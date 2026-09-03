@@ -458,5 +458,9 @@ export function Studio() {
     return <Dashboard onLogout={handleLogout} posts={state.posts} token={token} user={state.user} />
   }
 
-  return <LoginForm error={state.error} onLogin={handleLogin} />
+  if (state.status === 'login') {
+    return <LoginForm error={state.error} onLogin={handleLogin} />
+  }
+
+  return <main className="studio-loading">页面状态异常，请刷新后重试。</main>
 }
