@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.vite/
+.eslintcache
+.env
+.env.*
+!.env.example
+.git/
+.DS_Store

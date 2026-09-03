@@ -1,0 +1,46 @@
+name: genesis-production
+
+services:
+  backend:
+    platform: linux/amd64
+    build:
+      context: ./backend
+      target: production
+    environment:
+      GENESIS_ENVIRONMENT: production
+      GENESIS_DEBUG: "false"
+      GENESIS_CORS_ORIGINS: "[]"
+    expose:
+      - "8000"
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  frontend:
+    platform: linux/amd64
+    build:
+      context: ./frontend
+      target: production
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
