@@ -112,37 +112,64 @@ function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: str
 
   return (
     <main className="studio-login-shell">
+      <div className="studio-login-orbit studio-login-orbit--large" aria-hidden="true" />
+      <div className="studio-login-orbit studio-login-orbit--small" aria-hidden="true" />
       <section className="studio-login" aria-labelledby="studio-login-title">
-        <p className="eyebrow">GENESIS / AUTHOR SPACE</p>
-        <h1 id="studio-login-title">写作台</h1>
-        <p>仅站点作者可以管理文章、草稿和标签。</p>
-        <form onSubmit={submit}>
-          <label htmlFor="studio-handle">
-            账号
-            <input
-              autoComplete="username"
-              id="studio-handle"
-              onChange={(event) => setHandle(event.currentTarget.value)}
-              required
-              value={handle}
-            />
-          </label>
-          <label htmlFor="studio-password">
-            密码
-            <input
-              autoComplete="current-password"
-              id="studio-password"
-              onChange={(event) => setPassword(event.currentTarget.value)}
-              required
-              type="password"
-              value={password}
-            />
-          </label>
-          {error && <p className="studio-form-error" role="alert">{error}</p>}
-          <button className="primary-button" type="submit">
-            进入写作台
-          </button>
-        </form>
+        <div className="studio-login-intro">
+          <a className="studio-back-link" href="/">
+            <span aria-hidden="true">←</span> 返回博客首页
+          </a>
+          <div>
+            <p className="eyebrow">GENESIS / AUTHOR SPACE</p>
+            <h1 id="studio-login-title">
+              把想法，写成
+              <em>长期存在</em>的内容。
+            </h1>
+            <p className="studio-login-copy">在这里整理草稿、发布文章，让每一段思考都有落点。</p>
+          </div>
+          <p className="studio-login-note">仅限站点作者访问</p>
+        </div>
+
+        <div className="studio-login-card">
+          <div className="studio-login-card-heading">
+            <span className="studio-login-mark" aria-hidden="true">G.</span>
+            <div>
+              <p>AUTHOR LOGIN</p>
+              <h2>进入写作台</h2>
+            </div>
+          </div>
+          <form onSubmit={submit}>
+            <label htmlFor="studio-handle">
+              <span>账号</span>
+              <input
+                autoComplete="username"
+                autoFocus
+                id="studio-handle"
+                onChange={(event) => setHandle(event.currentTarget.value)}
+                placeholder="输入作者账号"
+                required
+                value={handle}
+              />
+            </label>
+            <label htmlFor="studio-password">
+              <span>密码</span>
+              <input
+                autoComplete="current-password"
+                id="studio-password"
+                onChange={(event) => setPassword(event.currentTarget.value)}
+                placeholder="输入密码"
+                required
+                type="password"
+                value={password}
+              />
+            </label>
+            {error && <p className="studio-form-error" role="alert">{error}</p>}
+            <button className="primary-button" type="submit">
+              进入写作台 <span aria-hidden="true">→</span>
+            </button>
+          </form>
+          <p className="studio-login-security">受保护的作者入口 · 登录后可管理文章与草稿</p>
+        </div>
       </section>
     </main>
   )
