@@ -19,6 +19,8 @@ FROM base AS development
 
 RUN uv sync --locked --no-install-project
 
+COPY alembic.ini ./
+COPY alembic ./alembic
 COPY src ./src
 COPY tests ./tests
 
@@ -32,6 +34,8 @@ FROM base AS production-builder
 
 RUN uv sync --locked --no-dev --no-install-project
 
+COPY alembic.ini ./
+COPY alembic ./alembic
 COPY src ./src
 
 RUN uv sync --locked --no-dev --no-editable
@@ -48,6 +52,8 @@ RUN groupadd --system --gid 10001 app \
 WORKDIR /app
 
 COPY --from=production-builder /opt/venv /opt/venv
+COPY --from=production-builder /app/alembic.ini ./
+COPY --from=production-builder /app/alembic ./alembic
 
 USER app
 

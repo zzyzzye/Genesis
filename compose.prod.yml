@@ -1,6 +1,46 @@
 name: genesis-production
 
 services:
+  postgres:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/postgres:16-alpine
+    platform: linux/amd64
+    environment:
+      POSTGRES_DB: genesis
+      POSTGRES_USER: genesis
+      POSTGRES_PASSWORD: ${GENESIS_POSTGRES_PASSWORD:?请先设置 GENESIS_POSTGRES_PASSWORD}
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U genesis -d genesis"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  migrate:
+    platform: linux/amd64
+    build:
+      context: ./backend
+      target: production
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      GENESIS_ENVIRONMENT: production
+      GENESIS_DEBUG: "false"
+      GENESIS_CORS_ORIGINS: "[]"
+      GENESIS_DATABASE_HOST: postgres
+      GENESIS_DATABASE_NAME: genesis
+      GENESIS_DATABASE_USER: genesis
+      GENESIS_DATABASE_PASSWORD: ${GENESIS_POSTGRES_PASSWORD:?请先设置 GENESIS_POSTGRES_PASSWORD}
+      GENESIS_JWT_SECRET: ${GENESIS_JWT_SECRET:?请先设置 GENESIS_JWT_SECRET}
+    init: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
     platform: linux/amd64
     build:
@@ -10,12 +50,20 @@ services:
       GENESIS_ENVIRONMENT: production
       GENESIS_DEBUG: "false"
       GENESIS_CORS_ORIGINS: "[]"
+      GENESIS_DATABASE_HOST: postgres
+      GENESIS_DATABASE_NAME: genesis
+      GENESIS_DATABASE_USER: genesis
+      GENESIS_DATABASE_PASSWORD: ${GENESIS_POSTGRES_PASSWORD:?请先设置 GENESIS_POSTGRES_PASSWORD}
+      GENESIS_JWT_SECRET: ${GENESIS_JWT_SECRET:?请先设置 GENESIS_JWT_SECRET}
     expose:
       - "8000"
     init: true
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
@@ -44,3 +92,6 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+
+volumes:
+  postgres_data:

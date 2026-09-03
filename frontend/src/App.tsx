@@ -1,44 +1,321 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { getHealth, type HealthResponse } from './lib/api'
+import {
+  getBlogPost,
+  getBlogPosts,
+  type BlogPostDetail,
+  type BlogPostPreview,
+  type BlogTag,
+} from './lib/api'
+import { Studio } from './Studio'
 
-type ConnectionState =
+type BlogState =
   | { status: 'loading' }
-  | { status: 'online'; data: HealthResponse }
-  | { status: 'offline' }
+  | { status: 'ready'; posts: BlogPostPreview[]; total: number }
+  | { status: 'error' }
 
-export function App() {
-  const [connection, setConnection] = useState<ConnectionState>({ status: 'loading' })
+type ArticleState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'ready'; post: BlogPostDetail }
+  | { status: 'error' }
+
+const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+})
+const emptyPosts: BlogPostPreview[] = []
+
+function formatDate(value: string): string {
+  return dateFormatter.format(new Date(value))
+}
+
+function getTags(posts: BlogPostPreview[]): BlogTag[] {
+  const tags = new Map<string, BlogTag>()
+  for (const post of posts) {
+    for (const tag of post.tags) {
+      tags.set(tag.slug, tag)
+    }
+  }
+  return [...tags.values()]
+}
+
+function MarkdownContent({ content }: { content: string }) {
+  return (
+    <div className="article-content">
+      {content
+        .trim()
+        .split('\n\n')
+        .map((block) => {
+          if (block.startsWith('# ')) {
+            return <h2 key={block}>{block.slice(2)}</h2>
+          }
+          if (block.startsWith('## ')) {
+            return <h3 key={block}>{block.slice(3)}</h3>
+          }
+          return <p key={block}>{block}</p>
+        })}
+    </div>
+  )
+}
+
+function TagList({ tags }: { tags: BlogTag[] }) {
+  return (
+    <div className="tag-list" aria-label="文章标签">
+      {tags.map((tag) => (
+        <span className="tag" key={tag.id}>
+          {tag.name}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function PublicBlog() {
+  const [blogState, setBlogState] = useState<BlogState>({ status: 'loading' })
+  const [articleState, setArticleState] = useState<ArticleState>({ status: 'idle' })
+  const [activeTag, setActiveTag] = useState<string | null>(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const articleRequest = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
 
-    void getHealth(controller.signal)
-      .then((data) => setConnection({ status: 'online', data }))
+    void getBlogPosts(controller.signal)
+      .then((data) => setBlogState({ status: 'ready', posts: data.items, total: data.total }))
       .catch(() => {
         if (!controller.signal.aborted) {
-          setConnection({ status: 'offline' })
+          setBlogState({ status: 'error' })
         }
       })
 
     return () => controller.abort()
-  }, [])
+  }, [refreshKey])
+
+  useEffect(
+    () => () => {
+      articleRequest.current?.abort()
+    },
+    [],
+  )
+
+  const posts = blogState.status === 'ready' ? blogState.posts : emptyPosts
+  const tags = useMemo(() => getTags(posts), [posts])
+  const visiblePosts = useMemo(
+    () =>
+      activeTag === null ? posts : posts.filter((post) => post.tags.some((tag) => tag.slug === activeTag)),
+    [activeTag, posts],
+  )
+  const featuredPost = visiblePosts.find((post) => post.is_featured) ?? visiblePosts[0]
+  const regularPosts = visiblePosts.filter((post) => post.slug !== featuredPost?.slug)
+
+  function openArticle(slug: string) {
+    articleRequest.current?.abort()
+    const controller = new AbortController()
+    articleRequest.current = controller
+    setArticleState({ status: 'loading' })
+
+    void getBlogPost(slug, controller.signal)
+      .then((post) => {
+        if (!controller.signal.aborted) {
+          setArticleState({ status: 'ready', post })
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setArticleState({ status: 'error' })
+        }
+      })
+  }
+
+  function closeArticle() {
+    articleRequest.current?.abort()
+    setArticleState({ status: 'idle' })
+  }
+
+  function retryPosts() {
+    setBlogState({ status: 'loading' })
+    setRefreshKey((key) => key + 1)
+  }
 
   return (
-    <main className="shell">
-      <section className="hero" aria-labelledby="page-title">
-        <span className="eyebrow">React · FastAPI</span>
-        <h1 id="page-title">Genesis</h1>
-        <p className="subtitle">工程骨架已经就绪，可以从这里开始构建产品。</p>
+    <div className="page" id="top">
+      <header className="site-header">
+        <a className="brand" href="#top" onClick={closeArticle}>
+          Genesis<span>.</span>
+        </a>
+        <nav aria-label="主导航">
+          <a href="#articles" onClick={closeArticle}>
+            博客
+          </a>
+          <a href="/studio">写作台</a>
+          <span title="将在博客模块完成后开发">工具</span>
+          <span title="将在工具模块完成后开发">影音</span>
+        </nav>
+        <span className="module-state">01 / Blog</span>
+      </header>
 
-        <div className={`status status--${connection.status}`} role="status">
-          <span className="status__dot" aria-hidden="true" />
-          {connection.status === 'loading' && '正在连接后端…'}
-          {connection.status === 'online' &&
-            `后端服务正常 · ${connection.data.environment}`}
-          {connection.status === 'offline' && '后端暂未连接，请先启动 FastAPI 服务'}
-        </div>
-      </section>
-    </main>
+      <main>
+        {articleState.status === 'ready' ? (
+          <article className="reader-shell">
+            <button className="back-button" type="button" onClick={closeArticle}>
+              <span aria-hidden="true">←</span> 返回文章列表
+            </button>
+            <div className="reader-intro">
+              <TagList tags={articleState.post.tags} />
+              <h1>{articleState.post.title}</h1>
+              <p className="reader-summary">{articleState.post.excerpt}</p>
+              <div className="article-meta">
+                <span>{articleState.post.author.display_name}</span>
+                <span>{formatDate(articleState.post.published_at)}</span>
+                <span>{articleState.post.read_time_minutes} 分钟阅读</span>
+              </div>
+            </div>
+            <MarkdownContent content={articleState.post.content_markdown} />
+          </article>
+        ) : (
+          <>
+            <section className="intro" aria-labelledby="page-title">
+              <p className="eyebrow">PERSONAL KNOWLEDGE SPACE</p>
+              <h1 id="page-title">
+                把热爱、思考和<br />
+                <em>长期主义</em>放在同一个空间。
+              </h1>
+              <p className="intro-copy">
+                Genesis 是一个逐步生长的个人系统。现在从博客开始，沉淀值得反复回看的想法与创造。
+              </p>
+              <div className="progress-grid" aria-label="产品建设进度">
+                <div>
+                  <strong>01</strong>
+                  <span>博客正在构建</span>
+                </div>
+                <div>
+                  <strong>02</strong>
+                  <span>工具随后接入</span>
+                </div>
+                <div>
+                  <strong>03</strong>
+                  <span>影音最后展开</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="articles" id="articles" aria-labelledby="articles-title">
+              <div className="section-heading">
+                <div>
+                  <p className="eyebrow">WRITING</p>
+                  <h2 id="articles-title">最近的文章</h2>
+                </div>
+                {blogState.status === 'ready' && <span>{blogState.total} 篇记录</span>}
+              </div>
+
+              {articleState.status === 'loading' && (
+                <p className="inline-message" role="status">
+                  正在打开文章…
+                </p>
+              )}
+              {articleState.status === 'error' && (
+                <p className="inline-message inline-message--error" role="alert">
+                  文章暂时无法打开，请稍后再试。
+                </p>
+              )}
+
+              {blogState.status === 'loading' && (
+                <div className="loading-grid" aria-label="正在加载文章">
+                  <div />
+                  <div />
+                  <div />
+                </div>
+              )}
+
+              {blogState.status === 'error' && (
+                <div className="error-state" role="alert">
+                  <p>暂时无法连接到博客内容服务。</p>
+                  <button type="button" onClick={retryPosts}>
+                    重新加载
+                  </button>
+                </div>
+              )}
+
+              {blogState.status === 'ready' && (
+                <>
+                  <div className="tag-filter" aria-label="按标签筛选文章">
+                    <button
+                      className={activeTag === null ? 'is-active' : ''}
+                      type="button"
+                      onClick={() => setActiveTag(null)}
+                    >
+                      全部
+                    </button>
+                    {tags.map((tag) => (
+                      <button
+                        className={activeTag === tag.slug ? 'is-active' : ''}
+                        key={tag.id}
+                        type="button"
+                        onClick={() => setActiveTag(tag.slug)}
+                      >
+                        {tag.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  {featuredPost && (
+                    <button
+                      className="featured-card"
+                      type="button"
+                      onClick={() => openArticle(featuredPost.slug)}
+                    >
+                      <span className="featured-index">精选 / 01</span>
+                      <div>
+                        <TagList tags={featuredPost.tags} />
+                        <h3>{featuredPost.title}</h3>
+                        <p>{featuredPost.excerpt}</p>
+                      </div>
+                      <span className="arrow" aria-label={`阅读 ${featuredPost.title}`}>
+                        ↗
+                      </span>
+                    </button>
+                  )}
+
+                  {regularPosts.length > 0 && (
+                    <div className="article-grid">
+                      {regularPosts.map((post) => (
+                        <button
+                          className="article-card"
+                          key={post.id}
+                          type="button"
+                          aria-label={`阅读 ${post.title}`}
+                          onClick={() => openArticle(post.slug)}
+                        >
+                          <TagList tags={post.tags} />
+                          <h3>{post.title}</h3>
+                          <p>{post.excerpt}</p>
+                          <footer>
+                            <span>{formatDate(post.published_at)}</span>
+                            <span>{post.read_time_minutes} min</span>
+                          </footer>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {!featuredPost && <div className="empty-state">这个标签下还没有公开文章。</div>}
+                </>
+              )}
+            </section>
+          </>
+        )}
+      </main>
+
+      <footer className="site-footer">
+        <span>Genesis · 个人内容系统</span>
+        <span>Blog is the beginning.</span>
+      </footer>
+    </div>
   )
+}
+
+export function App() {
+  return window.location.pathname === '/studio' ? <Studio /> : <PublicBlog />
 }
