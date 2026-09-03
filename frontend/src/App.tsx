@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 import {
   getBlogPost,
@@ -44,18 +46,7 @@ function getTags(posts: BlogPostPreview[]): BlogTag[] {
 function MarkdownContent({ content }: { content: string }) {
   return (
     <div className="article-content">
-      {content
-        .trim()
-        .split('\n\n')
-        .map((block) => {
-          if (block.startsWith('# ')) {
-            return <h2 key={block}>{block.slice(2)}</h2>
-          }
-          if (block.startsWith('## ')) {
-            return <h3 key={block}>{block.slice(3)}</h3>
-          }
-          return <p key={block}>{block}</p>
-        })}
+      <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
     </div>
   )
 }

@@ -468,6 +468,7 @@ nav span {
   line-height: 2;
 }
 
+.article-content h1,
 .article-content h2,
 .article-content h3 {
   margin: 0 0 1.5rem;
@@ -475,6 +476,10 @@ nav span {
   font-weight: 500;
   letter-spacing: -0.04em;
   line-height: 1.25;
+}
+
+.article-content h1 {
+  font-size: clamp(2.15rem, 4.5vw, 3.5rem);
 }
 
 .article-content h2 {
@@ -488,7 +493,101 @@ nav span {
 .article-content p {
   margin: 0 0 1.5rem;
   color: #46433f;
-  white-space: pre-line;
+}
+
+.article-content ul,
+.article-content ol {
+  margin: 0 0 1.5rem;
+  padding-left: 1.5rem;
+  color: #46433f;
+}
+
+.article-content li + li {
+  margin-top: 0.35rem;
+}
+
+.article-content blockquote {
+  margin: 0 0 1.5rem;
+  padding: 0.7rem 1.25rem;
+  border-left: 3px solid #d65738;
+  color: #686259;
+}
+
+.article-content blockquote p {
+  margin-bottom: 0;
+}
+
+.article-content a {
+  color: #a74630;
+  text-decoration: underline;
+  text-decoration-color: #d9a494;
+  text-underline-offset: 0.18em;
+}
+
+.article-content a:hover {
+  color: #d65738;
+}
+
+.article-content code {
+  padding: 0.12em 0.35em;
+  border-radius: 0.25rem;
+  background: #ebe7df;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.82em;
+}
+
+.article-content pre {
+  margin: 0 0 1.5rem;
+  overflow-x: auto;
+  padding: 1.2rem 1.3rem;
+  border-radius: 0.35rem;
+  background: #1e2433;
+  color: #f7f5f0;
+  font-size: 0.82em;
+  line-height: 1.7;
+}
+
+.article-content pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.article-content hr {
+  margin: 2.5rem 0;
+  border: 0;
+  border-top: 1px solid #dedbd4;
+}
+
+.article-content img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 2rem auto;
+}
+
+.article-content table {
+  display: block;
+  max-width: 100%;
+  margin: 0 0 1.5rem;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-family: Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 0.78em;
+  line-height: 1.5;
+}
+
+.article-content th,
+.article-content td {
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #d7d2c9;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.article-content th {
+  background: #ebe7df;
+  color: #1e2433;
 }
 
 .site-footer {

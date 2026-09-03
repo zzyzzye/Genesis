@@ -65,7 +65,7 @@ describe('App', () => {
           new Response(
             JSON.stringify({
               ...posts.items[0],
-              content_markdown: '# 从一个完整模块开始\n\n先把一件事做好。',
+              content_markdown: '# 从一个完整模块开始\n\n先把 **一件事** 做好。\n\n- 内容\n- 连接',
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
           ),
@@ -82,7 +82,8 @@ describe('App', () => {
 
     fireEvent.click(screen.getByLabelText('阅读 从一个完整模块开始'))
 
-    expect(await screen.findByText('先把一件事做好。')).toBeInTheDocument()
+    expect(await screen.findByText('一件事', { selector: 'strong' })).toBeInTheDocument()
+    expect(screen.getByRole('list')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '返回文章列表' })).toBeInTheDocument()
   })
 })
