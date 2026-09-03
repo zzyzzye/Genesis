@@ -60,7 +60,21 @@ export interface CurrentUser {
   id: string
   handle: string
   display_name: string
+  bio: string
+  avatar_url: string | null
   role: string
+}
+
+export interface RegistrationData {
+  handle: string
+  display_name: string
+  password: string
+}
+
+export interface ProfileUpdateData {
+  display_name: string
+  bio: string
+  avatar_url: string | null
 }
 
 interface BlogPostListResponse {
@@ -104,8 +118,24 @@ export function login(handle: string, password: string): Promise<AccessToken> {
   })
 }
 
+export function registerAccount(data: RegistrationData): Promise<CurrentUser> {
+  return request<CurrentUser>('/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
 export function getCurrentUser(token: string): Promise<CurrentUser> {
   return request<CurrentUser>('/auth/me', { headers: authHeaders(token) })
+}
+
+export function updateCurrentUser(token: string, data: ProfileUpdateData): Promise<CurrentUser> {
+  return request<CurrentUser>('/auth/me', {
+    method: 'PUT',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
 }
 
 export function getAdminBlogPosts(token: string): Promise<BlogPostAdmin[]> {

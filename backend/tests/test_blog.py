@@ -225,6 +225,56 @@ async def test_owner_can_log_in_and_read_own_profile(
 
 
 @pytest.mark.anyio
+async def test_member_can_register_and_manage_own_profile(client: AsyncClient) -> None:
+    registration_data = {
+        "handle": "reader_one",
+        "display_name": "  新读者  ",
+        "password": "member-password",
+    }
+    registration_response = await client.post("/api/v1/auth/register", json=registration_data)
+    duplicate_response = await client.post("/api/v1/auth/register", json=registration_data)
+    invalid_handle_response = await client.post(
+        "/api/v1/auth/register",
+        json={**registration_data, "handle": "不合法账号"},
+    )
+
+    assert registration_response.status_code == 201
+    assert registration_response.json() == {
+        "id": registration_response.json()["id"],
+        "handle": "reader_one",
+        "display_name": "新读者",
+        "bio": "",
+        "avatar_url": None,
+        "role": "member",
+    }
+    assert duplicate_response.status_code == 409
+    assert invalid_handle_response.status_code == 422
+
+    login_response = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "reader_one", "password": "member-password"},
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    update_response = await client.put(
+        "/api/v1/auth/me",
+        headers=headers,
+        json={
+            "display_name": "读者一号",
+            "bio": "喜欢阅读和记录。",
+            "avatar_url": "https://example.com/avatar.png",
+        },
+    )
+    profile_response = await client.get("/api/v1/auth/me", headers=headers)
+
+    assert login_response.status_code == 200
+    assert update_response.status_code == 200
+    assert update_response.json()["display_name"] == "读者一号"
+    assert update_response.json()["avatar_url"] == "https://example.com/avatar.png"
+    assert profile_response.json()["bio"] == "喜欢阅读和记录。"
+
+
+@pytest.mark.anyio
 async def test_owner_can_manage_drafts_and_publish_articles(
     client: AsyncClient, database_session: Session
 ) -> None:

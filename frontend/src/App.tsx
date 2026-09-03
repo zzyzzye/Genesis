@@ -9,6 +9,7 @@ import {
   type BlogPostPreview,
   type BlogTag,
 } from './lib/api'
+import { Account } from './Account'
 import { Studio } from './Studio'
 
 type BlogState =
@@ -140,6 +141,7 @@ function PublicBlog() {
           <a href="#articles" onClick={closeArticle}>
             博客
           </a>
+          <a href="/account">账户</a>
           <a href="/studio">写作台</a>
           <span title="将在博客模块完成后开发">工具</span>
           <span title="将在工具模块完成后开发">影音</span>
@@ -308,5 +310,7 @@ function PublicBlog() {
 }
 
 export function App() {
-  return window.location.pathname === '/studio' ? <Studio /> : <PublicBlog />
+  if (window.location.pathname === '/studio') return <Studio />
+  if (window.location.pathname === '/account') return <Account />
+  return <PublicBlog />
 }
