@@ -1309,6 +1309,8 @@ nav span {
   background: var(--studio-paper);
   color: var(--studio-muted);
 }
+.studio-back-link svg,
+.primary-button svg { width: 1rem; height: 1rem; }
 .studio-rail-brand {
   display: grid;
   width: 3rem;
@@ -1566,7 +1568,7 @@ nav span {
 .studio-topbar__site-link { display: flex; align-items: center; gap: .45rem; padding: .67rem .85rem; border-radius: .3rem; background: #172236; color: #fff; font-size: .67rem; font-weight: 800; }
 .studio-topbar__site-link:hover { background: #263650; }
 .studio-topbar__site-link svg { width: .95rem; height: .95rem; }
-.studio-topbar__site-link span { color: #b4bfce; }
+.studio-topbar__site-link > svg:last-child { width: .85rem; height: .85rem; color: #b4bfce; }
 .studio-content { min-width: 0; min-height: 0; flex: 1 1 auto; overflow: auto; padding: 1.15rem; }
 .studio-content--editor { padding: 0; background: #f7f6f3; }
 
@@ -1598,7 +1600,7 @@ nav span {
 .studio-quick-grid strong { font-size: .69rem; white-space: nowrap; }
 .studio-quick-grid small { margin-top: .2rem; color: #929ba5; font-size: .56rem; line-height: 1.45; }
 .studio-quick-chevron { width: .72rem !important; height: .72rem !important; color: #aeb5bd; }
-.studio-external-arrow { color: #a3abb4; font-size: .78rem; }
+.studio-external-arrow { width: .82rem !important; height: .82rem !important; color: #a3abb4; }
 .studio-activity-list { display: grid; }
 .studio-activity-list > button { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; align-items: center; gap: .75rem; width: 100%; min-height: 4.65rem; padding: .78rem 1rem; border: 0; border-bottom: 1px solid #eceff1; background: #fff; color: var(--studio-ink); text-align: left; }
 .studio-activity-list > button:hover { background: #f8f9fa; }
@@ -1712,8 +1714,7 @@ nav span {
   .studio-topbar__actions > button { display: none; }
   .studio-topbar__title h1 { font-size: 1.2rem; }
   .studio-topbar__site-link { padding: .55rem; }
-  .studio-topbar__site-link svg,
-  .studio-topbar__site-link span { display: none; }
+  .studio-topbar__site-link svg { display: none; }
   .studio-content { padding: .7rem; }
   .studio-stats { grid-template-columns: 1fr; }
   .studio-stat-card { padding: .85rem; }

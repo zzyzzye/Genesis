@@ -124,7 +124,7 @@ function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: str
       <section className="studio-login" aria-labelledby="studio-login-title">
         <div className="studio-login-intro">
           <Link className="studio-back-link" to="/">
-            <span aria-hidden="true">←</span> 返回 Genesis 首页
+            <StudioIcon name="arrow-left" /> 返回 Genesis 首页
           </Link>
           <div>
             <p className="eyebrow">GENESIS / AUTHOR SPACE</p>
@@ -172,7 +172,7 @@ function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: str
             </label>
             {error && <p className="studio-form-error" role="alert">{error}</p>}
             <button className="primary-button" type="submit">
-              进入写作台 <span aria-hidden="true">→</span>
+              进入写作台 <StudioIcon name="arrow-right" />
             </button>
           </form>
           <p className="studio-login-security">受保护的作者入口 · 登录后可管理文章与草稿</p>
@@ -601,7 +601,7 @@ function Dashboard({
           </div>
           <div className="studio-topbar__actions">
             <button type="button" aria-label="通知"><StudioIcon name="bell" /><span>2</span></button>
-            <Link className="studio-topbar__site-link" to="/blog"><StudioIcon name="eye" />查看站点 <span>↗</span></Link>
+            <Link className="studio-topbar__site-link" to="/blog"><StudioIcon name="eye" />查看站点 <StudioIcon name="arrow-up-right" /></Link>
           </div>
         </header>
 
