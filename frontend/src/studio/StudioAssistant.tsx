@@ -1,6 +1,8 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 
 import { StudioIcon } from './StudioIcon'
+import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider } from '../lib/api'
+import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
 
 type AssistantMessage = { role: 'assistant' | 'user'; content: string }
 
@@ -9,20 +11,53 @@ const suggestions = ['帮我梳理今天的写作计划', '把这篇文章改得
 export function StudioAssistant() {
   const [isOpen, setIsOpen] = useState(false)
   const [draft, setDraft] = useState('')
+  const [isBusy, setIsBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [provider, setProvider] = useState<AiProvider>('openai')
+  const [model, setModel] = useState('')
+  const [models, setModels] = useState<{ id: string; name: string | null }[]>([])
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  useEffect(() => {
+    const token = getStoredAuthToken(studioAuthTokenKey)
+    if (!token || !isOpen) return
+    void getProviderModels(token, provider)
+      .then((result) => {
+        setModels(result.models)
+        setModel((current) => current && result.models.some((item) => item.id === current) ? current : result.models[0]?.id ?? '')
+      })
+      .catch(() => {
+        setModels([])
+        setModel('')
+      })
+  }, [isOpen, provider])
+
   const [messages, setMessages] = useState<AssistantMessage[]>([
     { role: 'assistant', content: '你好，我是 Genesis 助手。\n我可以帮你构思、改写和整理内容。' },
   ])
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const content = draft.trim()
-    if (!content) return
-    setMessages((current) => [
-      ...current,
-      { role: 'user', content },
-      { role: 'assistant', content: '收到。Agent 接入后，我会在这里继续处理你的写作任务。' },
-    ])
+    const token = getStoredAuthToken(studioAuthTokenKey)
+    if (!content || isBusy || !token) return
+    const nextMessages: AiChatMessage[] = [...messages, { role: 'user', content }]
+    setMessages([...nextMessages, { role: 'assistant', content: '' }])
     setDraft('')
+    setError(null)
+    setIsBusy(true)
+    try {
+      await streamAiChat(token, { surface: 'studio', messages: nextMessages, model: model || undefined }, (tokenText) => {
+        setMessages((current) => {
+          const last = current.at(-1)
+          if (!last || last.role !== 'assistant') return current
+          return [...current.slice(0, -1), { ...last, content: last.content + tokenText }]
+        })
+      })
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'AI 请求失败，请稍后再试。')
+    } finally {
+      setIsBusy(false)
+    }
   }
 
   function handleSuggestion(suggestion: string) {
@@ -59,9 +94,19 @@ export function StudioAssistant() {
               </div>
             )}
           </div>
-          <form className="studio-assistant__composer" onSubmit={submit}>
+          <form className="studio-assistant__composer" onSubmit={(event) => { void submit(event) }}>
             <textarea aria-label="向 Genesis AI 提问" placeholder="告诉我你想完成什么…" rows={2} value={draft} onChange={(event) => setDraft(event.target.value)} />
-            <div><span><StudioIcon name="attachment" /> Agent 即将接入</span><button type="submit" aria-label="发送消息" disabled={!draft.trim()}><StudioIcon name="send" /></button></div>
+            <div className="studio-assistant__composer-tools">
+              <button className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
+                <StudioIcon name="assistant" /> {model || '选择模型'} <StudioIcon name="chevron" />
+              </button>
+              {modelMenuOpen && <div className="studio-assistant__model-menu">
+                <div className="studio-assistant__provider-tabs">{(['openai', 'grok', 'claude'] as AiProvider[]).map((item) => <button key={item} type="button" className={provider === item ? 'is-active' : ''} onClick={() => { setProvider(item); setModelMenuOpen(false) }}>{item}</button>)}</div>
+                {models.length === 0 ? <span className="studio-assistant__model-empty">暂无可用模型</span> : models.map((item) => <button key={item.id} type="button" onClick={() => { setModel(item.id); setModelMenuOpen(false) }}>{item.name || item.id}</button>)}
+              </div>}
+              <span className="studio-assistant__composer-status">{isBusy ? '正在生成…' : error ?? '单次会话'}</span>
+              <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>
+            </div>
           </form>
         </section>
       )}

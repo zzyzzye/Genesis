@@ -171,3 +171,83 @@ export async function deleteAdminBlogPost(token: string, id: string): Promise<vo
     throw new Error(`请求失败：HTTP ${response.status}`)
   }
 }
+export interface SystemHealth {
+  status: 'ok'
+  system: 'tools' | 'media'
+}
+
+export function getSystemHealth(system: 'tools' | 'media', signal?: AbortSignal): Promise<SystemHealth> {
+  return request<SystemHealth>(`/${system}/health`, { signal })
+}
+
+
+export type AiSurface = 'blog' | 'studio' | 'tools'
+
+export type AiProvider = 'openai' | 'grok' | 'claude'
+
+export interface AvailableModel {
+  id: string
+  name: string | null
+  created: number | null
+  context_window: number | null
+}
+
+export interface ProviderModels {
+  provider: AiProvider
+  models: AvailableModel[]
+}
+
+export function getProviderModels(token: string, provider: AiProvider): Promise<ProviderModels> {
+  return request<ProviderModels>(`/llm/providers/${provider}/models`, { headers: authHeaders(token) })
+}
+
+export interface AiChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface AiChatContext {
+  post_id?: string
+  title?: string
+  excerpt?: string
+  content_markdown?: string
+  selected_text?: string
+}
+
+export async function streamAiChat(
+  token: string,
+  request: {
+    surface: AiSurface
+    messages: AiChatMessage[]
+    context?: AiChatContext
+    model?: string
+  },
+  onToken: (content: string) => void,
+): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/ai/chat/stream`, {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (!response.ok || !response.body) {
+    throw new Error(`AI 请求失败：HTTP ${response.status}`)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    buffer += decoder.decode(value, { stream: !done })
+    const events = buffer.split('\n\n')
+    buffer = events.pop() ?? ''
+    for (const event of events) {
+      const line = event.split('\n').find((item) => item.startsWith('data: '))
+      if (!line) continue
+      const payload = JSON.parse(line.slice(6)) as { type: string; content?: string; message?: string }
+      if (payload.type === 'token' && payload.content) onToken(payload.content)
+      if (payload.type === 'error') throw new Error(payload.message ?? 'AI 生成失败')
+    }
+    if (done) break
+  }
+}

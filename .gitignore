@@ -40,3 +40,5 @@ dist/
 # Operating system files
 .DS_Store
 Thumbs.db
+
+# Local browser automation artifacts.playwright-mcp/

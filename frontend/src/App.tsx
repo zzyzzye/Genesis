@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -12,6 +12,7 @@ import {
 } from './lib/api'
 import { Account } from './Account'
 import { Studio } from './Studio'
+import { SystemLanding } from './SystemLanding'
 
 type BlogState =
   | { status: 'loading' }
@@ -73,7 +74,7 @@ function Home() {
         <nav aria-label="主导航">
           <Link to="/blog">博客</Link>
           <Link to="/account">账户</Link>
-          <Link to="/studio">写作台</Link>
+          <Link to="/blog/studio">博客 Studio</Link>
           <Link to="/tools">工具</Link>
           <Link to="/media">影音</Link>
         </nav>
@@ -192,7 +193,7 @@ function PublicBlog() {
             博客
           </Link>
           <Link to="/account">账户</Link>
-          <Link to="/studio">写作台</Link>
+          <Link to="/blog/studio">博客 Studio</Link>
           <Link to="/tools">工具</Link>
           <Link to="/media">影音</Link>
         </nav>
@@ -216,6 +217,7 @@ function PublicBlog() {
               </div>
             </div>
             <MarkdownContent content={articleState.post.content_markdown} />
+
           </article>
         ) : (
           <>
@@ -359,27 +361,20 @@ function PublicBlog() {
   )
 }
 
-function ModulePlaceholder({ title, index, description }: { title: string; index: string; description: string }) {
-  return (
-    <div className="page" id="top">
-      <header className="site-header"><Link className="brand" to="/">Genesis<span>.</span></Link><nav aria-label="主导航"><Link to="/blog">博客</Link><Link to="/tools">工具</Link><Link to="/media">影音</Link></nav><span className="module-state">{index} / {title}</span></header>
-      <main className="module-placeholder"><p className="eyebrow">GENESIS / {index}</p><h1>{title}<em>正在生长。</em></h1><p>{description}</p><Link className="primary-button" to="/">返回 Genesis 首页 <span aria-hidden="true">→</span></Link></main>
-    </div>
-  )
-}
-
 export function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/blog" element={<PublicBlog />} />
+        <Route path="/blog/*" element={<PublicBlog />} />
         <Route path="/articles/:slug" element={<PublicBlog />} />
-        <Route path="/tools" element={<ModulePlaceholder title="工具" index="02" description="把重复的工作整理成可以直接使用的小工具。" />} />
-        <Route path="/media" element={<ModulePlaceholder title="影音" index="03" description="记录正在发生的现场、声音和影像。" />} />
-        <Route path="/studio" element={<Studio />} />
+        <Route path="/tools/*" element={<SystemLanding system="tools" />} />
+        <Route path="/media/*" element={<SystemLanding system="media" />} />
+        <Route path="/blog/studio/*" element={<Studio />} />`r`n        <Route path="/studio" element={<Navigate to="/blog/studio" replace />} />
         <Route path="/account" element={<Account />} />
       </Routes>
     </BrowserRouter>
   )
 }
+
+

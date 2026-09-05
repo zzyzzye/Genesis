@@ -87,3 +87,5 @@ def delete_admin_post(
     session.delete(post)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+

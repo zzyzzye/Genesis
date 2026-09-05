@@ -313,16 +313,27 @@ async def test_owner_can_manage_drafts_and_publish_articles(
     duplicate_response = await client.post(
         "/api/v1/admin/blog/posts", headers=headers, json=publish_data
     )
-    delete_response = await client.delete(
-        f"/api/v1/admin/blog/posts/{created_post['id']}",
-        headers=headers,
-    )
 
     assert update_response.status_code == 200
     assert update_response.json()["published_at"] is not None
     assert public_response.status_code == 200
     assert public_response.json()["tags"][0]["name"] == "工程实践"
+
+    draft_again_response = await client.put(
+        f"/api/v1/admin/blog/posts/{created_post['id']}",
+        headers=headers,
+        json={**publish_data, "status": "draft"},
+    )
+    assert draft_again_response.status_code == 200
+    assert draft_again_response.json()["published_at"] is None
+    assert (await client.get("/api/v1/blog/posts/managed-draft")).status_code == 404
+
     assert duplicate_response.status_code == 409
+
+    delete_response = await client.delete(
+        f"/api/v1/admin/blog/posts/{created_post['id']}",
+        headers=headers,
+    )
     assert delete_response.status_code == 204
     assert (
         await client.get("/api/v1/admin/blog/posts/not-a-uuid", headers=headers)

@@ -1935,12 +1935,53 @@ nav span {
 .studio-assistant__composer textarea { display: block; box-sizing: border-box; width: 100%; resize: none; border: 0; outline: 0; background: transparent; color: #30434a; font: inherit; font-size: .72rem; line-height: 1.5; }
 .studio-assistant__composer textarea::placeholder { color: #a2aeac; }
 .studio-assistant__composer > div { display: flex; align-items: center; justify-content: space-between; margin-top: .35rem; }
+.studio-assistant__composer-tools { position: relative; }
+.studio-assistant__tool-button { display: inline-flex; align-items: center; gap: .25rem; padding: 0; border: 0; background: transparent; color: #506267; font: inherit; font-size: .65rem; }
+.studio-assistant__tool-button svg { width: .78rem; }
+.studio-assistant__model-menu { position: absolute; right: 0; bottom: 2rem; z-index: 2; display: grid; min-width: 12rem; padding: .35rem; border: 1px solid #dfe7e2; border-radius: .55rem; background: #fff; box-shadow: 0 .8rem 2rem rgba(31,44,57,.16); }
+.studio-assistant__model-menu button { width: 100%; padding: .45rem .55rem; border: 0; border-radius: .35rem; background: transparent; color: #506267; font: inherit; font-size: .65rem; text-align: left; }
+.studio-assistant__model-menu button:hover, .studio-assistant__provider-tabs button.is-active { background: #eef3ed; color: #203743; }
+.studio-assistant__provider-tabs { display: flex; gap: .2rem; padding: .2rem; margin-bottom: .25rem; background: #f4f6f3; border-radius: .35rem; }
+.studio-assistant__provider-tabs button { text-align: center; font-size: .58rem; }
+.studio-assistant__model-empty { padding: .6rem; color: #9aa6a2; font-size: .62rem; }
+.studio-assistant__composer-status { margin-left: auto; color: #a0aaa7; font-size: .58rem; }
 .studio-assistant__composer > div > span { display: inline-flex; align-items: center; gap: .25rem; color: #a0aaa7; font-size: .58rem; }
 .studio-assistant__composer > div > span svg { width: .7rem; }
 .studio-assistant__composer button { display: grid; width: 1.8rem; height: 1.8rem; place-items: center; border: 0; border-radius: .55rem; background: #d8e85e; color: #203743; cursor: pointer; }
 .studio-assistant__composer button:disabled { background: #edf0d9; color: #aab28f; cursor: not-allowed; }
 .studio-assistant__composer button svg { width: .85rem; }
+
+/* 模型菜单按钮不能继承发送按钮的圆形样式。 */
+.studio-assistant__composer .studio-assistant__model-menu button {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 1.8rem;
+  padding: .45rem .55rem;
+  border: 0;
+  border-radius: .35rem;
+  background: transparent;
+  color: #506267;
+  font: inherit;
+  font-size: .65rem;
+  line-height: 1.25;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.studio-assistant__composer .studio-assistant__provider-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: .2rem;
+  padding: .2rem;
+}
+.studio-assistant__composer .studio-assistant__provider-tabs button {
+  display: block;
+  width: auto;
+  min-height: 1.6rem;
+  padding: .35rem .5rem;
+  background: transparent;
+  text-align: center;
+}
+
 @keyframes assistant-rise { from { opacity: 0; transform: translateY(.6rem) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (max-width: 680px) { .studio-assistant { right: .75rem; bottom: .75rem; } .studio-assistant__launcher { width: 3.7rem; height: 3.7rem; } .studio-assistant__launcher-copy { display: none; } .studio-assistant__launcher-signal { top: .35rem; right: .35rem; } .studio-assistant__panel { width: min(24rem, calc(100vw - 1.5rem)); height: min(35rem, calc(100vh - 5.5rem)); } }
-
-
