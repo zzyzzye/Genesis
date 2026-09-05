@@ -2158,3 +2158,20 @@ nav span {
     max-height: calc(100vh - 5.5rem);
   }
 }
+
+/* Logo 标记：圆点独立定位，避免跟随字母基线造成错位。 */
+.studio-section-nav__mark {
+  position: relative;
+  letter-spacing: 0;
+}
+.studio-section-nav__mark span {
+  position: absolute;
+  right: .34rem;
+  bottom: .28rem;
+  color: var(--studio-accent);
+  font-family: Arial, sans-serif;
+  font-size: .72rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+}
