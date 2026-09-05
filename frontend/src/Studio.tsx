@@ -1,4 +1,11 @@
 import { type FormEvent, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+
+import { StudioIcon } from './studio/StudioIcon'
+import { StudioNavigation, type StudioSection } from './studio/StudioNavigation'
+import { StudioOverview } from './studio/StudioOverview'
 
 import {
   createAdminBlogPost,
@@ -116,9 +123,9 @@ function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: str
       <div className="studio-login-orbit studio-login-orbit--small" aria-hidden="true" />
       <section className="studio-login" aria-labelledby="studio-login-title">
         <div className="studio-login-intro">
-          <a className="studio-back-link" href="/">
-            <span aria-hidden="true">←</span> 返回博客首页
-          </a>
+          <Link className="studio-back-link" to="/">
+            <span aria-hidden="true">←</span> 返回 Genesis 首页
+          </Link>
           <div>
             <p className="eyebrow">GENESIS / AUTHOR SPACE</p>
             <h1 id="studio-login-title">
@@ -175,6 +182,15 @@ function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: str
   )
 }
 
+function MarkdownPreview({ content }: { content: string }) {
+  return (
+    <article className="studio-preview article-content">
+      <div className="studio-preview__label">预览</div>
+      <Markdown remarkPlugins={[remarkGfm]}>{content || '开始输入 Markdown，右侧会显示预览。'}</Markdown>
+    </article>
+  )
+}
+
 function Editor({
   editor,
   isSaving,
@@ -187,12 +203,12 @@ function Editor({
   isSaving: boolean
   onChange: (editor: EditorState) => void
   onDelete: () => void
-  onSave: () => void
+  onSave: (status: BlogPostStatus) => void
   feedback: string | null
 }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    onSave()
+    onSave(editor.status)
   }
 
   return (
@@ -200,13 +216,18 @@ function Editor({
       <div className="editor-heading">
         <div>
           <p className="eyebrow">{editor.id ? 'EDITING' : 'NEW DRAFT'}</p>
-          <h2 id="editor-title">{editor.id ? '编辑文章' : '新建文章'}</h2>
+          <h1 id="editor-title">{editor.id ? '编辑文章' : '新建文章'}</h1>
         </div>
-        {editor.id && (
-          <button className="text-button text-button--danger" type="button" onClick={onDelete}>
-            删除
-          </button>
-        )}
+        <div className="editor-heading__meta">
+          <span className={`post-status post-status--${editor.status}`}>
+            {editor.status === 'published' ? '已发布' : '草稿'}
+          </span>
+          {editor.id && (
+            <button className="text-button text-button--danger" type="button" onClick={onDelete}>
+              删除
+            </button>
+          )}
+        </div>
       </div>
       <form className="editor-form" onSubmit={submit}>
         <div className="editor-form__grid">
@@ -240,17 +261,20 @@ function Editor({
             value={editor.excerpt}
           />
         </label>
-        <label htmlFor="post-content">
-          正文（Markdown）
-          <textarea
-            className="editor-form__content"
-            id="post-content"
-            onChange={(event) => onChange({ ...editor, contentMarkdown: event.currentTarget.value })}
-            required
-            rows={14}
-            value={editor.contentMarkdown}
-          />
-        </label>
+        <div className="editor-content-grid">
+          <label htmlFor="post-content">
+            正文（Markdown）
+            <textarea
+              className="editor-form__content"
+              id="post-content"
+              onChange={(event) => onChange({ ...editor, contentMarkdown: event.currentTarget.value })}
+              required
+              rows={18}
+              value={editor.contentMarkdown}
+            />
+          </label>
+          <MarkdownPreview content={editor.contentMarkdown} />
+        </div>
         <div className="editor-form__grid">
           <label htmlFor="post-tags">
             标签
@@ -272,19 +296,6 @@ function Editor({
           </label>
         </div>
         <div className="editor-options">
-          <label htmlFor="post-status">
-            状态
-            <select
-              id="post-status"
-              onChange={(event) =>
-                onChange({ ...editor, status: event.currentTarget.value as BlogPostStatus })
-              }
-              value={editor.status}
-            >
-              <option value="draft">草稿</option>
-              <option value="published">公开发布</option>
-            </select>
-          </label>
           <label htmlFor="post-reading-time">
             阅读分钟
             <input
@@ -309,12 +320,201 @@ function Editor({
         </div>
         {feedback && <p className="studio-form-error" role="alert">{feedback}</p>}
         <div className="editor-actions">
-          <button className="primary-button" disabled={isSaving} type="submit">
-            {isSaving ? '正在保存…' : editor.status === 'published' ? '保存并发布' : '保存草稿'}
-          </button>
-          <span>文章以 Markdown 保存，公开端会安全地按文本展示。</span>
+          <div className="editor-actions__buttons">
+            <button
+              className="secondary-button"
+              disabled={isSaving}
+              type="button"
+              onClick={() => onSave('draft')}
+            >
+              保存草稿
+            </button>
+            <button
+              className="primary-button"
+              disabled={isSaving}
+              type="button"
+              onClick={() => onSave('published')}
+            >
+              {isSaving ? '正在保存…' : '保存并发布'}
+            </button>
+          </div>
+          <span>手动保存 · Markdown 内容会实时预览</span>
         </div>
       </form>
+    </section>
+  )
+}
+
+const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; description: string }> = {
+  overview: { eyebrow: 'BLOG CONTROL CENTER', title: '仪表盘', description: '掌握内容状态并快速进入今天的工作。' },
+  posts: { eyebrow: 'CONTENT / ARTICLES', title: '文章管理', description: '编辑、整理并发布长期内容。' },
+  pages: { eyebrow: 'CONTENT / PAGES', title: '页面管理', description: '规划站点里的固定页面和专题入口。' },
+  comments: { eyebrow: 'CONTENT / COMMENTS', title: '评论管理', description: '查看读者反馈与讨论。' },
+  attachments: { eyebrow: 'CONTENT / ASSETS', title: '附件管理', description: '统一整理图片、文件与媒体素材。' },
+  links: { eyebrow: 'CONTENT / LINKS', title: '链接管理', description: '维护站点内外的重要连接。' },
+  themes: { eyebrow: 'APPEARANCE / THEMES', title: '主题外观', description: '调整站点的视觉风格与展示方式。' },
+  menus: { eyebrow: 'APPEARANCE / MENUS', title: '菜单管理', description: '组织访客使用的导航结构。' },
+  users: { eyebrow: 'SYSTEM / USERS', title: '用户管理', description: '管理作者资料与访问权限。' },
+  settings: { eyebrow: 'SYSTEM / SETTINGS', title: '系统设置', description: '配置博客系统的基础信息。' },
+}
+
+const contextItems: Partial<Record<StudioSection, Array<{ title: string; note: string }>>> = {
+  pages: [
+    { title: '首页', note: '站点主要入口' },
+    { title: '关于', note: '个人介绍页面' },
+    { title: '归档', note: '按时间整理内容' },
+  ],
+  comments: [
+    { title: '待审核', note: '0 条评论' },
+    { title: '已通过', note: '0 条评论' },
+    { title: '回收站', note: '0 条评论' },
+  ],
+  attachments: [
+    { title: '图片', note: '封面与正文素材' },
+    { title: '文档', note: '可下载文件' },
+    { title: '视频', note: '影音内容资源' },
+  ],
+  links: [
+    { title: '友情链接', note: '站点伙伴' },
+    { title: '常用资源', note: '个人收藏' },
+  ],
+  themes: [
+    { title: '当前主题', note: 'Genesis Editorial' },
+    { title: '主题设置', note: '颜色、字体与版式' },
+  ],
+  menus: [
+    { title: '主导航', note: '顶部访客导航' },
+    { title: '页脚导航', note: '站点补充入口' },
+  ],
+  users: [
+    { title: '站点作者', note: '拥有内容管理权限' },
+    { title: '个人资料', note: '名称、头像与简介' },
+  ],
+  settings: [
+    { title: '基本信息', note: '站点名称与描述' },
+    { title: '发布设置', note: '默认文章状态' },
+    { title: '系统状态', note: '服务与版本信息' },
+  ],
+}
+
+function ContextSidebar({
+  activeSection,
+  editor,
+  posts,
+  user,
+  onCreatePost,
+  onOpenPost,
+}: {
+  activeSection: StudioSection
+  editor: EditorState
+  posts: BlogPostAdmin[]
+  user: CurrentUser
+  onCreatePost: () => void
+  onOpenPost: (post: BlogPostAdmin) => void
+}) {
+  const published = posts.filter((post) => post.status === 'published').length
+  const drafts = posts.length - published
+
+  if (activeSection === 'posts') {
+    return (
+      <aside className="studio-context-sidebar" aria-label="三级文章导航">
+        <header className="studio-context-header">
+          <div><span className="studio-level-mark">三级</span><p>AUTHOR / {user.handle}</p><h2>文章</h2></div>
+          <span>{posts.length} 篇</span>
+        </header>
+        <button className="new-post-button" type="button" onClick={onCreatePost}>
+          <StudioIcon name="plus" /> 新建文章
+        </button>
+        <div className="studio-context-filters" aria-label="文章筛选">
+          <button className="is-active" type="button">全部 <span>{posts.length}</span></button>
+          <button type="button">已发布 <span>{published}</span></button>
+          <button type="button">草稿 <span>{drafts}</span></button>
+        </div>
+        <div className="post-list">
+          {posts.map((post) => (
+            <button
+              className={editor.id === post.id ? 'post-list__item is-selected' : 'post-list__item'}
+              key={post.id}
+              type="button"
+              onClick={() => onOpenPost(post)}
+            >
+              <span className={`post-status post-status--${post.status}`}>{post.status === 'published' ? '已发布' : '草稿'}</span>
+              <strong>{post.title}</strong>
+              <small>{post.excerpt || '暂无摘要'}</small>
+              <time>{post.updated_at.slice(0, 10)}</time>
+            </button>
+          ))}
+          {posts.length === 0 && <p className="studio-context-empty">还没有文章，创建第一篇草稿吧。</p>}
+        </div>
+      </aside>
+    )
+  }
+
+  if (activeSection === 'overview') {
+    return (
+      <aside className="studio-context-sidebar" aria-label="三级工作台导航">
+        <header className="studio-context-header">
+          <div><span className="studio-level-mark">三级</span><p>TODAY / WORKSPACE</p><h2>工作台</h2></div>
+          <StudioIcon name="spark" />
+        </header>
+        <button className="new-post-button" type="button" onClick={onCreatePost}>
+          <StudioIcon name="plus" /> 开始写作
+        </button>
+        <div className="studio-context-summary">
+          <button type="button"><span>待完善草稿</span><strong>{drafts}</strong></button>
+          <button type="button"><span>已发布内容</span><strong>{published}</strong></button>
+        </div>
+        <p className="studio-context-label">最近更新</p>
+        <div className="studio-context-recent">
+          {posts.slice(0, 4).map((post) => (
+            <button type="button" key={post.id} onClick={() => onOpenPost(post)}>
+              <span>{post.status === 'published' ? 'P' : 'D'}</span>
+              <strong>{post.title}</strong>
+              <StudioIcon name="chevron" />
+            </button>
+          ))}
+        </div>
+        <div className="studio-context-note">
+          <StudioIcon name="spark" />
+          <div><strong>保持内容节奏</strong><p>先完成，再持续打磨。每一次发布都会让系统更完整。</p></div>
+        </div>
+      </aside>
+    )
+  }
+
+  const meta = sectionMeta[activeSection]
+  return (
+    <aside className="studio-context-sidebar" aria-label={`三级${meta.title}导航`}>
+      <header className="studio-context-header">
+        <div><span className="studio-level-mark">三级</span><p>SECTION / DETAIL</p><h2>{meta.title}</h2></div>
+      </header>
+      <div className="studio-context-menu">
+        {(contextItems[activeSection] ?? []).map((item, index) => (
+          <button className={index === 0 ? 'is-active' : ''} type="button" key={item.title}>
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            <div><strong>{item.title}</strong><small>{item.note}</small></div>
+            <StudioIcon name="chevron" />
+          </button>
+        ))}
+      </div>
+      <div className="studio-context-note studio-context-note--muted">
+        <StudioIcon name="spark" />
+        <div><strong>功能占位</strong><p>当前阶段先完成管理台信息架构，具体能力将在后续子系统中接入。</p></div>
+      </div>
+    </aside>
+  )
+}
+
+function SectionPlaceholder({ section }: { section: Exclude<StudioSection, 'overview' | 'posts'> }) {
+  const meta = sectionMeta[section]
+  return (
+    <section className="studio-placeholder-panel">
+      <span className="studio-placeholder-icon"><StudioIcon name="spark" /></span>
+      <p>{meta.eyebrow}</p>
+      <h2>{meta.title}</h2>
+      <span>{meta.description}</span>
+      <div className="studio-placeholder-rule" />
+      <small>界面结构已经就位，业务能力将在对应阶段接入。</small>
     </section>
   )
 }
@@ -330,15 +530,28 @@ function Dashboard({
   user: CurrentUser
   onLogout: () => void
 }) {
+  const [activeSection, setActiveSection] = useState<StudioSection>('overview')
   const [editor, setEditor] = useState<EditorState>(() => createEmptyEditor())
   const [managedPosts, setManagedPosts] = useState(posts)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
 
-  async function savePost() {
+  function createPost() {
+    setActiveSection('posts')
+    setEditor(createEmptyEditor())
+    setFeedback(null)
+  }
+
+  function openPost(post: BlogPostAdmin) {
+    setActiveSection('posts')
+    setEditor(toEditor(post))
+    setFeedback(null)
+  }
+
+  async function savePost(status: BlogPostStatus) {
     let payload: BlogPostWrite
     try {
-      payload = toPayload(editor)
+      payload = toPayload({ ...editor, status })
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : '文章信息不完整。')
       return
@@ -347,14 +560,10 @@ function Dashboard({
     setIsSaving(true)
     setFeedback(null)
     try {
-      const savedPost =
-        editor.id === null
-          ? await createAdminBlogPost(token, payload)
-          : await updateAdminBlogPost(token, editor.id, payload)
-      setManagedPosts((currentPosts) => [
-        savedPost,
-        ...currentPosts.filter((post) => post.id !== savedPost.id),
-      ])
+      const savedPost = editor.id === null
+        ? await createAdminBlogPost(token, payload)
+        : await updateAdminBlogPost(token, editor.id, payload)
+      setManagedPosts((currentPosts) => [savedPost, ...currentPosts.filter((post) => post.id !== savedPost.id)])
       setEditor(toEditor(savedPost))
       setFeedback('已保存。')
     } catch {
@@ -365,12 +574,8 @@ function Dashboard({
   }
 
   async function deletePost() {
-    if (editor.id === null) {
-      return
-    }
-    if (!window.confirm(`确定删除「${editor.title}」吗？此操作不可恢复。`)) {
-      return
-    }
+    if (editor.id === null) return
+    if (!window.confirm(`确定删除「${editor.title}」吗？此操作不可恢复。`)) return
     try {
       await deleteAdminBlogPost(token, editor.id)
       setManagedPosts((currentPosts) => currentPosts.filter((post) => post.id !== editor.id))
@@ -381,57 +586,36 @@ function Dashboard({
     }
   }
 
+  const meta = sectionMeta[activeSection]
+
   return (
-    <main className="studio-dashboard">
-      <section className="studio-sidebar" aria-label="文章列表">
-        <div className="studio-sidebar__top">
-          <div>
-            <p className="eyebrow">AUTHOR / {user.handle}</p>
-            <h1>写作台</h1>
+    <div className="studio-app-shell">
+      <StudioNavigation activeSection={activeSection} onChange={setActiveSection} onLogout={onLogout} user={user} />
+      <ContextSidebar activeSection={activeSection} editor={editor} posts={managedPosts} user={user} onCreatePost={createPost} onOpenPost={openPost} />
+
+      <div className="studio-workspace">
+        <header className="studio-topbar">
+          <div className="studio-topbar__title">
+            <span className="studio-mobile-level">内容工作区</span>
+            <div><p>{meta.eyebrow}</p><h1>{meta.title}</h1><small>{meta.description}</small></div>
           </div>
-          <button className="text-button" type="button" onClick={onLogout}>
-            退出
-          </button>
-        </div>
-        <button
-          className="new-post-button"
-          type="button"
-          onClick={() => {
-            setEditor(createEmptyEditor())
-            setFeedback(null)
-          }}
-        >
-          + 新建文章
-        </button>
-        <div className="post-list">
-          {managedPosts.map((post) => (
-            <button
-              className={editor.id === post.id ? 'post-list__item is-selected' : 'post-list__item'}
-              key={post.id}
-              type="button"
-              onClick={() => {
-                setEditor(toEditor(post))
-                setFeedback(null)
-              }}
-            >
-              <span className={`post-status post-status--${post.status}`}>
-                {post.status === 'published' ? '已发布' : '草稿'}
-              </span>
-              <strong>{post.title}</strong>
-              <small>{post.updated_at.slice(0, 10)}</small>
-            </button>
-          ))}
-        </div>
-      </section>
-      <Editor
-        editor={editor}
-        feedback={feedback}
-        isSaving={isSaving}
-        onChange={setEditor}
-        onDelete={() => void deletePost()}
-        onSave={() => void savePost()}
-      />
-    </main>
+          <div className="studio-topbar__actions">
+            <button type="button" aria-label="通知"><StudioIcon name="bell" /><span>2</span></button>
+            <Link className="studio-topbar__site-link" to="/blog"><StudioIcon name="eye" />查看站点 <span>↗</span></Link>
+          </div>
+        </header>
+
+        <main className={activeSection === 'posts' ? 'studio-content studio-content--editor' : 'studio-content'}>
+          {activeSection === 'overview' && (
+            <StudioOverview posts={managedPosts} onChange={setActiveSection} onCreatePost={createPost} onOpenPost={openPost} />
+          )}
+          {activeSection === 'posts' && (
+            <Editor editor={editor} feedback={feedback} isSaving={isSaving} onChange={setEditor} onDelete={() => void deletePost()} onSave={(status) => void savePost(status)} />
+          )}
+          {activeSection !== 'overview' && activeSection !== 'posts' && <SectionPlaceholder section={activeSection} />}
+        </main>
+      </div>
+    </div>
   )
 }
 

@@ -45,6 +45,7 @@ const posts = {
 
 describe('App', () => {
   afterEach(() => {
+    window.history.pushState({}, '', '/')
     vi.restoreAllMocks()
   })
 
@@ -74,6 +75,7 @@ describe('App', () => {
       return Promise.resolve(new Response(null, { status: 404 }))
     })
 
+    window.history.pushState({}, '', '/blog')
     render(<App />)
 
     expect(await screen.findByRole('heading', { name: '最近的文章' })).toBeInTheDocument()
@@ -86,4 +88,60 @@ describe('App', () => {
     expect(screen.getByRole('list')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '返回文章列表' })).toBeInTheDocument()
   })
+
+  it('写作台登录后展示三级导航和仪表盘，并可进入文章编辑', async () => {
+    const adminPosts = posts.items.map((post) => ({
+      ...post,
+      status: 'published' as const,
+      content_markdown: `# ${post.title}`,
+      created_at: '2026-09-01T00:00:00Z',
+      updated_at: '2026-09-05T00:00:00Z',
+    }))
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.endsWith('/auth/login')) {
+        return Promise.resolve(new Response(JSON.stringify({ access_token: 'test-token', token_type: 'bearer' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }))
+      }
+      if (url.endsWith('/auth/me')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          id: 'user-1',
+          handle: 'genesis',
+          display_name: 'Genesis',
+          bio: '',
+          avatar_url: null,
+          role: 'owner',
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      if (url.endsWith('/admin/blog/posts')) {
+        return Promise.resolve(new Response(JSON.stringify(adminPosts), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }))
+      }
+      return Promise.resolve(new Response(null, { status: 404 }))
+    })
+
+    window.history.pushState({}, '', '/studio')
+    render(<App />)
+
+    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'test-password' } })
+    fireEvent.click(screen.getByRole('button', { name: '进入写作台' }))
+
+    expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: '一级系统导航' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: '二级博客管理导航' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: '三级工作台导航' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '快捷访问' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^文章$/ }))
+
+    expect(screen.getByRole('heading', { name: '文章管理' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: '三级文章导航' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '新建文章' })).toBeInTheDocument()
+  })
+
 })

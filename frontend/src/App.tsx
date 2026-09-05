@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { BrowserRouter, Link, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -64,7 +65,46 @@ function TagList({ tags }: { tags: BlogTag[] }) {
   )
 }
 
+function Home() {
+  return (
+    <div className="page" id="top">
+      <header className="site-header">
+        <Link className="brand" to="/">Genesis<span>.</span></Link>
+        <nav aria-label="主导航">
+          <Link to="/blog">博客</Link>
+          <Link to="/account">账户</Link>
+          <Link to="/studio">写作台</Link>
+          <Link to="/tools">工具</Link>
+          <Link to="/media">影音</Link>
+        </nav>
+        <span className="module-state">00 / Genesis</span>
+      </header>
+      <main>
+        <section className="intro home-intro" aria-labelledby="home-title">
+          <p className="eyebrow">PERSONAL OPERATING SYSTEM</p>
+          <h1 id="home-title">把生活里重要的事，放进一个<em>会生长的系统。</em></h1>
+          <p className="intro-copy">Genesis 是一个逐步生长的个人系统，从内容沉淀、日常工具到影音记录，把分散的思考和创造连接起来。</p>
+        </section>
+        <section className="home-systems" aria-labelledby="systems-title">
+          <div className="section-heading">
+            <div><p className="eyebrow">THREE SYSTEMS</p><h2 id="systems-title">从一个入口，进入三个世界</h2></div>
+          </div>
+          <div className="home-system-grid">
+            <Link className="home-system-card home-system-card--blog" to="/blog"><span>01</span><h3>博客</h3><p>沉淀值得反复回看的想法、文章与长期记录。</p><strong>进入博客 ↗</strong></Link>
+            <Link className="home-system-card home-system-card--tools" to="/tools"><span>02</span><h3>工具</h3><p>把重复的工作整理成可以直接使用的小工具。</p><strong>进入工具 ↗</strong></Link>
+            <Link className="home-system-card home-system-card--media" to="/media"><span>03</span><h3>影音</h3><p>记录正在发生的现场、声音和影像。</p><strong>进入影音 ↗</strong></Link>
+          </div>
+        </section>
+      </main>
+      <footer className="site-footer"><span>Genesis · 个人内容系统</span><span>Build slowly. Keep growing.</span></footer>
+    </div>
+  )
+}
+
 function PublicBlog() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { slug } = useParams<{ slug: string }>()
   const [blogState, setBlogState] = useState<BlogState>({ status: 'loading' })
   const [articleState, setArticleState] = useState<ArticleState>({ status: 'idle' })
   const [activeTag, setActiveTag] = useState<string | null>(null)
@@ -103,6 +143,7 @@ function PublicBlog() {
   const regularPosts = visiblePosts.filter((post) => post.slug !== featuredPost?.slug)
 
   function openArticle(slug: string) {
+    void navigate(`/articles/${slug}`)
     articleRequest.current?.abort()
     const controller = new AbortController()
     articleRequest.current = controller
@@ -123,6 +164,7 @@ function PublicBlog() {
 
   function closeArticle() {
     articleRequest.current?.abort()
+    void navigate('/blog')
     setArticleState({ status: 'idle' })
   }
 
@@ -131,20 +173,28 @@ function PublicBlog() {
     setRefreshKey((key) => key + 1)
   }
 
+  useEffect(() => {
+    if (location.pathname.startsWith('/articles/') && slug !== undefined && articleState.status === 'idle') {
+      queueMicrotask(() => openArticle(slug))
+    }
+    // URL 参数变化时同步打开对应文章。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, slug])
+
   return (
     <div className="page" id="top">
       <header className="site-header">
-        <a className="brand" href="#top" onClick={closeArticle}>
+        <Link className="brand" to="/blog" onClick={closeArticle}>
           Genesis<span>.</span>
-        </a>
+        </Link>
         <nav aria-label="主导航">
-          <a href="#articles" onClick={closeArticle}>
+          <Link to="/blog" onClick={closeArticle}>
             博客
-          </a>
-          <a href="/account">账户</a>
-          <a href="/studio">写作台</a>
-          <span title="将在博客模块完成后开发">工具</span>
-          <span title="将在工具模块完成后开发">影音</span>
+          </Link>
+          <Link to="/account">账户</Link>
+          <Link to="/studio">写作台</Link>
+          <Link to="/tools">工具</Link>
+          <Link to="/media">影音</Link>
         </nav>
         <span className="module-state">01 / Blog</span>
       </header>
@@ -309,8 +359,27 @@ function PublicBlog() {
   )
 }
 
+function ModulePlaceholder({ title, index, description }: { title: string; index: string; description: string }) {
+  return (
+    <div className="page" id="top">
+      <header className="site-header"><Link className="brand" to="/">Genesis<span>.</span></Link><nav aria-label="主导航"><Link to="/blog">博客</Link><Link to="/tools">工具</Link><Link to="/media">影音</Link></nav><span className="module-state">{index} / {title}</span></header>
+      <main className="module-placeholder"><p className="eyebrow">GENESIS / {index}</p><h1>{title}<em>正在生长。</em></h1><p>{description}</p><Link className="primary-button" to="/">返回 Genesis 首页 <span aria-hidden="true">→</span></Link></main>
+    </div>
+  )
+}
+
 export function App() {
-  if (window.location.pathname === '/studio') return <Studio />
-  if (window.location.pathname === '/account') return <Account />
-  return <PublicBlog />
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/blog" element={<PublicBlog />} />
+        <Route path="/articles/:slug" element={<PublicBlog />} />
+        <Route path="/tools" element={<ModulePlaceholder title="工具" index="02" description="把重复的工作整理成可以直接使用的小工具。" />} />
+        <Route path="/media" element={<ModulePlaceholder title="影音" index="03" description="记录正在发生的现场、声音和影像。" />} />
+        <Route path="/studio" element={<Studio />} />
+        <Route path="/account" element={<Account />} />
+      </Routes>
+    </BrowserRouter>
+  )
 }
