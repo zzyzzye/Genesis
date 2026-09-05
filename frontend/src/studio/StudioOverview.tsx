@@ -35,6 +35,22 @@ export function StudioOverview({
     { title: '附件管理', description: '整理图片、文件与媒体素材', icon: 'attachment', action: () => onChange('attachments') },
     { title: '主题外观', description: '管理站点视觉与展示风格', icon: 'palette', action: () => onChange('themes') },
   ]
+  const activityItems = [
+    ...posts.slice(0, 6).map((post) => ({
+      id: post.id,
+      title: post.title,
+      description: post.excerpt || '暂无摘要',
+      label: post.status === 'published' ? '已发布' : '草稿',
+      date: formatShortDate(post.updated_at),
+      post,
+    })),
+    ...[
+      { id: 'editor-ready', title: '编辑器已准备就绪', description: '可以开始创建或继续编辑 Markdown 内容。', label: '系统提示', date: '今天' },
+      { id: 'preview-ready', title: '站点预览入口可用', description: '可随时从右上角检查公开页面的展示效果。', label: '系统提示', date: '今天' },
+      { id: 'draft-advice', title: '定期整理未完成草稿', description: '清理不再继续的选题，让内容计划保持清晰。', label: '内容建议', date: '本周' },
+      { id: 'asset-advice', title: '统一管理文章素材', description: '封面、图片和文档可集中归入附件管理。', label: '内容建议', date: '本周' },
+    ],
+  ].slice(0, 6)
 
   return (
     <section className="studio-overview" aria-labelledby="studio-overview-title">
@@ -75,14 +91,18 @@ export function StudioOverview({
             <button type="button" onClick={() => onChange('posts')}>查看全部</button>
           </header>
           <div className="studio-activity-list">
-            {posts.slice(0, 6).map((post, index) => (
-              <button type="button" onClick={() => onOpenPost(post)} key={post.id}>
+            {activityItems.map((item, index) => (
+              <button
+                className={'post' in item ? '' : 'is-static'}
+                type="button"
+                onClick={() => 'post' in item && onOpenPost(item.post)}
+                key={item.id}
+              >
                 <span className={`studio-activity-index studio-activity-index--${(index % 3) + 1}`}>{String(index + 1).padStart(2, '0')}</span>
-                <span><strong>{post.title}</strong><small>{post.excerpt || '暂无摘要'}</small></span>
-                <span className="studio-activity-meta"><em>{post.status === 'published' ? '已发布' : '草稿'}</em><time>{formatShortDate(post.updated_at)}</time></span>
+                <span><strong>{item.title}</strong><small>{item.description}</small></span>
+                <span className="studio-activity-meta"><em>{item.label}</em><time>{item.date}</time></span>
               </button>
             ))}
-            {posts.length === 0 && <div className="studio-empty-activity">还没有内容，从第一篇文章开始。</div>}
           </div>
         </article>
       </div>
