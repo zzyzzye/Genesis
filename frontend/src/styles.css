@@ -1733,3 +1733,108 @@ nav span {
   .editor-heading h1 { font-size: 1.55rem; }
   .editor-actions { flex-direction: column; }
 }
+
+
+/* 写作台细节：统一字体节奏、对比度和状态颜色 */
+.studio-app-shell {
+  --studio-ink: #172235;
+  --studio-muted: #687587;
+  --studio-faint: #98a3af;
+  --studio-brand: #1769bd;
+  --studio-accent: #d94d31;
+  --studio-line: #d9e0e6;
+  --studio-canvas: #eef2f6;
+  --studio-soft: #f6f8fa;
+  --studio-display: "Noto Serif SC", "Source Han Serif SC", "STSong", "SimSun", serif;
+  --studio-ui: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  font-family: var(--studio-ui);
+}
+
+.studio-system-rail { background: #f7f9fb; }
+.studio-section-nav { background: #fff; }
+.studio-context-sidebar { background: #f1f4f7; }
+.studio-workspace { background: var(--studio-canvas); }
+.studio-level-mark { font-family: var(--studio-ui); font-size: .66rem; letter-spacing: .12em; }
+.studio-system-rail > .studio-level-mark { color: var(--studio-brand); }
+.studio-section-nav .studio-level-mark { color: #738092; }
+.studio-context-sidebar .studio-level-mark { color: var(--studio-accent); }
+
+.studio-section-nav__header strong,
+.studio-context-header h2,
+.studio-topbar__title h1,
+.editor-heading h1,
+.studio-stat-card strong,
+.studio-context-summary strong,
+.studio-placeholder-panel h2 { font-family: var(--studio-display); letter-spacing: .01em; }
+
+.studio-section-nav__header strong { font-size: 1.7rem; font-weight: 600; }
+.studio-nav-search span { font-size: .88rem; }
+.studio-nav-search kbd { font-size: .68rem; }
+.studio-nav-group > p { font-size: .7rem; letter-spacing: .02em; }
+.studio-nav-item { min-height: 2.8rem; font-size: .9rem; line-height: 1.35; }
+.studio-nav-item em { font-size: .64rem; }
+.studio-section-account strong { font-size: .78rem; }
+.studio-section-account small { font-size: .66rem; }
+
+.studio-context-header p { font-size: .66rem; letter-spacing: .12em; }
+.studio-context-header h2 { font-size: 1.85rem; font-weight: 600; }
+.studio-context-header > span { font-size: .75rem; }
+.new-post-button { font-size: .84rem; }
+.studio-context-filters button { font-size: .72rem; }
+.studio-context-filters span { font-size: .62rem; }
+.post-list__item strong { font-size: .86rem; line-height: 1.35; }
+.post-list__item small { font-size: .7rem; line-height: 1.4; }
+.post-list__item time { font-size: .64rem; }
+.post-status { font-size: .64rem; }
+.studio-context-summary span { font-size: .68rem; }
+.studio-context-summary strong { font-size: 1.55rem; }
+.studio-context-label { font-size: .68rem; }
+.studio-context-recent strong { font-size: .76rem; }
+.studio-context-note strong { font-size: .72rem; }
+.studio-context-note p { font-size: .66rem; }
+.studio-context-menu strong { font-size: .78rem; }
+.studio-context-menu small { font-size: .64rem; }
+
+.studio-topbar__title p { font-size: .66rem; letter-spacing: .13em; }
+.studio-topbar__title h1 { font-size: 2rem; font-weight: 600; }
+.studio-topbar__title small { font-size: .72rem; }
+.studio-topbar__site-link { font-size: .74rem; }
+.studio-stat-card p { font-size: .72rem; }
+.studio-stat-card strong { font-size: 2rem; }
+.studio-stat-card small { font-size: .62rem; }
+.studio-panel__header p { font-size: .6rem; letter-spacing: .12em; }
+.studio-panel__header h2 { font-size: 1.02rem; }
+.studio-panel__header > span,
+.studio-panel__header > button { font-size: .64rem; }
+.studio-quick-grid strong { font-size: .82rem; }
+.studio-quick-grid small { font-size: .66rem; line-height: 1.5; }
+.studio-activity-list strong { font-size: .78rem; }
+.studio-activity-list small { font-size: .65rem; }
+.studio-activity-meta em { font-size: .62rem; }
+.studio-activity-meta time { font-size: .6rem; }
+
+.editor-heading .eyebrow { font-size: .66rem; }
+.editor-heading h1 { font-size: 2.3rem; font-weight: 600; }
+.editor-form label { font-size: .76rem; }
+.editor-form input,
+.editor-form textarea,
+.editor-form select { font-size: .88rem; }
+.studio-preview.article-content { font-size: .94rem; }
+.editor-actions { font-size: .66rem; }
+
+.studio-rail-systems .is-active { border-color: #172235; background: #172235; }
+.studio-nav-item.is-active { border-color: #d4dce4; background: #e9eff5; color: #142033; }
+.studio-nav-item.is-active::before { background: var(--studio-brand); }
+.post-list__item.is-selected { border-color: #d3dce5; background: #fff; }
+.post-list__item.is-selected::before { background: var(--studio-accent); }
+.studio-topbar__site-link,
+.new-post-button { background: #172235; }
+.studio-topbar__site-link:hover,
+.new-post-button:hover { background: #263750; }
+.studio-card-icon { color: #5e6d80; }
+
+@media (max-width: 680px) {
+  .studio-nav-item { font-size: .84rem; }
+  .studio-topbar__title h1 { font-size: 1.3rem; }
+  .editor-heading h1 { font-size: 1.7rem; }
+}
