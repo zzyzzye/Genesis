@@ -104,6 +104,8 @@ make docker-up
 
 文本生成通过 `GENESIS_TEXT_PROVIDER` 选择 `openai`、`grok` 或 `claude`，并分别填写对应的 API Key 和模型名。图像生成、视频生成配置将在后续阶段补充。
 
+后端已预留 LangChain、LangGraph、Deep Agents 依赖，并提供站点所有者权限的动态模型发现接口：GET /api/v1/llm/providers/{provider}/models。模型名称会根据配置的 URL 和 API Key 从供应商接口获取，.env 中的模型名仅作为自定义网关不可发现时的 fallback。
+
 如果临时脱离 Docker 运行服务，再分别复制后端和前端示例文件：
 
 ```bash
