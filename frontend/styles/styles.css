@@ -2010,3 +2010,23 @@ nav span {
 .studio-assistant__messages { flex: 0 0 auto; }
 .studio-assistant__suggestions { flex: 0 0 auto; }
 .studio-assistant__composer { flex: 0 0 auto; }
+/* Genesis AI 助手视觉与交互优化 */
+.studio-assistant__launcher { width: 3.35rem; height: 3.35rem; }
+.studio-assistant__launcher-icon { width: 2rem; height: 2rem; border-radius: .6rem; }
+.studio-assistant__launcher-icon svg { width: .95rem; height: .95rem; }
+.studio-assistant__panel { height: min(46rem, calc(100vh - 4rem)); }
+.studio-assistant__message p,
+.studio-assistant__markdown { font-size: .88rem; line-height: 1.75; }
+.studio-assistant__markdown > :first-child { margin-top: 0; }
+.studio-assistant__markdown > :last-child { margin-bottom: 0; }
+.studio-assistant__markdown p { margin: 0 0 .55rem; }
+.studio-assistant__markdown ul, .studio-assistant__markdown ol { margin: .35rem 0 .55rem 1.15rem; padding: 0; }
+.studio-assistant__markdown code { padding: .08rem .25rem; border-radius: .25rem; background: rgba(32,55,67,.08); font-size: .82em; }
+.studio-assistant__markdown pre { overflow-x: auto; padding: .65rem; border-radius: .45rem; background: #203743; color: #eef5e9; }
+.studio-assistant__markdown pre code { padding: 0; background: transparent; }
+.studio-assistant__model-menu { left: 0; right: auto; bottom: calc(100% + .5rem); }
+.provider-icon { display: inline-grid; width: 1.05rem; height: 1.05rem; place-items: center; border-radius: .3rem; font-size: .72rem; font-weight: 800; }
+.provider-icon--openai { background: #dceee5; color: #16735b; }
+.provider-icon--grok { background: #e7e9eb; color: #111820; }
+.provider-icon--claude { background: #f6dfc7; color: #a85b28; }
+@media (max-width: 680px) { .studio-assistant__launcher { width: 3rem; height: 3rem; } .studio-assistant__launcher-icon { width: 1.75rem; height: 1.75rem; } .studio-assistant__panel { height: min(46rem, calc(100vh - 3rem)); } }

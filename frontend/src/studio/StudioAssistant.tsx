@@ -1,10 +1,20 @@
 import { type FormEvent, useEffect, useState } from 'react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 import { StudioIcon } from './StudioIcon'
+
+function ProviderIcon({ provider }: { provider: AiProvider }) {
+  return <span className={`provider-icon provider-icon--${provider}`} aria-hidden="true">{provider === 'openai' ? '◎' : provider === 'grok' ? '𝕏' : '✦'}</span>
+}
 import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider } from '../lib/api'
 import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
 
 type AssistantMessage = { role: 'assistant' | 'user'; content: string }
+
+function MarkdownMessage({ content }: { content: string }) {
+  return <div className="studio-assistant__markdown"><Markdown remarkPlugins={[remarkGfm]}>{content || '正在生成…'}</Markdown></div>
+}
 
 const suggestions = ['帮我梳理今天的写作计划', '把这篇文章改得更有力量', '生成一个文章标题']
 
@@ -83,7 +93,7 @@ export function StudioAssistant() {
               {messages.map((message, index) => (
                 <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${message.role}-${index}`}>
                   {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
-                  <p>{message.content}</p>
+                  {message.role === 'assistant' ? <MarkdownMessage content={message.content} /> : <p>{message.content}</p>}
                 </div>
               ))}
             </div>
@@ -98,7 +108,7 @@ export function StudioAssistant() {
             <textarea aria-label="向 Genesis AI 提问" placeholder="告诉我你想完成什么…" rows={2} value={draft} onChange={(event) => setDraft(event.target.value)} />
             <div className="studio-assistant__composer-tools">
               <button className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
-                <StudioIcon name="assistant" /> {model || '选择模型'} <StudioIcon name="chevron" />
+                <ProviderIcon provider={provider} /> {model || '选择模型'} <StudioIcon name="chevron" />
               </button>
               {modelMenuOpen && <div className="studio-assistant__model-menu">
                 <div className="studio-assistant__provider-tabs">{(['openai', 'grok', 'claude'] as AiProvider[]).map((item) => <button key={item} type="button" className={provider === item ? 'is-active' : ''} onClick={() => { setProvider(item); setModelMenuOpen(false) }}>{item}</button>)}</div>
