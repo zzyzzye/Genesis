@@ -91,7 +91,7 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '返回文章列表' })).toBeInTheDocument()
   })
 
-  it('写作台登录后展示三级导航和仪表盘，并可进入文章编辑', async () => {
+  it('写作台登录后展示博客管理导航和仪表盘，并可进入文章编辑', async () => {
     const adminPosts = posts.items.map((post) => ({
       ...post,
       status: 'published' as const,
@@ -134,8 +134,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '进入写作台' }))
 
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: '一级系统导航' })).toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: '二级博客管理导航' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: '博客管理导航' })).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: '一级系统导航' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '快捷访问' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /^文章$/ }))
