@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm'
 
 import { StudioIcon } from './studio/StudioIcon'
 import { StudioNavigation } from './studio/StudioNavigation'
-import { getNavigationGroup, type StudioSection } from './studio/StudioNavigationModel'
+import type { StudioSection } from './studio/StudioNavigationModel'
 import { StudioOverview } from './studio/StudioOverview'
 
 import {
@@ -359,42 +359,6 @@ const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; descr
   settings: { eyebrow: 'SYSTEM / SETTINGS', title: '系统设置', description: '配置博客系统的基础信息。' },
 }
 
-function ContextSidebar({
-  activeSection,
-  onChange,
-}: {
-  activeSection: StudioSection
-  onChange: (section: StudioSection) => void
-}) {
-  const group = getNavigationGroup(activeSection)
-
-  if (!group) {
-    return null
-  }
-
-  return (
-    <aside className="studio-context-sidebar" aria-label={`三级${group.label}菜单`}>
-      <header className="studio-context-header">
-        <div><span className="studio-level-mark">三级</span><p>FUNCTION / {group.id.toUpperCase()}</p><h2>{group.label}</h2></div>
-        <span>{group.items.length} 项</span>
-      </header>
-      <nav className="studio-context-menu" aria-label={`${group.label}功能菜单`}>
-        {group.items.map((item) => (
-          <button className={activeSection === item.id ? 'is-active' : ''} type="button" key={item.id} onClick={() => onChange(item.id)}>
-            <StudioIcon className="studio-context-menu__icon" name={item.icon} />
-            <div><strong>{item.label}</strong><small>{item.description}</small></div>
-            <StudioIcon name="chevron" />
-          </button>
-        ))}
-      </nav>
-      <div className="studio-context-note studio-context-note--muted">
-        <StudioIcon name="spark" />
-        <div><strong>三级功能菜单</strong><p>这里负责切换具体功能，右侧区域展示对应的数据和操作。</p></div>
-      </div>
-    </aside>
-  )
-}
-
 function PostsIndex({
   posts,
   onCreatePost,
@@ -568,9 +532,8 @@ function Dashboard({
   const meta = sectionMeta[activeSection]
 
   return (
-    <div className={activeSection === 'overview' ? 'studio-app-shell studio-app-shell--overview' : 'studio-app-shell'}>
+    <div className="studio-app-shell">
       <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={onLogout} user={user} />
-      {activeSection !== 'overview' && <ContextSidebar activeSection={activeSection} onChange={selectSection} />}
 
       <div className="studio-workspace">
         <header className="studio-topbar">
