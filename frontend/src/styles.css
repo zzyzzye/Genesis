@@ -1920,3 +1920,45 @@ nav span {
   .studio-posts-workspace { grid-template-columns: 1fr; }
   .studio-post-index { display: none; }
 }
+
+
+/* 文章列表是右侧内容区的列表视图，点击后原地切换为编辑视图 */
+.studio-post-index { display: flex; flex-direction: column; min-height: 100%; overflow: auto; background: #eef2f6; }
+.studio-post-index__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.35rem 1.45rem 1rem; border-bottom: 1px solid #dfe4e9; background: #fff; }
+.studio-post-index__header p { margin: 0 0 .2rem; color: var(--studio-accent); font-size: .64rem; font-weight: 900; letter-spacing: .12em; }
+.studio-post-index__header h2 { margin: 0; font-family: var(--studio-display); font-size: 1.75rem; font-weight: 600; }
+.studio-post-index__actions { display: flex; align-items: center; gap: .5rem; }
+.studio-post-index__actions > button:not(.new-post-button) { padding: .58rem .75rem; border: 1px solid #d8dee4; border-radius: .25rem; background: #fff; color: #526173; font-size: .72rem; }
+.studio-post-index__actions > button:not(.new-post-button):hover { background: #f6f8fa; color: var(--studio-ink); }
+.studio-post-index__actions .new-post-button { width: auto; margin: 0; padding: .62rem .85rem; font-size: .75rem; }
+.studio-post-index__toolbar { display: flex; align-items: center; gap: .7rem; padding: .95rem 1.45rem; border-bottom: 1px solid #dfe4e9; background: #f8fafb; }
+.studio-post-index__toolbar > label { display: flex; align-items: center; gap: .5rem; width: 15rem; padding: .55rem .65rem; border: 1px solid #d7dee5; border-radius: .25rem; background: #fff; color: #8793a0; }
+.studio-post-index__toolbar input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--studio-ink); font: inherit; font-size: .75rem; }
+.studio-post-index__filters { display: flex; align-items: center; gap: .3rem; }
+.studio-post-index__filters button { padding: .45rem .6rem; border: 0; background: transparent; color: #687687; font-size: .7rem; }
+.studio-post-index__filters button:hover,
+.studio-post-index__filters button.is-active { color: var(--studio-ink); font-weight: 700; }
+.studio-post-index__toolbar .studio-post-count { margin-left: auto; color: #8d98a4; font-size: .68rem; white-space: nowrap; }
+.studio-post-index > .studio-content-list { gap: 0; padding: 0; }
+.studio-content-list__item { display: grid; grid-template-columns: 1.3rem minmax(0, 1fr) auto; align-items: center; gap: .85rem; min-height: 6.25rem; padding: .85rem 1.45rem; border: 0; border-bottom: 1px solid #e0e5e9; border-radius: 0; background: #fff; color: var(--studio-ink); text-align: left; }
+.studio-content-list__item:hover { background: #f8fafb; }
+.studio-post-check { display: block; width: 1.1rem; height: 1.1rem; border: 1px solid #9ba7b3; border-radius: .15rem; }
+.studio-content-list__body { display: grid; gap: .22rem; min-width: 0; }
+.studio-content-list__body strong { overflow: hidden; font-size: .92rem; font-weight: 600; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.studio-content-list__body small { overflow: hidden; color: #7e8b99; font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
+.studio-content-list__body em { width: fit-content; padding: .18rem .38rem; border: 1px solid #d5dde5; border-radius: .2rem; color: #687789; font-size: .62rem; font-style: normal; }
+.studio-content-list__meta { display: grid; grid-template-columns: auto auto .8rem; align-items: center; gap: .9rem; color: #738193; font-size: .68rem; }
+.studio-content-list__meta time { color: #8e99a5; white-space: nowrap; }
+.studio-content-list__meta svg { width: .75rem; height: .75rem; color: #a5aeb7; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+@media (max-width: 900px) {
+  .studio-post-index__header { align-items: flex-start; flex-direction: column; }
+  .studio-post-index__actions { width: 100%; }
+  .studio-post-index__toolbar { align-items: stretch; flex-direction: column; }
+  .studio-post-index__toolbar > label { width: 100%; }
+  .studio-post-index__filters { flex-wrap: wrap; }
+  .studio-post-index__toolbar .studio-post-count { margin-left: 0; }
+  .studio-content-list__item { grid-template-columns: 1.1rem minmax(0, 1fr); }
+  .studio-content-list__meta { display: none; }
+}

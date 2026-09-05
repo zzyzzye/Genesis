@@ -140,8 +140,14 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /^内容管理$/ }))
 
     expect(screen.getByRole('heading', { name: '文章管理' })).toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: '三级文章内容' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '新建文章' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: '三级内容管理菜单' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '文章列表' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /从一个完整模块开始/ }))
+
+    expect(screen.queryByRole('region', { name: '文章列表' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '编辑文章' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: '三级内容管理菜单' })).toBeInTheDocument()
   })
 
 })

@@ -361,61 +361,15 @@ const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; descr
 
 function ContextSidebar({
   activeSection,
-  editor,
-  posts,
   onChange,
-  onCreatePost,
-  onOpenPost,
 }: {
   activeSection: StudioSection
-  editor: EditorState
-  posts: BlogPostAdmin[]
   onChange: (section: StudioSection) => void
-  onCreatePost: () => void
-  onOpenPost: (post: BlogPostAdmin) => void
 }) {
   const group = getNavigationGroup(activeSection)
 
   if (!group) {
     return null
-  }
-
-  if (activeSection === 'posts') {
-    const published = posts.filter((post) => post.status === 'published').length
-    const drafts = posts.length - published
-
-    return (
-      <aside className="studio-context-sidebar" aria-label="三级文章内容">
-        <header className="studio-context-header">
-          <div><span className="studio-level-mark">三级</span><p>CONTENT / ARTICLES</p><h2>文章</h2></div>
-          <span>{posts.length} 篇</span>
-        </header>
-        <button className="new-post-button" type="button" onClick={onCreatePost}>
-          <StudioIcon name="plus" /> 新建文章
-        </button>
-        <div className="studio-context-filters" aria-label="文章筛选">
-          <button className="is-active" type="button">全部 <span>{posts.length}</span></button>
-          <button type="button">已发布 <span>{published}</span></button>
-          <button type="button">草稿 <span>{drafts}</span></button>
-        </div>
-        <div className="studio-content-list">
-          {posts.map((post) => (
-            <button
-              className={editor.id === post.id ? 'studio-content-list__item is-selected' : 'studio-content-list__item'}
-              key={post.id}
-              type="button"
-              onClick={() => onOpenPost(post)}
-            >
-              <span className={`post-status post-status--${post.status}`}>{post.status === 'published' ? '已发布' : '草稿'}</span>
-              <strong>{post.title}</strong>
-              <small>{post.excerpt || '暂无摘要'}</small>
-              <time>{post.updated_at.slice(0, 10)}</time>
-            </button>
-          ))}
-          {posts.length === 0 && <p className="studio-context-empty">还没有文章，创建第一篇草稿吧。</p>}
-        </div>
-      </aside>
-    )
   }
 
   return (
@@ -441,21 +395,81 @@ function ContextSidebar({
   )
 }
 
+function PostsIndex({
+  posts,
+  onCreatePost,
+  onOpenPost,
+}: {
+  posts: BlogPostAdmin[]
+  onCreatePost: () => void
+  onOpenPost: (post: BlogPostAdmin) => void
+}) {
+
+  return (
+    <section className="studio-post-index" aria-label="文章列表">
+      <header className="studio-post-index__header">
+        <div><p>CONTENT / ARTICLES</p><h2>文章</h2></div>
+        <div className="studio-post-index__actions">
+          <button type="button">分类</button>
+          <button type="button">标签</button>
+          <button type="button">回收站</button>
+          <button className="new-post-button" type="button" onClick={onCreatePost}><StudioIcon name="plus" /> 新建</button>
+        </div>
+      </header>
+      <div className="studio-post-index__toolbar">
+        <label htmlFor="studio-post-search"><StudioIcon name="search" /><span className="sr-only">搜索文章</span><input id="studio-post-search" placeholder="输入关键词搜索" /></label>
+        <div className="studio-post-index__filters" aria-label="文章筛选">
+          <button className="is-active" type="button">状态：全部</button>
+          <button type="button">可见性：全部</button>
+          <button type="button">排序：最新</button>
+        </div>
+        <span className="studio-post-count">共 {posts.length} 篇</span>
+      </div>
+      <div className="studio-content-list">
+        {posts.map((post) => (
+          <button className="studio-content-list__item" key={post.id} type="button" onClick={() => onOpenPost(post)}>
+            <span className="studio-post-check" aria-hidden="true" />
+            <span className="studio-content-list__body">
+              <strong>{post.title}</strong>
+              <small>分类：内容 · 访问量：— · 评论：0</small>
+              <em>{post.status === 'published' ? '已发布' : '草稿'}</em>
+            </span>
+            <span className="studio-content-list__meta"><span>{post.status === 'published' ? '公开' : '未发布'}</span><time>{post.updated_at.slice(0, 10)}</time><StudioIcon name="chevron" /></span>
+          </button>
+        ))}
+        {posts.length === 0 && <p className="studio-context-empty">还没有文章，创建第一篇草稿吧。</p>}
+      </div>
+    </section>
+  )
+}
+
 function PostsWorkspace({
   editor,
   feedback,
   isSaving,
+  posts,
+  view,
   onChange,
+  onCreatePost,
   onDelete,
+  onOpenPost,
   onSave,
 }: {
   editor: EditorState
   feedback: string | null
   isSaving: boolean
+  posts: BlogPostAdmin[]
+  view: 'list' | 'editor'
   onChange: (editor: EditorState) => void
+  onCreatePost: () => void
   onDelete: () => void
+  onOpenPost: (post: BlogPostAdmin) => void
   onSave: (status: BlogPostStatus) => void
 }) {
+  if (view === 'list') {
+    return <PostsIndex onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} />
+  }
+
   return <Editor editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onDelete={onDelete} onSave={onSave} />
 }
 
@@ -485,19 +499,29 @@ function Dashboard({
   onLogout: () => void
 }) {
   const [activeSection, setActiveSection] = useState<StudioSection>('overview')
+  const [postView, setPostView] = useState<'list' | 'editor'>('list')
   const [editor, setEditor] = useState<EditorState>(() => createEmptyEditor())
   const [managedPosts, setManagedPosts] = useState(posts)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
 
+  function selectSection(section: StudioSection) {
+    setActiveSection(section)
+    if (section === 'posts') {
+      setPostView('list')
+    }
+  }
+
   function createPost() {
     setActiveSection('posts')
+    setPostView('editor')
     setEditor(createEmptyEditor())
     setFeedback(null)
   }
 
   function openPost(post: BlogPostAdmin) {
     setActiveSection('posts')
+    setPostView('editor')
     setEditor(toEditor(post))
     setFeedback(null)
   }
@@ -534,6 +558,7 @@ function Dashboard({
       await deleteAdminBlogPost(token, editor.id)
       setManagedPosts((currentPosts) => currentPosts.filter((post) => post.id !== editor.id))
       setEditor(createEmptyEditor())
+      setPostView('list')
       setFeedback('文章已删除。')
     } catch {
       setFeedback('删除失败，请稍后重试。')
@@ -544,8 +569,8 @@ function Dashboard({
 
   return (
     <div className={activeSection === 'overview' ? 'studio-app-shell studio-app-shell--overview' : 'studio-app-shell'}>
-      <StudioNavigation activeSection={activeSection} onChange={setActiveSection} onLogout={onLogout} user={user} />
-      {activeSection !== 'overview' && <ContextSidebar activeSection={activeSection} editor={editor} posts={managedPosts} onChange={setActiveSection} onCreatePost={createPost} onOpenPost={openPost} />}
+      <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={onLogout} user={user} />
+      {activeSection !== 'overview' && <ContextSidebar activeSection={activeSection} onChange={selectSection} />}
 
       <div className="studio-workspace">
         <header className="studio-topbar">
@@ -561,7 +586,7 @@ function Dashboard({
 
         <main className={activeSection === 'posts' ? 'studio-content studio-content--editor' : 'studio-content'}>
           {activeSection === 'overview' && (
-            <StudioOverview posts={managedPosts} onChange={setActiveSection} onCreatePost={createPost} onOpenPost={openPost} />
+            <StudioOverview posts={managedPosts} onChange={selectSection} onCreatePost={createPost} onOpenPost={openPost} />
           )}
           {activeSection === 'posts' && (
             <PostsWorkspace
@@ -569,8 +594,12 @@ function Dashboard({
               feedback={feedback}
               isSaving={isSaving}
               onChange={setEditor}
+              onCreatePost={createPost}
               onDelete={() => void deletePost()}
+              onOpenPost={openPost}
               onSave={(status) => void savePost(status)}
+              posts={managedPosts}
+              view={postView}
             />
           )}
           {activeSection !== 'overview' && activeSection !== 'posts' && <SectionPlaceholder section={activeSection} />}
