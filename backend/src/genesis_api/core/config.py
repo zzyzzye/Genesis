@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +28,19 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr = SecretStr("development-only-jwt-secret-do-not-use-in-production")
     jwt_access_token_expire_minutes: int = 120
     development_owner_password: SecretStr = SecretStr("genesis-local-only")
+
+    text_provider: Literal["openai", "grok", "claude"] = "openai"
+    text_openai_api_key: SecretStr | None = None
+    text_openai_base_url: str = "https://api.openai.com/v1"
+    text_openai_model: str = "gpt-4o-mini"
+    text_grok_api_key: SecretStr | None = None
+    text_grok_base_url: str = "https://api.x.ai/v1"
+    text_grok_model: str = "grok-3-mini"
+    text_claude_api_key: SecretStr | None = None
+    text_claude_base_url: str = "https://api.anthropic.com"
+    text_claude_model: str = "claude-3-5-sonnet-latest"
+    text_temperature: float = 0.7
+    text_max_tokens: int = 4096
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> Settings:

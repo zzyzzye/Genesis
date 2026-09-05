@@ -95,7 +95,16 @@ make dev-frontend
 
 ## 配置
 
-本地配置文件不会进入 Git。需要调整配置时，复制示例文件并在本地修改：
+本地配置文件不会进入 Git。使用 Docker 开发时，复制项目根目录的示例文件，文本生成模型的配置会由 Compose 传给后端：
+
+```bash
+cp .env.example .env
+make docker-up
+```
+
+文本生成通过 `GENESIS_TEXT_PROVIDER` 选择 `openai`、`grok` 或 `claude`，并分别填写对应的 API Key 和模型名。图像生成、视频生成配置将在后续阶段补充。
+
+如果临时脱离 Docker 运行服务，再分别复制后端和前端示例文件：
 
 ```bash
 cp backend/.env.example backend/.env
