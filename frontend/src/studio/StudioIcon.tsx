@@ -4,6 +4,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bell,
+  Bot,
   ChevronRight,
   Eye,
   File,
@@ -17,11 +18,13 @@ import {
   Paperclip,
   Plus,
   Search,
+  Send,
   Settings,
   Sparkles,
   UserRound,
   Video,
   Wrench,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -31,8 +34,10 @@ export type StudioIconName =
   | 'arrow-up-right'
   | 'articles'
   | 'attachment'
+  | 'assistant'
   | 'bell'
   | 'chevron'
+  | 'close'
   | 'comments'
   | 'dashboard'
   | 'eye'
@@ -44,6 +49,7 @@ export type StudioIconName =
   | 'palette'
   | 'plus'
   | 'search'
+  | 'send'
   | 'settings'
   | 'spark'
   | 'tools'
@@ -55,8 +61,10 @@ const icons: Record<StudioIconName, LucideIcon> = {
   'arrow-up-right': ArrowUpRight,
   articles: FileText,
   attachment: Paperclip,
+  assistant: Bot,
   bell: Bell,
   chevron: ChevronRight,
+  close: X,
   comments: MessageSquare,
   dashboard: Gauge,
   eye: Eye,
@@ -68,6 +76,7 @@ const icons: Record<StudioIconName, LucideIcon> = {
   palette: Palette,
   plus: Plus,
   search: Search,
+  send: Send,
   settings: Settings,
   spark: Sparkles,
   tools: Wrench,

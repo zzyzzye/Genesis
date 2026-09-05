@@ -7,6 +7,7 @@ import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTok
 import { StudioIcon } from './studio/StudioIcon'
 import { StudioNavigation } from './studio/StudioNavigation'
 import type { StudioSection } from './studio/StudioNavigationModel'
+import { StudioAssistant } from './studio/StudioAssistant'
 import { StudioOverview } from './studio/StudioOverview'
 
 import {
@@ -569,6 +570,7 @@ function Dashboard({
           {activeSection !== 'overview' && activeSection !== 'posts' && <SectionPlaceholder section={activeSection} />}
         </main>
       </div>
+      <StudioAssistant />
     </div>
   )
 }
