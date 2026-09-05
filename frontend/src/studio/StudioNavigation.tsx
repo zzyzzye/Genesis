@@ -48,7 +48,7 @@ export function StudioNavigation({
   return (
     <>
       <aside className="studio-system-rail" aria-label="一级系统导航">
-        <Link className="studio-rail-brand" to="/" aria-label="返回 Genesis 首页">G<span>.</span></Link>
+        <Link className="studio-rail-brand" to="/" aria-label="返回 Genesis 首页"><span className="studio-rail-brand__wordmark">G<span>.</span></span></Link>
         <span className="studio-level-mark">一级</span>
         <nav className="studio-rail-systems">
           <button className="is-active" type="button" onClick={() => onChange('overview')} aria-label="博客系统">

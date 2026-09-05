@@ -1838,3 +1838,42 @@ nav span {
   .studio-topbar__title h1 { font-size: 1.3rem; }
   .editor-heading h1 { font-size: 1.7rem; }
 }
+
+
+/* Logo 与右侧内容的最后一轮细节修正 */
+.studio-rail-brand { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
+.studio-rail-brand__wordmark { display: inline-flex; align-items: baseline; white-space: nowrap; }
+.studio-rail-brand__wordmark > span { display: inline; color: var(--studio-accent); }
+
+.studio-topbar__title h1 { font-size: 2.15rem; line-height: 1.12; }
+.studio-topbar__title small { margin-top: .38rem; font-size: .78rem; line-height: 1.5; }
+.studio-stat-card { min-height: 8.5rem; }
+.studio-stat-card p { font-size: .82rem; font-weight: 500; line-height: 1.35; }
+.studio-stat-card strong { margin-top: .24rem; font-size: 2.15rem; line-height: 1; }
+.studio-stat-card small { font-size: .68rem; }
+.studio-panel__header { padding: 1.15rem 1.25rem .95rem; }
+.studio-panel__header p { font-size: .64rem; }
+.studio-panel__header h2 { font-size: 1.16rem; line-height: 1.25; }
+.studio-panel__header > span,
+.studio-panel__header > button { font-size: .7rem; }
+.studio-quick-grid { gap: .78rem; padding: 1rem; }
+.studio-quick-grid button,
+.studio-quick-grid > a { min-height: 8rem; padding: 1rem; }
+.studio-quick-grid strong { font-size: .92rem; font-weight: 700; line-height: 1.35; }
+.studio-quick-grid small { margin-top: .3rem; font-size: .72rem; line-height: 1.55; }
+.studio-activity-list > button { min-height: 5rem; padding: .9rem 1.1rem; }
+.studio-activity-list strong { font-size: .88rem; font-weight: 700; }
+.studio-activity-list small { margin-top: .24rem; font-size: .7rem; line-height: 1.5; }
+.studio-activity-meta em { font-size: .66rem; }
+.studio-activity-meta time { font-size: .64rem; }
+
+
+/* Logo 颜色与内容区阅读尺寸 */
+.studio-rail-brand > .studio-rail-brand__wordmark { color: var(--studio-brand); }
+.studio-rail-brand__wordmark > span { color: var(--studio-accent); }
+.studio-stat-card p { font-size: .9rem; }
+.studio-stat-card small { font-size: .74rem; }
+.studio-quick-grid strong { font-size: 1.02rem; }
+.studio-quick-grid small { font-size: .78rem; }
+.studio-activity-list strong { font-size: .92rem; }
+.studio-activity-list small { font-size: .74rem; }
