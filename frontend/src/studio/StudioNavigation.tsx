@@ -19,7 +19,6 @@ export function StudioNavigation({
     <>
       <aside className="studio-system-rail" aria-label="一级系统导航">
         <Link className="studio-rail-brand" to="/" aria-label="返回 Genesis 首页"><span className="studio-rail-brand__wordmark">G<span>.</span></span></Link>
-        <span className="studio-level-mark">一级</span>
         <nav className="studio-rail-systems">
           <button className="is-active" type="button" onClick={() => onChange('overview')} aria-label="博客系统">
             <StudioIcon name="articles" />
@@ -45,7 +44,6 @@ export function StudioNavigation({
       <aside className="studio-section-nav" aria-label="二级博客管理导航">
         <header className="studio-section-nav__header">
           <div>
-            <span className="studio-level-mark">二级</span>
             <p>GENESIS STUDIO</p>
           </div>
           <strong>博客系统</strong>
@@ -63,16 +61,18 @@ export function StudioNavigation({
             <span>仪表盘</span>
           </button>
 
-          {navigationGroups.map((group) => {
-            const isGroupActive = group.items.some((item) => item.id === activeSection)
-            return (
-              <button className={isGroupActive ? 'studio-nav-item is-active' : 'studio-nav-item'} key={group.id} type="button" onClick={() => onChange(group.items[0]?.id ?? 'overview')}>
-                <StudioIcon name={group.icon} />
-                <span>{group.label}</span>
-                <StudioIcon className="studio-nav-chevron" name="chevron" />
-              </button>
-            )
-          })}
+          {navigationGroups.map((group) => (
+            <div className="studio-nav-group" key={group.id}>
+              <p>{group.label}</p>
+              {group.items.map((item) => (
+                <button className={activeSection === item.id ? 'studio-nav-item is-active' : 'studio-nav-item'} key={item.id} type="button" onClick={() => onChange(item.id)}>
+                  <StudioIcon name={item.icon} />
+                  <span>{item.label}</span>
+                  {item.id === 'comments' ? <em>0</em> : <StudioIcon className="studio-nav-chevron" name="chevron" />}
+                </button>
+              ))}
+            </div>
+          ))}
         </nav>
 
         <footer className="studio-section-account">

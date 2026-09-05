@@ -138,10 +138,12 @@ describe('App', () => {
     expect(screen.getByRole('complementary', { name: '二级博客管理导航' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '快捷访问' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /^内容管理$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^文章$/ }))
 
     expect(screen.getByRole('heading', { name: '文章管理' })).toBeInTheDocument()
-    expect(screen.queryByRole('complementary', { name: /三级/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('一级')).not.toBeInTheDocument()
+    expect(screen.queryByText('二级')).not.toBeInTheDocument()
+    expect(screen.queryByText('三级')).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: '文章列表' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /从一个完整模块开始/ }))
@@ -153,7 +155,9 @@ describe('App', () => {
     view.unmount()
     render(<App />)
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
-    expect(screen.queryByRole('complementary', { name: /三级/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('一级')).not.toBeInTheDocument()
+    expect(screen.queryByText('二级')).not.toBeInTheDocument()
+    expect(screen.queryByText('三级')).not.toBeInTheDocument()
   })
 
 })
