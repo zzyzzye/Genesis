@@ -1985,3 +1985,22 @@ nav span {
 
 @keyframes assistant-rise { from { opacity: 0; transform: translateY(.6rem) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (max-width: 680px) { .studio-assistant { right: .75rem; bottom: .75rem; } .studio-assistant__launcher { width: 3.7rem; height: 3.7rem; } .studio-assistant__launcher-copy { display: none; } .studio-assistant__launcher-signal { top: .35rem; right: .35rem; } .studio-assistant__panel { width: min(24rem, calc(100vw - 1.5rem)); height: min(35rem, calc(100vh - 5.5rem)); } }
+
+/* 助手底部工具栏：模型选择器与发送按钮必须使用不同的布局规则。 */
+.studio-assistant__composer-tools { min-width: 0; gap: .55rem; }
+.studio-assistant__composer .studio-assistant__tool-button {
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  min-height: 1.8rem;
+  padding: .25rem .35rem;
+  flex: 0 1 auto;
+  white-space: nowrap;
+  border-radius: .35rem;
+  background: transparent;
+  color: #506267;
+}
+.studio-assistant__composer .studio-assistant__tool-button:hover { background: #f1f4ee; }
+.studio-assistant__composer .studio-assistant__composer-status { min-width: 0; overflow: hidden; flex: 1 1 auto; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.studio-assistant__composer > .studio-assistant__composer-tools > button[type='submit'] { flex: 0 0 1.8rem; }
