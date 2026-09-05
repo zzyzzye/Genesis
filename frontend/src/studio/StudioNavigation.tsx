@@ -1,38 +1,8 @@
 import { Link } from 'react-router-dom'
 
 import type { CurrentUser } from '../lib/api'
-import { StudioIcon, type StudioIconName } from './StudioIcon'
-
-export type StudioSection = 'overview' | 'posts' | 'pages' | 'comments' | 'attachments' | 'links' | 'themes' | 'menus' | 'users' | 'settings'
-
-type NavigationItem = { id: StudioSection; label: string; icon: StudioIconName; badge?: string }
-
-const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
-  {
-    label: '内容管理',
-    items: [
-      { id: 'posts', label: '文章', icon: 'articles' },
-      { id: 'pages', label: '页面', icon: 'pages' },
-      { id: 'comments', label: '评论', icon: 'comments', badge: '0' },
-      { id: 'attachments', label: '附件', icon: 'attachment' },
-      { id: 'links', label: '链接', icon: 'link' },
-    ],
-  },
-  {
-    label: '外观设计',
-    items: [
-      { id: 'themes', label: '主题', icon: 'palette' },
-      { id: 'menus', label: '菜单', icon: 'menu' },
-    ],
-  },
-  {
-    label: '系统管理',
-    items: [
-      { id: 'users', label: '用户', icon: 'user' },
-      { id: 'settings', label: '设置', icon: 'settings' },
-    ],
-  },
-]
+import { StudioIcon } from './StudioIcon'
+import { navigationGroups, type StudioSection } from './StudioNavigationModel'
 
 export function StudioNavigation({
   activeSection,
@@ -93,18 +63,16 @@ export function StudioNavigation({
             <span>仪表盘</span>
           </button>
 
-          {navigationGroups.map((group) => (
-            <div className="studio-nav-group" key={group.label}>
-              <p>{group.label}</p>
-              {group.items.map((item) => (
-                <button className={activeSection === item.id ? 'studio-nav-item is-active' : 'studio-nav-item'} key={item.id} type="button" onClick={() => onChange(item.id)}>
-                  <StudioIcon name={item.icon} />
-                  <span>{item.label}</span>
-                  {item.badge ? <em>{item.badge}</em> : <StudioIcon className="studio-nav-chevron" name="chevron" />}
-                </button>
-              ))}
-            </div>
-          ))}
+          {navigationGroups.map((group) => {
+            const isGroupActive = group.items.some((item) => item.id === activeSection)
+            return (
+              <button className={isGroupActive ? 'studio-nav-item is-active' : 'studio-nav-item'} key={group.id} type="button" onClick={() => onChange(group.items[0]?.id ?? 'overview')}>
+                <StudioIcon name={group.icon} />
+                <span>{group.label}</span>
+                <StudioIcon className="studio-nav-chevron" name="chevron" />
+              </button>
+            )
+          })}
         </nav>
 
         <footer className="studio-section-account">

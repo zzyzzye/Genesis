@@ -137,10 +137,10 @@ describe('App', () => {
     expect(screen.queryByRole('complementary', { name: '三级工作台导航' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '快捷访问' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /^文章$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^内容管理$/ }))
 
     expect(screen.getByRole('heading', { name: '文章管理' })).toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: '三级文章导航' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: '三级内容管理菜单' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '新建文章' })).toBeInTheDocument()
   })
 

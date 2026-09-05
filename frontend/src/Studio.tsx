@@ -4,7 +4,8 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { StudioIcon } from './studio/StudioIcon'
-import { StudioNavigation, type StudioSection } from './studio/StudioNavigation'
+import { StudioNavigation } from './studio/StudioNavigation'
+import { getNavigationGroup, type StudioSection } from './studio/StudioNavigationModel'
 import { StudioOverview } from './studio/StudioOverview'
 
 import {
@@ -358,150 +359,116 @@ const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; descr
   settings: { eyebrow: 'SYSTEM / SETTINGS', title: '系统设置', description: '配置博客系统的基础信息。' },
 }
 
-const contextItems: Partial<Record<StudioSection, Array<{ title: string; note: string }>>> = {
-  pages: [
-    { title: '首页', note: '站点主要入口' },
-    { title: '关于', note: '个人介绍页面' },
-    { title: '归档', note: '按时间整理内容' },
-  ],
-  comments: [
-    { title: '待审核', note: '0 条评论' },
-    { title: '已通过', note: '0 条评论' },
-    { title: '回收站', note: '0 条评论' },
-  ],
-  attachments: [
-    { title: '图片', note: '封面与正文素材' },
-    { title: '文档', note: '可下载文件' },
-    { title: '视频', note: '影音内容资源' },
-  ],
-  links: [
-    { title: '友情链接', note: '站点伙伴' },
-    { title: '常用资源', note: '个人收藏' },
-  ],
-  themes: [
-    { title: '当前主题', note: 'Genesis Editorial' },
-    { title: '主题设置', note: '颜色、字体与版式' },
-  ],
-  menus: [
-    { title: '主导航', note: '顶部访客导航' },
-    { title: '页脚导航', note: '站点补充入口' },
-  ],
-  users: [
-    { title: '站点作者', note: '拥有内容管理权限' },
-    { title: '个人资料', note: '名称、头像与简介' },
-  ],
-  settings: [
-    { title: '基本信息', note: '站点名称与描述' },
-    { title: '发布设置', note: '默认文章状态' },
-    { title: '系统状态', note: '服务与版本信息' },
-  ],
-}
-
 function ContextSidebar({
   activeSection,
+  onChange,
+}: {
+  activeSection: StudioSection
+  onChange: (section: StudioSection) => void
+}) {
+  const group = getNavigationGroup(activeSection)
+
+  if (!group) {
+    return null
+  }
+
+  return (
+    <aside className="studio-context-sidebar" aria-label={`三级${group.label}菜单`}>
+      <header className="studio-context-header">
+        <div><span className="studio-level-mark">三级</span><p>FUNCTION / {group.id.toUpperCase()}</p><h2>{group.label}</h2></div>
+        <span>{group.items.length} 项</span>
+      </header>
+      <nav className="studio-context-menu" aria-label={`${group.label}功能菜单`}>
+        {group.items.map((item) => (
+          <button className={activeSection === item.id ? 'is-active' : ''} type="button" key={item.id} onClick={() => onChange(item.id)}>
+            <StudioIcon className="studio-context-menu__icon" name={item.icon} />
+            <div><strong>{item.label}</strong><small>{item.description}</small></div>
+            <StudioIcon name="chevron" />
+          </button>
+        ))}
+      </nav>
+      <div className="studio-context-note studio-context-note--muted">
+        <StudioIcon name="spark" />
+        <div><strong>三级功能菜单</strong><p>这里负责切换具体功能，右侧区域展示对应的数据和操作。</p></div>
+      </div>
+    </aside>
+  )
+}
+
+function PostsIndex({
   editor,
   posts,
-  user,
   onCreatePost,
   onOpenPost,
 }: {
-  activeSection: StudioSection
   editor: EditorState
   posts: BlogPostAdmin[]
-  user: CurrentUser
   onCreatePost: () => void
   onOpenPost: (post: BlogPostAdmin) => void
 }) {
   const published = posts.filter((post) => post.status === 'published').length
   const drafts = posts.length - published
 
-  if (activeSection === 'posts') {
-    return (
-      <aside className="studio-context-sidebar" aria-label="三级文章导航">
-        <header className="studio-context-header">
-          <div><span className="studio-level-mark">三级</span><p>AUTHOR / {user.handle}</p><h2>文章</h2></div>
-          <span>{posts.length} 篇</span>
-        </header>
-        <button className="new-post-button" type="button" onClick={onCreatePost}>
-          <StudioIcon name="plus" /> 新建文章
-        </button>
-        <div className="studio-context-filters" aria-label="文章筛选">
-          <button className="is-active" type="button">全部 <span>{posts.length}</span></button>
-          <button type="button">已发布 <span>{published}</span></button>
-          <button type="button">草稿 <span>{drafts}</span></button>
-        </div>
-        <div className="post-list">
-          {posts.map((post) => (
-            <button
-              className={editor.id === post.id ? 'post-list__item is-selected' : 'post-list__item'}
-              key={post.id}
-              type="button"
-              onClick={() => onOpenPost(post)}
-            >
-              <span className={`post-status post-status--${post.status}`}>{post.status === 'published' ? '已发布' : '草稿'}</span>
-              <strong>{post.title}</strong>
-              <small>{post.excerpt || '暂无摘要'}</small>
-              <time>{post.updated_at.slice(0, 10)}</time>
-            </button>
-          ))}
-          {posts.length === 0 && <p className="studio-context-empty">还没有文章，创建第一篇草稿吧。</p>}
-        </div>
-      </aside>
-    )
-  }
-
-  if (activeSection === 'overview') {
-    return (
-      <aside className="studio-context-sidebar" aria-label="三级工作台导航">
-        <header className="studio-context-header">
-          <div><span className="studio-level-mark">三级</span><p>TODAY / WORKSPACE</p><h2>工作台</h2></div>
-          <StudioIcon name="spark" />
-        </header>
-        <button className="new-post-button" type="button" onClick={onCreatePost}>
-          <StudioIcon name="plus" /> 开始写作
-        </button>
-        <div className="studio-context-summary">
-          <button type="button"><span>待完善草稿</span><strong>{drafts}</strong></button>
-          <button type="button"><span>已发布内容</span><strong>{published}</strong></button>
-        </div>
-        <p className="studio-context-label">最近更新</p>
-        <div className="studio-context-recent">
-          {posts.slice(0, 4).map((post) => (
-            <button type="button" key={post.id} onClick={() => onOpenPost(post)}>
-              <span>{post.status === 'published' ? 'P' : 'D'}</span>
-              <strong>{post.title}</strong>
-              <StudioIcon name="chevron" />
-            </button>
-          ))}
-        </div>
-        <div className="studio-context-note">
-          <StudioIcon name="spark" />
-          <div><strong>保持内容节奏</strong><p>先完成，再持续打磨。每一次发布都会让系统更完整。</p></div>
-        </div>
-      </aside>
-    )
-  }
-
-  const meta = sectionMeta[activeSection]
   return (
-    <aside className="studio-context-sidebar" aria-label={`三级${meta.title}导航`}>
-      <header className="studio-context-header">
-        <div><span className="studio-level-mark">三级</span><p>SECTION / DETAIL</p><h2>{meta.title}</h2></div>
+    <aside className="studio-post-index" aria-label="文章内容列表">
+      <header className="studio-post-index__header">
+        <div><p>CONTENT / ARTICLES</p><h2>文章</h2></div>
+        <span>{posts.length} 篇</span>
       </header>
-      <div className="studio-context-menu">
-        {(contextItems[activeSection] ?? []).map((item, index) => (
-          <button className={index === 0 ? 'is-active' : ''} type="button" key={item.title}>
-            <span>{String(index + 1).padStart(2, '0')}</span>
-            <div><strong>{item.title}</strong><small>{item.note}</small></div>
-            <StudioIcon name="chevron" />
+      <button className="new-post-button" type="button" onClick={onCreatePost}>
+        <StudioIcon name="plus" /> 新建文章
+      </button>
+      <div className="studio-context-filters" aria-label="文章筛选">
+        <button className="is-active" type="button">全部 <span>{posts.length}</span></button>
+        <button type="button">已发布 <span>{published}</span></button>
+        <button type="button">草稿 <span>{drafts}</span></button>
+      </div>
+      <div className="studio-content-list">
+        {posts.map((post) => (
+          <button
+            className={editor.id === post.id ? 'studio-content-list__item is-selected' : 'studio-content-list__item'}
+            key={post.id}
+            type="button"
+            onClick={() => onOpenPost(post)}
+          >
+            <span className={`post-status post-status--${post.status}`}>{post.status === 'published' ? '已发布' : '草稿'}</span>
+            <strong>{post.title}</strong>
+            <small>{post.excerpt || '暂无摘要'}</small>
+            <time>{post.updated_at.slice(0, 10)}</time>
           </button>
         ))}
-      </div>
-      <div className="studio-context-note studio-context-note--muted">
-        <StudioIcon name="spark" />
-        <div><strong>功能占位</strong><p>当前阶段先完成管理台信息架构，具体能力将在后续子系统中接入。</p></div>
+        {posts.length === 0 && <p className="studio-context-empty">还没有文章，创建第一篇草稿吧。</p>}
       </div>
     </aside>
+  )
+}
+
+function PostsWorkspace({
+  editor,
+  feedback,
+  isSaving,
+  posts,
+  onChange,
+  onCreatePost,
+  onDelete,
+  onOpenPost,
+  onSave,
+}: {
+  editor: EditorState
+  feedback: string | null
+  isSaving: boolean
+  posts: BlogPostAdmin[]
+  onChange: (editor: EditorState) => void
+  onCreatePost: () => void
+  onDelete: () => void
+  onOpenPost: (post: BlogPostAdmin) => void
+  onSave: (status: BlogPostStatus) => void
+}) {
+  return (
+    <div className="studio-posts-workspace">
+      <PostsIndex editor={editor} onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} />
+      <Editor editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onDelete={onDelete} onSave={onSave} />
+    </div>
   )
 }
 
@@ -591,7 +558,7 @@ function Dashboard({
   return (
     <div className={activeSection === 'overview' ? 'studio-app-shell studio-app-shell--overview' : 'studio-app-shell'}>
       <StudioNavigation activeSection={activeSection} onChange={setActiveSection} onLogout={onLogout} user={user} />
-      {activeSection !== 'overview' && <ContextSidebar activeSection={activeSection} editor={editor} posts={managedPosts} user={user} onCreatePost={createPost} onOpenPost={openPost} />}
+      {activeSection !== 'overview' && <ContextSidebar activeSection={activeSection} onChange={setActiveSection} />}
 
       <div className="studio-workspace">
         <header className="studio-topbar">
@@ -610,7 +577,17 @@ function Dashboard({
             <StudioOverview posts={managedPosts} onChange={setActiveSection} onCreatePost={createPost} onOpenPost={openPost} />
           )}
           {activeSection === 'posts' && (
-            <Editor editor={editor} feedback={feedback} isSaving={isSaving} onChange={setEditor} onDelete={() => void deletePost()} onSave={(status) => void savePost(status)} />
+            <PostsWorkspace
+              editor={editor}
+              feedback={feedback}
+              isSaving={isSaving}
+              onChange={setEditor}
+              onCreatePost={createPost}
+              onDelete={() => void deletePost()}
+              onOpenPost={openPost}
+              onSave={(status) => void savePost(status)}
+              posts={managedPosts}
+            />
           )}
           {activeSection !== 'overview' && activeSection !== 'posts' && <SectionPlaceholder section={activeSection} />}
         </main>
