@@ -134,7 +134,7 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
     expect(screen.getByRole('complementary', { name: '一级系统导航' })).toBeInTheDocument()
     expect(screen.getByRole('complementary', { name: '二级博客管理导航' })).toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: '三级工作台导航' })).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: '三级工作台导航' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '快捷访问' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /^文章$/ }))

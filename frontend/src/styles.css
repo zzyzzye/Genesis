@@ -1297,6 +1297,8 @@ nav span {
 }
 
 /* 一级导航：仅负责系统切换 */
+.studio-app-shell--overview { grid-template-columns: 4.75rem 14.75rem minmax(0, 1fr); }
+
 .studio-system-rail {
   position: relative;
   z-index: 4;
@@ -1677,6 +1679,7 @@ nav span {
 
 @media (max-width: 1500px) {
   .studio-app-shell { grid-template-columns: 4.5rem 13.75rem 18.5rem minmax(0, 1fr); }
+  .studio-app-shell--overview { grid-template-columns: 4.5rem 13.75rem minmax(0, 1fr); }
   .studio-quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .studio-quick-grid button,
   .studio-quick-grid > a { min-height: 5.8rem; }
@@ -1684,6 +1687,7 @@ nav span {
 
 @media (max-width: 1260px) {
   .studio-app-shell { grid-template-columns: 4.25rem 13rem 17rem minmax(0, 1fr); min-width: 52rem; }
+  .studio-app-shell--overview { grid-template-columns: 4.25rem 13rem minmax(0, 1fr); }
   .studio-overview-grid { grid-template-columns: 1fr; }
   .studio-activity-list small { max-width: 48rem; }
   .editor-content-grid { grid-template-columns: 1fr; }
@@ -1697,6 +1701,7 @@ nav span {
 
 @media (max-width: 900px) {
   .studio-app-shell { grid-template-columns: 4.1rem 15rem minmax(0, 1fr); min-width: 42rem; }
+  .studio-app-shell--overview { grid-template-columns: 4.1rem minmax(0, 1fr); }
   .studio-section-nav { display: none; }
   .studio-mobile-level { display: inline-flex; padding: .3rem .45rem; border-radius: .2rem; background: #eef1f4; color: #6f7d8e; font-size: .57rem; font-weight: 800; }
 }

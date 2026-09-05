@@ -589,9 +589,9 @@ function Dashboard({
   const meta = sectionMeta[activeSection]
 
   return (
-    <div className="studio-app-shell">
+    <div className={activeSection === 'overview' ? 'studio-app-shell studio-app-shell--overview' : 'studio-app-shell'}>
       <StudioNavigation activeSection={activeSection} onChange={setActiveSection} onLogout={onLogout} user={user} />
-      <ContextSidebar activeSection={activeSection} editor={editor} posts={managedPosts} user={user} onCreatePost={createPost} onOpenPost={openPost} />
+      {activeSection !== 'overview' && <ContextSidebar activeSection={activeSection} editor={editor} posts={managedPosts} user={user} onCreatePost={createPost} onOpenPost={openPost} />}
 
       <div className="studio-workspace">
         <header className="studio-topbar">
