@@ -46,6 +46,8 @@ const posts = {
 describe('App', () => {
   afterEach(() => {
     window.history.pushState({}, '', '/')
+    window.localStorage.removeItem('genesis-account-token')
+    window.localStorage.removeItem('genesis-studio-token')
     vi.restoreAllMocks()
   })
 
@@ -126,7 +128,7 @@ describe('App', () => {
     })
 
     window.history.pushState({}, '', '/studio')
-    render(<App />)
+    const view = render(<App />)
 
     fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'test-password' } })
     fireEvent.click(screen.getByRole('button', { name: '进入写作台' }))
@@ -146,6 +148,11 @@ describe('App', () => {
 
     expect(screen.queryByRole('region', { name: '文章列表' })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '编辑文章' })).toBeInTheDocument()
+
+    expect(window.localStorage.getItem('genesis-studio-token')).toBe('test-token')
+    view.unmount()
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
     expect(screen.queryByRole('complementary', { name: /三级/ })).not.toBeInTheDocument()
   })
 

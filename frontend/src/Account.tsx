@@ -1,5 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 
+import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken } from './lib/auth'
+
 import {
   getCurrentUser,
   login,
@@ -7,8 +9,6 @@ import {
   updateCurrentUser,
   type CurrentUser,
 } from './lib/api'
-
-const accountTokenKey = 'genesis-account-token'
 
 type AccountState =
   | { status: 'loading' }
@@ -172,9 +172,9 @@ function Profile({ user, feedback, onLogout, onSave }: {
 }
 
 export function Account() {
-  const [token, setToken] = useState(() => window.localStorage.getItem(accountTokenKey))
+  const [token, setToken] = useState(() => getStoredAuthToken())
   const [state, setState] = useState<AccountState>(() =>
-    window.localStorage.getItem(accountTokenKey) === null
+    getStoredAuthToken() === null
       ? { status: 'guest', mode: 'login', error: null }
       : { status: 'loading' },
   )
@@ -184,14 +184,14 @@ export function Account() {
     void getCurrentUser(token)
       .then((user) => setState({ status: 'ready', user, feedback: null }))
       .catch(() => {
-        window.localStorage.removeItem(accountTokenKey)
+        clearStoredAuthToken()
         setToken(null)
         setState({ status: 'guest', mode: 'login', error: '登录状态已过期，请重新登录。' })
       })
   }, [token])
 
   function setLoggedInToken(accessToken: string) {
-    window.localStorage.setItem(accountTokenKey, accessToken)
+    storeAuthToken(accessToken)
     setToken(accessToken)
   }
 
@@ -223,7 +223,7 @@ export function Account() {
       <Profile
         feedback={state.feedback}
         onLogout={() => {
-          window.localStorage.removeItem(accountTokenKey)
+          clearStoredAuthToken()
           setToken(null)
           setState({ status: 'guest', mode: 'login', error: null })
         }}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
+import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey } from './lib/auth'
 import { StudioIcon } from './studio/StudioIcon'
 import { StudioNavigation } from './studio/StudioNavigation'
 import type { StudioSection } from './studio/StudioNavigationModel'
@@ -573,8 +574,10 @@ function Dashboard({
 }
 
 export function Studio() {
-  const [state, setState] = useState<StudioState>({ status: 'login', error: null })
-  const [token, setToken] = useState<string | null>(null)
+  const [token, setToken] = useState<string | null>(() => getStoredAuthToken(studioAuthTokenKey))
+  const [state, setState] = useState<StudioState>(() =>
+    getStoredAuthToken(studioAuthTokenKey) === null ? { status: 'login', error: null } : { status: 'loading' },
+  )
 
   useEffect(() => {
     if (token === null) {
@@ -590,6 +593,7 @@ export function Studio() {
       })
       .catch(() => {
         if (!cancelled) {
+          clearStoredAuthToken(studioAuthTokenKey)
           setToken(null)
           setState({ status: 'login', error: '登录状态无效，请重新登录。' })
         }
@@ -604,12 +608,14 @@ export function Studio() {
     setState({ status: 'loading' })
     void login(handle, password)
       .then((data) => {
+        storeAuthToken(data.access_token, studioAuthTokenKey)
         setToken(data.access_token)
       })
       .catch(() => setState({ status: 'login', error: '账号或密码错误。' }))
   }
 
   function handleLogout() {
+    clearStoredAuthToken(studioAuthTokenKey)
     setToken(null)
     setState({ status: 'login', error: null })
   }
