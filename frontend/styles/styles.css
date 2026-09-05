@@ -2004,3 +2004,9 @@ nav span {
 .studio-assistant__composer .studio-assistant__tool-button:hover { background: #f1f4ee; }
 .studio-assistant__composer .studio-assistant__composer-status { min-width: 0; overflow: hidden; flex: 1 1 auto; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 .studio-assistant__composer > .studio-assistant__composer-tools > button[type='submit'] { flex: 0 0 1.8rem; }
+
+/* 助手面板采用完整的纵向工作区：消息区占据剩余空间，输入框始终贴底。 */
+.studio-assistant__body { display: flex; flex: 1 1 auto; flex-direction: column; }
+.studio-assistant__messages { flex: 0 0 auto; }
+.studio-assistant__suggestions { flex: 0 0 auto; }
+.studio-assistant__composer { flex: 0 0 auto; }
