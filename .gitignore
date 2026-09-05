@@ -41,4 +41,6 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Local browser automation artifacts.playwright-mcp/
+# Local browser automation artifacts
+.playwright-mcp/
+
