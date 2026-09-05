@@ -1,14 +1,14 @@
-# Virtual environments
+# Python 虚拟环境
 .venv/
 venv/
 env/
 
-# Python cache and compiled files
+# Python 缓存和编译文件
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Test, type-checker, and linter caches
+# 测试、类型检查和代码检查缓存
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -16,31 +16,30 @@ __pycache__/
 .coverage.*
 htmlcov/
 
-# Frontend dependencies and caches
+# 前端依赖和缓存
 node_modules/
 .vite/
 .eslintcache
 
-# Build and packaging artifacts
+# 构建和打包产物
 build/
 dist/
 *.egg-info/
 .eggs/
 
-# Local environment and secrets
+# 本地环境配置和敏感信息
 .env
 .env.*
 !.env.example
 
-# Editors and IDEs
+# 编辑器和 IDE 配置
 .idea/
 .vscode/
 *.swp
 
-# Operating system files
+# 操作系统文件
 .DS_Store
 Thumbs.db
 
-# Local browser automation artifacts
+# 本地浏览器自动化产物
 .playwright-mcp/
-
