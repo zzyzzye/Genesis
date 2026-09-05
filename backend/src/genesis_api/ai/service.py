@@ -19,7 +19,7 @@ class AiChatService:
         self.settings = settings
 
     async def stream(self, request: AiChatRequest) -> AsyncIterator[str]:
-        provider = self.settings.text_provider
+        provider = request.provider or self.settings.text_provider
         api_key, base_url, configured_model = self._config(provider)
         if api_key is None or not api_key.get_secret_value().strip():
             raise AiProviderError(f"未配置 {provider} 的 API Key")
@@ -54,6 +54,12 @@ class AiChatService:
                 self.settings.text_grok_base_url,
                 self.settings.text_grok_model,
             )
+        if provider == "gemini":
+            return (
+                self.settings.text_gemini_api_key,
+                self.settings.text_gemini_base_url,
+                self.settings.text_gemini_model,
+            )
         return (
             self.settings.text_claude_api_key,
             self.settings.text_claude_base_url,
@@ -63,6 +69,8 @@ class AiChatService:
     @staticmethod
     def _url(provider: str, base_url: str) -> str:
         base = base_url.rstrip("/")
+        if provider in ("openai", "grok", "gemini") and not base.endswith("/v1"):
+            base = f"{base}/v1"
         return f"{base}/messages" if provider == "claude" else f"{base}/chat/completions"
 
     @staticmethod
@@ -78,7 +86,10 @@ class AiChatService:
     def _payload(self, request: AiChatRequest, model: str, provider: str) -> dict[str, Any]:
         system = (
             "你是 Genesis AI，服务于个人内容系统。优先给出可执行、清晰的中文回答。"
-            "涉及修改文章时先给出修改结果和说明，不要擅自发布或删除内容。"
+            "你可以阅读博客知识库，帮助修改现有文章或创作新文章。"
+            "涉及修改文章时输出完整修改稿和修改说明；创作文章时输出可直接粘贴到编辑器的"
+            "Markdown 草稿。"
+            "绝不擅自发布、删除或覆盖文章。"
         )
         if request.context:
             context = request.context.model_dump(exclude_none=True)

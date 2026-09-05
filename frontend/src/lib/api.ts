@@ -183,7 +183,7 @@ export function getSystemHealth(system: 'tools' | 'media', signal?: AbortSignal)
 
 export type AiSurface = 'blog' | 'studio' | 'tools'
 
-export type AiProvider = 'openai' | 'grok' | 'claude'
+export type AiProvider = 'openai' | 'grok' | 'gemini' | 'claude'
 
 export interface AvailableModel {
   id: string
@@ -220,6 +220,7 @@ export async function streamAiChat(
     surface: AiSurface
     messages: AiChatMessage[]
     context?: AiChatContext
+    provider?: AiProvider
     model?: string
   },
   onToken: (content: string) => void,

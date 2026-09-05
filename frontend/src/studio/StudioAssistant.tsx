@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm'
 import { StudioIcon } from './StudioIcon'
 
 function ProviderIcon({ provider }: { provider: AiProvider }) {
-  return <span className={`provider-icon provider-icon--${provider}`} aria-hidden="true">{provider === 'openai' ? '◎' : provider === 'grok' ? '𝕏' : '✦'}</span>
+  return <span className={`provider-icon provider-icon--${provider}`} aria-hidden="true">{provider === 'openai' ? '◎' : provider === 'grok' ? '𝕏' : provider === 'gemini' ? '✦' : '◇'}</span>
 }
 import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider } from '../lib/api'
 import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
@@ -56,7 +56,7 @@ export function StudioAssistant() {
     setError(null)
     setIsBusy(true)
     try {
-      await streamAiChat(token, { surface: 'studio', messages: nextMessages, model: model || undefined }, (tokenText) => {
+      await streamAiChat(token, { surface: 'studio', messages: nextMessages, provider, model: model || undefined }, (tokenText) => {
         setMessages((current) => {
           const last = current.at(-1)
           if (!last || last.role !== 'assistant') return current
@@ -111,7 +111,7 @@ export function StudioAssistant() {
                 <ProviderIcon provider={provider} /> {model || '选择模型'} <StudioIcon name="chevron" />
               </button>
               {modelMenuOpen && <div className="studio-assistant__model-menu">
-                <div className="studio-assistant__provider-tabs">{(['openai', 'grok', 'claude'] as AiProvider[]).map((item) => <button key={item} type="button" className={provider === item ? 'is-active' : ''} onClick={() => { setProvider(item); setModelMenuOpen(false) }}>{item}</button>)}</div>
+                <div className="studio-assistant__provider-tabs">{(['openai', 'grok', 'gemini', 'claude'] as AiProvider[]).map((item) => <button key={item} type="button" className={provider === item ? 'is-active' : ''} onClick={() => { setProvider(item); setModelMenuOpen(false) }}>{item}</button>)}</div>
                 {models.length === 0 ? <span className="studio-assistant__model-empty">暂无可用模型</span> : models.map((item) => <button key={item.id} type="button" onClick={() => { setModel(item.id); setModelMenuOpen(false) }}>{item.name || item.id}</button>)}
               </div>}
               <span className="studio-assistant__composer-status">{isBusy ? '正在生成…' : error ?? '单次会话'}</span>

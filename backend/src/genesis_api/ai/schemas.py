@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 AiSurface = Literal["blog", "studio", "tools"]
+AiProvider = Literal["openai", "grok", "gemini", "claude"]
 MessageRole = Literal["user", "assistant"]
 
 
@@ -19,12 +20,14 @@ class AiContext(BaseModel):
     excerpt: str | None = None
     content_markdown: str | None = None
     selected_text: str | None = None
+    articles: list[dict[str, str | None]] | None = None
 
 
 class AiChatRequest(BaseModel):
     surface: AiSurface
     messages: list[AiMessage] = Field(min_length=1, max_length=40)
     context: AiContext | None = None
+    provider: AiProvider | None = None
     model: str | None = None
 
 

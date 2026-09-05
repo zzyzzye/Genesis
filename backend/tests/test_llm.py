@@ -32,6 +32,40 @@ async def test_list_openai_models_uses_configured_url_and_bearer_key() -> None:
 
 
 @pytest.mark.anyio
+async def test_list_grok_models_adds_v1_to_root_base_url() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"data": [{"id": "grok-test"}]})
+
+    settings = Settings(
+        text_grok_api_key=SecretStr("grok-test-key"),
+        text_grok_base_url="https://gateway.example/",
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await ModelDiscoveryService(settings, client).list_models("grok")
+
+    assert str(requests[0].url) == "https://gateway.example/v1/models"
+    assert result.models[0].id == "grok-test"
+
+
+@pytest.mark.anyio
+async def test_list_gemini_models_accepts_native_name_field() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"models": [{"name": "models/gemini-2.5-flash"}]})
+
+    settings = Settings(
+        text_gemini_api_key=SecretStr("gemini-test-key"),
+        text_gemini_base_url="https://gateway.example/",
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await ModelDiscoveryService(settings, client).list_models("gemini")
+
+    assert result.models[0].id == "gemini-2.5-flash"
+
+
+@pytest.mark.anyio
 async def test_list_claude_models_supports_base_url_with_v1() -> None:
     requests: list[httpx.Request] = []
 

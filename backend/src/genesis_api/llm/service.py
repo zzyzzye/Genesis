@@ -45,13 +45,15 @@ class ModelDiscoveryService:
 
         if not isinstance(payload, dict):
             raise ModelDiscoveryError("模型列表响应格式无效")
-        return ProviderModels(provider=provider, models=self._parse_models(payload))
+        return ProviderModels(provider=provider, models=self._parse_models(payload, provider))
 
     def _provider_config(self, provider: ProviderName) -> tuple[SecretStr | None, str]:
         if provider == "openai":
             return self.settings.text_openai_api_key, self.settings.text_openai_base_url
         if provider == "grok":
             return self.settings.text_grok_api_key, self.settings.text_grok_base_url
+        if provider == "gemini":
+            return self.settings.text_gemini_api_key, self.settings.text_gemini_base_url
         return self.settings.text_claude_api_key, self.settings.text_claude_base_url
 
     @staticmethod
@@ -59,8 +61,8 @@ class ModelDiscoveryService:
         normalized = base_url.rstrip("/")
         if normalized.endswith("/models"):
             return normalized
-        if provider == "claude" and not normalized.endswith("/v1"):
-            return f"{normalized}/v1/models"
+        if provider in ("openai", "grok", "gemini", "claude") and not normalized.endswith("/v1"):
+            normalized = f"{normalized}/v1"
         return urljoin(f"{normalized}/", "models")
 
     @staticmethod
@@ -74,18 +76,25 @@ class ModelDiscoveryService:
         return {"authorization": f"Bearer {api_key}", "accept": "application/json"}
 
     @staticmethod
-    def _parse_models(payload: dict[str, Any]) -> list[AvailableModel]:
+    def _parse_models(payload: dict[str, Any], provider: ProviderName) -> list[AvailableModel]:
         raw_models = payload.get("data", payload.get("models", []))
         if not isinstance(raw_models, list):
             raise ModelDiscoveryError("模型列表响应格式无效")
 
         models: list[AvailableModel] = []
         for raw_model in raw_models:
-            if not isinstance(raw_model, dict) or not isinstance(raw_model.get("id"), str):
+            if not isinstance(raw_model, dict):
+                continue
+            model_id = raw_model.get("id")
+            if provider == "gemini" and not isinstance(model_id, str):
+                native_name = raw_model.get("name")
+                if isinstance(native_name, str):
+                    model_id = native_name.removeprefix("models/")
+            if not isinstance(model_id, str):
                 continue
             models.append(
                 AvailableModel(
-                    id=raw_model["id"],
+                    id=model_id,
                     name=raw_model.get("display_name") or raw_model.get("name"),
                     created=raw_model.get("created"),
                     context_window=raw_model.get("context_window")

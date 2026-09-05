@@ -29,13 +29,16 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 120
     development_owner_password: SecretStr = SecretStr("genesis-local-only")
 
-    text_provider: Literal["openai", "grok", "claude"] = "openai"
+    text_provider: Literal["openai", "grok", "gemini", "claude"] = "openai"
     text_openai_api_key: SecretStr | None = None
     text_openai_base_url: str = "https://api.openai.com/v1"
     text_openai_model: str | None = None
     text_grok_api_key: SecretStr | None = None
     text_grok_base_url: str = "https://api.x.ai/v1"
     text_grok_model: str | None = None
+    text_gemini_api_key: SecretStr | None = None
+    text_gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+    text_gemini_model: str | None = None
     text_claude_api_key: SecretStr | None = None
     text_claude_base_url: str = "https://api.anthropic.com"
     text_claude_model: str | None = None
