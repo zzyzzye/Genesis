@@ -140,7 +140,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /^内容管理$/ }))
 
     expect(screen.getByRole('heading', { name: '文章管理' })).toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: '三级内容管理菜单' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: '三级文章内容' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '新建文章' })).toBeInTheDocument()
   })
 
