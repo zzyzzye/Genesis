@@ -5,8 +5,20 @@ import remarkGfm from 'remark-gfm'
 import { StudioIcon } from './StudioIcon'
 
 function ProviderIcon({ provider }: { provider: AiProvider }) {
-  return <span className={`provider-icon provider-icon--${provider}`} aria-hidden="true">{provider === 'openai' ? '◎' : provider === 'grok' ? '𝕏' : provider === 'gemini' ? '✦' : '◇'}</span>
+  const common = { viewBox: '0 0 24 24', role: 'img' as const, focusable: 'false' as const }
+
+  if (provider === 'openai') {
+    return <svg className={`provider-icon provider-icon--${provider}`} {...common} aria-label="OpenAI"><path d="M12 2.75a4.25 4.25 0 0 1 3.68 2.12 4.25 4.25 0 0 1 4.42 4.42A4.25 4.25 0 0 1 18 13a4.25 4.25 0 0 1-2.12 3.68 4.25 4.25 0 0 1-4.42 4.42A4.25 4.25 0 0 1 8 19a4.25 4.25 0 0 1-4.42-4.42A4.25 4.25 0 0 1 6 11a4.25 4.25 0 0 1 2.12-4.42A4.25 4.25 0 0 1 12 2.75Z" /><path d="m8.12 6.58 3.76 2.17v4.34l-3.76 2.17M15.88 6.58l-3.76 2.17M15.88 17.42l-3.76-2.17M6 11l3.76 2.17M18 13l-3.76-2.17" /></svg>
+  }
+  if (provider === 'grok') {
+    return <svg className={`provider-icon provider-icon--${provider}`} {...common} aria-label="Grok"><path d="M5.1 4.2h3.2l10.6 15.6h-3.2L5.1 4.2Z" /><path d="M18.9 4.2h-3.2L5.1 19.8h3.2L18.9 4.2Z" /></svg>
+  }
+  if (provider === 'gemini') {
+    return <svg className={`provider-icon provider-icon--${provider}`} {...common} aria-label="Gemini"><path d="M12 2.5c.56 4.84 2.66 7.08 7.5 7.5-4.84.56-7.08 2.66-7.5 7.5-.56-4.84-2.66-7.08-7.5-7.5 4.84-.42 6.94-2.66 7.5-7.5Z" /></svg>
+  }
+  return <svg className={`provider-icon provider-icon--${provider}`} {...common} aria-label="Claude"><path d="M7.05 14.08 10.7 5.1a2 2 0 0 1 3.72 1.52l-3.65 8.98a2 2 0 1 1-3.72-1.52Z" /><path d="m13.3 9.92 3.65 8.98a2 2 0 0 1-3.72 1.52l-3.65-8.98a2 2 0 0 1 3.72-1.52Z" /></svg>
 }
+
 import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider } from '../lib/api'
 import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
 

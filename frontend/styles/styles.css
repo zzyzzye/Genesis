@@ -2175,3 +2175,25 @@ nav span {
   line-height: 1;
   letter-spacing: 0;
 }
+
+/* 模型选择器使用矢量 Provider 标识，保证在任意分辨率下清晰。 */
+.provider-icon {
+  display: inline-block;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+  vertical-align: middle;
+  overflow: visible;
+}
+.provider-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.65;
+}
+.provider-icon--openai { color: #087f63; }
+.provider-icon--grok { color: #111820; }
+.provider-icon--gemini { color: #4f6fe8; }
+.provider-icon--gemini path { fill: currentColor; stroke: none; }
+.provider-icon--claude { color: #b7642b; }
