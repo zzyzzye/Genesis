@@ -2226,3 +2226,21 @@ nav span {
 .studio-assistant__provider-tabs button .provider-icon {
   margin-right: .12rem;
 }
+
+.editor-heading__meta { flex-wrap: wrap; }
+.editor-import-button {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .55rem .7rem;
+  border: 1px solid #cfd8e1;
+  border-radius: .3rem;
+  background: #fff;
+  color: #526174;
+  cursor: pointer;
+  font-size: .7rem;
+  font-weight: 750;
+}
+.editor-import-button:hover { border-color: #1769bd; background: #f4f8fc; color: #1769bd; }
+.editor-import-button svg { width: .9rem; height: .9rem; }
+.editor-import-button input { display: none; }

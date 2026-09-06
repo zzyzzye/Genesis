@@ -22,6 +22,7 @@ import {
   Settings,
   Sparkles,
   UserRound,
+  Upload,
   Video,
   Wrench,
   X,
@@ -54,6 +55,7 @@ export type StudioIconName =
   | 'spark'
   | 'tools'
   | 'user'
+  | 'upload'
 
 const icons: Record<StudioIconName, LucideIcon> = {
   'arrow-left': ArrowLeft,
@@ -81,6 +83,7 @@ const icons: Record<StudioIconName, LucideIcon> = {
   spark: Sparkles,
   tools: Wrench,
   user: UserRound,
+  upload: Upload,
 }
 
 export function StudioIcon({ name, ...props }: { name: StudioIconName } & SVGProps<SVGSVGElement>) {

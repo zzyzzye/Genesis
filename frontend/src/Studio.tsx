@@ -185,6 +185,20 @@ function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: str
   )
 }
 
+function slugifyFilename(filename: string): string {
+  return filename.replace(/\.md$/i, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+function parseMarkdownImport(filename: string, content: string): { title: string; excerpt: string; slug: string } {
+  const lines = content.split(/\r?\n/)
+  const titleIndex = lines.findIndex((line) => /^#\s+/.test(line.trim()))
+  const titleLine = titleIndex >= 0 ? lines[titleIndex] ?? '' : ''
+  const title = titleIndex >= 0 ? titleLine.replace(/^#\s+/, '').trim() : filename.replace(/\.md$/i, '')
+  const body = lines.filter((_, index) => index !== titleIndex).join('\n').trim()
+  const paragraphs = body.split(/\n\s*\n/).map((paragraph) => paragraph.replace(/^#{2,6}\s+/, '').replace(/[*_`>#-]/g, '').trim()).filter(Boolean)
+  return { title, excerpt: paragraphs[0]?.slice(0, 500) || title, slug: slugifyFilename(filename) }
+}
+
 function MarkdownPreview({ content }: { content: string }) {
   return (
     <article className="studio-preview article-content">
@@ -214,6 +228,29 @@ function Editor({
     onSave(editor.status)
   }
 
+  function importMarkdown(file: File) {
+    if (!file.name.toLowerCase().endsWith('.md')) {
+      window.alert('请选择 Markdown 文件（.md）。')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const content = typeof reader.result === 'string' ? reader.result : ''
+      const metadata = parseMarkdownImport(file.name, content)
+      onChange({
+        ...editor,
+        id: null,
+        title: metadata.title,
+        excerpt: metadata.excerpt,
+        slug: metadata.slug,
+        contentMarkdown: content,
+        status: 'draft',
+      })
+    }
+    reader.onerror = () => window.alert('Markdown 文件读取失败，请重试。')
+    reader.readAsText(file)
+  }
+
   return (
     <section className="editor-panel" aria-labelledby="editor-title">
       <div className="editor-heading">
@@ -222,6 +259,10 @@ function Editor({
           <h1 id="editor-title">{editor.id ? '编辑文章' : '新建文章'}</h1>
         </div>
         <div className="editor-heading__meta">
+          <label className="editor-import-button">
+            <StudioIcon name="upload" /> 导入 Markdown
+            <input accept=".md,text/markdown" type="file" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) importMarkdown(file); event.currentTarget.value = '' }} />
+          </label>
           <span className={`post-status post-status--${editor.status}`}>
             {editor.status === 'published' ? '已发布' : '草稿'}
           </span>
