@@ -2197,3 +2197,13 @@ nav span {
 .provider-icon--gemini { color: #4f6fe8; }
 .provider-icon--gemini path { fill: currentColor; stroke: none; }
 .provider-icon--claude { color: #b7642b; }
+
+/* 使用官方品牌轮廓的 SVG 填充，不再用近似线稿或文字字符。 */
+.provider-icon path {
+  fill: currentColor;
+  stroke: none;
+}
+.provider-icon--openai { color: #111; }
+.provider-icon--grok { color: #111; }
+.provider-icon--gemini { color: #4f6fe8; }
+.provider-icon--claude { color: #191919; }
