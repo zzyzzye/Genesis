@@ -21,6 +21,9 @@ class AiContext(BaseModel):
     content_markdown: str | None = None
     selected_text: str | None = None
     articles: list[dict[str, str | None]] | None = None
+    current_post: dict[str, object] | None = None
+    available_tools: list[dict[str, object]] | None = None
+    write_policy: str | None = None
 
 
 class AiChatRequest(BaseModel):

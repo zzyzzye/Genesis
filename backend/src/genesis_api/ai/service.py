@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from genesis_api.agent.service import AgentPrompt
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
 
@@ -84,13 +85,7 @@ class AiChatService:
         return {"authorization": f"Bearer {api_key}", "content-type": "application/json"}
 
     def _payload(self, request: AiChatRequest, model: str, provider: str) -> dict[str, Any]:
-        system = (
-            "你是 Genesis AI，服务于个人内容系统。优先给出可执行、清晰的中文回答。"
-            "你可以阅读博客知识库，帮助修改现有文章或创作新文章。"
-            "涉及修改文章时输出完整修改稿和修改说明；创作文章时输出可直接粘贴到编辑器的"
-            "Markdown 草稿。"
-            "绝不擅自发布、删除或覆盖文章。"
-        )
+        system = AgentPrompt.system_message(request)
         if request.context:
             context = request.context.model_dump(exclude_none=True)
             system += f"\n当前页面上下文：{json.dumps(context, ensure_ascii=False)}"

@@ -7,10 +7,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
+from genesis_api.agent.context import build_studio_agent_context
 from genesis_api.ai.schemas import AiChatRequest, AiContext
 from genesis_api.ai.service import AiChatService, AiProviderError
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
-from genesis_api.blog.service import list_admin_posts
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.identity.models import UserRole
 
@@ -33,18 +33,16 @@ async def stream_chat(
 
     # 博客 Studio 是单作者后台，AI 默认获得全量文章知识库；不暴露给公开博客。
     if request.surface == "studio":
-        articles = [
-            {
-                "title": post.title,
-                "excerpt": post.excerpt,
-                "content_markdown": post.content_markdown,
-                "status": post.status.value,
-            }
-            for post in list_admin_posts(session)
-        ]
         context = request.context or AiContext()
+        agent_context = build_studio_agent_context(
+            session,
+            post_id=context.post_id,
+            title=context.title,
+            excerpt=context.excerpt,
+            content_markdown=context.content_markdown,
+        )
         request = request.model_copy(
-            update={"context": context.model_copy(update={"articles": articles})}
+            update={"context": context.model_copy(update=agent_context)}
         )
 
     async def events() -> AsyncIterator[str]:
