@@ -2218,3 +2218,11 @@ nav span {
   width: .85rem;
   height: .85rem;
 }
+
+/* 模型按钮中的官方 Logo 与模型名称保持舒适间距。 */
+.studio-assistant__tool-button .provider-icon {
+  margin-right: .2rem;
+}
+.studio-assistant__provider-tabs button .provider-icon {
+  margin-right: .12rem;
+}
