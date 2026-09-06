@@ -23,6 +23,15 @@ class AgentPrompt:
         )
 
     @staticmethod
+    def system_message_from_capabilities() -> str:
+        capabilities = AgentPrompt.capabilities()
+        return (
+            "你是 Genesis Agent，服务于站点所有者的私人博客后台。"
+            "请分析、处理、优化和创建文章；只读任务直接完成，写入任务必须等待用户确认。"
+            f"\n工具权限清单：{json.dumps(capabilities, ensure_ascii=False)}"
+        )
+
+    @staticmethod
     def capabilities() -> dict[str, Any]:
         return {
             "read": ["list_posts", "get_post", "search_posts", "analyze_post", "suggest_revision"],

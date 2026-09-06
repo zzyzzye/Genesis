@@ -41,9 +41,7 @@ async def stream_chat(
             excerpt=context.excerpt,
             content_markdown=context.content_markdown,
         )
-        request = request.model_copy(
-            update={"context": context.model_copy(update=agent_context)}
-        )
+        request = request.model_copy(update={"context": context.model_copy(update=agent_context)})
 
     async def events() -> AsyncIterator[str]:
         try:
