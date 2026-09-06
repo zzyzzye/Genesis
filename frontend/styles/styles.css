@@ -2207,3 +2207,14 @@ nav span {
 .provider-icon--grok { color: #111; }
 .provider-icon--gemini { color: #4f6fe8; }
 .provider-icon--claude { color: #191919; }
+
+.studio-assistant__provider-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .25rem;
+}
+.studio-assistant__provider-tabs .provider-icon {
+  width: .85rem;
+  height: .85rem;
+}

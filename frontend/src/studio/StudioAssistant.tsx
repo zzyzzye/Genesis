@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -38,19 +38,36 @@ export function StudioAssistant() {
   const [provider, setProvider] = useState<AiProvider>('openai')
   const [model, setModel] = useState('')
   const [models, setModels] = useState<{ id: string; name: string | null }[]>([])
+  const modelsCache = useRef<Partial<Record<AiProvider, { id: string; name: string | null }[]>>>({})
+  const selectedModels = useRef<Partial<Record<AiProvider, string>>>({})
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   useEffect(() => {
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!token || !isOpen) return
-    void getProviderModels(token, provider)
-      .then((result) => {
-        setModels(result.models)
-        setModel((current) => current && result.models.some((item) => item.id === current) ? current : result.models[0]?.id ?? '')
-      })
-      .catch(() => {
-        setModels([])
-        setModel('')
-      })
+
+    let cancelled = false
+    const providers: AiProvider[] = ['openai', 'grok', 'gemini', 'claude']
+    void Promise.all(providers.map(async (item) => {
+      if (modelsCache.current[item]) return
+      try {
+        const result = await getProviderModels(token, item)
+        modelsCache.current[item] = result.models
+      } catch {
+        modelsCache.current[item] = []
+      }
+    })).then(() => {
+      if (cancelled) return
+      const availableModels = modelsCache.current[provider] ?? []
+      setModels(availableModels)
+      const preferredModel = selectedModels.current[provider]
+      const nextModel = preferredModel && availableModels.some((item) => item.id === preferredModel)
+        ? preferredModel
+        : availableModels[0]?.id ?? ''
+      selectedModels.current[provider] = nextModel
+      setModel(nextModel)
+    })
+
+    return () => { cancelled = true }
   }, [isOpen, provider])
 
   const [messages, setMessages] = useState<AssistantMessage[]>([
@@ -123,10 +140,10 @@ export function StudioAssistant() {
                 <ProviderIcon provider={provider} /> {model || '选择模型'} <StudioIcon name="chevron" />
               </button>
               {modelMenuOpen && <div className="studio-assistant__model-menu">
-                <div className="studio-assistant__provider-tabs">{(['openai', 'grok', 'gemini', 'claude'] as AiProvider[]).map((item) => <button key={item} type="button" className={provider === item ? 'is-active' : ''} onClick={() => { setProvider(item); setModelMenuOpen(false) }}>{item}</button>)}</div>
-                {models.length === 0 ? <span className="studio-assistant__model-empty">暂无可用模型</span> : models.map((item) => <button key={item.id} type="button" onClick={() => { setModel(item.id); setModelMenuOpen(false) }}>{item.name || item.id}</button>)}
+                <div className="studio-assistant__provider-tabs">{(['openai', 'grok', 'gemini', 'claude'] as AiProvider[]).map((item) => <button key={item} type="button" className={provider === item ? 'is-active' : ''} aria-label={`切换到 ${item} 模型`} onClick={() => { setProvider(item); setModels(modelsCache.current[item] ?? []); setModel(selectedModels.current[item] ?? modelsCache.current[item]?.[0]?.id ?? '') }}><ProviderIcon provider={item} /><span>{item}</span></button>)}</div>
+                {models.length === 0 ? <span className="studio-assistant__model-empty">暂无可用模型</span> : models.map((item) => <button key={item.id} type="button" onClick={() => { selectedModels.current[provider] = item.id; setModel(item.id); setModelMenuOpen(false) }}>{item.name || item.id}</button>)}
               </div>}
-              <span className="studio-assistant__composer-status">{isBusy ? '正在生成…' : error ?? '单次会话'}</span>
+              {(isBusy || error) && <span className="studio-assistant__composer-status">{isBusy ? '正在生成…' : error}</span>}
               <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>
             </div>
           </form>
