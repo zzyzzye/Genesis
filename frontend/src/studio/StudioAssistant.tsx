@@ -23,14 +23,15 @@ import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider } 
 import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
 
 type AssistantMessage = { role: 'assistant' | 'user'; content: string }
+type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string }
+
+const defaultSuggestions = ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '创建一篇新的文章草稿']
 
 function MarkdownMessage({ content }: { content: string }) {
   return <div className="studio-assistant__markdown"><Markdown remarkPlugins={[remarkGfm]}>{content || '正在生成…'}</Markdown></div>
 }
 
-const suggestions = ['帮我梳理今天的写作计划', '把这篇文章改得更有力量', '生成一个文章标题']
-
-export function StudioAssistant() {
+export function StudioAssistant({ activeSection, editor }: { activeSection: string; editor: AssistantEditorContext | null }) {
   const [isOpen, setIsOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [isBusy, setIsBusy] = useState(false)
@@ -41,6 +42,7 @@ export function StudioAssistant() {
   const modelsCache = useRef<Partial<Record<AiProvider, { id: string; name: string | null }[]>>>({})
   const selectedModels = useRef<Partial<Record<AiProvider, string>>>({})
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const suggestions = editor ? ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '为当前文章生成更好的标题'] : defaultSuggestions
   useEffect(() => {
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!token || !isOpen) return
@@ -85,7 +87,7 @@ export function StudioAssistant() {
     setError(null)
     setIsBusy(true)
     try {
-      await streamAiChat(token, { surface: 'studio', messages: nextMessages, provider, model: model || undefined }, (tokenText) => {
+      await streamAiChat(token, { surface: 'studio', messages: nextMessages, provider, model: model || undefined, context: editor ? { post_id: editor.id ?? undefined, title: editor.title, excerpt: editor.excerpt, content_markdown: editor.contentMarkdown } : undefined }, (tokenText) => {
         setMessages((current) => {
           const last = current.at(-1)
           if (!last || last.role !== 'assistant') return current
@@ -117,7 +119,7 @@ export function StudioAssistant() {
             </button>
           </header>
           <div className="studio-assistant__body">
-            <div className="studio-assistant__context"><StudioIcon name="spark" /> 当前空间：写作台</div>
+            <div className="studio-assistant__context"><StudioIcon name="spark" /> {editor ? `当前文章：${editor.title || '未命名草稿'}` : activeSection === 'overview' ? '当前空间：内容总览' : '当前空间：写作台'}</div>
             <div className="studio-assistant__messages">
               {messages.map((message, index) => (
                 <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${message.role}-${index}`}>

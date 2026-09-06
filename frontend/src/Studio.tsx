@@ -570,7 +570,10 @@ function Dashboard({
           {activeSection !== 'overview' && activeSection !== 'posts' && <SectionPlaceholder section={activeSection} />}
         </main>
       </div>
-      <StudioAssistant />
+      <StudioAssistant
+        activeSection={activeSection}
+        editor={activeSection === 'posts' && postView === 'editor' ? { id: editor.id, title: editor.title, excerpt: editor.excerpt, contentMarkdown: editor.contentMarkdown, slug: editor.slug } : null}
+      />
     </div>
   )
 }
