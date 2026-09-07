@@ -1921,7 +1921,7 @@ nav span {
 .studio-assistant__context svg { width: .75rem; color: #9aaf45; }
 .studio-assistant__messages { display: grid; gap: .85rem; }
 .studio-assistant__message { display: flex; gap: .45rem; align-items: flex-start; }
-.studio-assistant__message p { max-width: 84%; margin: 0; padding: .68rem .75rem; border-radius: .7rem .7rem .7rem .15rem; background: #eef2f0; color: #3f5054; font-size: .73rem; line-height: 1.65; white-space: pre-line; }
+.studio-assistant__message p { max-width: 100%; box-sizing: border-box; margin: 0; padding: .68rem .75rem; border-radius: .7rem .7rem .7rem .15rem; background: #eef2f0; color: #3f5054; font-size: .73rem; line-height: 1.65; white-space: pre-line; }
 .studio-assistant__message--user { justify-content: flex-end; }
 .studio-assistant__message--user p { border-radius: .7rem .7rem .15rem .7rem; background: #dceba5; color: #35452f; }
 .studio-assistant__message-mark { display: grid; flex: 0 0 auto; width: 1.35rem; height: 1.35rem; margin-top: .2rem; place-items: center; border-radius: .4rem; background: #203743; color: #d8e85e; }
