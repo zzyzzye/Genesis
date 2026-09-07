@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -199,35 +199,156 @@ function parseMarkdownImport(filename: string, content: string): { title: string
   return { title, excerpt: paragraphs[0]?.slice(0, 500) || title, slug: slugifyFilename(filename) }
 }
 
-function MarkdownPreview({ content }: { content: string }) {
+type MarkdownOutlineItem = { level: number; title: string; line: number; offset: number }
+
+function getMarkdownOutline(content: string): MarkdownOutlineItem[] {
+  let offset = 0
+  return content.split(/\r?\n/).flatMap((line, index) => {
+    const match = /^(#{1,3})\s+(.+?)\s*$/.exec(line)
+    const hashes = match?.[1]
+    const title = match?.[2]
+    const item = hashes && title ? { level: hashes.length, title, line: index, offset } : null
+    offset += line.length + 1
+    return item ? [item] : []
+  })
+}
+
+const markdownTools = [
+  { label: '粗体', shortLabel: 'B', prefix: '**', suffix: '**' },
+  { label: '斜体', shortLabel: 'I', prefix: '*', suffix: '*' },
+  { label: '二级标题', shortLabel: 'H2', prefix: '## ', suffix: '' },
+  { label: '链接', shortLabel: '↗', prefix: '[', suffix: '](https://)' },
+  { label: '引用', shortLabel: '❝', prefix: '> ', suffix: '' },
+  { label: '代码块', shortLabel: '</>', prefix: '```\n', suffix: '\n```' },
+  { label: '列表', shortLabel: '•', prefix: '- ', suffix: '' },
+  { label: '分隔线', shortLabel: '—', prefix: '\n---\n', suffix: '' },
+]
+
+function PostSettingsModal({
+  editor,
+  feedback,
+  isSaving,
+  onChange,
+  onClose,
+  onDelete,
+  onImportMarkdown,
+  onSave,
+}: {
+  editor: EditorState
+  feedback: string | null
+  isSaving: boolean
+  onChange: (editor: EditorState) => void
+  onClose: () => void
+  onDelete: () => void
+  onImportMarkdown: (file: File) => void
+  onSave: (status: BlogPostStatus) => void
+}) {
   return (
-    <article className="studio-preview article-content">
-      <div className="studio-preview__label">预览</div>
-      <Markdown remarkPlugins={[remarkGfm]}>{content || '开始输入 Markdown，右侧会显示预览。'}</Markdown>
-    </article>
+    <div className="markdown-settings-modal" role="dialog" aria-modal="true" aria-labelledby="markdown-settings-title">
+      <section className="markdown-settings-modal__surface">
+        <header className="markdown-settings-modal__header">
+          <div>
+            <p className="eyebrow">ARTICLE SETTINGS</p>
+            <h2 id="markdown-settings-title">文章设置</h2>
+          </div>
+          <button className="text-button" type="button" onClick={onClose}>关闭</button>
+        </header>
+        <div className="markdown-settings-modal__body">
+          <div className="editor-form__grid">
+            <label htmlFor="settings-slug">
+              URL Slug
+              <input id="settings-slug" onChange={(event) => onChange({ ...editor, slug: event.currentTarget.value })} pattern="[a-z0-9]+(-[a-z0-9]+)*" required value={editor.slug} />
+            </label>
+            <label htmlFor="settings-cover">
+              封面链接（可选）
+              <input id="settings-cover" onChange={(event) => onChange({ ...editor, coverImageUrl: event.currentTarget.value })} type="url" value={editor.coverImageUrl} />
+            </label>
+          </div>
+          <label htmlFor="settings-excerpt">
+            摘要
+            <textarea id="settings-excerpt" onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} required rows={4} value={editor.excerpt} />
+          </label>
+          <label htmlFor="settings-tags">
+            标签
+            <input id="settings-tags" onChange={(event) => onChange({ ...editor, tagsText: event.currentTarget.value })} placeholder="产品:product, 工程:engineering" value={editor.tagsText} />
+          </label>
+          <div className="editor-options">
+            <label htmlFor="settings-reading-time">
+              阅读分钟
+              <input id="settings-reading-time" min="1" onChange={(event) => onChange({ ...editor, readTimeMinutes: Number(event.currentTarget.value) || 1 })} type="number" value={editor.readTimeMinutes} />
+            </label>
+            <label className="checkbox-label" htmlFor="settings-featured">
+              <input checked={editor.isFeatured} id="settings-featured" onChange={(event) => onChange({ ...editor, isFeatured: event.currentTarget.checked })} type="checkbox" />
+              设为精选
+            </label>
+          </div>
+          <label className="markdown-import-control">
+            <span>导入 Markdown 文件</span>
+            <small>导入后会覆盖当前标题、摘要、Slug 和正文。</small>
+            <input accept=".md,text/markdown" type="file" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) onImportMarkdown(file); event.currentTarget.value = '' }} />
+          </label>
+          {feedback && <p className="studio-form-error" role="alert">{feedback}</p>}
+        </div>
+        <footer className="markdown-settings-modal__footer">
+          <button className="text-button text-button--danger" disabled={!editor.id || isSaving} type="button" onClick={onDelete}>删除文章</button>
+          <div>
+            <button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存草稿</button>
+            <button className="primary-button" disabled={isSaving} type="button" onClick={() => onSave('published')}>{isSaving ? '正在保存…' : '保存并发布'}</button>
+          </div>
+        </footer>
+      </section>
+    </div>
   )
 }
 
-function Editor({
+function MarkdownEditor({
   editor,
+  feedback,
   isSaving,
+  onBack,
   onChange,
   onDelete,
+  onPreview,
   onSave,
-  feedback,
-  onClose,
 }: {
   editor: EditorState
+  feedback: string | null
   isSaving: boolean
+  onBack: () => void
   onChange: (editor: EditorState) => void
   onDelete: () => void
+  onPreview: () => void
   onSave: (status: BlogPostStatus) => void
-  feedback: string | null
-  onClose: () => void
 }) {
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    onSave(editor.status)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const outline = getMarkdownOutline(editor.contentMarkdown)
+
+  function updateContent(contentMarkdown: string) {
+    onChange({ ...editor, contentMarkdown })
+  }
+
+  function applyTool(prefix: string, suffix: string) {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const selected = editor.contentMarkdown.slice(start, end) || '输入内容'
+    const nextContent = `${editor.contentMarkdown.slice(0, start)}${prefix}${selected}${suffix}${editor.contentMarkdown.slice(end)}`
+    updateContent(nextContent)
+    requestAnimationFrame(() => {
+      textarea.focus()
+      const nextStart = start + prefix.length
+      textarea.setSelectionRange(nextStart, nextStart + selected.length)
+    })
+  }
+
+  function jumpToOutline(item: MarkdownOutlineItem) {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.focus()
+    textarea.setSelectionRange(item.offset, item.offset)
+    textarea.scrollTop = Math.max(0, item.offset / Math.max(1, editor.contentMarkdown.length) * textarea.scrollHeight - textarea.clientHeight / 3)
   }
 
   function importMarkdown(file: File) {
@@ -239,155 +360,49 @@ function Editor({
     reader.onload = () => {
       const content = typeof reader.result === 'string' ? reader.result : ''
       const metadata = parseMarkdownImport(file.name, content)
-      onChange({
-        ...editor,
-        id: null,
-        title: metadata.title,
-        excerpt: metadata.excerpt,
-        slug: metadata.slug,
-        contentMarkdown: content,
-        status: 'draft',
-      })
+      onChange({ ...editor, id: null, title: metadata.title, excerpt: metadata.excerpt, slug: metadata.slug, contentMarkdown: content, status: 'draft' })
     }
     reader.onerror = () => window.alert('Markdown 文件读取失败，请重试。')
     reader.readAsText(file)
   }
 
   return (
-    <section className="editor-panel" aria-labelledby="editor-title">
-      <div className="editor-heading">
-        <div>
-          <p className="eyebrow">{editor.id ? 'EDITING' : 'NEW DRAFT'}</p>
-          <h1 id="editor-title">{editor.id ? '编辑文章' : '新建文章'}</h1>
-        </div>
-        <div className="editor-heading__meta">
-          <button className="text-button" type="button" onClick={onClose}>关闭</button>
-          <label className="editor-import-button">
-            <StudioIcon name="upload" /> 导入 Markdown
-            <input accept=".md,text/markdown" type="file" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) importMarkdown(file); event.currentTarget.value = '' }} />
-          </label>
-          <span className={`post-status post-status--${editor.status}`}>
-            {editor.status === 'published' ? '已发布' : '草稿'}
-          </span>
-          {editor.id && (
-            <button className="text-button text-button--danger" type="button" onClick={onDelete}>
-              删除
-            </button>
-          )}
-        </div>
-      </div>
-      <form className="editor-form" onSubmit={submit}>
-        <div className="editor-form__grid">
-          <label htmlFor="post-title">
-            标题
-            <input
-              id="post-title"
-              onChange={(event) => onChange({ ...editor, title: event.currentTarget.value })}
-              required
-              value={editor.title}
-            />
-          </label>
-          <label htmlFor="post-slug">
-            URL Slug
-            <input
-              id="post-slug"
-              onChange={(event) => onChange({ ...editor, slug: event.currentTarget.value })}
-              pattern="[a-z0-9]+(-[a-z0-9]+)*"
-              required
-              value={editor.slug}
-            />
-          </label>
-        </div>
-        <label htmlFor="post-excerpt">
-          摘要
-          <textarea
-            id="post-excerpt"
-            onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })}
-            required
-            rows={3}
-            value={editor.excerpt}
-          />
-        </label>
-        <div className="editor-content-grid">
-          <label htmlFor="post-content">
-            正文（Markdown）
-            <textarea
-              className="editor-form__content"
-              id="post-content"
-              onChange={(event) => onChange({ ...editor, contentMarkdown: event.currentTarget.value })}
-              required
-              rows={18}
-              value={editor.contentMarkdown}
-            />
-          </label>
-          <MarkdownPreview content={editor.contentMarkdown} />
-        </div>
-        <div className="editor-form__grid">
-          <label htmlFor="post-tags">
-            标签
-            <input
-              id="post-tags"
-              onChange={(event) => onChange({ ...editor, tagsText: event.currentTarget.value })}
-              placeholder="产品:product, 工程:engineering"
-              value={editor.tagsText}
-            />
-          </label>
-          <label htmlFor="post-cover">
-            封面链接（可选）
-            <input
-              id="post-cover"
-              onChange={(event) => onChange({ ...editor, coverImageUrl: event.currentTarget.value })}
-              type="url"
-              value={editor.coverImageUrl}
-            />
-          </label>
-        </div>
-        <div className="editor-options">
-          <label htmlFor="post-reading-time">
-            阅读分钟
-            <input
-              id="post-reading-time"
-              min="1"
-              onChange={(event) =>
-                onChange({ ...editor, readTimeMinutes: Number(event.currentTarget.value) || 1 })
-              }
-              type="number"
-              value={editor.readTimeMinutes}
-            />
-          </label>
-          <label className="checkbox-label" htmlFor="post-featured">
-            <input
-              checked={editor.isFeatured}
-              id="post-featured"
-              onChange={(event) => onChange({ ...editor, isFeatured: event.currentTarget.checked })}
-              type="checkbox"
-            />
-            设为精选
-          </label>
-        </div>
-        {feedback && <p className="studio-form-error" role="alert">{feedback}</p>}
-        <div className="editor-actions">
-          <div className="editor-actions__buttons">
-            <button
-              className="secondary-button"
-              disabled={isSaving}
-              type="button"
-              onClick={() => onSave('draft')}
-            >
-              保存草稿
-            </button>
-            <button
-              className="primary-button"
-              disabled={isSaving}
-              type="button"
-              onClick={() => onSave('published')}
-            >
-              {isSaving ? '正在保存…' : '保存并发布'}
-            </button>
+    <section className="markdown-editor" aria-labelledby="markdown-editor-title">
+      <header className="markdown-editor__header">
+        <div className="markdown-editor__identity">
+          <button className="text-button" type="button" onClick={onBack}>← 返回文章列表</button>
+          <div className="markdown-editor__title-row">
+            <span className="markdown-editor__eyebrow">MARKDOWN WORKSPACE</span>
+            <span className={`post-status post-status--${editor.status}`}>{editor.status === 'published' ? '已发布' : '草稿'}</span>
           </div>
-          <span>手动保存 · Markdown 内容会实时预览</span>
+          <input aria-label="文章标题" className="markdown-editor__title" id="markdown-editor-title" onChange={(event) => onChange({ ...editor, title: event.currentTarget.value })} placeholder="输入文章标题" value={editor.title} />
         </div>
-      </form>
+        <div className="markdown-editor__actions">
+          <button className="secondary-button" type="button" onClick={onPreview}><StudioIcon name="eye" /> 预览</button>
+          <button className="secondary-button" type="button" onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" /> 设置</button>
+          <button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存</button>
+          <button className="primary-button" disabled={isSaving} type="button" onClick={() => onSave('published')}>{isSaving ? '发布中…' : '发布'}</button>
+        </div>
+      </header>
+      {feedback && <p className="markdown-editor__feedback" role="status">{feedback}</p>}
+      <div className="markdown-editor__workspace">
+        <aside className="markdown-editor__outline" aria-label="文章大纲">
+          <div className="markdown-editor__pane-label">大纲</div>
+          {outline.length === 0 && <p>输入标题后，这里会生成大纲。</p>}
+          {outline.map((item) => <button className={`markdown-editor__outline-item markdown-editor__outline-item--${item.level}`} key={`${item.line}-${item.title}`} type="button" onClick={() => jumpToOutline(item)}>{item.title}</button>)}
+        </aside>
+        <section className="markdown-editor__source" aria-label="Markdown 编辑区">
+          <div className="markdown-editor__toolbar" role="toolbar" aria-label="Markdown 工具栏">
+            {markdownTools.map((tool) => <button key={tool.label} aria-label={tool.label} title={tool.label} type="button" onClick={() => applyTool(tool.prefix, tool.suffix)}>{tool.shortLabel}</button>)}
+          </div>
+          <textarea ref={textareaRef} aria-label="Markdown 正文" className="markdown-editor__textarea" onChange={(event) => updateContent(event.currentTarget.value)} spellCheck={false} value={editor.contentMarkdown} />
+        </section>
+        <section className="markdown-editor__preview" aria-label="实时预览">
+          <div className="markdown-editor__pane-label">实时预览</div>
+          <article className="article-content"><Markdown remarkPlugins={[remarkGfm]}>{editor.contentMarkdown || '开始输入 Markdown 内容。'}</Markdown></article>
+        </section>
+      </div>
+      {isSettingsOpen && <PostSettingsModal editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onImportMarkdown={importMarkdown} onSave={onSave} />}
     </section>
   )
 }
@@ -478,7 +493,7 @@ function ArticleReader({
           <span className={`post-status post-status--${editor.status}`}>
             {editor.status === 'published' ? '已发布' : '草稿'}
           </span>
-          <button className="primary-button" type="button" onClick={onEdit}>编辑设置</button>
+          <button className="primary-button" type="button" onClick={onEdit}>编辑文章</button>
         </div>
       </header>
       <article className="article-reader__content article-content">
@@ -496,11 +511,11 @@ function PostsWorkspace({
   posts,
   view,
   onChange,
-  onCloseEditor,
   onCreatePost,
   onDelete,
   onEdit,
   onOpenPost,
+  onPreview,
   onBack,
   onSave,
 }: {
@@ -511,11 +526,11 @@ function PostsWorkspace({
   posts: BlogPostAdmin[]
   view: 'list' | 'preview'
   onChange: (editor: EditorState) => void
-  onCloseEditor: () => void
   onCreatePost: () => void
   onDelete: () => void
   onEdit: () => void
   onOpenPost: (post: BlogPostAdmin) => void
+  onPreview: () => void
   onBack: () => void
   onSave: (status: BlogPostStatus) => void
 }) {
@@ -523,24 +538,11 @@ function PostsWorkspace({
     return <PostsIndex onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} />
   }
 
-  return (
-    <>
-      <ArticleReader editor={editor} onBack={onBack} onEdit={onEdit} />
-      {isEditorOpen && (
-        <div className="studio-editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-title">
-          <Editor
-            editor={editor}
-            feedback={feedback}
-            isSaving={isSaving}
-            onChange={onChange}
-            onClose={onCloseEditor}
-            onDelete={onDelete}
-            onSave={onSave}
-          />
-        </div>
-      )}
-    </>
-  )
+  if (isEditorOpen) {
+    return <MarkdownEditor editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} />
+  }
+
+  return <ArticleReader editor={editor} onBack={onBack} onEdit={onEdit} />
 }
 
 function SectionPlaceholder({ section }: { section: Exclude<StudioSection, 'overview' | 'posts'> }) {
@@ -612,7 +614,7 @@ function Dashboard({
   function openPost(post: BlogPostAdmin) {
     setEditor(toEditor(post))
     setFeedback(null)
-    void navigate(`${studioBasePath}/posts/${encodeURIComponent(post.id)}`)
+    void navigate(`${studioBasePath}/posts/${encodeURIComponent(post.id)}/edit`)
   }
 
   async function savePost(status: BlogPostStatus) {
@@ -633,7 +635,7 @@ function Dashboard({
       setManagedPosts((currentPosts) => [savedPost, ...currentPosts.filter((post) => post.id !== savedPost.id)])
       setEditor(toEditor(savedPost))
       setFeedback('已保存。')
-      void navigate(`${studioBasePath}/posts/${encodeURIComponent(savedPost.id)}`)
+      void navigate(`${studioBasePath}/posts/${encodeURIComponent(savedPost.id)}/edit`)
     } catch {
       setFeedback('保存失败，请检查必填项、Slug 和网络连接。')
     } finally {
@@ -684,11 +686,11 @@ function Dashboard({
               isEditorOpen={isEditorOpen}
               isSaving={isSaving}
               onChange={setEditor}
-              onCloseEditor={() => { void navigate(activeEditor.id ? `${studioBasePath}/posts/${encodeURIComponent(activeEditor.id)}` : `${studioBasePath}/posts`) }}
               onCreatePost={createPost}
               onDelete={() => void deletePost()}
               onEdit={() => { void navigate(activeEditor.id ? `${studioBasePath}/posts/${encodeURIComponent(activeEditor.id)}/edit` : `${studioBasePath}/posts/new/edit`) }}
               onOpenPost={openPost}
+              onPreview={() => { void navigate(activeEditor.id ? `${studioBasePath}/posts/${encodeURIComponent(activeEditor.id)}` : `${studioBasePath}/posts`) }}
               onBack={() => { void navigate(`${studioBasePath}/posts`) }}
               onSave={(status) => void savePost(status)}
               posts={managedPosts}
