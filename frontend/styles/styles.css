@@ -2055,6 +2055,7 @@ nav span {
 @media (max-width: 680px) { .studio-assistant__launcher { width: 3rem; height: 3rem; } .studio-assistant__launcher-icon { width: 1.75rem; height: 1.75rem; } .studio-assistant__panel { height: calc(100vh - 5.25rem); max-height: calc(100vh - 5.25rem); } }
 
 /* 工作台侧边栏与 AI 助手的最终布局修正 */
+.studio-app-shell { column-gap: .65rem; }
 .studio-section-nav {
   min-width: 15.25rem;
   background: #fbfcfd;
@@ -2179,6 +2180,7 @@ nav span {
   font-size: .72rem;
 }
 @media (max-width: 680px) {
+  .studio-app-shell { column-gap: 0; }
   .studio-section-nav { min-width: 0; }
   .studio-assistant__panel {
     width: min(26rem, calc(100vw - 1.5rem));
