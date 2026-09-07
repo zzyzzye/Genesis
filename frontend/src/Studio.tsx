@@ -3,22 +3,33 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
+  BlockTypeSelect,
+  BoldItalicUnderlineToggles,
   codeBlockPlugin,
   codeMirrorPlugin,
+  CodeToggle,
+  CreateLink,
   diffSourcePlugin,
+  DiffSourceToggleWrapper,
   headingsPlugin,
   imagePlugin,
-  KitchenSinkToolbar,
+  InsertCodeBlock,
+  InsertImage,
+  InsertTable,
+  InsertThematicBreak,
   linkDialogPlugin,
   linkPlugin,
   listsPlugin,
+  ListsToggle,
   markdownShortcutPlugin,
   MDXEditor,
   quotePlugin,
+  Separator,
   tablePlugin,
   thematicBreakPlugin,
   toolbarPlugin,
   type Translation,
+  UndoRedo,
 } from '@mdxeditor/editor'
 import '@mdxeditor/editor/style.css'
 
@@ -176,7 +187,7 @@ function createEmptyEditor(): EditorState {
     slug: '',
     title: '',
     excerpt: '',
-    contentMarkdown: '# 新文章\n\n从这里开始写。',
+    contentMarkdown: '从这里开始写。',
     coverImageUrl: '',
     status: 'draft',
     isFeatured: false,
@@ -186,13 +197,19 @@ function createEmptyEditor(): EditorState {
   }
 }
 
+function stripLeadingDocumentTitle(contentMarkdown: string, title: string): string {
+  const match = /^(?:#\s+)(.+?)(?:\r?\n){1,2}/.exec(contentMarkdown)
+  if (match?.[1]?.trim() === title.trim()) return contentMarkdown.slice(match[0].length)
+  return contentMarkdown
+}
+
 function toEditor(post: BlogPostAdmin): EditorState {
   return {
     id: post.id,
     slug: post.slug,
     title: post.title,
     excerpt: post.excerpt,
-    contentMarkdown: post.content_markdown,
+    contentMarkdown: stripLeadingDocumentTitle(post.content_markdown, post.title),
     coverImageUrl: post.cover_image_url ?? '',
     status: post.status,
     isFeatured: post.is_featured,
@@ -490,7 +507,7 @@ function MarkdownEditor({
     reader.onload = () => {
       const content = typeof reader.result === 'string' ? reader.result : ''
       const metadata = parseMarkdownImport(file.name, content)
-      onChange({ ...editor, id: null, title: metadata.title, excerpt: metadata.excerpt, slug: metadata.slug, contentMarkdown: content, status: 'draft' })
+      onChange({ ...editor, id: null, title: metadata.title, excerpt: metadata.excerpt, slug: metadata.slug, contentMarkdown: stripLeadingDocumentTitle(content, metadata.title), status: 'draft' })
     }
     reader.onerror = () => window.alert('Markdown 文件读取失败，请重试。')
     reader.readAsText(file)
@@ -502,7 +519,6 @@ function MarkdownEditor({
         <div className="markdown-editor__identity">
           <button className="text-button" type="button" onClick={onBack}>← 返回文章列表</button>
           <div className="markdown-editor__title-row">
-            <span className="markdown-editor__eyebrow">MDX MARKDOWN WORKSPACE</span>
             <span className={`post-status post-status--${editor.status}`}>{editor.status === 'published' ? '已发布' : '草稿'}</span>
           </div>
           <input aria-label="文章标题" className="markdown-editor__title" id="markdown-editor-title" onChange={(event) => onChange({ ...editor, title: event.currentTarget.value })} placeholder="输入文章标题" value={editor.title} />
@@ -537,7 +553,26 @@ function MarkdownEditor({
               codeMirrorPlugin({ codeBlockLanguages: { text: '纯文本', javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', json: 'JSON', bash: 'Bash', css: 'CSS', html: 'HTML' } }),
               diffSourcePlugin({ viewMode: 'rich-text' }),
               markdownShortcutPlugin(),
-              toolbarPlugin({ toolbarContents: () => <KitchenSinkToolbar /> }),
+              toolbarPlugin({
+                toolbarContents: () => (
+                  <DiffSourceToggleWrapper>
+                    <UndoRedo />
+                    <Separator />
+                    <BoldItalicUnderlineToggles />
+                    <CodeToggle />
+                    <Separator />
+                    <BlockTypeSelect />
+                    <Separator />
+                    <ListsToggle options={['bullet', 'number', 'check']} />
+                    <Separator />
+                    <CreateLink />
+                    <InsertImage />
+                    <InsertTable />
+                    <InsertCodeBlock />
+                    <InsertThematicBreak />
+                  </DiffSourceToggleWrapper>
+                ),
+              }),
             ]}
             spellCheck={false}
           />

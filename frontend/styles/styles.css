@@ -2784,3 +2784,70 @@ nav span {
   .taxonomy-select-row button,
   .taxonomy-create-row button { width: 100%; }
 }
+
+
+/* Typora 式文章编辑：弱化应用外壳，让正文成为视觉中心。 */
+.markdown-editor__header {
+  align-items: center;
+  padding: .7rem 1.35rem .6rem;
+  border-bottom-color: #e4e7ea;
+}
+.markdown-editor__title-row { margin-top: .5rem; }
+.markdown-editor__title {
+  width: min(100%, 62rem);
+  margin-top: .18rem;
+  font-size: clamp(1.65rem, 2.65vw, 2.55rem);
+  font-weight: 550;
+  letter-spacing: -.045em;
+  line-height: 1.18;
+}
+.markdown-editor__actions { gap: .35rem; padding-top: .65rem; }
+.markdown-editor__actions .primary-button,
+.markdown-editor__actions .secondary-button {
+  min-height: 2rem;
+  padding: .45rem .68rem;
+  border-radius: .25rem;
+  font-size: .69rem;
+}
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
+  min-height: 2.85rem;
+  padding: .35rem max(.7rem, calc((100% - 66rem) / 2));
+  border-bottom-color: #e8ebed;
+  background: #fff;
+  box-shadow: none;
+}
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar button,
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar [role='radio'] {
+  border-radius: .22rem;
+}
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar button:hover,
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar [role='radio']:hover {
+  background: #f0f3f5;
+}
+.genesis-mdx-content {
+  max-width: 52rem;
+  padding: 3.5rem clamp(1.25rem, 5vw, 4rem) 7rem;
+  color: #202939;
+  font-family: Georgia, "Noto Serif SC", "Source Han Serif SC", "STSong", serif;
+  font-size: 1.08rem;
+  line-height: 2;
+}
+.genesis-mdx-content > :first-child { margin-top: 0; }
+.genesis-mdx-content h1,
+.genesis-mdx-content h2,
+.genesis-mdx-content h3 {
+  color: #172235;
+  font-weight: 600;
+  letter-spacing: -.04em;
+}
+.genesis-mdx-content h1 { font-size: 2.25rem; }
+.genesis-mdx-content h2 { margin-top: 2.8rem; font-size: 1.65rem; }
+.genesis-mdx-content p { margin: 0 0 1.45rem; }
+.genesis-mdx-content blockquote { margin: 1.6rem 0; padding: .2rem 1.2rem; border-left: 2px solid #cdd6df; color: #657386; }
+.genesis-mdx-content pre { margin: 1.8rem 0; border-radius: .4rem; box-shadow: inset 0 0 0 1px #e2e6ea; }
+.genesis-mdx-content code { font-family: "SFMono-Regular", Consolas, monospace; }
+@media (max-width: 680px) {
+  .markdown-editor__header { padding: .65rem .9rem; }
+  .markdown-editor__actions { padding-top: .3rem; }
+  .genesis-mdx-content { padding: 2rem 1.1rem 4rem; font-size: 1rem; }
+}
