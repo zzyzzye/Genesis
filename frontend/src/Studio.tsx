@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -559,6 +559,25 @@ function SectionPlaceholder({ section }: { section: Exclude<StudioSection, 'over
   )
 }
 
+const studioSectionIds: StudioSection[] = ['overview', 'posts', 'pages', 'comments', 'attachments', 'links', 'themes', 'menus', 'users', 'settings']
+
+function getStudioRoute(pathname: string): {
+  activeSection: StudioSection
+  postId: string | null
+  postView: 'list' | 'preview'
+  isEditorOpen: boolean
+} {
+  const relativePath = pathname.replace(/^\/blog\/studio\/?/, '')
+  const [sectionSegment, postSegment, actionSegment] = relativePath.split('/').filter(Boolean)
+  const activeSection = sectionSegment && studioSectionIds.includes(sectionSegment as StudioSection)
+    ? sectionSegment as StudioSection
+    : 'overview'
+  const postId = activeSection === 'posts' && postSegment && postSegment !== 'new' ? postSegment : null
+  const isEditorOpen = activeSection === 'posts' && (postSegment === 'new' || actionSegment === 'edit')
+  const postView = activeSection === 'posts' && (postId !== null || isEditorOpen) ? 'preview' : 'list'
+  return { activeSection, postId, postView, isEditorOpen }
+}
+
 function Dashboard({
   posts,
   token,
@@ -570,42 +589,38 @@ function Dashboard({
   user: CurrentUser
   onLogout: () => void
 }) {
-  const [activeSection, setActiveSection] = useState<StudioSection>('overview')
-  const [postView, setPostView] = useState<'list' | 'preview'>('list')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { activeSection, postId, postView, isEditorOpen } = getStudioRoute(location.pathname)
   const [editor, setEditor] = useState<EditorState>(() => createEmptyEditor())
   const [managedPosts, setManagedPosts] = useState(posts)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
-  const [isEditorOpen, setIsEditorOpen] = useState(false)
+  const studioBasePath = '/blog/studio'
+
+  const selectedPost = postId === null ? null : managedPosts.find((post) => post.id === postId) ?? null
+  const activeEditor = selectedPost && editor.id !== postId ? toEditor(selectedPost) : editor
 
   function selectSection(section: StudioSection) {
-    setActiveSection(section)
-    if (section === 'posts') {
-      setPostView('list')
-      setIsEditorOpen(false)
-    }
+    void navigate(section === 'overview' ? studioBasePath : `${studioBasePath}/${section}`)
   }
 
   function createPost() {
-    setActiveSection('posts')
-    setPostView('preview')
     setEditor(createEmptyEditor())
     setFeedback(null)
-    setIsEditorOpen(true)
+    void navigate(`${studioBasePath}/posts/new/edit`)
   }
 
   function openPost(post: BlogPostAdmin) {
-    setActiveSection('posts')
-    setPostView('preview')
     setEditor(toEditor(post))
     setFeedback(null)
-    setIsEditorOpen(false)
+    void navigate(`${studioBasePath}/posts/${encodeURIComponent(post.id)}`)
   }
 
   async function savePost(status: BlogPostStatus) {
     let payload: BlogPostWrite
     try {
-      payload = toPayload({ ...editor, status })
+      payload = toPayload({ ...activeEditor, status })
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : '文章信息不完整。')
       return
@@ -614,14 +629,13 @@ function Dashboard({
     setIsSaving(true)
     setFeedback(null)
     try {
-      const savedPost = editor.id === null
+      const savedPost = activeEditor.id === null
         ? await createAdminBlogPost(token, payload)
-        : await updateAdminBlogPost(token, editor.id, payload)
+        : await updateAdminBlogPost(token, activeEditor.id, payload)
       setManagedPosts((currentPosts) => [savedPost, ...currentPosts.filter((post) => post.id !== savedPost.id)])
       setEditor(toEditor(savedPost))
       setFeedback('已保存。')
-      setPostView('preview')
-      setIsEditorOpen(false)
+      void navigate(`${studioBasePath}/posts/${encodeURIComponent(savedPost.id)}`)
     } catch {
       setFeedback('保存失败，请检查必填项、Slug 和网络连接。')
     } finally {
@@ -630,15 +644,14 @@ function Dashboard({
   }
 
   async function deletePost() {
-    if (editor.id === null) return
-    if (!window.confirm(`确定删除「${editor.title}」吗？此操作不可恢复。`)) return
+    if (activeEditor.id === null) return
+    if (!window.confirm(`确定删除「${activeEditor.title}」吗？此操作不可恢复。`)) return
     try {
-      await deleteAdminBlogPost(token, editor.id)
-      setManagedPosts((currentPosts) => currentPosts.filter((post) => post.id !== editor.id))
+      await deleteAdminBlogPost(token, activeEditor.id)
+      setManagedPosts((currentPosts) => currentPosts.filter((post) => post.id !== activeEditor.id))
       setEditor(createEmptyEditor())
-      setPostView('list')
-      setIsEditorOpen(false)
       setFeedback('文章已删除。')
+      void navigate(`${studioBasePath}/posts`)
     } catch {
       setFeedback('删除失败，请稍后重试。')
     }
@@ -668,17 +681,17 @@ function Dashboard({
           )}
           {activeSection === 'posts' && (
             <PostsWorkspace
-              editor={editor}
+              editor={activeEditor}
               feedback={feedback}
               isEditorOpen={isEditorOpen}
               isSaving={isSaving}
               onChange={setEditor}
-              onCloseEditor={() => setIsEditorOpen(false)}
+              onCloseEditor={() => { void navigate(activeEditor.id ? `${studioBasePath}/posts/${encodeURIComponent(activeEditor.id)}` : `${studioBasePath}/posts`) }}
               onCreatePost={createPost}
               onDelete={() => void deletePost()}
-              onEdit={() => setIsEditorOpen(true)}
+              onEdit={() => { void navigate(activeEditor.id ? `${studioBasePath}/posts/${encodeURIComponent(activeEditor.id)}/edit` : `${studioBasePath}/posts/new/edit`) }}
               onOpenPost={openPost}
-              onBack={() => { setPostView('list'); setIsEditorOpen(false) }}
+              onBack={() => { void navigate(`${studioBasePath}/posts`) }}
               onSave={(status) => void savePost(status)}
               posts={managedPosts}
               view={postView}
@@ -689,7 +702,7 @@ function Dashboard({
       </div>
       <StudioAssistant
         activeSection={activeSection}
-        editor={activeSection === 'posts' && postView === 'preview' ? { id: editor.id, title: editor.title, excerpt: editor.excerpt, contentMarkdown: editor.contentMarkdown, slug: editor.slug } : null}
+        editor={activeSection === 'posts' && postView === 'preview' ? { id: activeEditor.id, title: activeEditor.title, excerpt: activeEditor.excerpt, contentMarkdown: activeEditor.contentMarkdown, slug: activeEditor.slug } : null}
       />
     </div>
   )
