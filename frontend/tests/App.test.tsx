@@ -152,6 +152,7 @@ describe('App', () => {
     expect(window.location.pathname).toBe('/blog/studio/posts/post-1/edit')
     expect(screen.queryByRole('region', { name: '文章列表' })).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Markdown 编辑区' })).toBeInTheDocument()
+    expect(document.querySelector('.studio-topbar')).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '文章标题' })).toHaveValue('从一个完整模块开始')
     fireEvent.click(screen.getByRole('button', { name: '预览' }))
     expect(window.location.pathname).toBe('/blog/studio/posts/post-1')

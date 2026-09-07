@@ -638,16 +638,18 @@ function Dashboard({
       <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={onLogout} user={user} />
 
       <div className="studio-workspace">
-        <header className="studio-topbar">
-          <div className="studio-topbar__title">
-            <span className="studio-mobile-level">内容工作区</span>
-            <div><p>{meta.eyebrow}</p><h1>{meta.title}</h1><small>{meta.description}</small></div>
-          </div>
-          <div className="studio-topbar__actions">
-            <button type="button" aria-label="通知"><StudioIcon name="bell" /><span>2</span></button>
-            <Link className="studio-topbar__site-link" to="/blog"><StudioIcon name="eye" />查看站点 <StudioIcon name="arrow-up-right" /></Link>
-          </div>
-        </header>
+        {!isEditorOpen && (
+          <header className="studio-topbar">
+            <div className="studio-topbar__title">
+              <span className="studio-mobile-level">内容工作区</span>
+              <div><p>{meta.eyebrow}</p><h1>{meta.title}</h1><small>{meta.description}</small></div>
+            </div>
+            <div className="studio-topbar__actions">
+              <button type="button" aria-label="通知"><StudioIcon name="bell" /><span>2</span></button>
+              <Link className="studio-topbar__site-link" to="/blog"><StudioIcon name="eye" />查看站点 <StudioIcon name="arrow-up-right" /></Link>
+            </div>
+          </header>
+        )}
 
         <main className={activeSection === 'posts' ? 'studio-content studio-content--editor' : 'studio-content'}>
           {activeSection === 'overview' && (
