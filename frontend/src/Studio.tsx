@@ -1,7 +1,25 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import {
+  codeBlockPlugin,
+  codeMirrorPlugin,
+  diffSourcePlugin,
+  headingsPlugin,
+  imagePlugin,
+  KitchenSinkToolbar,
+  linkDialogPlugin,
+  linkPlugin,
+  listsPlugin,
+  markdownShortcutPlugin,
+  MDXEditor,
+  quotePlugin,
+  tablePlugin,
+  thematicBreakPlugin,
+  toolbarPlugin,
+} from '@mdxeditor/editor'
+import '@mdxeditor/editor/style.css'
 
 import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey } from './lib/auth'
 import { StudioIcon } from './studio/StudioIcon'
@@ -199,31 +217,6 @@ function parseMarkdownImport(filename: string, content: string): { title: string
   return { title, excerpt: paragraphs[0]?.slice(0, 500) || title, slug: slugifyFilename(filename) }
 }
 
-type MarkdownOutlineItem = { level: number; title: string; line: number; offset: number }
-
-function getMarkdownOutline(content: string): MarkdownOutlineItem[] {
-  let offset = 0
-  return content.split(/\r?\n/).flatMap((line, index) => {
-    const match = /^(#{1,3})\s+(.+?)\s*$/.exec(line)
-    const hashes = match?.[1]
-    const title = match?.[2]
-    const item = hashes && title ? { level: hashes.length, title, line: index, offset } : null
-    offset += line.length + 1
-    return item ? [item] : []
-  })
-}
-
-const markdownTools = [
-  { label: '粗体', shortLabel: 'B', prefix: '**', suffix: '**' },
-  { label: '斜体', shortLabel: 'I', prefix: '*', suffix: '*' },
-  { label: '二级标题', shortLabel: 'H2', prefix: '## ', suffix: '' },
-  { label: '链接', shortLabel: '↗', prefix: '[', suffix: '](https://)' },
-  { label: '引用', shortLabel: '❝', prefix: '> ', suffix: '' },
-  { label: '代码块', shortLabel: '</>', prefix: '```\n', suffix: '\n```' },
-  { label: '列表', shortLabel: '•', prefix: '- ', suffix: '' },
-  { label: '分隔线', shortLabel: '—', prefix: '\n---\n', suffix: '' },
-]
-
 function PostSettingsModal({
   editor,
   feedback,
@@ -320,36 +313,7 @@ function MarkdownEditor({
   onPreview: () => void
   onSave: (status: BlogPostStatus) => void
 }) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const outline = getMarkdownOutline(editor.contentMarkdown)
-
-  function updateContent(contentMarkdown: string) {
-    onChange({ ...editor, contentMarkdown })
-  }
-
-  function applyTool(prefix: string, suffix: string) {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
-    const selected = editor.contentMarkdown.slice(start, end) || '输入内容'
-    const nextContent = `${editor.contentMarkdown.slice(0, start)}${prefix}${selected}${suffix}${editor.contentMarkdown.slice(end)}`
-    updateContent(nextContent)
-    requestAnimationFrame(() => {
-      textarea.focus()
-      const nextStart = start + prefix.length
-      textarea.setSelectionRange(nextStart, nextStart + selected.length)
-    })
-  }
-
-  function jumpToOutline(item: MarkdownOutlineItem) {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    textarea.focus()
-    textarea.setSelectionRange(item.offset, item.offset)
-    textarea.scrollTop = Math.max(0, item.offset / Math.max(1, editor.contentMarkdown.length) * textarea.scrollHeight - textarea.clientHeight / 3)
-  }
 
   function importMarkdown(file: File) {
     if (!file.name.toLowerCase().endsWith('.md')) {
@@ -372,7 +336,7 @@ function MarkdownEditor({
         <div className="markdown-editor__identity">
           <button className="text-button" type="button" onClick={onBack}>← 返回文章列表</button>
           <div className="markdown-editor__title-row">
-            <span className="markdown-editor__eyebrow">MARKDOWN WORKSPACE</span>
+            <span className="markdown-editor__eyebrow">MDX MARKDOWN WORKSPACE</span>
             <span className={`post-status post-status--${editor.status}`}>{editor.status === 'published' ? '已发布' : '草稿'}</span>
           </div>
           <input aria-label="文章标题" className="markdown-editor__title" id="markdown-editor-title" onChange={(event) => onChange({ ...editor, title: event.currentTarget.value })} placeholder="输入文章标题" value={editor.title} />
@@ -385,21 +349,31 @@ function MarkdownEditor({
         </div>
       </header>
       {feedback && <p className="markdown-editor__feedback" role="status">{feedback}</p>}
-      <div className="markdown-editor__workspace">
-        <aside className="markdown-editor__outline" aria-label="文章大纲">
-          <div className="markdown-editor__pane-label">大纲</div>
-          {outline.length === 0 && <p>输入标题后，这里会生成大纲。</p>}
-          {outline.map((item) => <button className={`markdown-editor__outline-item markdown-editor__outline-item--${item.level}`} key={`${item.line}-${item.title}`} type="button" onClick={() => jumpToOutline(item)}>{item.title}</button>)}
-        </aside>
-        <section className="markdown-editor__source" aria-label="Markdown 编辑区">
-          <div className="markdown-editor__toolbar" role="toolbar" aria-label="Markdown 工具栏">
-            {markdownTools.map((tool) => <button key={tool.label} aria-label={tool.label} title={tool.label} type="button" onClick={() => applyTool(tool.prefix, tool.suffix)}>{tool.shortLabel}</button>)}
-          </div>
-          <textarea ref={textareaRef} aria-label="Markdown 正文" className="markdown-editor__textarea" onChange={(event) => updateContent(event.currentTarget.value)} spellCheck={false} value={editor.contentMarkdown} />
-        </section>
-        <section className="markdown-editor__preview" aria-label="实时预览">
-          <div className="markdown-editor__pane-label">实时预览</div>
-          <article className="article-content"><Markdown remarkPlugins={[remarkGfm]}>{editor.contentMarkdown || '开始输入 Markdown 内容。'}</Markdown></article>
+      <div className="markdown-editor__workspace markdown-editor__workspace--mdx">
+        <section className="markdown-editor__source markdown-editor__source--mdx" aria-label="Markdown 编辑区">
+          <MDXEditor
+            key={editor.id ?? 'new'}
+            className="genesis-mdx-editor"
+            contentEditableClassName="genesis-mdx-content"
+            markdown={editor.contentMarkdown}
+            onChange={(contentMarkdown) => onChange({ ...editor, contentMarkdown })}
+            plugins={[
+              headingsPlugin(),
+              listsPlugin(),
+              quotePlugin(),
+              thematicBreakPlugin(),
+              linkPlugin(),
+              linkDialogPlugin(),
+              tablePlugin(),
+              imagePlugin(),
+              codeBlockPlugin({ defaultCodeBlockLanguage: 'text' }),
+              codeMirrorPlugin({ codeBlockLanguages: { text: '纯文本', javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', json: 'JSON', bash: 'Bash', css: 'CSS', html: 'HTML' } }),
+              diffSourcePlugin({ viewMode: 'rich-text' }),
+              markdownShortcutPlugin(),
+              toolbarPlugin({ toolbarContents: () => <KitchenSinkToolbar /> }),
+            ]}
+            spellCheck={false}
+          />
         </section>
       </div>
       {isSettingsOpen && <PostSettingsModal editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onImportMarkdown={importMarkdown} onSave={onSave} />}
