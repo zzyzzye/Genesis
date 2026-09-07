@@ -387,11 +387,8 @@ function MarkdownEditor({
     <section className="markdown-editor typora-github-shell" aria-labelledby="markdown-editor-title">
       <header className="markdown-editor__header">
         <div className="markdown-editor__identity">
-          <button className="text-button" type="button" onClick={onBack}>← 返回文章列表</button>
-          <div className="markdown-editor__title-row">
-            <span className={`post-status post-status--${editor.status}`}>{editor.status === 'published' ? '已发布' : '草稿'}</span>
-          </div>
-          <input aria-label="文章标题" className="markdown-editor__title" id="markdown-editor-title" onChange={(event) => onChange({ ...editor, title: event.currentTarget.value })} placeholder="输入文章标题" value={editor.title} />
+          <button className="text-button" type="button" onClick={onBack}>← 文章列表</button>
+          <span>写作模式</span>
         </div>
         <div className="markdown-editor__actions">
           <button className="secondary-button" type="button" onClick={onPreview}><StudioIcon name="eye" /> 预览</button>
@@ -407,6 +404,9 @@ function MarkdownEditor({
             key={editor.id ?? 'new'}
             markdown={editor.contentMarkdown}
             onChange={(contentMarkdown) => onChange({ ...editor, contentMarkdown })}
+            onTitleChange={(title) => onChange({ ...editor, title })}
+            status={editor.status}
+            title={editor.title}
           />
         </section>
       </div>

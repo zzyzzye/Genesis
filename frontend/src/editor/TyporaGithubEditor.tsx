@@ -134,12 +134,25 @@ const mdxEditorChineseTranslation: Translation = (key, defaultValue, interpolati
 export function TyporaGithubEditor({
   markdown,
   onChange,
+  onTitleChange,
+  status,
+  title,
 }: {
   markdown: string
   onChange: (markdown: string) => void
+  onTitleChange: (title: string) => void
+  status: 'draft' | 'published'
+  title: string
 }) {
   return (
     <div className="typora-github-editor">
+      <header className="typora-github-editor__document-header">
+        <div className="typora-github-editor__document-meta">
+          <span>文章 / Markdown</span>
+          <span className={`typora-github-editor__status typora-github-editor__status--${status}`}>{status === 'published' ? '已发布' : '草稿'}</span>
+        </div>
+        <input aria-label="文章标题" className="typora-github-editor__title" onChange={(event) => onTitleChange(event.currentTarget.value)} placeholder="输入文章标题" value={title} />
+      </header>
       <MDXEditor
         className="genesis-mdx-editor"
         contentEditableClassName="genesis-mdx-content"
