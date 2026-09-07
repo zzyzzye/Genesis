@@ -149,6 +149,8 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /从一个完整模块开始/ }))
 
     expect(screen.queryByRole('region', { name: '文章列表' })).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '从一个完整模块开始' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '编辑设置' }))
     expect(screen.getByRole('heading', { name: '编辑文章' })).toBeInTheDocument()
 
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('test-token')

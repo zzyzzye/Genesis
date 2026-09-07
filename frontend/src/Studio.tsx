@@ -215,6 +215,7 @@ function Editor({
   onDelete,
   onSave,
   feedback,
+  onClose,
 }: {
   editor: EditorState
   isSaving: boolean
@@ -222,6 +223,7 @@ function Editor({
   onDelete: () => void
   onSave: (status: BlogPostStatus) => void
   feedback: string | null
+  onClose: () => void
 }) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -259,6 +261,7 @@ function Editor({
           <h1 id="editor-title">{editor.id ? '编辑文章' : '新建文章'}</h1>
         </div>
         <div className="editor-heading__meta">
+          <button className="text-button" type="button" onClick={onClose}>关闭</button>
           <label className="editor-import-button">
             <StudioIcon name="upload" /> 导入 Markdown
             <input accept=".md,text/markdown" type="file" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) importMarkdown(file); event.currentTarget.value = '' }} />
@@ -450,34 +453,96 @@ function PostsIndex({
   )
 }
 
+function ArticleReader({
+  editor,
+  onBack,
+  onEdit,
+}: {
+  editor: EditorState
+  onBack: () => void
+  onEdit: () => void
+}) {
+  return (
+    <section className="article-reader" aria-labelledby="article-reader-title">
+      <header className="article-reader__header">
+        <div className="article-reader__heading">
+          <button className="text-button article-reader__back" type="button" onClick={onBack}>← 返回文章列表</button>
+          <div className="article-reader__eyebrow">{editor.status === 'published' ? 'PUBLISHED ARTICLE' : 'DRAFT ARTICLE'}</div>
+          <h1 id="article-reader-title">{editor.title || '未命名文章'}</h1>
+          <p>{editor.excerpt || '还没有摘要，打开编辑设置补充文章信息。'}</p>
+          <div className="article-reader__meta">
+            <span>{editor.readTimeMinutes} 分钟阅读</span>
+            {editor.tagsText && <span>{editor.tagsText}</span>}
+            <span>{editor.isFeatured ? '精选文章' : '普通文章'}</span>
+          </div>
+        </div>
+        <div className="article-reader__actions">
+          <span className={`post-status post-status--${editor.status}`}>
+            {editor.status === 'published' ? '已发布' : '草稿'}
+          </span>
+          <button className="primary-button" type="button" onClick={onEdit}>编辑设置</button>
+        </div>
+      </header>
+      <article className="article-reader__content article-content">
+        <Markdown remarkPlugins={[remarkGfm]}>{editor.contentMarkdown || '开始输入 Markdown 内容。'}</Markdown>
+      </article>
+    </section>
+  )
+}
+
 function PostsWorkspace({
   editor,
   feedback,
+  isEditorOpen,
   isSaving,
   posts,
   view,
   onChange,
+  onCloseEditor,
   onCreatePost,
   onDelete,
+  onEdit,
   onOpenPost,
+  onBack,
   onSave,
 }: {
   editor: EditorState
   feedback: string | null
+  isEditorOpen: boolean
   isSaving: boolean
   posts: BlogPostAdmin[]
-  view: 'list' | 'editor'
+  view: 'list' | 'preview'
   onChange: (editor: EditorState) => void
+  onCloseEditor: () => void
   onCreatePost: () => void
   onDelete: () => void
+  onEdit: () => void
   onOpenPost: (post: BlogPostAdmin) => void
+  onBack: () => void
   onSave: (status: BlogPostStatus) => void
 }) {
   if (view === 'list') {
     return <PostsIndex onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} />
   }
 
-  return <Editor editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onDelete={onDelete} onSave={onSave} />
+  return (
+    <>
+      <ArticleReader editor={editor} onBack={onBack} onEdit={onEdit} />
+      {isEditorOpen && (
+        <div className="studio-editor-modal" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+          <Editor
+            editor={editor}
+            feedback={feedback}
+            isSaving={isSaving}
+            onChange={onChange}
+            onClose={onCloseEditor}
+            onDelete={onDelete}
+            onSave={onSave}
+          />
+        </div>
+      )}
+    </>
+  )
 }
 
 function SectionPlaceholder({ section }: { section: Exclude<StudioSection, 'overview' | 'posts'> }) {
@@ -506,31 +571,35 @@ function Dashboard({
   onLogout: () => void
 }) {
   const [activeSection, setActiveSection] = useState<StudioSection>('overview')
-  const [postView, setPostView] = useState<'list' | 'editor'>('list')
+  const [postView, setPostView] = useState<'list' | 'preview'>('list')
   const [editor, setEditor] = useState<EditorState>(() => createEmptyEditor())
   const [managedPosts, setManagedPosts] = useState(posts)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [isEditorOpen, setIsEditorOpen] = useState(false)
 
   function selectSection(section: StudioSection) {
     setActiveSection(section)
     if (section === 'posts') {
       setPostView('list')
+      setIsEditorOpen(false)
     }
   }
 
   function createPost() {
     setActiveSection('posts')
-    setPostView('editor')
+    setPostView('preview')
     setEditor(createEmptyEditor())
     setFeedback(null)
+    setIsEditorOpen(true)
   }
 
   function openPost(post: BlogPostAdmin) {
     setActiveSection('posts')
-    setPostView('editor')
+    setPostView('preview')
     setEditor(toEditor(post))
     setFeedback(null)
+    setIsEditorOpen(false)
   }
 
   async function savePost(status: BlogPostStatus) {
@@ -551,6 +620,8 @@ function Dashboard({
       setManagedPosts((currentPosts) => [savedPost, ...currentPosts.filter((post) => post.id !== savedPost.id)])
       setEditor(toEditor(savedPost))
       setFeedback('已保存。')
+      setPostView('preview')
+      setIsEditorOpen(false)
     } catch {
       setFeedback('保存失败，请检查必填项、Slug 和网络连接。')
     } finally {
@@ -566,6 +637,7 @@ function Dashboard({
       setManagedPosts((currentPosts) => currentPosts.filter((post) => post.id !== editor.id))
       setEditor(createEmptyEditor())
       setPostView('list')
+      setIsEditorOpen(false)
       setFeedback('文章已删除。')
     } catch {
       setFeedback('删除失败，请稍后重试。')
@@ -598,11 +670,15 @@ function Dashboard({
             <PostsWorkspace
               editor={editor}
               feedback={feedback}
+              isEditorOpen={isEditorOpen}
               isSaving={isSaving}
               onChange={setEditor}
+              onCloseEditor={() => setIsEditorOpen(false)}
               onCreatePost={createPost}
               onDelete={() => void deletePost()}
+              onEdit={() => setIsEditorOpen(true)}
               onOpenPost={openPost}
+              onBack={() => { setPostView('list'); setIsEditorOpen(false) }}
               onSave={(status) => void savePost(status)}
               posts={managedPosts}
               view={postView}
@@ -613,7 +689,7 @@ function Dashboard({
       </div>
       <StudioAssistant
         activeSection={activeSection}
-        editor={activeSection === 'posts' && postView === 'editor' ? { id: editor.id, title: editor.title, excerpt: editor.excerpt, contentMarkdown: editor.contentMarkdown, slug: editor.slug } : null}
+        editor={activeSection === 'posts' && postView === 'preview' ? { id: editor.id, title: editor.title, excerpt: editor.excerpt, contentMarkdown: editor.contentMarkdown, slug: editor.slug } : null}
       />
     </div>
   )
