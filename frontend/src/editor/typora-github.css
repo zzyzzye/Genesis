@@ -1,0 +1,279 @@
+:root {
+  --typora-gh-canvas: #ffffff;
+  --typora-gh-subtle: #f6f8fa;
+  --typora-gh-border: #d0d7de;
+  --typora-gh-border-muted: #d8dee4;
+  --typora-gh-text: #1f2328;
+  --typora-gh-muted: #57606a;
+  --typora-gh-accent: #0969da;
+  --typora-gh-accent-soft: #ddf4ff;
+  --typora-gh-code: #f6f8fa;
+}
+
+/* 独立的 Typora × GitHub 写作主题；只作用于 MDX 编辑器工作区。 */
+.typora-github-shell {
+  background: var(--typora-gh-canvas);
+}
+
+.typora-github-shell .markdown-editor__header {
+  align-items: center;
+  min-height: 4.5rem;
+  padding: .68rem max(1.15rem, calc((100% - 76rem) / 2));
+  border-bottom: 1px solid var(--typora-gh-border-muted);
+  background: var(--typora-gh-canvas);
+}
+
+.typora-github-shell .markdown-editor__identity > .text-button {
+  color: var(--typora-gh-muted);
+  font-size: .72rem;
+}
+
+.typora-github-shell .markdown-editor__identity > .text-button:hover {
+  color: var(--typora-gh-accent);
+}
+
+.typora-github-shell .markdown-editor__title-row {
+  margin-top: .4rem;
+}
+
+.typora-github-shell .markdown-editor__title {
+  width: min(100%, 56rem);
+  margin-top: .14rem;
+  color: var(--typora-gh-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: clamp(1.55rem, 2.45vw, 2.35rem);
+  font-weight: 650;
+  letter-spacing: -.045em;
+  line-height: 1.18;
+}
+
+.typora-github-shell .markdown-editor__actions {
+  gap: .38rem;
+  padding-top: 0;
+}
+
+.typora-github-shell .markdown-editor__actions .primary-button,
+.typora-github-shell .markdown-editor__actions .secondary-button {
+  min-height: 2rem;
+  margin: 0;
+  padding: .42rem .72rem;
+  border-radius: .28rem;
+  font-size: .7rem;
+  font-weight: 600;
+}
+
+.typora-github-shell .markdown-editor__actions .secondary-button {
+  border-color: var(--typora-gh-border);
+  background: var(--typora-gh-canvas);
+  color: var(--typora-gh-text);
+}
+
+.typora-github-shell .markdown-editor__actions .secondary-button:hover {
+  border-color: #8c959f;
+  background: var(--typora-gh-subtle);
+}
+
+.typora-github-shell .markdown-editor__actions .primary-button {
+  border-color: #1f883d;
+  background: #1f883d;
+}
+
+.typora-github-shell .markdown-editor__actions .primary-button:hover:not(:disabled) {
+  border-color: #1a7f37;
+  background: #1a7f37;
+  transform: none;
+}
+
+.typora-github-shell .markdown-editor__workspace--mdx {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.typora-github-shell .markdown-editor__source--mdx {
+  display: block;
+  min-height: calc(100vh - 8rem);
+  border-right: 0;
+  background: var(--typora-gh-canvas);
+}
+
+.typora-github-editor > .genesis-mdx-editor {
+  min-height: calc(100vh - 8rem);
+  border: 0;
+  border-radius: 0;
+  background: var(--typora-gh-canvas);
+}
+
+.typora-github-editor > .genesis-mdx-editor .mdxeditor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  min-height: 2.7rem;
+  padding: .3rem max(.75rem, calc((100% - 66rem) / 2));
+  border-bottom: 1px solid var(--typora-gh-border-muted);
+  background: color-mix(in srgb, var(--typora-gh-canvas) 94%, var(--typora-gh-subtle));
+  box-shadow: none;
+}
+
+.typora-github-editor > .genesis-mdx-editor .mdxeditor-toolbar button,
+.typora-github-editor > .genesis-mdx-editor .mdxeditor-toolbar [role='radio'] {
+  border-radius: .22rem;
+}
+
+.typora-github-editor > .genesis-mdx-editor .mdxeditor-toolbar button:hover,
+.typora-github-editor > .genesis-mdx-editor .mdxeditor-toolbar [role='radio']:hover {
+  background: #eaeef2;
+}
+
+.typora-github-editor > .genesis-mdx-editor .mdxeditor-toolbar [data-state='on'] {
+  background: var(--typora-gh-accent-soft);
+  color: #0969da;
+}
+
+.typora-github-editor .genesis-mdx-content {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 3.25rem clamp(1.25rem, 5vw, 3.75rem) 7rem;
+  color: var(--typora-gh-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.typora-github-editor .genesis-mdx-content > :first-child {
+  margin-top: 0;
+}
+
+.typora-github-editor .genesis-mdx-content h1,
+.typora-github-editor .genesis-mdx-content h2,
+.typora-github-editor .genesis-mdx-content h3,
+.typora-github-editor .genesis-mdx-content h4 {
+  color: var(--typora-gh-text);
+  font-family: inherit;
+  font-weight: 650;
+  letter-spacing: -.025em;
+  line-height: 1.25;
+}
+
+.typora-github-editor .genesis-mdx-content h1 {
+  margin: 2.3rem 0 1.25rem;
+  padding-bottom: .35rem;
+  border-bottom: 1px solid var(--typora-gh-border-muted);
+  font-size: 2rem;
+}
+
+.typora-github-editor .genesis-mdx-content h2 {
+  margin: 2.4rem 0 1rem;
+  padding-bottom: .3rem;
+  border-bottom: 1px solid var(--typora-gh-border-muted);
+  font-size: 1.45rem;
+}
+
+.typora-github-editor .genesis-mdx-content h3 {
+  margin: 2rem 0 .85rem;
+  font-size: 1.2rem;
+}
+
+.typora-github-editor .genesis-mdx-content p {
+  margin: 0 0 1.1rem;
+}
+
+.typora-github-editor .genesis-mdx-content a {
+  color: var(--typora-gh-accent);
+  text-decoration: none;
+}
+
+.typora-github-editor .genesis-mdx-content a:hover {
+  text-decoration: underline;
+}
+
+.typora-github-editor .genesis-mdx-content blockquote {
+  margin: 1.35rem 0;
+  padding: .1rem 1rem;
+  border-left: .25rem solid var(--typora-gh-border);
+  color: var(--typora-gh-muted);
+}
+
+.typora-github-editor .genesis-mdx-content ul,
+.typora-github-editor .genesis-mdx-content ol {
+  padding-left: 1.65rem;
+}
+
+.typora-github-editor .genesis-mdx-content li + li {
+  margin-top: .3rem;
+}
+
+.typora-github-editor .genesis-mdx-content :not(pre) > code {
+  padding: .15em .35em;
+  border-radius: .22rem;
+  background: rgb(175 184 193 / 20%);
+  color: #24292f;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: .85em;
+}
+
+.typora-github-editor .genesis-mdx-content pre {
+  margin: 1.4rem 0;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  border: 1px solid var(--typora-gh-border-muted);
+  border-radius: .38rem;
+  background: var(--typora-gh-code);
+  box-shadow: none;
+}
+
+.typora-github-editor .genesis-mdx-content pre code {
+  color: var(--typora-gh-text);
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: .84em;
+}
+
+.typora-github-editor .genesis-mdx-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-spacing: 0;
+  border-collapse: collapse;
+}
+
+.typora-github-editor .genesis-mdx-content th,
+.typora-github-editor .genesis-mdx-content td {
+  padding: .48rem .72rem;
+  border: 1px solid var(--typora-gh-border);
+}
+
+.typora-github-editor .genesis-mdx-content th {
+  background: var(--typora-gh-subtle);
+  font-weight: 650;
+}
+
+.typora-github-editor .genesis-mdx-content tr:nth-child(2n) {
+  background: var(--typora-gh-subtle);
+}
+
+@media (max-width: 680px) {
+  .typora-github-shell .markdown-editor__header {
+    align-items: flex-start;
+    padding: .65rem .9rem;
+  }
+
+  .typora-github-shell .markdown-editor__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .typora-github-shell .markdown-editor__title {
+    font-size: 1.55rem;
+  }
+
+  .typora-github-shell .markdown-editor__source--mdx,
+  .typora-github-editor > .genesis-mdx-editor {
+    min-height: calc(100vh - 9rem);
+  }
+
+  .typora-github-editor .genesis-mdx-content {
+    padding: 2rem 1.15rem 4rem;
+    font-size: .96rem;
+  }
+}
