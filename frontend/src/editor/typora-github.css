@@ -439,3 +439,81 @@
 @media (max-width: 680px) {
   .typora-github-editor__document-header { padding-top: 1.35rem; }
 }
+
+
+/* 写作时把 CMS 导航收成窄轨，接近 Typora 的文件栏尺度。 */
+.studio-app-shell.is-writing {
+  grid-template-columns: 4.2rem minmax(0, 1fr);
+  background: var(--typora-gh-canvas);
+}
+
+.studio-app-shell.is-writing .studio-section-nav {
+  min-width: 0;
+  border-right-color: #eaeef2;
+}
+
+.studio-app-shell.is-writing .studio-section-nav__header {
+  padding: .8rem .95rem;
+}
+
+.studio-app-shell.is-writing .studio-section-nav__brand {
+  justify-content: center;
+  width: 100%;
+}
+
+.studio-app-shell.is-writing .studio-section-nav__brand > span:last-child,
+.studio-app-shell.is-writing .studio-section-nav__header > small,
+.studio-app-shell.is-writing .studio-nav-search,
+.studio-app-shell.is-writing .studio-nav-group > p,
+.studio-app-shell.is-writing .studio-nav-item > span,
+.studio-app-shell.is-writing .studio-nav-item em,
+.studio-app-shell.is-writing .studio-nav-chevron,
+.studio-app-shell.is-writing .studio-section-account > div:nth-child(2) {
+  display: none;
+}
+
+.studio-app-shell.is-writing .studio-nav-groups {
+  padding: .35rem .55rem 1rem;
+}
+
+.studio-app-shell.is-writing .studio-nav-group {
+  margin-top: .35rem;
+}
+
+.studio-app-shell.is-writing .studio-nav-item {
+  display: grid;
+  min-height: 2.55rem;
+  padding: .5rem;
+  place-items: center;
+  border-radius: .3rem;
+}
+
+.studio-app-shell.is-writing .studio-nav-item.is-active::before {
+  top: .45rem;
+  bottom: .45rem;
+  left: -.56rem;
+  width: .15rem;
+}
+
+.studio-app-shell.is-writing .studio-section-account {
+  justify-content: center;
+  padding: .75rem .55rem;
+}
+
+.studio-app-shell.is-writing .studio-section-account > button {
+  display: none;
+}
+
+.studio-app-shell.is-writing .markdown-editor__actions .secondary-button {
+  color: #57606a;
+}
+
+@media (max-width: 680px) {
+  .studio-app-shell.is-writing {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-app-shell.is-writing .studio-section-nav {
+    display: none;
+  }
+}

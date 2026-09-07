@@ -698,7 +698,7 @@ function Dashboard({
   const meta = sectionMeta[activeSection]
 
   return (
-    <div className="studio-app-shell">
+    <div className={`studio-app-shell${isEditorOpen ? ' is-writing' : ''}`}>
       <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={onLogout} user={user} />
 
       <div className="studio-workspace">
