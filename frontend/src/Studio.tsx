@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -653,8 +653,11 @@ function Dashboard({
   const selectedPost = postId === null ? null : managedPosts.find((post) => post.id === postId) ?? null
   const activeEditor = selectedPost && editor.id !== postId ? toEditor(selectedPost) : editor
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0
+    const editorWorkspace = document.querySelector<HTMLElement>('.markdown-editor__workspace--mdx')
+    if (editorWorkspace) editorWorkspace.scrollTop = 0
   }, [location.pathname])
 
   function selectSection(section: StudioSection) {
