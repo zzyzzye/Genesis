@@ -1921,9 +1921,24 @@ nav span {
 .studio-assistant__context svg { width: .75rem; color: #9aaf45; }
 .studio-assistant__messages { display: grid; gap: .85rem; }
 .studio-assistant__message { display: flex; gap: .45rem; align-items: flex-start; }
-.studio-assistant__message p { max-width: 100%; box-sizing: border-box; margin: 0; padding: .68rem .75rem; border-radius: .7rem .7rem .7rem .15rem; background: #eef2f0; color: #3f5054; font-size: .73rem; line-height: 1.65; white-space: pre-line; }
+.studio-assistant__message > p,
+.studio-assistant__message > .studio-assistant__markdown {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  margin: 0;
+  padding: .68rem .75rem;
+  border-radius: .7rem .7rem .7rem .15rem;
+  background: #eef2f0;
+  color: #3f5054;
+  font-size: .73rem;
+  line-height: 1.65;
+  white-space: pre-line;
+}
 .studio-assistant__message--user { justify-content: flex-end; }
-.studio-assistant__message--user p { border-radius: .7rem .7rem .15rem .7rem; background: #dceba5; color: #35452f; }
+.studio-assistant__message--user > p { border-radius: .7rem .7rem .15rem .7rem; background: #dceba5; color: #35452f; }
 .studio-assistant__message-mark { display: grid; flex: 0 0 auto; width: 1.35rem; height: 1.35rem; margin-top: .2rem; place-items: center; border-radius: .4rem; background: #203743; color: #d8e85e; }
 .studio-assistant__message-mark svg { width: .72rem; }
 .studio-assistant__suggestions { display: grid; gap: .4rem; margin-top: 1.1rem; }
@@ -2019,7 +2034,15 @@ nav span {
 .studio-assistant__markdown { font-size: .82rem; line-height: 1.65; }
 .studio-assistant__markdown > :first-child { margin-top: 0; }
 .studio-assistant__markdown > :last-child { margin-bottom: 0; }
-.studio-assistant__markdown p { margin: 0 0 .55rem; }
+.studio-assistant__markdown p {
+  margin: 0 0 .55rem;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
 .studio-assistant__markdown ul, .studio-assistant__markdown ol { margin: .35rem 0 .55rem 1.15rem; padding: 0; }
 .studio-assistant__markdown code { padding: .08rem .25rem; border-radius: .25rem; background: rgba(32,55,67,.08); font-size: .82em; }
 .studio-assistant__markdown pre { overflow-x: auto; padding: .65rem; border-radius: .45rem; background: #203743; color: #eef5e9; }
