@@ -387,8 +387,7 @@ function MarkdownEditor({
     <section className="markdown-editor typora-github-shell" aria-labelledby="markdown-editor-title">
       <header className="markdown-editor__header">
         <div className="markdown-editor__identity">
-          <button className="text-button" type="button" onClick={onBack}>← 文章列表</button>
-          <span>写作模式</span>
+          <button className="text-button" type="button" onClick={onBack}>← 返回文章列表</button>
         </div>
         <div className="markdown-editor__actions">
           <button className="secondary-button" type="button" onClick={onPreview}><StudioIcon name="eye" /> 预览</button>
@@ -405,7 +404,6 @@ function MarkdownEditor({
             markdown={editor.contentMarkdown}
             onChange={(contentMarkdown) => onChange({ ...editor, contentMarkdown })}
             onTitleChange={(title) => onChange({ ...editor, title })}
-            status={editor.status}
             title={editor.title}
           />
         </section>

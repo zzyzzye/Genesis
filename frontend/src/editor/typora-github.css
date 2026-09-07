@@ -367,3 +367,75 @@
     font-size: 1.7rem;
   }
 }
+
+
+/* 以 Typora GitHub 官方截图为基线：应用栏极轻，文档标题与正文是唯一主角。 */
+.typora-github-shell .markdown-editor__header {
+  min-height: 3rem;
+  padding-top: .35rem;
+  padding-bottom: .35rem;
+  border-bottom-color: #eaeef2;
+}
+
+.typora-github-shell .markdown-editor__identity > .text-button {
+  font-size: .68rem;
+}
+
+.typora-github-editor__document-header {
+  width: min(100% - 2rem, 52rem);
+  padding: 2rem 0 .8rem;
+}
+
+.typora-github-editor__title {
+  margin: 0;
+  padding-bottom: .45rem;
+  border-bottom-color: #eaeef2;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: clamp(1.65rem, 2.5vw, 2.1rem);
+  font-weight: 650;
+  letter-spacing: -.04em;
+}
+
+.typora-github-editor > .genesis-mdx-editor .mdxeditor-toolbar {
+  max-height: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-bottom-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: max-height 150ms ease, opacity 120ms ease, padding 150ms ease;
+}
+
+.typora-github-editor:focus-within > .genesis-mdx-editor .mdxeditor-toolbar,
+.typora-github-editor:hover > .genesis-mdx-editor .mdxeditor-toolbar {
+  max-height: 3rem;
+  min-height: 2.7rem;
+  padding-top: .3rem;
+  padding-bottom: .3rem;
+  border-bottom-color: var(--typora-gh-border-muted);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.typora-github-editor .genesis-mdx-content {
+  max-width: 52rem;
+  padding-top: 1.35rem;
+  font-size: 1rem;
+  line-height: 1.85;
+}
+
+.typora-github-editor .genesis-mdx-content h1 {
+  margin-top: 1.9rem;
+  font-size: 1.8rem;
+}
+
+.typora-github-editor .genesis-mdx-content h2 {
+  margin-top: 2.2rem;
+  font-size: 1.35rem;
+}
+
+@media (max-width: 680px) {
+  .typora-github-editor__document-header { padding-top: 1.35rem; }
+}
