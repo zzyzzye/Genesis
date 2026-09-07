@@ -23,16 +23,51 @@ import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider } 
 import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
 
 type AssistantMessage = { role: 'assistant' | 'user'; content: string }
-type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string }
+type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string; status: 'draft' | 'published' }
+type AssistantPageContext = { route: string; section: string; pageType: 'overview' | 'posts_list' | 'post_editor' | 'post_preview' | 'section' }
+
+const pageLabels: Record<AssistantPageContext['pageType'], string> = {
+  overview: '内容总览',
+  posts_list: '文章管理 / 文章列表',
+  post_editor: '文章管理 / 文章编辑',
+  post_preview: '文章管理 / 文章预览',
+  section: '写作台功能页',
+}
 
 const defaultSuggestions = ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '创建一篇新的文章草稿']
+const assistantSessionKey = 'genesis-studio-ai-conversation'
+
+function initialAssistantMessages(): AssistantMessage[] {
+  return [{ role: 'assistant', content: '你好，我是 Genesis 助手。\n我可以帮你构思、改写和整理内容。' }]
+}
+
+function readAssistantSession(): { isOpen: boolean; messages: AssistantMessage[] } {
+  if (typeof window === 'undefined') return { isOpen: false, messages: initialAssistantMessages() }
+
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(assistantSessionKey) ?? 'null') as unknown
+    if (!stored || typeof stored !== 'object') return { isOpen: false, messages: initialAssistantMessages() }
+    const value = stored as { isOpen?: unknown; messages?: unknown }
+    const messages = Array.isArray(value.messages)
+      ? value.messages.filter((message): message is AssistantMessage => (
+        typeof message === 'object'
+        && message !== null
+        && ((message as AssistantMessage).role === 'assistant' || (message as AssistantMessage).role === 'user')
+        && typeof (message as AssistantMessage).content === 'string'
+      ))
+      : []
+    return { isOpen: value.isOpen === true, messages: messages.length > 0 ? messages : initialAssistantMessages() }
+  } catch {
+    return { isOpen: false, messages: initialAssistantMessages() }
+  }
+}
 
 function MarkdownMessage({ content }: { content: string }) {
   return <div className="studio-assistant__markdown"><Markdown remarkPlugins={[remarkGfm]}>{content || '正在生成…'}</Markdown></div>
 }
 
-export function StudioAssistant({ activeSection, editor }: { activeSection: string; editor: AssistantEditorContext | null }) {
-  const [isOpen, setIsOpen] = useState(false)
+export function StudioAssistant({ page, editor }: { page: AssistantPageContext; editor: AssistantEditorContext | null }) {
+  const [isOpen, setIsOpen] = useState(() => readAssistantSession().isOpen)
   const [draft, setDraft] = useState('')
   const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -72,9 +107,19 @@ export function StudioAssistant({ activeSection, editor }: { activeSection: stri
     return () => { cancelled = true }
   }, [isOpen, provider])
 
-  const [messages, setMessages] = useState<AssistantMessage[]>([
-    { role: 'assistant', content: '你好，我是 Genesis 助手。\n我可以帮你构思、改写和整理内容。' },
-  ])
+  const [messages, setMessages] = useState<AssistantMessage[]>(() => readAssistantSession().messages)
+
+  useEffect(() => {
+    window.sessionStorage.setItem(assistantSessionKey, JSON.stringify({ isOpen, messages }))
+  }, [isOpen, messages])
+
+  function startNewConversation() {
+    if (isBusy) return
+    setMessages(initialAssistantMessages())
+    setDraft('')
+    setError(null)
+    setModelMenuOpen(false)
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -87,7 +132,24 @@ export function StudioAssistant({ activeSection, editor }: { activeSection: stri
     setError(null)
     setIsBusy(true)
     try {
-      await streamAiChat(token, { surface: 'studio', messages: nextMessages, provider, model: model || undefined, context: editor ? { post_id: editor.id ?? undefined, title: editor.title, excerpt: editor.excerpt, content_markdown: editor.contentMarkdown } : undefined }, (tokenText) => {
+      await streamAiChat(token, {
+        surface: 'studio',
+        messages: nextMessages,
+        provider,
+        model: model || undefined,
+        context: {
+          route: page.route,
+          section: page.section,
+          page_type: page.pageType,
+          ...(editor ? {
+            post_id: editor.id ?? undefined,
+            title: editor.title,
+            excerpt: editor.excerpt,
+            content_markdown: editor.contentMarkdown,
+            editor_status: editor.status,
+          } : {}),
+        },
+      }, (tokenText) => {
         setMessages((current) => {
           const last = current.at(-1)
           if (!last || last.role !== 'assistant') return current
@@ -114,12 +176,17 @@ export function StudioAssistant({ activeSection, editor }: { activeSection: stri
               <span className="studio-assistant__avatar"><StudioIcon name="assistant" /></span>
               <div><strong>Genesis AI</strong><span><i />在线 · 创作助手</span></div>
             </div>
-            <button className="studio-assistant__close" type="button" aria-label="关闭 AI 助手" onClick={() => setIsOpen(false)}>
-              <StudioIcon name="close" />
-            </button>
+            <div className="studio-assistant__header-actions">
+              <button className="studio-assistant__new-conversation" type="button" aria-label="新建对话" disabled={isBusy} onClick={startNewConversation}>
+                <StudioIcon name="plus" />
+              </button>
+              <button className="studio-assistant__close" type="button" aria-label="关闭 AI 助手" onClick={() => setIsOpen(false)}>
+                <StudioIcon name="close" />
+              </button>
+            </div>
           </header>
           <div className="studio-assistant__body">
-            <div className="studio-assistant__context"><StudioIcon name="spark" /> {editor ? `当前文章：${editor.title || '未命名草稿'}` : activeSection === 'overview' ? '当前空间：内容总览' : '当前空间：写作台'}</div>
+            <div className="studio-assistant__context"><StudioIcon name="spark" /> {editor ? `当前文章：${editor.title || '未命名草稿'}` : `当前页面：${pageLabels[page.pageType]}`}</div>
             <div className="studio-assistant__messages">
               {messages.map((message, index) => (
                 <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${message.role}-${index}`}>

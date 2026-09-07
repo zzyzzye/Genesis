@@ -31,15 +31,19 @@ async def stream_chat(
             detail="博客后台 AI 仅限站点所有者使用",
         )
 
-    # 博客 Studio 是单作者后台，AI 默认获得全量文章知识库；不暴露给公开博客。
+    # 博客 Studio 只按当前页面查询必要的可信数据；不暴露给公开博客。
     if request.surface == "studio":
         context = request.context or AiContext()
         agent_context = build_studio_agent_context(
             session,
+            route=context.route,
+            section=context.section,
+            page_type=context.page_type,
             post_id=context.post_id,
             title=context.title,
             excerpt=context.excerpt,
             content_markdown=context.content_markdown,
+            editor_status=context.editor_status,
         )
         request = request.model_copy(update={"context": context.model_copy(update=agent_context)})
 

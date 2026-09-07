@@ -46,9 +46,7 @@ import { StudioAssistant } from './studio/StudioAssistant'
 import { StudioOverview } from './studio/StudioOverview'
 
 import {
-  createAdminBlogCategory,
   createAdminBlogPost,
-  createAdminBlogTag,
   deleteAdminBlogPost,
   getAdminBlogCategories,
   getAdminBlogPosts,
@@ -57,12 +55,10 @@ import {
   login,
   updateAdminBlogPost,
   type BlogCategory,
-  type BlogCategoryWrite,
   type BlogPostAdmin,
   type BlogPostStatus,
   type BlogPostWrite,
   type BlogTag,
-  type BlogTagWrite,
   type CurrentUser,
 } from './lib/api'
 
@@ -408,20 +404,6 @@ function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: str
   )
 }
 
-function slugifyFilename(filename: string): string {
-  return filename.replace(/\.md$/i, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-}
-
-function parseMarkdownImport(filename: string, content: string): { title: string; excerpt: string; slug: string } {
-  const lines = content.split(/\r?\n/)
-  const titleIndex = lines.findIndex((line) => /^#\s+/.test(line.trim()))
-  const titleLine = titleIndex >= 0 ? lines[titleIndex] ?? '' : ''
-  const title = titleIndex >= 0 ? titleLine.replace(/^#\s+/, '').trim() : filename.replace(/\.md$/i, '')
-  const body = lines.filter((_, index) => index !== titleIndex).join('\n').trim()
-  const paragraphs = body.split(/\n\s*\n/).map((paragraph) => paragraph.replace(/^#{2,6}\s+/, '').replace(/[*_`>#-]/g, '').trim()).filter(Boolean)
-  return { title, excerpt: paragraphs[0]?.slice(0, 500) || title, slug: slugifyFilename(filename) }
-}
-
 function PostSettingsModal({
   categories,
   editor,
@@ -429,10 +411,7 @@ function PostSettingsModal({
   isSaving,
   onChange,
   onClose,
-  onCreateCategory,
-  onCreateTag,
   onDelete,
-  onImportMarkdown,
   onSave,
   tags,
 }: {
@@ -442,64 +421,16 @@ function PostSettingsModal({
   isSaving: boolean
   onChange: (editor: EditorState) => void
   onClose: () => void
-  onCreateCategory: (data: BlogCategoryWrite) => Promise<BlogCategory>
-  onCreateTag: (data: BlogTagWrite) => Promise<BlogTag>
   onDelete: () => void
-  onImportMarkdown: (file: File) => void
   onSave: (status: BlogPostStatus) => void
   tags: BlogTag[]
 }) {
-  const [newCategoryName, setNewCategoryName] = useState('')
-  const [newCategorySlug, setNewCategorySlug] = useState('')
-  const [newTagName, setNewTagName] = useState('')
-  const [newTagSlug, setNewTagSlug] = useState('')
   const [tagToAdd, setTagToAdd] = useState('')
-  const [taxonomyError, setTaxonomyError] = useState<string | null>(null)
   const selectedTags = tags.filter((tag) => editor.selectedTagSlugs.includes(tag.slug))
   const availableTags = tags.filter((tag) => !editor.selectedTagSlugs.includes(tag.slug))
 
-  async function createCategory() {
-    const name = newCategoryName.trim()
-    const slug = newCategorySlug.trim()
-    if (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-      setTaxonomyError('请填写分类名称和英文 slug，例如：engineering。')
-      return
-    }
-    try {
-      const category = await onCreateCategory({ name, slug })
-      onChange({ ...editor, categoryId: category.id })
-      setNewCategoryName('')
-      setNewCategorySlug('')
-      setTaxonomyError(null)
-    } catch (error) {
-      setTaxonomyError(error instanceof Error ? error.message : '分类创建失败，请重试。')
-    }
-  }
-
-  async function createTag() {
-    const name = newTagName.trim()
-    const slug = newTagSlug.trim()
-    if (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-      setTaxonomyError('请填写标签名称和英文 slug，例如：engineering。')
-      return
-    }
-    if (selectedTags.length >= 10) {
-      setTaxonomyError('一篇文章最多选择 10 个标签。')
-      return
-    }
-    try {
-      const tag = await onCreateTag({ name, slug })
-      onChange({ ...editor, selectedTagSlugs: [...editor.selectedTagSlugs, tag.slug] })
-      setNewTagName('')
-      setNewTagSlug('')
-      setTaxonomyError(null)
-    } catch (error) {
-      setTaxonomyError(error instanceof Error ? error.message : '标签创建失败，请重试。')
-    }
-  }
-
   function addTag() {
-    if (!tagToAdd || editor.selectedTagSlugs.includes(tagToAdd) || selectedTags.length >= 10) return
+    if (!tagToAdd || editor.selectedTagSlugs.includes(tagToAdd)) return
     onChange({ ...editor, selectedTagSlugs: [...editor.selectedTagSlugs, tagToAdd] })
     setTagToAdd('')
   }
@@ -511,53 +442,54 @@ function PostSettingsModal({
           <div>
             <p className="eyebrow">ARTICLE SETTINGS</p>
             <h2 id="markdown-settings-title">文章设置</h2>
-            <span>整理文章信息、分类和标签</span>
           </div>
           <button className="markdown-settings-modal__close" type="button" aria-label="关闭文章设置" onClick={onClose}><StudioIcon name="close" /></button>
         </header>
         <div className="markdown-settings-modal__body">
-          <section className="taxonomy-section" aria-labelledby="settings-category-title">
-            <div className="taxonomy-section__heading"><div><h3 id="settings-category-title">分类</h3><p>先创建分类，再为文章选择一个归属。</p></div></div>
-            <div className="taxonomy-select-row">
-              <select aria-label="文章分类" value={editor.categoryId ?? ''} onChange={(event) => onChange({ ...editor, categoryId: event.currentTarget.value || null })}>
+          <div className="settings-fields-grid">
+            <label className="settings-field" htmlFor="settings-category">
+              分类
+              <select id="settings-category" aria-label="文章分类" value={editor.categoryId ?? ''} onChange={(event) => onChange({ ...editor, categoryId: event.currentTarget.value || null })}>
                 <option value="">暂不分类</option>
                 {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
               </select>
-            </div>
-            <div className="taxonomy-create-row">
-              <input aria-label="新分类名称" placeholder="新分类名称" value={newCategoryName} onChange={(event) => setNewCategoryName(event.currentTarget.value)} />
-              <input aria-label="新分类 slug" placeholder="英文 slug" value={newCategorySlug} onChange={(event) => setNewCategorySlug(event.currentTarget.value)} />
-              <button type="button" onClick={() => { void createCategory() }}>创建分类</button>
-            </div>
-          </section>
-          <section className="taxonomy-section" aria-labelledby="settings-tags-title">
-            <div className="taxonomy-section__heading"><div><h3 id="settings-tags-title">标签</h3><p>从已有标签中选择，也可以先创建新标签。</p></div><span>{selectedTags.length}/10</span></div>
+            </label>
+            <label className="settings-field" htmlFor="settings-slug">
+              URL Slug
+              <input id="settings-slug" onChange={(event) => onChange({ ...editor, slug: event.currentTarget.value })} pattern="[a-z0-9]+(-[a-z0-9]+)*" required value={editor.slug} />
+            </label>
+          </div>
+          <section className="settings-tags" aria-labelledby="settings-tags-title">
+            <div className="settings-field__heading"><label htmlFor="settings-tag-picker" id="settings-tags-title">标签</label><span>{selectedTags.length}</span></div>
             <div className="taxonomy-chips" aria-label="已选标签">
               {selectedTags.length === 0 && <span className="taxonomy-empty">暂未选择标签</span>}
               {selectedTags.map((tag) => <span className="taxonomy-chip" key={tag.id}>{tag.name}<button type="button" aria-label={`移除标签 ${tag.name}`} onClick={() => onChange({ ...editor, selectedTagSlugs: editor.selectedTagSlugs.filter((slug) => slug !== tag.slug) })}><StudioIcon name="close" /></button></span>)}
             </div>
-            <div className="taxonomy-select-row">
-              <select aria-label="选择已有标签" value={tagToAdd} onChange={(event) => setTagToAdd(event.currentTarget.value)}>
-                <option value="">选择已有标签</option>
+            <div className="settings-tag-picker">
+              <select id="settings-tag-picker" aria-label="选择已有标签" value={tagToAdd} onChange={(event) => setTagToAdd(event.currentTarget.value)}>
+                <option value="">选择标签</option>
                 {availableTags.map((tag) => <option key={tag.id} value={tag.slug}>{tag.name}</option>)}
               </select>
-              <button type="button" disabled={!tagToAdd || selectedTags.length >= 10} onClick={addTag}>添加标签</button>
-            </div>
-            <div className="taxonomy-create-row">
-              <input aria-label="新标签名称" placeholder="新标签名称" value={newTagName} onChange={(event) => setNewTagName(event.currentTarget.value)} />
-              <input aria-label="新标签 slug" placeholder="英文 slug" value={newTagSlug} onChange={(event) => setNewTagSlug(event.currentTarget.value)} />
-              <button type="button" onClick={() => { void createTag() }}>创建并选择</button>
+              <button type="button" disabled={!tagToAdd} onClick={addTag}>添加</button>
             </div>
           </section>
-          <label htmlFor="settings-slug">URL Slug<input id="settings-slug" onChange={(event) => onChange({ ...editor, slug: event.currentTarget.value })} pattern="[a-z0-9]+(-[a-z0-9]+)*" required value={editor.slug} /></label>
-          <label htmlFor="settings-excerpt">摘要<textarea id="settings-excerpt" onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} required rows={4} value={editor.excerpt} /></label>
-          <label htmlFor="settings-cover">封面链接（可选）<input id="settings-cover" onChange={(event) => onChange({ ...editor, coverImageUrl: event.currentTarget.value })} type="url" value={editor.coverImageUrl} /></label>
-          <div className="editor-options"><label htmlFor="settings-reading-time">阅读分钟<input id="settings-reading-time" min="1" onChange={(event) => onChange({ ...editor, readTimeMinutes: Number(event.currentTarget.value) || 1 })} type="number" value={editor.readTimeMinutes} /></label><label className="checkbox-label" htmlFor="settings-featured"><input checked={editor.isFeatured} id="settings-featured" onChange={(event) => onChange({ ...editor, isFeatured: event.currentTarget.checked })} type="checkbox" />设为精选</label></div>
-          <label className="markdown-import-control"><span>导入 Markdown 文件</span><small>导入后会覆盖当前标题、摘要、Slug 和正文。</small><input accept=".md,text/markdown" type="file" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) onImportMarkdown(file); event.currentTarget.value = '' }} /></label>
-          {taxonomyError && <p className="studio-form-error" role="alert">{taxonomyError}</p>}
+          <label className="settings-field" htmlFor="settings-excerpt">
+            摘要
+            <textarea id="settings-excerpt" onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} required rows={3} value={editor.excerpt} />
+          </label>
+          <label className="settings-field" htmlFor="settings-cover">
+            封面链接 <span className="settings-field__hint">可选</span>
+            <input id="settings-cover" onChange={(event) => onChange({ ...editor, coverImageUrl: event.currentTarget.value })} type="url" value={editor.coverImageUrl} />
+          </label>
           {feedback && <p className="studio-form-error" role="alert">{feedback}</p>}
         </div>
-        <footer className="markdown-settings-modal__footer"><button className="text-button text-button--danger" disabled={!editor.id || isSaving} type="button" onClick={onDelete}>删除文章</button><div><button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存草稿</button><button className="primary-button" disabled={isSaving} type="button" onClick={() => onSave('published')}>{isSaving ? '正在保存…' : '保存并发布'}</button></div></footer>
+        <footer className="markdown-settings-modal__footer">
+          <button className="text-button text-button--danger" disabled={!editor.id || isSaving} type="button" onClick={onDelete}>删除文章</button>
+          <div>
+            <button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存草稿</button>
+            <button className="primary-button" disabled={isSaving} type="button" onClick={() => onSave('published')}>{isSaving ? '正在保存…' : '保存并发布'}</button>
+          </div>
+        </footer>
       </section>
     </div>
   )
@@ -570,8 +502,6 @@ function MarkdownEditor({
   isSaving,
   onBack,
   onChange,
-  onCreateCategory,
-  onCreateTag,
   onDelete,
   onPreview,
   onSave,
@@ -583,8 +513,6 @@ function MarkdownEditor({
   isSaving: boolean
   onBack: () => void
   onChange: (editor: EditorState) => void
-  onCreateCategory: (data: BlogCategoryWrite) => Promise<BlogCategory>
-  onCreateTag: (data: BlogTagWrite) => Promise<BlogTag>
   onDelete: () => void
   onPreview: () => void
   onSave: (status: BlogPostStatus) => void
@@ -594,21 +522,6 @@ function MarkdownEditor({
   const editorWorkspaceRef = useRef<HTMLDivElement>(null)
   const outlineItems = getMarkdownOutline(editor.contentMarkdown)
   const [isOutlineExpanded, setIsOutlineExpanded] = useState(true)
-
-  function importMarkdown(file: File) {
-    if (!file.name.toLowerCase().endsWith('.md')) {
-      window.alert('请选择 Markdown 文件（.md）。')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => {
-      const content = typeof reader.result === 'string' ? reader.result : ''
-      const metadata = parseMarkdownImport(file.name, content)
-      onChange({ ...editor, id: null, title: metadata.title, excerpt: metadata.excerpt, slug: metadata.slug, contentMarkdown: content, status: 'draft' })
-    }
-    reader.onerror = () => window.alert('Markdown 文件读取失败，请重试。')
-    reader.readAsText(file)
-  }
 
   return (
     <section className="markdown-editor" aria-labelledby="markdown-editor-title">
@@ -655,6 +568,7 @@ function MarkdownEditor({
             ]}
             spellCheck={false}
           />
+        </section>
         <aside className={`markdown-editor__outline markdown-editor__outline--mdx ${isOutlineExpanded ? 'markdown-editor__outline--expanded' : ''}`} aria-label="文章目录">
           <button
             aria-controls="markdown-editor-outline"
@@ -683,9 +597,8 @@ function MarkdownEditor({
             </nav>
           ) : <p className="markdown-editor__outline-empty" id="markdown-editor-outline">添加一级至三级标题后，会在这里显示目录。</p>)}
         </aside>
-        </section>
       </div>
-      {isSettingsOpen && <PostSettingsModal categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onCreateCategory={onCreateCategory} onCreateTag={onCreateTag} onDelete={onDelete} onImportMarkdown={importMarkdown} onSave={onSave} tags={tags} />}
+      {isSettingsOpen && <PostSettingsModal categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onSave={onSave} tags={tags} />}
     </section>
   )
 }
@@ -763,11 +676,7 @@ function ArticleReader({
           <div className="article-reader__eyebrow">{editor.status === 'published' ? 'PUBLISHED ARTICLE' : 'DRAFT ARTICLE'}</div>
           <h1 id="article-reader-title">{editor.title || '未命名文章'}</h1>
           <p>{editor.excerpt || '还没有摘要，打开编辑设置补充文章信息。'}</p>
-          <div className="article-reader__meta">
-            <span>{editor.readTimeMinutes} 分钟阅读</span>
-            {editor.selectedTagSlugs.length > 0 && <span>{editor.selectedTagSlugs.join(' · ')}</span>}
-            <span>{editor.isFeatured ? '精选文章' : '普通文章'}</span>
-          </div>
+          {editor.selectedTagSlugs.length > 0 && <div className="article-reader__meta"><span>{editor.selectedTagSlugs.join(' · ')}</span></div>}
         </div>
         <div className="article-reader__actions">
           <span className={`post-status post-status--${editor.status}`}>
@@ -792,13 +701,11 @@ function PostsWorkspace({
   posts,
   view,
   onChange,
-  onCreateCategory,
   onCreatePost,
   onDelete,
   onEdit,
   onOpenPost,
   onPreview,
-  onCreateTag,
   onBack,
   onSave,
   tags,
@@ -811,13 +718,11 @@ function PostsWorkspace({
   posts: BlogPostAdmin[]
   view: 'list' | 'preview'
   onChange: (editor: EditorState) => void
-  onCreateCategory: (data: BlogCategoryWrite) => Promise<BlogCategory>
   onCreatePost: () => void
   onDelete: () => void
   onEdit: () => void
   onOpenPost: (post: BlogPostAdmin) => void
   onPreview: () => void
-  onCreateTag: (data: BlogTagWrite) => Promise<BlogTag>
   onBack: () => void
   onSave: (status: BlogPostStatus) => void
   tags: BlogTag[]
@@ -827,7 +732,7 @@ function PostsWorkspace({
   }
 
   if (isEditorOpen) {
-    return <MarkdownEditor categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onCreateCategory={onCreateCategory} onCreateTag={onCreateTag} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} />
+    return <MarkdownEditor categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} />
   }
 
   return <ArticleReader editor={editor} onBack={onBack} onEdit={onEdit} />
@@ -888,8 +793,8 @@ function Dashboard({
   const { activeSection, postId, postView, isEditorOpen } = getStudioRoute(location.pathname)
   const [editor, setEditor] = useState<EditorState>(() => createEmptyEditor())
   const [managedPosts, setManagedPosts] = useState(posts)
-  const [tagOptions, setTagOptions] = useState(tags)
-  const [categoryOptions, setCategoryOptions] = useState(categories)
+  const [tagOptions] = useState(tags)
+  const [categoryOptions] = useState(categories)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const studioBasePath = '/blog/studio'
@@ -946,18 +851,6 @@ function Dashboard({
     }
   }
 
-  async function createTag(data: BlogTagWrite): Promise<BlogTag> {
-    const created = await createAdminBlogTag(token, data)
-    setTagOptions((current) => [...current.filter((tag) => tag.id !== created.id && tag.slug !== created.slug), created].sort((a, b) => a.name.localeCompare(b.name)))
-    return created
-  }
-
-  async function createCategory(data: BlogCategoryWrite): Promise<BlogCategory> {
-    const created = await createAdminBlogCategory(token, data)
-    setCategoryOptions((current) => [...current.filter((category) => category.id !== created.id && category.slug !== created.slug), created].sort((a, b) => a.name.localeCompare(b.name)))
-    return created
-  }
-
   async function deletePost() {
     if (activeEditor.id === null) return
     if (!window.confirm(`确定删除「${activeEditor.title}」吗？此操作不可恢复。`)) return
@@ -1004,7 +897,6 @@ function Dashboard({
               isEditorOpen={isEditorOpen}
               isSaving={isSaving}
               onChange={setEditor}
-              onCreateCategory={createCategory}
               onCreatePost={createPost}
               onDelete={() => void deletePost()}
               onEdit={() => { void navigate(activeEditor.id ? `${studioBasePath}/posts/${encodeURIComponent(activeEditor.id)}/edit` : `${studioBasePath}/posts/new/edit`) }}
@@ -1013,7 +905,6 @@ function Dashboard({
               onBack={() => { void navigate(`${studioBasePath}/posts`) }}
               onSave={(status) => void savePost(status)}
               posts={managedPosts}
-              onCreateTag={createTag}
               tags={tagOptions}
               view={postView}
             />
@@ -1022,8 +913,27 @@ function Dashboard({
         </main>
       </div>
       <StudioAssistant
-        activeSection={activeSection}
-        editor={activeSection === 'posts' && postView === 'preview' ? { id: activeEditor.id, title: activeEditor.title, excerpt: activeEditor.excerpt, contentMarkdown: activeEditor.contentMarkdown, slug: activeEditor.slug } : null}
+        page={{
+          route: location.pathname,
+          section: activeSection,
+          pageType: activeSection === 'overview'
+            ? 'overview'
+            : activeSection !== 'posts'
+              ? 'section'
+              : isEditorOpen
+                ? 'post_editor'
+                : postId !== null
+                  ? 'post_preview'
+                  : 'posts_list',
+        }}
+        editor={activeSection === 'posts' && (isEditorOpen || postId !== null) ? {
+          id: activeEditor.id,
+          title: activeEditor.title,
+          excerpt: activeEditor.excerpt,
+          contentMarkdown: activeEditor.contentMarkdown,
+          slug: activeEditor.slug,
+          status: activeEditor.status,
+        } : null}
       />
     </div>
   )

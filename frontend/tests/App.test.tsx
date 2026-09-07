@@ -48,6 +48,7 @@ describe('App', () => {
     window.history.pushState({}, '', '/')
     window.localStorage.removeItem('genesis-account-token')
     window.localStorage.removeItem('genesis-studio-token')
+    window.sessionStorage.removeItem('genesis-studio-ai-conversation')
     vi.restoreAllMocks()
   })
 
@@ -177,10 +178,22 @@ describe('App', () => {
     expect(screen.getByRole('region', { name: '从一个完整模块开始' })).toBeInTheDocument()
 
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('test-token')
+    window.sessionStorage.setItem('genesis-studio-ai-conversation', JSON.stringify({
+      isOpen: true,
+      messages: [
+        { role: 'assistant', content: '上一轮回复' },
+        { role: 'user', content: '请继续保留这段对话' },
+      ],
+    }))
     view.unmount()
     window.history.pushState({}, '', '/blog/studio')
     render(<App />)
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Genesis AI 助手' })).toBeInTheDocument()
+    expect(screen.getByText('请继续保留这段对话')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '新建对话' }))
+    expect(screen.queryByText('请继续保留这段对话')).not.toBeInTheDocument()
+    expect(screen.getByText('你好，我是 Genesis 助手。', { exact: false })).toBeInTheDocument()
     expect(screen.queryByText('一级')).not.toBeInTheDocument()
     expect(screen.queryByText('二级')).not.toBeInTheDocument()
     expect(screen.queryByText('三级')).not.toBeInTheDocument()

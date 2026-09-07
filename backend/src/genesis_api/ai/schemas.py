@@ -15,12 +15,18 @@ class AiMessage(BaseModel):
 
 
 class AiContext(BaseModel):
+    route: str | None = None
+    section: str | None = None
+    page_type: str | None = None
     post_id: str | None = None
     title: str | None = None
     excerpt: str | None = None
     content_markdown: str | None = None
+    editor_status: str | None = None
     selected_text: str | None = None
-    articles: list[dict[str, str | None]] | None = None
+    page: dict[str, object] | None = None
+    article_summary: dict[str, object] | None = None
+    articles: list[dict[str, object]] | None = None
     current_post: dict[str, object] | None = None
     available_tools: list[dict[str, object]] | None = None
     write_policy: str | None = None

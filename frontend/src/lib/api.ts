@@ -245,10 +245,14 @@ export interface AiChatMessage {
 }
 
 export interface AiChatContext {
+  route?: string
+  section?: string
+  page_type?: string
   post_id?: string
   title?: string
   excerpt?: string
   content_markdown?: string
+  editor_status?: 'draft' | 'published'
   selected_text?: string
 }
 

@@ -90,7 +90,7 @@ async def test_list_claude_models_supports_base_url_with_v1() -> None:
 
 @pytest.mark.anyio
 async def test_list_models_requires_provider_key() -> None:
-    service = ModelDiscoveryService(Settings())
+    service = ModelDiscoveryService(Settings(text_grok_api_key=SecretStr("")))
 
     with pytest.raises(ModelDiscoveryError, match="未配置 grok 的 API Key"):
         await service.list_models("grok")
