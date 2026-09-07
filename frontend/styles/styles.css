@@ -2113,8 +2113,8 @@ nav span {
 
 .studio-assistant__panel {
   width: min(26rem, calc(100vw - 2rem));
-  height: min(34rem, calc(100vh - 6rem));
-  max-height: calc(100vh - 6rem);
+  height: calc(100vh - 6.2rem);
+  max-height: calc(100vh - 6.2rem);
   border-color: #cfdad9;
 }
 .studio-assistant__body {
@@ -2154,8 +2154,8 @@ nav span {
   .studio-section-nav { min-width: 0; }
   .studio-assistant__panel {
     width: min(26rem, calc(100vw - 1.5rem));
-    height: min(34rem, calc(100vh - 5.5rem));
-    max-height: calc(100vh - 5.5rem);
+    height: calc(100vh - 5.25rem);
+    max-height: calc(100vh - 5.25rem);
   }
 }
 
