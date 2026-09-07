@@ -2727,3 +2727,60 @@ nav span {
   .genesis-mdx-editor { min-height: calc(100vh - 9rem); }
   .genesis-mdx-content { padding: 1rem 1rem 3rem; font-size: .95rem; }
 }
+
+
+/* 文章设置：用明确的选择和创建流程替代原始字符串输入。 */
+.markdown-settings-modal__header { align-items: flex-start; }
+.markdown-settings-modal__header > div > span { display: block; margin-top: .35rem; color: #8a96a4; font-size: .68rem; }
+.markdown-settings-modal__close {
+  display: grid;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #d9e1e8;
+  border-radius: .35rem;
+  background: #fff;
+  color: #718096;
+  cursor: pointer;
+}
+.markdown-settings-modal__close:hover { border-color: #aebdca; background: #f4f7f9; color: #172235; }
+.markdown-settings-modal__close svg { width: 1rem; height: 1rem; }
+.taxonomy-section {
+  display: grid;
+  gap: .7rem;
+  padding: .9rem;
+  border: 1px solid #dfe6ec;
+  border-radius: .35rem;
+  background: #fff;
+}
+.taxonomy-section__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: .8rem; }
+.taxonomy-section__heading h3 { margin: 0; color: #26364a; font-size: .84rem; }
+.taxonomy-section__heading p { margin: .25rem 0 0; color: #8a96a4; font-size: .65rem; line-height: 1.5; }
+.taxonomy-section__heading > span { color: #8a96a4; font-size: .65rem; }
+.taxonomy-select-row,
+.taxonomy-create-row { display: flex; align-items: center; gap: .45rem; }
+.taxonomy-select-row select,
+.taxonomy-create-row input { min-width: 0; flex: 1 1 auto; width: 100%; box-sizing: border-box; padding: .55rem .6rem; border: 1px solid #d5dde5; border-radius: .25rem; outline: 0; background: #fff; color: #26364a; font: inherit; font-size: .72rem; }
+.taxonomy-select-row select:focus,
+.taxonomy-create-row input:focus { border-color: #1769bd; box-shadow: 0 0 0 2px rgb(23 105 189 / 10%); }
+.taxonomy-select-row button,
+.taxonomy-create-row button { flex: 0 0 auto; padding: .56rem .7rem; border: 1px solid #cad6df; border-radius: .25rem; background: #f5f8fa; color: #526174; font: inherit; font-size: .68rem; font-weight: 750; cursor: pointer; white-space: nowrap; }
+.taxonomy-select-row button:hover,
+.taxonomy-create-row button:hover { border-color: #1769bd; background: #eef5fb; color: #1769bd; }
+.taxonomy-select-row button:disabled { cursor: not-allowed; opacity: .5; }
+.taxonomy-chips { display: flex; flex-wrap: wrap; gap: .4rem; min-height: 1.8rem; align-items: center; }
+.taxonomy-empty { color: #9aa5b0; font-size: .68rem; }
+.taxonomy-chip { display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .35rem .3rem .55rem; border: 1px solid #cddce8; border-radius: 999px; background: #eef5fb; color: #365a78; font-size: .68rem; }
+.taxonomy-chip button { display: grid; width: 1.15rem; height: 1.15rem; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #7791a7; cursor: pointer; }
+.taxonomy-chip button:hover { background: #d7e6f1; color: #263f56; }
+.taxonomy-chip svg { width: .68rem; height: .68rem; }
+.markdown-settings-modal__footer > div { align-items: center; }
+@media (max-width: 680px) {
+  .taxonomy-select-row,
+  .taxonomy-create-row { align-items: stretch; flex-wrap: wrap; }
+  .taxonomy-select-row select,
+  .taxonomy-create-row input { flex-basis: calc(50% - .25rem); }
+  .taxonomy-select-row button,
+  .taxonomy-create-row button { width: 100%; }
+}

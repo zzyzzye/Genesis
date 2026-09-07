@@ -59,6 +59,16 @@ class BlogTag(Base):
     )
 
 
+class BlogCategory(Base):
+    __tablename__ = "blog_categories"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(50), unique=True)
+    slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+
+    posts: Mapped[list[BlogPost]] = relationship(back_populates="category")
+
+
 class BlogPost(Base):
     __tablename__ = "blog_posts"
 
@@ -73,6 +83,12 @@ class BlogPost(Base):
     excerpt: Mapped[str] = mapped_column(String(500))
     content_markdown: Mapped[str] = mapped_column(Text)
     cover_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    category_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("blog_categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[BlogPostStatus] = mapped_column(
         Enum(
             BlogPostStatus,
@@ -91,6 +107,7 @@ class BlogPost(Base):
     )
 
     author: Mapped[User] = relationship(back_populates="blog_posts")
+    category: Mapped[BlogCategory | None] = relationship(back_populates="posts")
     tags: Mapped[list[BlogTag]] = relationship(
         secondary=blog_post_tags,
         back_populates="posts",

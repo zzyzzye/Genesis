@@ -118,6 +118,18 @@ describe('App', () => {
           role: 'owner',
         }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
       }
+      if (url.endsWith('/admin/blog/tags')) {
+        return Promise.resolve(new Response(JSON.stringify([{ id: 'tag-1', name: '工程', slug: 'engineering' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }))
+      }
+      if (url.endsWith('/admin/blog/categories')) {
+        return Promise.resolve(new Response(JSON.stringify([{ id: 'category-1', name: '工程', slug: 'engineering' }]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }))
+      }
       if (url.endsWith('/admin/blog/posts')) {
         return Promise.resolve(new Response(JSON.stringify(adminPosts), {
           status: 200,
@@ -154,6 +166,12 @@ describe('App', () => {
     expect(screen.getByRole('region', { name: 'Markdown 编辑区' })).toBeInTheDocument()
     expect(document.querySelector('.studio-topbar')).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '文章标题' })).toHaveValue('从一个完整模块开始')
+    fireEvent.click(screen.getByRole('button', { name: '打开文章设置' }))
+    expect(screen.getByRole('dialog', { name: '文章设置' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '文章分类' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '选择已有标签' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '关闭文章设置' }))
+    expect(screen.queryByRole('dialog', { name: '文章设置' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '预览' }))
     expect(window.location.pathname).toBe('/blog/studio/posts/post-1')
     expect(screen.getByRole('region', { name: '从一个完整模块开始' })).toBeInTheDocument()

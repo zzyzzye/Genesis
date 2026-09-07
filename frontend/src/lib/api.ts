@@ -11,12 +11,19 @@ export interface BlogTag {
   slug: string
 }
 
+export interface BlogCategory {
+  id: string
+  name: string
+  slug: string
+}
+
 export interface BlogPostPreview {
   id: string
   slug: string
   title: string
   excerpt: string
   cover_image_url: string | null
+  category: BlogCategory | null
   is_featured: boolean
   read_time_minutes: number
   published_at: string
@@ -35,12 +42,18 @@ export interface BlogTagWrite {
   slug: string
 }
 
+export interface BlogCategoryWrite {
+  name: string
+  slug: string
+}
+
 export interface BlogPostWrite {
   slug: string
   title: string
   excerpt: string
   content_markdown: string
   cover_image_url: string | null
+  category_id: string | null
   status: BlogPostStatus
   is_featured: boolean
   read_time_minutes: number
@@ -53,6 +66,7 @@ export interface BlogPostAdmin extends BlogPostWrite {
   created_at: string
   updated_at: string
   author: BlogAuthor
+  category: BlogCategory | null
   tags: BlogTag[]
 }
 
@@ -140,6 +154,30 @@ export function updateCurrentUser(token: string, data: ProfileUpdateData): Promi
 
 export function getAdminBlogPosts(token: string): Promise<BlogPostAdmin[]> {
   return request<BlogPostAdmin[]>('/admin/blog/posts', { headers: authHeaders(token) })
+}
+
+export function getAdminBlogTags(token: string): Promise<BlogTag[]> {
+  return request<BlogTag[]>('/admin/blog/tags', { headers: authHeaders(token) })
+}
+
+export function createAdminBlogTag(token: string, data: BlogTagWrite): Promise<BlogTag> {
+  return request<BlogTag>('/admin/blog/tags', {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export function getAdminBlogCategories(token: string): Promise<BlogCategory[]> {
+  return request<BlogCategory[]>('/admin/blog/categories', { headers: authHeaders(token) })
+}
+
+export function createAdminBlogCategory(token: string, data: BlogCategoryWrite): Promise<BlogCategory> {
+  return request<BlogCategory>('/admin/blog/categories', {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
 }
 
 export function createAdminBlogPost(token: string, data: BlogPostWrite): Promise<BlogPostAdmin> {

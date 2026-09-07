@@ -29,12 +29,18 @@ import { StudioAssistant } from './studio/StudioAssistant'
 import { StudioOverview } from './studio/StudioOverview'
 
 import {
+  createAdminBlogCategory,
   createAdminBlogPost,
+  createAdminBlogTag,
   deleteAdminBlogPost,
+  getAdminBlogCategories,
   getAdminBlogPosts,
+  getAdminBlogTags,
   getCurrentUser,
   login,
   updateAdminBlogPost,
+  type BlogCategory,
+  type BlogCategoryWrite,
   type BlogPostAdmin,
   type BlogPostStatus,
   type BlogPostWrite,
@@ -53,13 +59,14 @@ interface EditorState {
   status: BlogPostStatus
   isFeatured: boolean
   readTimeMinutes: number
-  tagsText: string
+  categoryId: string | null
+  selectedTagSlugs: string[]
 }
 
 type StudioState =
   | { status: 'login'; error: string | null }
   | { status: 'loading' }
-  | { status: 'ready'; user: CurrentUser; posts: BlogPostAdmin[] }
+  | { status: 'ready'; user: CurrentUser; posts: BlogPostAdmin[]; tags: BlogTag[]; categories: BlogCategory[] }
   | { status: 'error' }
 
 function createEmptyEditor(): EditorState {
@@ -73,12 +80,9 @@ function createEmptyEditor(): EditorState {
     status: 'draft',
     isFeatured: false,
     readTimeMinutes: 3,
-    tagsText: '',
+    categoryId: null,
+    selectedTagSlugs: [],
   }
-}
-
-function formatTags(tags: BlogTag[]): string {
-  return tags.map((tag) => `${tag.name}:${tag.slug}`).join(', ')
 }
 
 function toEditor(post: BlogPostAdmin): EditorState {
@@ -92,40 +96,29 @@ function toEditor(post: BlogPostAdmin): EditorState {
     status: post.status,
     isFeatured: post.is_featured,
     readTimeMinutes: post.read_time_minutes,
-    tagsText: formatTags(post.tags),
+    categoryId: post.category?.id ?? null,
+    selectedTagSlugs: post.tags.map((tag) => tag.slug),
   }
 }
 
-function parseTags(value: string): BlogTagWrite[] {
-  if (value.trim() === '') {
-    return []
-  }
-
-  const tags = value.split(',').map((entry) => {
-    const [name, slug, ...rest] = entry.split(':').map((part) => part.trim())
-    if (!name || !slug || rest.length > 0 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-      throw new Error('标签请使用“名称:english-slug”的格式，并以英文逗号分隔。')
-    }
-    return { name, slug }
+function toPayload(editor: EditorState, tagOptions: BlogTag[]): BlogPostWrite {
+  const tagsBySlug = new Map(tagOptions.map((tag) => [tag.slug, tag]))
+  const tags = editor.selectedTagSlugs.map((slug) => {
+    const tag = tagsBySlug.get(slug)
+    if (!tag) throw new Error(`标签“${slug}”不存在，请先创建后再选择。`)
+    return { name: tag.name, slug: tag.slug }
   })
-
-  if (new Set(tags.map((tag) => tag.slug)).size !== tags.length) {
-    throw new Error('同一篇文章不能重复使用同一个标签。')
-  }
-  return tags
-}
-
-function toPayload(editor: EditorState): BlogPostWrite {
   return {
     slug: editor.slug.trim(),
     title: editor.title.trim(),
     excerpt: editor.excerpt.trim(),
     content_markdown: editor.contentMarkdown.trim(),
     cover_image_url: editor.coverImageUrl.trim() || null,
+    category_id: editor.categoryId,
     status: editor.status,
     is_featured: editor.isFeatured,
     read_time_minutes: editor.readTimeMinutes,
-    tags: parseTags(editor.tagsText),
+    tags,
   }
 }
 
@@ -218,24 +211,87 @@ function parseMarkdownImport(filename: string, content: string): { title: string
 }
 
 function PostSettingsModal({
+  categories,
   editor,
   feedback,
   isSaving,
   onChange,
   onClose,
+  onCreateCategory,
+  onCreateTag,
   onDelete,
   onImportMarkdown,
   onSave,
+  tags,
 }: {
+  categories: BlogCategory[]
   editor: EditorState
   feedback: string | null
   isSaving: boolean
   onChange: (editor: EditorState) => void
   onClose: () => void
+  onCreateCategory: (data: BlogCategoryWrite) => Promise<BlogCategory>
+  onCreateTag: (data: BlogTagWrite) => Promise<BlogTag>
   onDelete: () => void
   onImportMarkdown: (file: File) => void
   onSave: (status: BlogPostStatus) => void
+  tags: BlogTag[]
 }) {
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategorySlug, setNewCategorySlug] = useState('')
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagSlug, setNewTagSlug] = useState('')
+  const [tagToAdd, setTagToAdd] = useState('')
+  const [taxonomyError, setTaxonomyError] = useState<string | null>(null)
+  const selectedTags = tags.filter((tag) => editor.selectedTagSlugs.includes(tag.slug))
+  const availableTags = tags.filter((tag) => !editor.selectedTagSlugs.includes(tag.slug))
+
+  async function createCategory() {
+    const name = newCategoryName.trim()
+    const slug = newCategorySlug.trim()
+    if (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      setTaxonomyError('请填写分类名称和英文 slug，例如：engineering。')
+      return
+    }
+    try {
+      const category = await onCreateCategory({ name, slug })
+      onChange({ ...editor, categoryId: category.id })
+      setNewCategoryName('')
+      setNewCategorySlug('')
+      setTaxonomyError(null)
+    } catch (error) {
+      setTaxonomyError(error instanceof Error ? error.message : '分类创建失败，请重试。')
+    }
+  }
+
+  async function createTag() {
+    const name = newTagName.trim()
+    const slug = newTagSlug.trim()
+    if (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      setTaxonomyError('请填写标签名称和英文 slug，例如：engineering。')
+      return
+    }
+    if (selectedTags.length >= 10) {
+      setTaxonomyError('一篇文章最多选择 10 个标签。')
+      return
+    }
+    try {
+      const tag = await onCreateTag({ name, slug })
+      onChange({ ...editor, selectedTagSlugs: [...editor.selectedTagSlugs, tag.slug] })
+      setNewTagName('')
+      setNewTagSlug('')
+      setTaxonomyError(null)
+    } catch (error) {
+      setTaxonomyError(error instanceof Error ? error.message : '标签创建失败，请重试。')
+    }
+  }
+
+  function addTag() {
+    if (!tagToAdd || editor.selectedTagSlugs.includes(tagToAdd) || selectedTags.length >= 10) return
+    onChange({ ...editor, selectedTagSlugs: [...editor.selectedTagSlugs, tagToAdd] })
+    setTagToAdd('')
+  }
+
   return (
     <div className="markdown-settings-modal" role="dialog" aria-modal="true" aria-labelledby="markdown-settings-title">
       <section className="markdown-settings-modal__surface">
@@ -243,75 +299,84 @@ function PostSettingsModal({
           <div>
             <p className="eyebrow">ARTICLE SETTINGS</p>
             <h2 id="markdown-settings-title">文章设置</h2>
+            <span>整理文章信息、分类和标签</span>
           </div>
-          <button className="text-button" type="button" onClick={onClose}>关闭</button>
+          <button className="markdown-settings-modal__close" type="button" aria-label="关闭文章设置" onClick={onClose}><StudioIcon name="close" /></button>
         </header>
         <div className="markdown-settings-modal__body">
-          <div className="editor-form__grid">
-            <label htmlFor="settings-slug">
-              URL Slug
-              <input id="settings-slug" onChange={(event) => onChange({ ...editor, slug: event.currentTarget.value })} pattern="[a-z0-9]+(-[a-z0-9]+)*" required value={editor.slug} />
-            </label>
-            <label htmlFor="settings-cover">
-              封面链接（可选）
-              <input id="settings-cover" onChange={(event) => onChange({ ...editor, coverImageUrl: event.currentTarget.value })} type="url" value={editor.coverImageUrl} />
-            </label>
-          </div>
-          <label htmlFor="settings-excerpt">
-            摘要
-            <textarea id="settings-excerpt" onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} required rows={4} value={editor.excerpt} />
-          </label>
-          <label htmlFor="settings-tags">
-            标签
-            <input id="settings-tags" onChange={(event) => onChange({ ...editor, tagsText: event.currentTarget.value })} placeholder="产品:product, 工程:engineering" value={editor.tagsText} />
-          </label>
-          <div className="editor-options">
-            <label htmlFor="settings-reading-time">
-              阅读分钟
-              <input id="settings-reading-time" min="1" onChange={(event) => onChange({ ...editor, readTimeMinutes: Number(event.currentTarget.value) || 1 })} type="number" value={editor.readTimeMinutes} />
-            </label>
-            <label className="checkbox-label" htmlFor="settings-featured">
-              <input checked={editor.isFeatured} id="settings-featured" onChange={(event) => onChange({ ...editor, isFeatured: event.currentTarget.checked })} type="checkbox" />
-              设为精选
-            </label>
-          </div>
-          <label className="markdown-import-control">
-            <span>导入 Markdown 文件</span>
-            <small>导入后会覆盖当前标题、摘要、Slug 和正文。</small>
-            <input accept=".md,text/markdown" type="file" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) onImportMarkdown(file); event.currentTarget.value = '' }} />
-          </label>
+          <section className="taxonomy-section" aria-labelledby="settings-category-title">
+            <div className="taxonomy-section__heading"><div><h3 id="settings-category-title">分类</h3><p>先创建分类，再为文章选择一个归属。</p></div></div>
+            <div className="taxonomy-select-row">
+              <select aria-label="文章分类" value={editor.categoryId ?? ''} onChange={(event) => onChange({ ...editor, categoryId: event.currentTarget.value || null })}>
+                <option value="">暂不分类</option>
+                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+              </select>
+            </div>
+            <div className="taxonomy-create-row">
+              <input aria-label="新分类名称" placeholder="新分类名称" value={newCategoryName} onChange={(event) => setNewCategoryName(event.currentTarget.value)} />
+              <input aria-label="新分类 slug" placeholder="英文 slug" value={newCategorySlug} onChange={(event) => setNewCategorySlug(event.currentTarget.value)} />
+              <button type="button" onClick={() => { void createCategory() }}>创建分类</button>
+            </div>
+          </section>
+          <section className="taxonomy-section" aria-labelledby="settings-tags-title">
+            <div className="taxonomy-section__heading"><div><h3 id="settings-tags-title">标签</h3><p>从已有标签中选择，也可以先创建新标签。</p></div><span>{selectedTags.length}/10</span></div>
+            <div className="taxonomy-chips" aria-label="已选标签">
+              {selectedTags.length === 0 && <span className="taxonomy-empty">暂未选择标签</span>}
+              {selectedTags.map((tag) => <span className="taxonomy-chip" key={tag.id}>{tag.name}<button type="button" aria-label={`移除标签 ${tag.name}`} onClick={() => onChange({ ...editor, selectedTagSlugs: editor.selectedTagSlugs.filter((slug) => slug !== tag.slug) })}><StudioIcon name="close" /></button></span>)}
+            </div>
+            <div className="taxonomy-select-row">
+              <select aria-label="选择已有标签" value={tagToAdd} onChange={(event) => setTagToAdd(event.currentTarget.value)}>
+                <option value="">选择已有标签</option>
+                {availableTags.map((tag) => <option key={tag.id} value={tag.slug}>{tag.name}</option>)}
+              </select>
+              <button type="button" disabled={!tagToAdd || selectedTags.length >= 10} onClick={addTag}>添加标签</button>
+            </div>
+            <div className="taxonomy-create-row">
+              <input aria-label="新标签名称" placeholder="新标签名称" value={newTagName} onChange={(event) => setNewTagName(event.currentTarget.value)} />
+              <input aria-label="新标签 slug" placeholder="英文 slug" value={newTagSlug} onChange={(event) => setNewTagSlug(event.currentTarget.value)} />
+              <button type="button" onClick={() => { void createTag() }}>创建并选择</button>
+            </div>
+          </section>
+          <label htmlFor="settings-slug">URL Slug<input id="settings-slug" onChange={(event) => onChange({ ...editor, slug: event.currentTarget.value })} pattern="[a-z0-9]+(-[a-z0-9]+)*" required value={editor.slug} /></label>
+          <label htmlFor="settings-excerpt">摘要<textarea id="settings-excerpt" onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} required rows={4} value={editor.excerpt} /></label>
+          <label htmlFor="settings-cover">封面链接（可选）<input id="settings-cover" onChange={(event) => onChange({ ...editor, coverImageUrl: event.currentTarget.value })} type="url" value={editor.coverImageUrl} /></label>
+          <div className="editor-options"><label htmlFor="settings-reading-time">阅读分钟<input id="settings-reading-time" min="1" onChange={(event) => onChange({ ...editor, readTimeMinutes: Number(event.currentTarget.value) || 1 })} type="number" value={editor.readTimeMinutes} /></label><label className="checkbox-label" htmlFor="settings-featured"><input checked={editor.isFeatured} id="settings-featured" onChange={(event) => onChange({ ...editor, isFeatured: event.currentTarget.checked })} type="checkbox" />设为精选</label></div>
+          <label className="markdown-import-control"><span>导入 Markdown 文件</span><small>导入后会覆盖当前标题、摘要、Slug 和正文。</small><input accept=".md,text/markdown" type="file" onChange={(event) => { const file = event.currentTarget.files?.[0]; if (file) onImportMarkdown(file); event.currentTarget.value = '' }} /></label>
+          {taxonomyError && <p className="studio-form-error" role="alert">{taxonomyError}</p>}
           {feedback && <p className="studio-form-error" role="alert">{feedback}</p>}
         </div>
-        <footer className="markdown-settings-modal__footer">
-          <button className="text-button text-button--danger" disabled={!editor.id || isSaving} type="button" onClick={onDelete}>删除文章</button>
-          <div>
-            <button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存草稿</button>
-            <button className="primary-button" disabled={isSaving} type="button" onClick={() => onSave('published')}>{isSaving ? '正在保存…' : '保存并发布'}</button>
-          </div>
-        </footer>
+        <footer className="markdown-settings-modal__footer"><button className="text-button text-button--danger" disabled={!editor.id || isSaving} type="button" onClick={onDelete}>删除文章</button><div><button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存草稿</button><button className="primary-button" disabled={isSaving} type="button" onClick={() => onSave('published')}>{isSaving ? '正在保存…' : '保存并发布'}</button></div></footer>
       </section>
     </div>
   )
 }
 
 function MarkdownEditor({
+  categories,
   editor,
   feedback,
   isSaving,
   onBack,
   onChange,
+  onCreateCategory,
+  onCreateTag,
   onDelete,
   onPreview,
   onSave,
+  tags,
 }: {
+  categories: BlogCategory[]
   editor: EditorState
   feedback: string | null
   isSaving: boolean
   onBack: () => void
   onChange: (editor: EditorState) => void
+  onCreateCategory: (data: BlogCategoryWrite) => Promise<BlogCategory>
+  onCreateTag: (data: BlogTagWrite) => Promise<BlogTag>
   onDelete: () => void
   onPreview: () => void
   onSave: (status: BlogPostStatus) => void
+  tags: BlogTag[]
 }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
@@ -343,7 +408,7 @@ function MarkdownEditor({
         </div>
         <div className="markdown-editor__actions">
           <button className="secondary-button" type="button" onClick={onPreview}><StudioIcon name="eye" /> 预览</button>
-          <button className="secondary-button" type="button" onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" /> 设置</button>
+          <button className="secondary-button" type="button" aria-label="打开文章设置" onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" /> 设置</button>
           <button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存</button>
           <button className="primary-button" disabled={isSaving} type="button" onClick={() => onSave('published')}>{isSaving ? '发布中…' : '发布'}</button>
         </div>
@@ -376,7 +441,7 @@ function MarkdownEditor({
           />
         </section>
       </div>
-      {isSettingsOpen && <PostSettingsModal editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onImportMarkdown={importMarkdown} onSave={onSave} />}
+      {isSettingsOpen && <PostSettingsModal categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onCreateCategory={onCreateCategory} onCreateTag={onCreateTag} onDelete={onDelete} onImportMarkdown={importMarkdown} onSave={onSave} tags={tags} />}
     </section>
   )
 }
@@ -416,10 +481,7 @@ function PostsIndex({
         </div>
         <span className="studio-post-count">共 {posts.length} 篇</span>
         <div className="studio-post-index__actions">
-          <button type="button">分类</button>
-          <button type="button">标签</button>
-          <button type="button">回收站</button>
-          <button className="new-post-button" type="button" onClick={onCreatePost}><StudioIcon name="plus" /> 新建</button>
+          <button className="new-post-button" type="button" onClick={onCreatePost}><StudioIcon name="plus" /> 新建文章</button>
         </div>
       </div>
       <div className="studio-content-list">
@@ -428,7 +490,7 @@ function PostsIndex({
             <span className="studio-post-check" aria-hidden="true" />
             <span className="studio-content-list__body">
               <strong>{post.title}</strong>
-              <small>分类：内容 · 访问量：— · 评论：0</small>
+              <small>分类：{post.category?.name ?? '未分类'} · 访问量：— · 评论：0</small>
               <em>{post.status === 'published' ? '已发布' : '草稿'}</em>
             </span>
             <span className="studio-content-list__meta"><span>{post.status === 'published' ? '公开' : '未发布'}</span><time>{post.updated_at.slice(0, 10)}</time><StudioIcon name="chevron" /></span>
@@ -459,7 +521,7 @@ function ArticleReader({
           <p>{editor.excerpt || '还没有摘要，打开编辑设置补充文章信息。'}</p>
           <div className="article-reader__meta">
             <span>{editor.readTimeMinutes} 分钟阅读</span>
-            {editor.tagsText && <span>{editor.tagsText}</span>}
+            {editor.selectedTagSlugs.length > 0 && <span>{editor.selectedTagSlugs.join(' · ')}</span>}
             <span>{editor.isFeatured ? '精选文章' : '普通文章'}</span>
           </div>
         </div>
@@ -478,6 +540,7 @@ function ArticleReader({
 }
 
 function PostsWorkspace({
+  categories,
   editor,
   feedback,
   isEditorOpen,
@@ -485,14 +548,18 @@ function PostsWorkspace({
   posts,
   view,
   onChange,
+  onCreateCategory,
   onCreatePost,
   onDelete,
   onEdit,
   onOpenPost,
   onPreview,
+  onCreateTag,
   onBack,
   onSave,
+  tags,
 }: {
+  categories: BlogCategory[]
   editor: EditorState
   feedback: string | null
   isEditorOpen: boolean
@@ -500,20 +567,23 @@ function PostsWorkspace({
   posts: BlogPostAdmin[]
   view: 'list' | 'preview'
   onChange: (editor: EditorState) => void
+  onCreateCategory: (data: BlogCategoryWrite) => Promise<BlogCategory>
   onCreatePost: () => void
   onDelete: () => void
   onEdit: () => void
   onOpenPost: (post: BlogPostAdmin) => void
   onPreview: () => void
+  onCreateTag: (data: BlogTagWrite) => Promise<BlogTag>
   onBack: () => void
   onSave: (status: BlogPostStatus) => void
+  tags: BlogTag[]
 }) {
   if (view === 'list') {
     return <PostsIndex onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} />
   }
 
   if (isEditorOpen) {
-    return <MarkdownEditor editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} />
+    return <MarkdownEditor categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onCreateCategory={onCreateCategory} onCreateTag={onCreateTag} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} />
   }
 
   return <ArticleReader editor={editor} onBack={onBack} onEdit={onEdit} />
@@ -522,12 +592,13 @@ function PostsWorkspace({
 function SectionPlaceholder({ section }: { section: Exclude<StudioSection, 'overview' | 'posts'> }) {
   const meta = sectionMeta[section]
   return (
-    <section className="studio-placeholder-panel">
+    <section className="studio-placeholder-panel" aria-label={`${meta.title}占位页`}>
       <span className="studio-placeholder-icon"><StudioIcon name="spark" /></span>
       <p>{meta.eyebrow}</p>
       <h2>{meta.title}</h2>
       <span>{meta.description}</span>
       <div className="studio-placeholder-rule" />
+      <strong>{section === 'settings' ? '设置中心正在建设中。' : '这个功能模块正在建设中。'}</strong>
       <small>界面结构已经就位，业务能力将在对应阶段接入。</small>
     </section>
   )
@@ -554,11 +625,15 @@ function getStudioRoute(pathname: string): {
 
 function Dashboard({
   posts,
+  tags,
+  categories,
   token,
   user,
   onLogout,
 }: {
   posts: BlogPostAdmin[]
+  tags: BlogTag[]
+  categories: BlogCategory[]
   token: string
   user: CurrentUser
   onLogout: () => void
@@ -568,6 +643,8 @@ function Dashboard({
   const { activeSection, postId, postView, isEditorOpen } = getStudioRoute(location.pathname)
   const [editor, setEditor] = useState<EditorState>(() => createEmptyEditor())
   const [managedPosts, setManagedPosts] = useState(posts)
+  const [tagOptions, setTagOptions] = useState(tags)
+  const [categoryOptions, setCategoryOptions] = useState(categories)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const studioBasePath = '/blog/studio'
@@ -594,7 +671,7 @@ function Dashboard({
   async function savePost(status: BlogPostStatus) {
     let payload: BlogPostWrite
     try {
-      payload = toPayload({ ...activeEditor, status })
+      payload = toPayload({ ...activeEditor, status }, tagOptions)
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : '文章信息不完整。')
       return
@@ -615,6 +692,18 @@ function Dashboard({
     } finally {
       setIsSaving(false)
     }
+  }
+
+  async function createTag(data: BlogTagWrite): Promise<BlogTag> {
+    const created = await createAdminBlogTag(token, data)
+    setTagOptions((current) => [...current.filter((tag) => tag.id !== created.id && tag.slug !== created.slug), created].sort((a, b) => a.name.localeCompare(b.name)))
+    return created
+  }
+
+  async function createCategory(data: BlogCategoryWrite): Promise<BlogCategory> {
+    const created = await createAdminBlogCategory(token, data)
+    setCategoryOptions((current) => [...current.filter((category) => category.id !== created.id && category.slug !== created.slug), created].sort((a, b) => a.name.localeCompare(b.name)))
+    return created
   }
 
   async function deletePost() {
@@ -657,11 +746,13 @@ function Dashboard({
           )}
           {activeSection === 'posts' && (
             <PostsWorkspace
+              categories={categoryOptions}
               editor={activeEditor}
               feedback={feedback}
               isEditorOpen={isEditorOpen}
               isSaving={isSaving}
               onChange={setEditor}
+              onCreateCategory={createCategory}
               onCreatePost={createPost}
               onDelete={() => void deletePost()}
               onEdit={() => { void navigate(activeEditor.id ? `${studioBasePath}/posts/${encodeURIComponent(activeEditor.id)}/edit` : `${studioBasePath}/posts/new/edit`) }}
@@ -670,6 +761,8 @@ function Dashboard({
               onBack={() => { void navigate(`${studioBasePath}/posts`) }}
               onSave={(status) => void savePost(status)}
               posts={managedPosts}
+              onCreateTag={createTag}
+              tags={tagOptions}
               view={postView}
             />
           )}
@@ -696,10 +789,15 @@ export function Studio() {
     }
 
     let cancelled = false
-    void Promise.all([getCurrentUser(token), getAdminBlogPosts(token)])
-      .then(([user, posts]) => {
+    void Promise.all([
+      getCurrentUser(token),
+      getAdminBlogPosts(token),
+      getAdminBlogTags(token).catch(() => []),
+      getAdminBlogCategories(token).catch(() => []),
+    ])
+      .then(([user, posts, tags, categories]) => {
         if (!cancelled) {
-          setState({ status: 'ready', user, posts })
+          setState({ status: 'ready', user, posts, tags, categories })
         }
       })
       .catch(() => {
@@ -736,7 +834,7 @@ export function Studio() {
   }
 
   if (state.status === 'ready' && token !== null) {
-    return <Dashboard onLogout={handleLogout} posts={state.posts} token={token} user={state.user} />
+    return <Dashboard categories={state.categories} onLogout={handleLogout} posts={state.posts} tags={state.tags} token={token} user={state.user} />
   }
 
   if (state.status === 'login') {

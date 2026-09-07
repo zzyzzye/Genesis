@@ -15,6 +15,19 @@ class BlogAuthor(BaseModel):
     avatar_url: str | None
 
 
+class BlogCategoryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    slug: str
+
+
+class BlogCategoryWrite(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=80)
+
+
 class BlogTagRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -31,6 +44,7 @@ class BlogPostPreview(BaseModel):
     title: str
     excerpt: str
     cover_image_url: str | None
+    category: BlogCategoryRead | None
     is_featured: bool
     read_time_minutes: int
     published_at: datetime
@@ -58,6 +72,7 @@ class BlogPostWrite(BaseModel):
     excerpt: str = Field(min_length=1, max_length=500)
     content_markdown: str = Field(min_length=1)
     cover_image_url: str | None = Field(default=None, max_length=500)
+    category_id: UUID | None = None
     status: BlogPostStatus = BlogPostStatus.DRAFT
     is_featured: bool = False
     read_time_minutes: int = Field(default=1, ge=1, le=120)
@@ -81,6 +96,8 @@ class BlogPostAdminRead(BaseModel):
     excerpt: str
     content_markdown: str
     cover_image_url: str | None
+    category_id: UUID | None
+    category: BlogCategoryRead | None
     status: BlogPostStatus
     is_featured: bool
     read_time_minutes: int
