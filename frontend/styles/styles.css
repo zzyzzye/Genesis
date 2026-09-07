@@ -2682,6 +2682,53 @@ nav span {
 }
 
 
+/* MDXEditor 占满文章工作区，避免保留旧三栏编辑器的空列。 */
+.markdown-editor__workspace--mdx {
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.markdown-editor__source--mdx {
+  display: block;
+  height: 100%;
+  min-height: calc(100vh - 11rem);
+  border-right: 0;
+  background: #fff;
+}
+.markdown-editor__source--mdx > .genesis-mdx-editor {
+  min-height: calc(100vh - 11rem);
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border-bottom: 1px solid #dce3e9;
+  background: #f8fafb;
+}
+.genesis-mdx-content {
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: 1.5rem clamp(1rem, 4vw, 3.5rem) 5rem;
+  font-family: var(--studio-display);
+  font-size: 1rem;
+  line-height: 1.85;
+}
+.genesis-mdx-content h1,
+.genesis-mdx-content h2,
+.genesis-mdx-content h3 {
+  font-family: var(--studio-display);
+}
+@media (max-width: 680px) {
+  .markdown-editor__source--mdx,
+  .markdown-editor__source--mdx > .genesis-mdx-editor { min-height: calc(100vh - 9rem); }
+  .genesis-mdx-content { padding: 1rem 1rem 3rem; font-size: .95rem; }
+}
+
+
 /* 文章设置：用明确的选择和创建流程替代原始字符串输入。 */
 .markdown-settings-modal__header { align-items: flex-start; }
 .markdown-settings-modal__header > div > span { display: block; margin-top: .35rem; color: #8a96a4; font-size: .68rem; }
