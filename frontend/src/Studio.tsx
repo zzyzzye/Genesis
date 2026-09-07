@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -640,6 +640,7 @@ function Dashboard({
 }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const contentRef = useRef<HTMLElement>(null)
   const { activeSection, postId, postView, isEditorOpen } = getStudioRoute(location.pathname)
   const [editor, setEditor] = useState<EditorState>(() => createEmptyEditor())
   const [managedPosts, setManagedPosts] = useState(posts)
@@ -651,6 +652,10 @@ function Dashboard({
 
   const selectedPost = postId === null ? null : managedPosts.find((post) => post.id === postId) ?? null
   const activeEditor = selectedPost && editor.id !== postId ? toEditor(selectedPost) : editor
+
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0
+  }, [location.pathname])
 
   function selectSection(section: StudioSection) {
     void navigate(section === 'overview' ? studioBasePath : `${studioBasePath}/${section}`)
@@ -740,7 +745,7 @@ function Dashboard({
           </header>
         )}
 
-        <main className={activeSection === 'posts' ? 'studio-content studio-content--editor' : 'studio-content'}>
+        <main ref={contentRef} className={activeSection === 'posts' ? 'studio-content studio-content--editor' : 'studio-content'}>
           {activeSection === 'overview' && (
             <StudioOverview posts={managedPosts} onChange={selectSection} onCreatePost={createPost} onOpenPost={openPost} />
           )}
