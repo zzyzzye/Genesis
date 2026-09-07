@@ -2016,7 +2016,7 @@ nav span {
 .studio-assistant__launcher-icon svg { width: .95rem; height: .95rem; }
 .studio-assistant__panel { height: calc(100vh - 6.2rem); max-height: calc(100vh - 6.2rem); }
 .studio-assistant__message p,
-.studio-assistant__markdown { font-size: .88rem; line-height: 1.75; }
+.studio-assistant__markdown { font-size: .82rem; line-height: 1.65; }
 .studio-assistant__markdown > :first-child { margin-top: 0; }
 .studio-assistant__markdown > :last-child { margin-bottom: 0; }
 .studio-assistant__markdown p { margin: 0 0 .55rem; }
@@ -2130,14 +2130,16 @@ nav span {
 .studio-assistant__suggestions { margin-top: .2rem; }
 .studio-assistant__composer {
   flex: 0 0 auto;
-  padding: .7rem .85rem .8rem;
+  padding: .8rem .9rem .9rem;
 }
 .studio-assistant__composer textarea {
-  min-height: 3rem;
-  padding: .2rem 0;
+  min-height: 3.25rem;
+  padding: .25rem 0;
+  font-size: .82rem;
+  line-height: 1.55;
 }
 .studio-assistant__composer > div {
-  gap: .5rem;
+  gap: .6rem;
 }
 .studio-assistant__composer-tools {
   display: flex;
@@ -2147,8 +2149,11 @@ nav span {
 .studio-assistant__composer .studio-assistant__tool-button {
   flex: 0 1 auto;
   max-width: 11rem;
+  min-height: 2rem;
+  padding: .3rem .4rem;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: .72rem;
 }
 @media (max-width: 680px) {
   .studio-section-nav { min-width: 0; }
@@ -2244,3 +2249,15 @@ nav span {
 .editor-import-button:hover { border-color: #1769bd; background: #f4f8fc; color: #1769bd; }
 .editor-import-button svg { width: .9rem; height: .9rem; }
 .editor-import-button input { display: none; }
+
+
+/* 输入区与正文保持同一视觉层级，避免控件文字过小。 */
+.studio-assistant__composer .studio-assistant__tool-button svg { width: .9rem; }
+.studio-assistant__composer .studio-assistant__composer-status { font-size: .64rem; }
+.studio-assistant__composer > .studio-assistant__composer-tools > button[type='submit'] {
+  width: 2.05rem;
+  height: 2.05rem;
+  flex-basis: 2.05rem;
+  border-radius: .65rem;
+}
+.studio-assistant__composer > .studio-assistant__composer-tools > button[type='submit'] svg { width: .95rem; }

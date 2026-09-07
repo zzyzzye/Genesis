@@ -136,7 +136,18 @@ export function StudioAssistant({ activeSection, editor }: { activeSection: stri
             )}
           </div>
           <form className="studio-assistant__composer" onSubmit={(event) => { void submit(event) }}>
-            <textarea aria-label="向 Genesis AI 提问" placeholder="告诉我你想完成什么…" rows={2} value={draft} onChange={(event) => setDraft(event.target.value)} />
+            <textarea
+              aria-label="向 Genesis AI 提问"
+              placeholder="告诉我你想完成什么…"
+              rows={2}
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+                event.preventDefault()
+                event.currentTarget.form?.requestSubmit()
+              }}
+            />
             <div className="studio-assistant__composer-tools">
               <button className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
                 <ProviderIcon provider={provider} /> {model || '选择模型'} <StudioIcon name="chevron" />
