@@ -1857,11 +1857,12 @@ nav span {
 .studio-post-index__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.35rem 1.45rem 1rem; border-bottom: 1px solid #dfe4e9; background: #fff; }
 .studio-post-index__header p { margin: 0 0 .2rem; color: var(--studio-accent); font-size: .64rem; font-weight: 900; letter-spacing: .12em; }
 .studio-post-index__header h2 { margin: 0; font-family: var(--studio-display); font-size: 1.75rem; font-weight: 600; }
-.studio-post-index__actions { display: flex; align-items: center; gap: .5rem; }
+.studio-post-index__actions { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
 .studio-post-index__actions > button:not(.new-post-button) { padding: .58rem .75rem; border: 1px solid #d8dee4; border-radius: .25rem; background: #fff; color: #526173; font-size: .72rem; }
 .studio-post-index__actions > button:not(.new-post-button):hover { background: #f6f8fa; color: var(--studio-ink); }
 .studio-post-index__actions .new-post-button { width: auto; margin: 0; padding: .62rem .85rem; font-size: .75rem; }
-.studio-post-index__toolbar { display: flex; align-items: center; gap: .7rem; padding: .95rem 1.45rem; border-bottom: 1px solid #dfe4e9; background: #f8fafb; }
+.studio-post-index__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: .7rem; padding: .95rem 1.45rem; border-bottom: 1px solid #dfe4e9; background: #f8fafb; }
+.studio-post-index__toolbar-title { color: var(--studio-ink); font-size: .9rem; font-weight: 800; }
 .studio-post-index__toolbar > label { display: flex; align-items: center; gap: .5rem; width: 15rem; padding: .55rem .65rem; border: 1px solid #d7dee5; border-radius: .25rem; background: #fff; color: #8793a0; }
 .studio-post-index__toolbar input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--studio-ink); font: inherit; font-size: .75rem; }
 .studio-post-index__filters { display: flex; align-items: center; gap: .3rem; }
@@ -2409,4 +2410,12 @@ nav span {
   .studio-editor-modal > .editor-panel { max-height: calc(100vh - 1rem); padding: 1rem; border-radius: .4rem; }
   .studio-editor-modal .editor-heading { flex-direction: column; }
   .studio-editor-modal .editor-heading__meta { width: 100%; justify-content: flex-start; }
+}
+
+
+/* 文章管理标题由工作台顶栏统一承担，列表工具收进搜索行。 */
+.studio-post-index__toolbar-title { flex: 0 0 auto; }
+.studio-post-index__toolbar .studio-post-count { margin-left: 0; }
+@media (max-width: 1100px) {
+  .studio-post-index__actions { width: 100%; margin-left: 0; }
 }

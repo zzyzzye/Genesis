@@ -417,16 +417,8 @@ function PostsIndex({
 
   return (
     <section className="studio-post-index" aria-label="文章列表">
-      <header className="studio-post-index__header">
-        <div><p>CONTENT / ARTICLES</p><h2>文章</h2></div>
-        <div className="studio-post-index__actions">
-          <button type="button">分类</button>
-          <button type="button">标签</button>
-          <button type="button">回收站</button>
-          <button className="new-post-button" type="button" onClick={onCreatePost}><StudioIcon name="plus" /> 新建</button>
-        </div>
-      </header>
       <div className="studio-post-index__toolbar">
+        <strong className="studio-post-index__toolbar-title">文章</strong>
         <label htmlFor="studio-post-search"><StudioIcon name="search" /><span className="sr-only">搜索文章</span><input id="studio-post-search" placeholder="输入关键词搜索" /></label>
         <div className="studio-post-index__filters" aria-label="文章筛选">
           <button className="is-active" type="button">状态：全部</button>
@@ -434,6 +426,12 @@ function PostsIndex({
           <button type="button">排序：最新</button>
         </div>
         <span className="studio-post-count">共 {posts.length} 篇</span>
+        <div className="studio-post-index__actions">
+          <button type="button">分类</button>
+          <button type="button">标签</button>
+          <button type="button">回收站</button>
+          <button className="new-post-button" type="button" onClick={onCreatePost}><StudioIcon name="plus" /> 新建</button>
+        </div>
       </div>
       <div className="studio-content-list">
         {posts.map((post) => (
