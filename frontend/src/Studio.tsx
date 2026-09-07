@@ -1,23 +1,39 @@
 import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import Markdown from 'react-markdown'
+import { EditorView } from '@codemirror/view'
 import remarkGfm from 'remark-gfm'
 import {
+  BlockTypeSelect,
+  BoldItalicUnderlineToggles,
   codeBlockPlugin,
   codeMirrorPlugin,
+  CodeToggle,
+  CreateLink,
+  DiffSourceToggleWrapper,
   diffSourcePlugin,
+  HighlightToggle,
   headingsPlugin,
   imagePlugin,
-  KitchenSinkToolbar,
+  InsertAdmonition,
+  InsertCodeBlock,
+  InsertFrontmatter,
+  InsertImage,
+  InsertTable,
+  InsertThematicBreak,
   linkDialogPlugin,
   linkPlugin,
+  ListsToggle,
   listsPlugin,
   markdownShortcutPlugin,
   MDXEditor,
   quotePlugin,
+  Separator,
+  StrikeThroughSupSubToggles,
   tablePlugin,
   thematicBreakPlugin,
   toolbarPlugin,
+  UndoRedo,
   type Translation,
 } from '@mdxeditor/editor'
 import '@mdxeditor/editor/style.css'
@@ -50,6 +66,101 @@ import {
   type CurrentUser,
 } from './lib/api'
 
+const genesisCodeBlockTheme = EditorView.theme({
+  '&': {
+    backgroundColor: '#ffffff',
+    color: '#334155',
+  },
+  '&.cm-focused': { outline: 'none' },
+  '.cm-scroller': {
+    fontFamily: '"Cascadia Code", "SFMono-Regular", Consolas, monospace',
+    fontSize: '.88rem',
+    lineHeight: '1.75',
+  },
+  '.cm-content': {
+    minHeight: '5rem',
+    padding: '.75rem 2rem .7rem 1.9rem',
+    caretColor: '#2563eb',
+  },
+  '.cm-line': { padding: '0 .45rem' },
+  '.cm-gutters': {
+    border: '0',
+    borderRight: '1px solid #e8edf4',
+    backgroundColor: '#ffffff',
+    color: '#94a3b8',
+  },
+  '.cm-gutterElement': {
+    padding: '0 .9rem 0 1rem',
+    fontSize: '.86rem',
+    fontWeight: '500',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'transparent' },
+  '.cm-activeLineGutter': { color: '#94a3b8' },
+  '.cm-selectionBackground': { backgroundColor: '#dbeafe !important' },
+  '.cm-cursor': { borderLeftColor: '#2563eb' },
+  '.cm-tooltip': {
+    border: '1px solid #d8e1ee',
+    borderRadius: '.4rem',
+    backgroundColor: '#ffffff',
+    color: '#334155',
+    boxShadow: '0 .6rem 1.5rem rgba(15, 23, 42, .12)',
+  },
+}, { dark: false })
+const GenesisToolbar = () => (
+  <DiffSourceToggleWrapper>
+    <UndoRedo />
+    <Separator />
+    <BoldItalicUnderlineToggles />
+    <CodeToggle />
+    <HighlightToggle />
+    <Separator />
+    <StrikeThroughSupSubToggles />
+    <Separator />
+    <ListsToggle />
+    <Separator />
+    <BlockTypeSelect />
+    <Separator />
+    <CreateLink />
+    <InsertImage />
+    <Separator />
+    <InsertTable />
+    <InsertThematicBreak />
+    <Separator />
+    <InsertCodeBlock />
+    <InsertAdmonition />
+    <Separator />
+    <InsertFrontmatter />
+  </DiffSourceToggleWrapper>
+)
+type MarkdownOutlineItem = {
+  level: number
+  text: string
+}
+
+function getMarkdownOutline(markdown: string): MarkdownOutlineItem[] {
+  const lines = markdown.split('\n')
+  const headings: MarkdownOutlineItem[] = []
+  let isInsideCodeFence = false
+
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) {
+      isInsideCodeFence = !isInsideCodeFence
+      continue
+    }
+    if (isInsideCodeFence) continue
+
+    const match = /^(#{1,3})\s+(.+?)\s*#*\s*$/.exec(line)
+    if (!match) continue
+
+    headings.push({
+      level: (match[1] ?? '').length,
+      text: (match[2] ?? '').replace(/[*_~]/g, '').trim(),
+    })
+  }
+
+  return headings
+}
 const mdxEditorChineseText: Record<string, string> = {
   "admonitions.caution": "注意",
   "admonitions.changeType": "选择提示类型",
@@ -480,6 +591,9 @@ function MarkdownEditor({
   tags: BlogTag[]
 }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const editorWorkspaceRef = useRef<HTMLDivElement>(null)
+  const outlineItems = getMarkdownOutline(editor.contentMarkdown)
+  const [isOutlineExpanded, setIsOutlineExpanded] = useState(true)
 
   function importMarkdown(file: File) {
     if (!file.name.toLowerCase().endsWith('.md')) {
@@ -515,7 +629,7 @@ function MarkdownEditor({
         </div>
       </header>
       {feedback && <p className="markdown-editor__feedback" role="status">{feedback}</p>}
-      <div className="markdown-editor__workspace markdown-editor__workspace--mdx">
+      <div className="markdown-editor__workspace markdown-editor__workspace--mdx" ref={editorWorkspaceRef}>
         <section className="markdown-editor__source markdown-editor__source--mdx" aria-label="Markdown 编辑区">
           <MDXEditor
             key={editor.id ?? 'new'}
@@ -534,13 +648,41 @@ function MarkdownEditor({
               tablePlugin(),
               imagePlugin(),
               codeBlockPlugin({ defaultCodeBlockLanguage: 'text' }),
-              codeMirrorPlugin({ codeBlockLanguages: { text: '纯文本', javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', json: 'JSON', bash: 'Bash', css: 'CSS', html: 'HTML' } }),
+              codeMirrorPlugin({ codeBlockLanguages: { text: '纯文本', javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', json: 'JSON', bash: 'Bash', css: 'CSS', html: 'HTML' }, codeMirrorExtensions: [genesisCodeBlockTheme] }),
               diffSourcePlugin({ viewMode: 'rich-text' }),
               markdownShortcutPlugin(),
-              toolbarPlugin({ toolbarContents: () => <KitchenSinkToolbar /> }),
+              toolbarPlugin({ toolbarContents: () => <GenesisToolbar /> }),
             ]}
             spellCheck={false}
           />
+        <aside className={`markdown-editor__outline markdown-editor__outline--mdx ${isOutlineExpanded ? 'markdown-editor__outline--expanded' : ''}`} aria-label="文章目录">
+          <button
+            aria-controls="markdown-editor-outline"
+            aria-expanded={isOutlineExpanded}
+            className="markdown-editor__outline-heading"
+            type="button"
+            onClick={() => setIsOutlineExpanded((isExpanded) => !isExpanded)}
+          >
+            <span>目录</span><small>{isOutlineExpanded ? `${outlineItems.length} 节 · 收起` : '展开'}</small>
+          </button>
+          {isOutlineExpanded && (outlineItems.length > 0 ? (
+            <nav aria-label="文章标题导航" id="markdown-editor-outline">
+              {outlineItems.map((item, index) => (
+                <button
+                  className={`markdown-editor__outline-item markdown-editor__outline-item--${item.level}`}
+                  key={`${item.text}-${index}`}
+                  type="button"
+                  onClick={() => {
+                    const headings = editorWorkspaceRef.current?.querySelectorAll('.genesis-mdx-content h1, .genesis-mdx-content h2, .genesis-mdx-content h3')
+                    headings?.[index]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                >
+                  {item.text}
+                </button>
+              ))}
+            </nav>
+          ) : <p className="markdown-editor__outline-empty" id="markdown-editor-outline">添加一级至三级标题后，会在这里显示目录。</p>)}
+        </aside>
         </section>
       </div>
       {isSettingsOpen && <PostSettingsModal categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onCreateCategory={onCreateCategory} onCreateTag={onCreateTag} onDelete={onDelete} onImportMarkdown={importMarkdown} onSave={onSave} tags={tags} />}
