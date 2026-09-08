@@ -105,3 +105,20 @@ async def test_list_models_rejects_invalid_response() -> None:
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         with pytest.raises(ModelDiscoveryError, match="响应格式无效"):
             await ModelDiscoveryService(settings, client).list_models("grok")
+
+
+@pytest.mark.anyio
+async def test_list_models_logs_upstream_failure_without_api_key(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, text="upstream unavailable")
+
+    api_key = "test-key-must-not-appear-in-logs"
+    settings = Settings(text_openai_api_key=SecretStr(api_key))
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ModelDiscoveryError, match="获取 openai 模型列表失败"):
+            await ModelDiscoveryService(settings, client).list_models("openai")
+
+    assert "获取模型列表时调用上游服务失败：provider=openai" in caplog.text
+    assert api_key not in caplog.text

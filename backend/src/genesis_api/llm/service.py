@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 from urllib.parse import urljoin
 
@@ -8,6 +9,8 @@ from pydantic import SecretStr
 
 from genesis_api.core.config import Settings
 from genesis_api.llm.models import AvailableModel, ProviderModels, ProviderName
+
+logger = logging.getLogger(__name__)
 
 
 class ModelDiscoveryError(RuntimeError):
@@ -38,6 +41,7 @@ class ModelDiscoveryService:
             response.raise_for_status()
             payload = response.json()
         except (httpx.HTTPError, ValueError) as exc:
+            logger.exception("获取模型列表时调用上游服务失败：provider=%s", provider)
             raise ModelDiscoveryError(f"获取 {provider} 模型列表失败") from exc
         finally:
             if owns_client:

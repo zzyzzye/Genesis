@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Annotated
 
@@ -16,6 +17,7 @@ from genesis_api.identity.models import UserRole
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
+logger = logging.getLogger(__name__)
 
 
 @router.post("/chat/stream")
@@ -54,6 +56,11 @@ async def stream_chat(
                 yield f"data: {payload}\n\n"
             yield 'data: {"type":"done"}\n\n'
         except AiProviderError as exc:
+            logger.warning(
+                "AI 流式响应失败：provider=%s，原因=%s",
+                request.provider or settings.text_provider,
+                exc,
+            )
             payload = json.dumps({"type": "error", "message": str(exc)}, ensure_ascii=False)
             yield f"data: {payload}\n\n"
 

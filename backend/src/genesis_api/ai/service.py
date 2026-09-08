@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -9,6 +10,8 @@ import httpx
 from genesis_api.agent.service import AgentPrompt
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class AiProviderError(RuntimeError):
@@ -40,6 +43,7 @@ class AiChatService:
                         if token:
                             yield token
             except httpx.HTTPError as exc:
+                logger.exception("AI 流式请求上游服务失败：provider=%s", provider)
                 raise AiProviderError(f"{provider} 模型请求失败") from exc
 
     def _config(self, provider: str) -> tuple[Any, str, str | None]:
