@@ -16,7 +16,7 @@ export function SystemLanding({ system }: { system: SystemKey }) {
       <header className="site-header">
         <Link className="brand" to="/">Genesis<span>.</span></Link>
         <nav aria-label="主导航"><Link to="/blog">博客</Link><Link to="/tools">工具</Link><Link to="/media">影音</Link></nav>
-        <span className="module-state">{config.index} / {config.title}</span>
+        <div className="header-utilities"><span className="module-state">{config.index} / {config.title}</span><Link className="account-entry" to="/account"><span aria-hidden="true">◌</span> 账户</Link></div>
       </header>
       <main className="module-placeholder">
         <p className="eyebrow">GENESIS / {config.index} / {config.apiPath}</p>

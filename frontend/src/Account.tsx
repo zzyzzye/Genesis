@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken } from './lib/auth'
 
@@ -41,81 +42,103 @@ function AccountForm({
     onRegister(handle, displayName, password)
   }
 
+  const isLogin = mode === 'login'
+
   return (
     <main className="account-shell">
-      <section className="account-card" aria-labelledby="account-title">
-        <a className="studio-back-link" href="/">
-          <span aria-hidden="true">←</span> 返回博客首页
-        </a>
-        <p className="eyebrow">GENESIS / COMMUNITY</p>
-        <h1 id="account-title">{mode === 'login' ? '欢迎回来' : '加入讨论'}</h1>
-        <p className="account-lede">
-          {mode === 'login' ? '登录后参与文章讨论，并维护你的个人资料。' : '创建账号后，即可在文章下留下你的想法。'}
-        </p>
-        <div className="account-tabs" role="tablist" aria-label="账户操作">
-          <button
-            aria-selected={mode === 'login'}
-            className={mode === 'login' ? 'is-active' : ''}
-            onClick={() => onModeChange('login')}
-            role="tab"
-            type="button"
-          >
-            登录
-          </button>
-          <button
-            aria-selected={mode === 'register'}
-            className={mode === 'register' ? 'is-active' : ''}
-            onClick={() => onModeChange('register')}
-            role="tab"
-            type="button"
-          >
-            注册
-          </button>
+      <section className="account-pass" aria-labelledby="account-title">
+        <div className="account-pass__rail">
+          <Link className="account-pass__brand" to="/" aria-label="返回 Genesis 首页">
+            Genesis<span>.</span>
+          </Link>
+          <div className="account-pass__copy">
+            <p className="eyebrow">GENESIS / READER’S PASS</p>
+            <h1 id="account-title">{isLogin ? <>回来，<em>继续阅读。</em></> : <>留下名字，<em>参与讨论。</em></>}</h1>
+            <p>
+              {isLogin
+                ? '在文章、评论和个人记录之间，接上你上次停下的地方。'
+                : '创建一个轻量身份，让每一次值得回应的阅读都留下印记。'}
+            </p>
+          </div>
+          <dl className="account-pass__notes" aria-label="账户可以做什么">
+            <div><dt>01</dt><dd>参与文章讨论</dd></div>
+            <div><dt>02</dt><dd>维护个人资料</dd></div>
+            <div><dt>03</dt><dd>回到正在阅读的内容</dd></div>
+          </dl>
+          <Link className="account-pass__back" to="/blog"><span aria-hidden="true">←</span> 先去读一篇</Link>
         </div>
-        <form className="account-form" onSubmit={submit}>
-          <label htmlFor="account-handle">
-            <span>账号</span>
-            <input
-              autoComplete="username"
-              id="account-handle"
-              minLength={3}
-              onChange={(event) => setHandle(event.currentTarget.value)}
-              placeholder="3–50 位英文、数字、_ 或 -"
-              required
-              value={handle}
-            />
-          </label>
-          {mode === 'register' && (
-            <label htmlFor="account-display-name">
-              <span>昵称</span>
+
+        <div className="account-pass__form-panel">
+          <div className="account-pass__form-heading">
+            <p>{isLogin ? 'MEMBER SIGN IN' : 'CREATE ACCOUNT'}</p>
+            <h2>{isLogin ? '登录你的账户' : '创建阅读身份'}</h2>
+          </div>
+          <div className="account-tabs" role="tablist" aria-label="账户操作">
+            <button
+              aria-selected={isLogin}
+              className={isLogin ? 'is-active' : ''}
+              onClick={() => onModeChange('login')}
+              role="tab"
+              type="button"
+            >
+              登录
+            </button>
+            <button
+              aria-selected={!isLogin}
+              className={!isLogin ? 'is-active' : ''}
+              onClick={() => onModeChange('register')}
+              role="tab"
+              type="button"
+            >
+              注册
+            </button>
+          </div>
+          <form className="account-form" onSubmit={submit}>
+            <label htmlFor="account-handle">
+              <span>账号</span>
               <input
-                autoComplete="nickname"
-                id="account-display-name"
-                onChange={(event) => setDisplayName(event.currentTarget.value)}
-                placeholder="评论中展示的名字"
+                autoComplete="username"
+                id="account-handle"
+                minLength={3}
+                onChange={(event) => setHandle(event.currentTarget.value)}
+                placeholder="3–50 位英文、数字、_ 或 -"
                 required
-                value={displayName}
+                value={handle}
               />
             </label>
-          )}
-          <label htmlFor="account-password">
-            <span>密码</span>
-            <input
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              id="account-password"
-              minLength={8}
-              onChange={(event) => setPassword(event.currentTarget.value)}
-              placeholder="至少 8 位"
-              required
-              type="password"
-              value={password}
-            />
-          </label>
-          {error && <p className="studio-form-error" role="alert">{error}</p>}
-          <button className="primary-button" type="submit">
-            {mode === 'login' ? '登录账户' : '创建账户'} <span aria-hidden="true">→</span>
-          </button>
-        </form>
+            {!isLogin && (
+              <label htmlFor="account-display-name">
+                <span>昵称</span>
+                <input
+                  autoComplete="nickname"
+                  id="account-display-name"
+                  onChange={(event) => setDisplayName(event.currentTarget.value)}
+                  placeholder="评论中展示的名字"
+                  required
+                  value={displayName}
+                />
+              </label>
+            )}
+            <label htmlFor="account-password">
+              <span>密码</span>
+              <input
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
+                id="account-password"
+                minLength={8}
+                onChange={(event) => setPassword(event.currentTarget.value)}
+                placeholder="至少 8 位"
+                required
+                type="password"
+                value={password}
+              />
+            </label>
+            {error && <p className="studio-form-error" role="alert">{error}</p>}
+            <button className="primary-button" type="submit">
+              {isLogin ? '进入 Genesis' : '创建并进入'} <span aria-hidden="true">→</span>
+            </button>
+          </form>
+          <p className="account-pass__privacy">仅使用必要的账户信息；不会公开你的登录资料。</p>
+        </div>
       </section>
     </main>
   )

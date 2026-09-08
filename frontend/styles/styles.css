@@ -3372,3 +3372,239 @@ nav span {
   width: .95rem;
   height: .95rem;
 }
+
+/* 账户页：将登录设计成一张阅读通行证，而非普通居中表单。 */
+.account-shell {
+  position: relative;
+  overflow: hidden;
+  min-height: 100dvh;
+  padding: clamp(1rem, 3vw, 3rem);
+  background:
+    linear-gradient(120deg, rgb(15 32 48 / 94%), rgb(27 51 66 / 92%)),
+    #17323f;
+}
+
+.account-shell::before,
+.account-shell::after {
+  position: absolute;
+  border: 1px solid rgb(239 222 175 / 22%);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.account-shell::before {
+  width: min(62vw, 53rem);
+  height: min(62vw, 53rem);
+  top: -25rem;
+  left: -21rem;
+}
+
+.account-shell::after {
+  width: min(42vw, 36rem);
+  height: min(42vw, 36rem);
+  right: -16rem;
+  bottom: -18rem;
+}
+
+.account-pass {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(17rem, 1.1fr) minmax(20rem, .9fr);
+  width: min(100%, 68rem);
+  min-height: min(43rem, calc(100dvh - clamp(2rem, 6vw, 6rem)));
+  overflow: hidden;
+  border: 1px solid rgb(255 253 249 / 23%);
+  border-radius: 1rem;
+  background: #fbf8ef;
+  box-shadow: 0 2rem 5rem rgb(3 17 25 / 35%);
+}
+
+.account-pass__rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: clamp(2rem, 5vw, 4.25rem);
+  color: #f8f2e6;
+  background:
+    linear-gradient(145deg, rgb(20 51 65 / 96%), rgb(15 35 47 / 98%)),
+    #153746;
+}
+
+.account-pass__brand {
+  align-self: flex-start;
+  color: #f8f2e6;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -.07em;
+}
+
+.account-pass__brand span { color: #e7b96d; }
+
+.account-pass__copy { margin-top: auto; padding-top: 4rem; }
+.account-pass__copy .eyebrow { color: #e7b96d; }
+.account-pass__copy h1 {
+  max-width: 7ch;
+  margin: 1rem 0 1.35rem;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: clamp(3rem, 5.4vw, 5.1rem);
+  font-weight: 500;
+  letter-spacing: -.09em;
+  line-height: 1.02;
+}
+.account-pass__copy h1 em { color: #e7b96d; font-style: italic; }
+.account-pass__copy > p:last-child {
+  max-width: 24rem;
+  margin: 0;
+  color: #c8d6d3;
+  font-size: .96rem;
+  line-height: 1.85;
+}
+.account-pass__notes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .85rem;
+  margin: 3.5rem 0 1.35rem;
+}
+.account-pass__notes div { border-top: 1px solid rgb(240 231 208 / 27%); padding-top: .7rem; }
+.account-pass__notes dt { color: #e7b96d; font-size: .68rem; font-weight: 800; letter-spacing: .08em; }
+.account-pass__notes dd { margin: .32rem 0 0; color: #d9e0d9; font-size: .72rem; line-height: 1.45; }
+.account-pass__back {
+  align-self: flex-start;
+  color: #aebfbd;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.account-pass__back:hover { color: #f8f2e6; }
+.account-pass__back span { margin-right: .35rem; color: #e7b96d; }
+
+.account-pass__form-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(2rem, 5vw, 4.5rem);
+  background: #fbf8ef;
+}
+.account-pass__form-heading p {
+  margin: 0 0 .55rem;
+  color: #b66f33;
+  font-size: .66rem;
+  font-weight: 800;
+  letter-spacing: .14em;
+}
+.account-pass__form-heading h2 {
+  margin: 0;
+  color: #193947;
+  font-family: Georgia, "Noto Serif SC", serif;
+  font-size: clamp(2rem, 3.2vw, 2.85rem);
+  font-weight: 500;
+  letter-spacing: -.065em;
+}
+.account-pass .account-tabs { margin: 2.25rem 0 1.7rem; background: #e8e3d6; }
+.account-pass .account-tabs button.is-active { color: #173b49; box-shadow: 0 .2rem .8rem rgb(16 43 54 / 10%); }
+.account-pass .account-form { gap: 1.1rem; }
+.account-pass .account-form label { color: #35515a; font-size: .76rem; letter-spacing: .04em; }
+.account-pass .account-form input { border-color: #d6d0c1; background: #fffdf8; }
+.account-pass .primary-button { margin-top: .8rem; border-color: #173b49; background: #173b49; }
+.account-pass .primary-button:hover:not(:disabled) { border-color: #b66f33; background: #b66f33; }
+.account-pass__privacy { margin: 1.25rem 0 0; color: #8b877c; font-size: .72rem; line-height: 1.6; }
+
+.header-utilities {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: .85rem;
+}
+.header-utilities .module-state { justify-self: auto; }
+.account-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .42rem .65rem;
+  border: 1px solid #d9d2c6;
+  border-radius: 999px;
+  color: #3a4752;
+  font-size: .76rem;
+  font-weight: 750;
+  line-height: 1;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+.account-entry span { color: #b66f33; font-size: 1rem; line-height: .7; }
+.account-entry:hover { border-color: #b66f33; background: #fffaf0; color: #9b5725; }
+.account-entry:focus-visible,
+.account-pass__brand:focus-visible,
+.account-pass__back:focus-visible { outline: 3px solid rgb(231 185 109 / 56%); outline-offset: 4px; }
+
+@media (max-width: 680px) {
+  .page .site-header { grid-template-columns: 1fr auto; }
+  .page .site-header .brand { justify-self: start; }
+  .header-utilities { gap: .55rem; }
+  .header-utilities .module-state { display: none; }
+  .account-entry { padding: .42rem .58rem; }
+  .account-shell { display: block; padding: 0; }
+  .account-pass { grid-template-columns: 1fr; min-height: 100dvh; border: 0; border-radius: 0; }
+  .account-pass__rail { min-height: 28rem; padding: 1.6rem 1.45rem; }
+  .account-pass__copy { padding-top: 3rem; }
+  .account-pass__copy h1 { font-size: clamp(3rem, 14vw, 4.4rem); }
+  .account-pass__notes { margin-top: 2.25rem; }
+  .account-pass__form-panel { padding: 2.25rem 1.45rem 2.5rem; }
+}
+
+/* 账户页浅色化：保留“阅读通行证”的双栏结构，去除深色底与高反差面板。 */
+.account-shell {
+  background:
+    radial-gradient(circle at 8% 12%, rgb(220 127 84 / 18%), transparent 21rem),
+    radial-gradient(circle at 94% 88%, rgb(220 194 145 / 28%), transparent 24rem),
+    #f5f0e8;
+}
+.account-shell::before,
+.account-shell::after { border-color: rgb(184 113 73 / 18%); }
+.account-pass {
+  border-color: #ddd2c4;
+  background: #fffdf8;
+  box-shadow: 0 1.4rem 4rem rgb(89 63 40 / 12%);
+}
+.account-pass__rail {
+  color: #30424a;
+  background:
+    linear-gradient(145deg, rgb(247 232 209 / 96%), rgb(239 219 191 / 98%)),
+    #f0dcc0;
+}
+.account-pass__brand { color: #30424a; }
+.account-pass__brand span,
+.account-pass__copy .eyebrow,
+.account-pass__copy h1 em,
+.account-pass__notes dt,
+.account-pass__back span { color: #c96a42; }
+.account-pass__copy h1 { color: #30424a; }
+.account-pass__copy > p:last-child { color: #607177; }
+.account-pass__notes div { border-top-color: rgb(78 100 105 / 20%); }
+.account-pass__notes dd { color: #52676d; }
+.account-pass__back { color: #687b80; }
+.account-pass__back:hover { color: #30424a; }
+.account-pass__form-panel { background: #fffdf8; }
+.account-pass__form-heading p { color: #c96a42; }
+.account-pass__form-heading h2 { color: #30424a; }
+.account-pass .account-tabs { background: #f0e9df; }
+.account-pass .account-tabs button.is-active { color: #30424a; box-shadow: 0 .2rem .8rem rgb(96 68 45 / 9%); }
+.account-pass .account-form label { color: #4e656a; }
+.account-pass .account-form input {
+  border-color: #ded2c2;
+  background: #fffefa;
+}
+.account-pass .account-form input:focus {
+  border-color: #c96a42;
+  background: #fffefa;
+  box-shadow: 0 0 0 3px rgb(201 106 66 / 15%);
+}
+.account-pass .primary-button { border-color: #c96a42; background: #c96a42; color: #fffaf3; }
+.account-pass .primary-button:hover:not(:disabled) { border-color: #a95134; background: #a95134; }
+.account-pass__privacy { color: #8b8377; }
+.account-entry { border-color: #dfd3c5; color: #53656b; background: #fffdf9; }
+.account-entry span { color: #c96a42; }
+.account-entry:hover { border-color: #c96a42; background: #fff7ec; color: #a95134; }
+.account-entry:focus-visible,
+.account-pass__brand:focus-visible,
+.account-pass__back:focus-visible { outline-color: rgb(201 106 66 / 45%); }

@@ -7,12 +7,11 @@ function Home() {
         <Link className="brand" to="/">Genesis<span>.</span></Link>
         <nav aria-label="主导航">
           <Link to="/blog">博客</Link>
-          <Link to="/account">账户</Link>
           <Link to="/blog/studio">博客 Studio</Link>
           <Link to="/tools">工具</Link>
           <Link to="/media">影音</Link>
         </nav>
-        <span className="module-state">00 / Genesis</span>
+        <div className="header-utilities"><span className="module-state">00 / Genesis</span><Link className="account-entry" to="/account"><span aria-hidden="true">◌</span> 账户</Link></div>
       </header>
       <main>
         <section className="intro home-intro" aria-labelledby="home-title">

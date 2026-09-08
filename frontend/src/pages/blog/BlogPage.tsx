@@ -125,12 +125,11 @@ function PublicBlog() {
           <Link to="/blog" onClick={closeArticle}>
             博客
           </Link>
-          <Link to="/account">账户</Link>
           <Link to="/blog/studio">博客 Studio</Link>
           <Link to="/tools">工具</Link>
           <Link to="/media">影音</Link>
         </nav>
-        <span className="module-state">01 / Blog</span>
+        <div className="header-utilities"><span className="module-state">01 / Blog</span><Link className="account-entry" to="/account"><span aria-hidden="true">◌</span> 账户</Link></div>
       </header>
 
       <main>
