@@ -18,13 +18,21 @@ function ProviderIcon({ provider }: { provider: AiProvider }) {
   }
   return <svg className={`provider-icon provider-icon--${provider}`} {...common} aria-label="Claude / Anthropic 官方标识"><path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z" /></svg>
 }
-
-import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider } from '../lib/api'
+import {
+  AiChatRunTerminalError,
+  createAiChatRun,
+  getProviderModels,
+  streamAiChatRun,
+  type AiChatMessage,
+  type AiProvider,
+} from '../lib/api'
 import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
 
 type AssistantMessage = { role: 'assistant' | 'user'; content: string }
 type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string; status: 'draft' | 'published' }
 type AssistantPageContext = { route: string; section: string; pageType: 'overview' | 'posts_list' | 'post_editor' | 'post_preview' | 'section' }
+type ActiveAssistantRun = { id: string; assistantMessageIndex: number }
+type AssistantSession = { isOpen: boolean; messages: AssistantMessage[]; activeRun: ActiveAssistantRun | null }
 
 const pageLabels: Record<AssistantPageContext['pageType'], string> = {
   overview: '内容总览',
@@ -41,13 +49,14 @@ function initialAssistantMessages(): AssistantMessage[] {
   return [{ role: 'assistant', content: '你好，我是 Genesis 助手。\n我可以帮你构思、改写和整理内容。' }]
 }
 
-function readAssistantSession(): { isOpen: boolean; messages: AssistantMessage[] } {
-  if (typeof window === 'undefined') return { isOpen: false, messages: initialAssistantMessages() }
+function readAssistantSession(): AssistantSession {
+  const fallback = { isOpen: false, messages: initialAssistantMessages(), activeRun: null }
+  if (typeof window === 'undefined') return fallback
 
   try {
     const stored = JSON.parse(window.sessionStorage.getItem(assistantSessionKey) ?? 'null') as unknown
-    if (!stored || typeof stored !== 'object') return { isOpen: false, messages: initialAssistantMessages() }
-    const value = stored as { isOpen?: unknown; messages?: unknown }
+    if (!stored || typeof stored !== 'object') return fallback
+    const value = stored as { isOpen?: unknown; messages?: unknown; activeRun?: unknown }
     const messages = Array.isArray(value.messages)
       ? value.messages.filter((message): message is AssistantMessage => (
         typeof message === 'object'
@@ -56,9 +65,18 @@ function readAssistantSession(): { isOpen: boolean; messages: AssistantMessage[]
         && typeof (message as AssistantMessage).content === 'string'
       ))
       : []
-    return { isOpen: value.isOpen === true, messages: messages.length > 0 ? messages : initialAssistantMessages() }
+    const normalizedMessages = messages.length > 0 ? messages : initialAssistantMessages()
+    const activeCandidate = value.activeRun
+    const activeRun = (
+      typeof activeCandidate === 'object'
+      && activeCandidate !== null
+      && typeof (activeCandidate as ActiveAssistantRun).id === 'string'
+      && Number.isInteger((activeCandidate as ActiveAssistantRun).assistantMessageIndex)
+      && normalizedMessages[(activeCandidate as ActiveAssistantRun).assistantMessageIndex]?.role === 'assistant'
+    ) ? activeCandidate as ActiveAssistantRun : null
+    return { isOpen: value.isOpen === true, messages: normalizedMessages, activeRun }
   } catch {
-    return { isOpen: false, messages: initialAssistantMessages() }
+    return fallback
   }
 }
 
@@ -66,18 +84,37 @@ function MarkdownMessage({ content }: { content: string }) {
   return <div className="studio-assistant__markdown"><Markdown remarkPlugins={[remarkGfm]}>{content || '正在生成…'}</Markdown></div>
 }
 
+function updateAssistantMessage(
+  messages: AssistantMessage[],
+  index: number,
+  update: (content: string) => string,
+): AssistantMessage[] {
+  if (messages[index]?.role !== 'assistant') return messages
+  return messages.map((message, messageIndex) => (
+    messageIndex === index ? { ...message, content: update(message.content) } : message
+  ))
+}
+
 export function StudioAssistant({ page, editor }: { page: AssistantPageContext; editor: AssistantEditorContext | null }) {
-  const [isOpen, setIsOpen] = useState(() => readAssistantSession().isOpen)
+  const [initialSession] = useState(readAssistantSession)
+  const [isOpen, setIsOpen] = useState(initialSession.isOpen)
+  const [messages, setMessages] = useState<AssistantMessage[]>(initialSession.messages)
+  const [activeRun, setActiveRun] = useState<ActiveAssistantRun | null>(initialSession.activeRun)
+  const [isStarting, setIsStarting] = useState(false)
+  const [streamStatus, setStreamStatus] = useState<string | null>(initialSession.activeRun ? '正在恢复输出…' : null)
   const [draft, setDraft] = useState('')
-  const [isBusy, setIsBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [provider, setProvider] = useState<AiProvider>('openai')
   const [model, setModel] = useState('')
   const [models, setModels] = useState<{ id: string; name: string | null }[]>([])
   const modelsCache = useRef<Partial<Record<AiProvider, { id: string; name: string | null }[]>>>({})
   const selectedModels = useRef<Partial<Record<AiProvider, string>>>({})
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  const shouldStickToBottomRef = useRef(true)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
+  const isBusy = isStarting || activeRun !== null
   const suggestions = editor ? ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '为当前文章生成更好的标题'] : defaultSuggestions
+
   useEffect(() => {
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!token || !isOpen) return
@@ -107,17 +144,89 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     return () => { cancelled = true }
   }, [isOpen, provider])
 
-  const [messages, setMessages] = useState<AssistantMessage[]>(() => readAssistantSession().messages)
+  useEffect(() => {
+    window.sessionStorage.setItem(
+      assistantSessionKey,
+      JSON.stringify({ isOpen, messages, activeRun }),
+    )
+  }, [activeRun, isOpen, messages])
 
   useEffect(() => {
-    window.sessionStorage.setItem(assistantSessionKey, JSON.stringify({ isOpen, messages }))
+    const body = bodyRef.current
+    if (!body || !isOpen || !shouldStickToBottomRef.current) return
+    const frame = window.requestAnimationFrame(() => {
+      body.scrollTop = body.scrollHeight
+    })
+    return () => window.cancelAnimationFrame(frame)
   }, [isOpen, messages])
+
+  useEffect(() => {
+    if (!activeRun || !isOpen) return
+    const run = activeRun
+    const token = getStoredAuthToken(studioAuthTokenKey)
+    if (!token) return
+
+    let cancelled = false
+    const controller = new AbortController()
+
+    async function consumeRun() {
+      setError(null)
+      setStreamStatus('正在恢复输出…')
+      while (!cancelled) {
+        try {
+          const result = await streamAiChatRun(token!, run.id, {
+            onSnapshot: (content) => {
+              setMessages((current) => updateAssistantMessage(
+                current,
+                run.assistantMessageIndex,
+                () => content,
+              ))
+              setStreamStatus('正在生成…')
+            },
+            onToken: (content) => {
+              setMessages((current) => updateAssistantMessage(
+                current,
+                run.assistantMessageIndex,
+                (existing) => existing + content,
+              ))
+              setStreamStatus('正在生成…')
+            },
+          }, controller.signal)
+          if (cancelled) return
+          if (result === 'completed') {
+            setActiveRun((current) => current?.id === run.id ? null : current)
+            setStreamStatus(null)
+            setError(null)
+            return
+          }
+          setStreamStatus('连接中断，正在恢复…')
+        } catch (caught) {
+          if (cancelled || (caught instanceof DOMException && caught.name === 'AbortError')) return
+          if (caught instanceof AiChatRunTerminalError) {
+            setError(caught.message)
+            setActiveRun((current) => current?.id === run.id ? null : current)
+            setStreamStatus(null)
+            return
+          }
+          setStreamStatus('连接中断，正在恢复…')
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 800))
+      }
+    }
+
+    void consumeRun()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [activeRun, isOpen])
 
   function startNewConversation() {
     if (isBusy) return
     setMessages(initialAssistantMessages())
     setDraft('')
     setError(null)
+    setStreamStatus(null)
     setModelMenuOpen(false)
   }
 
@@ -127,12 +236,15 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!content || isBusy || !token) return
     const nextMessages: AiChatMessage[] = [...messages, { role: 'user', content }]
+    const assistantMessageIndex = nextMessages.length
+    shouldStickToBottomRef.current = true
     setMessages([...nextMessages, { role: 'assistant', content: '' }])
     setDraft('')
     setError(null)
-    setIsBusy(true)
+    setStreamStatus('正在创建生成任务…')
+    setIsStarting(true)
     try {
-      await streamAiChat(token, {
+      const run = await createAiChatRun(token, {
         surface: 'studio',
         messages: nextMessages,
         provider,
@@ -149,17 +261,15 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
             editor_status: editor.status,
           } : {}),
         },
-      }, (tokenText) => {
-        setMessages((current) => {
-          const last = current.at(-1)
-          if (!last || last.role !== 'assistant') return current
-          return [...current.slice(0, -1), { ...last, content: last.content + tokenText }]
-        })
       })
+      setActiveRun({ id: run.id, assistantMessageIndex })
+      setStreamStatus('正在生成…')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'AI 请求失败，请稍后再试。')
+      setStreamStatus(null)
+      setMessages((current) => current.filter((_, index) => index !== assistantMessageIndex))
     } finally {
-      setIsBusy(false)
+      setIsStarting(false)
     }
   }
 
@@ -185,7 +295,15 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
               </button>
             </div>
           </header>
-          <div className="studio-assistant__body">
+          <div
+            className="studio-assistant__body"
+            ref={bodyRef}
+            onScroll={(event) => {
+              const element = event.currentTarget
+              const distanceToBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+              shouldStickToBottomRef.current = distanceToBottom <= 32
+            }}
+          >
             <div className="studio-assistant__context"><StudioIcon name="spark" /> {editor ? `当前文章：${editor.title || '未命名草稿'}` : `当前页面：${pageLabels[page.pageType]}`}</div>
             <div className="studio-assistant__messages">
               {messages.map((message, index) => (
@@ -223,7 +341,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
                 <div className="studio-assistant__provider-tabs">{(['openai', 'grok', 'gemini', 'claude'] as AiProvider[]).map((item) => <button key={item} type="button" className={provider === item ? 'is-active' : ''} aria-label={`切换到 ${item} 模型`} onClick={() => { setProvider(item); setModels(modelsCache.current[item] ?? []); setModel(selectedModels.current[item] ?? modelsCache.current[item]?.[0]?.id ?? '') }}><ProviderIcon provider={item} /><span>{item}</span></button>)}</div>
                 {models.length === 0 ? <span className="studio-assistant__model-empty">暂无可用模型</span> : models.map((item) => <button key={item.id} type="button" onClick={() => { selectedModels.current[provider] = item.id; setModel(item.id); setModelMenuOpen(false) }}>{item.name || item.id}</button>)}
               </div>}
-              {(isBusy || error) && <span className="studio-assistant__composer-status">{isBusy ? '正在生成…' : error}</span>}
+              {(isBusy || error || streamStatus) && <span className="studio-assistant__composer-status">{error ?? streamStatus ?? '正在生成…'}</span>}
               <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>
             </div>
           </form>
@@ -237,4 +355,3 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     </div>
   )
 }
-

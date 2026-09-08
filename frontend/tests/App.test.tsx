@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../src/App'
@@ -137,6 +137,17 @@ describe('App', () => {
           headers: { 'Content-Type': 'application/json' },
         }))
       }
+      if (url.includes('/ai/chat/runs/resumable-run/stream')) {
+        return Promise.resolve(new Response([
+          'data: {"type":"snapshot","run_id":"resumable-run","content":"恢复后的完整回复","sequence":2}',
+          '',
+          'data: {"type":"done","sequence":2}',
+          '',
+        ].join('\n'), {
+          status: 200,
+          headers: { 'Content-Type': 'text/event-stream' },
+        }))
+      }
       return Promise.resolve(new Response(null, { status: 404 }))
     })
 
@@ -179,18 +190,24 @@ describe('App', () => {
 
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('test-token')
     window.sessionStorage.setItem('genesis-studio-ai-conversation', JSON.stringify({
-      isOpen: true,
+      isOpen: false,
       messages: [
         { role: 'assistant', content: '上一轮回复' },
         { role: 'user', content: '请继续保留这段对话' },
+        { role: 'assistant', content: '刷新前的部分回复' },
       ],
+      activeRun: { id: 'resumable-run', assistantMessageIndex: 2 },
     }))
     view.unmount()
     window.history.pushState({}, '', '/blog/studio')
     render(<App />)
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Genesis AI 助手' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '打开 Genesis AI 助手' }))
     expect(screen.getByRole('region', { name: 'Genesis AI 助手' })).toBeInTheDocument()
     expect(screen.getByText('请继续保留这段对话')).toBeInTheDocument()
+    expect(await screen.findByText('恢复后的完整回复')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: '新建对话' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: '新建对话' }))
     expect(screen.queryByText('请继续保留这段对话')).not.toBeInTheDocument()
     expect(screen.getByText('你好，我是 Genesis 助手。', { exact: false })).toBeInTheDocument()

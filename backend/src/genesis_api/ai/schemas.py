@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+from genesis_api.ai.models import AiChatRunStatus
 
 AiSurface = Literal["blog", "studio", "tools"]
 AiProvider = Literal["openai", "grok", "gemini", "claude"]
@@ -38,6 +41,19 @@ class AiChatRequest(BaseModel):
     context: AiContext | None = None
     provider: AiProvider | None = None
     model: str | None = None
+
+
+class AiChatRunCreated(BaseModel):
+    id: UUID
+    status: AiChatRunStatus
+
+
+class AiChatRunSnapshot(BaseModel):
+    id: UUID
+    status: AiChatRunStatus
+    content: str
+    sequence: int
+    error: str | None = None
 
 
 class AiError(BaseModel):

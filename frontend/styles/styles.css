@@ -3343,6 +3343,50 @@ nav span {
   margin: 0;
 }
 
+/* AI 对话内容严格限制在面板内：长文本和代码块换行，不产生横向位移。 */
+.studio-assistant__panel,
+.studio-assistant__body,
+.studio-assistant__messages,
+.studio-assistant__message,
+.studio-assistant__message > p,
+.studio-assistant__message > .studio-assistant__markdown {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.studio-assistant__panel {
+  contain: layout paint;
+}
+.studio-assistant__body {
+  width: 100%;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+.studio-assistant__messages,
+.studio-assistant__message {
+  width: 100%;
+}
+.studio-assistant__markdown {
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.studio-assistant__markdown pre {
+  max-width: 100%;
+  overflow-x: hidden;
+  border: 1px solid #dce4df;
+  background: #f4f7f3;
+  color: #2d4247;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.studio-assistant__markdown pre code {
+  white-space: inherit;
+  overflow-wrap: inherit;
+  word-break: inherit;
+}
+
 /* 常驻对话工具：新建对话与关闭操作保持并列且不挤压标题。 */
 .studio-assistant__header-actions {
   display: flex;

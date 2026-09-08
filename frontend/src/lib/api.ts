@@ -256,24 +256,60 @@ export interface AiChatContext {
   selected_text?: string
 }
 
-export async function streamAiChat(
-  token: string,
-  request: {
-    surface: AiSurface
-    messages: AiChatMessage[]
-    context?: AiChatContext
-    provider?: AiProvider
-    model?: string
-  },
-  onToken: (content: string) => void,
-): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/ai/chat/stream`, {
+export interface AiChatRequest {
+  surface: AiSurface
+  messages: AiChatMessage[]
+  context?: AiChatContext
+  provider?: AiProvider
+  model?: string
+}
+
+export type AiChatRunStatus = 'pending' | 'running' | 'completed' | 'failed'
+
+export interface AiChatRunCreated {
+  id: string
+  status: AiChatRunStatus
+}
+
+export interface AiChatRunSnapshot {
+  id: string
+  status: AiChatRunStatus
+  content: string
+  sequence: number
+  error: string | null
+}
+
+export class AiChatRunTerminalError extends Error {}
+
+export function createAiChatRun(token: string, chatRequest: AiChatRequest): Promise<AiChatRunCreated> {
+  return request<AiChatRunCreated>('/ai/chat/runs', {
     method: 'POST',
     headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify(request),
+    body: JSON.stringify(chatRequest),
+  })
+}
+
+export function getAiChatRun(token: string, runId: string): Promise<AiChatRunSnapshot> {
+  return request<AiChatRunSnapshot>(`/ai/chat/runs/${encodeURIComponent(runId)}`, {
+    headers: authHeaders(token),
+  })
+}
+
+export async function streamAiChatRun(
+  token: string,
+  runId: string,
+  handlers: {
+    onSnapshot: (content: string, sequence: number) => void
+    onToken: (content: string, sequence: number) => void
+  },
+  signal?: AbortSignal,
+): Promise<'completed' | 'disconnected'> {
+  const response = await fetch(`${apiBaseUrl}/ai/chat/runs/${encodeURIComponent(runId)}/stream`, {
+    headers: authHeaders(token),
+    signal,
   })
   if (!response.ok || !response.body) {
-    throw new Error(`AI 请求失败：HTTP ${response.status}`)
+    throw new AiChatRunTerminalError(`AI 续传失败：HTTP ${response.status}`)
   }
 
   const reader = response.body.getReader()
@@ -284,13 +320,52 @@ export async function streamAiChat(
     buffer += decoder.decode(value, { stream: !done })
     const events = buffer.split('\n\n')
     buffer = events.pop() ?? ''
-    for (const event of events) {
-      const line = event.split('\n').find((item) => item.startsWith('data: '))
-      if (!line) continue
-      const payload = JSON.parse(line.slice(6)) as { type: string; content?: string; message?: string }
-      if (payload.type === 'token' && payload.content) onToken(payload.content)
-      if (payload.type === 'error') throw new Error(payload.message ?? 'AI 生成失败')
+    if (done && buffer.trim()) {
+      events.push(buffer)
+      buffer = ''
     }
-    if (done) break
+    for (const event of events) {
+      const data = event
+        .split('\n')
+        .filter((line) => line.startsWith('data:'))
+        .map((line) => line.slice(5).trimStart())
+        .join('\n')
+      if (!data) continue
+      const payload = JSON.parse(data) as {
+        type: string
+        content?: string
+        message?: string
+        sequence?: number
+      }
+      const sequence = payload.sequence ?? 0
+      if (payload.type === 'snapshot') handlers.onSnapshot(payload.content ?? '', sequence)
+      if (payload.type === 'token' && payload.content) handlers.onToken(payload.content, sequence)
+      if (payload.type === 'error') {
+        throw new AiChatRunTerminalError(payload.message ?? 'AI 生成失败')
+      }
+      if (payload.type === 'done') return 'completed'
+    }
+    if (done) return 'disconnected'
   }
+}
+
+export async function streamAiChat(
+  token: string,
+  chatRequest: AiChatRequest,
+  onToken: (content: string) => void,
+): Promise<void> {
+  const run = await createAiChatRun(token, chatRequest)
+  let renderedContent = ''
+  const result = await streamAiChatRun(token, run.id, {
+    onSnapshot: (content) => {
+      const delta = content.startsWith(renderedContent) ? content.slice(renderedContent.length) : content
+      renderedContent = content
+      if (delta) onToken(delta)
+    },
+    onToken: (content) => {
+      renderedContent += content
+      onToken(content)
+    },
+  })
+  if (result === 'disconnected') throw new Error('AI 流式连接意外中断')
 }
