@@ -1,140 +1,66 @@
 from __future__ import annotations
 
-import json
 import logging
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, cast
 
-import httpx
+from langgraph_sdk import get_client
 
-from genesis_api.agent.service import AgentPrompt
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
 
 logger = logging.getLogger(__name__)
 
 
-class AiProviderError(RuntimeError):
-    """文本模型调用失败。"""
+class LangGraphAgentService:
+    """通过 LangGraph SDK 调用独立 Agent，不向浏览器暴露 Agent 地址。"""
 
-
-class AiChatService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    async def stream(self, request: AiChatRequest) -> AsyncIterator[str]:
-        provider = request.provider or self.settings.text_provider
-        api_key, base_url, configured_model = self._config(provider)
-        if api_key is None or not api_key.get_secret_value().strip():
-            raise AiProviderError(f"未配置 {provider} 的 API Key")
-        model = request.model or configured_model
-        if not model:
-            raise AiProviderError(f"未配置 {provider} 的模型名称")
-
-        payload = self._payload(request, model, provider)
-        headers = self._headers(provider, api_key.get_secret_value())
-        url = self._url(provider, base_url)
-        async with httpx.AsyncClient(timeout=None) as client:
-            try:
-                async with client.stream("POST", url, headers=headers, json=payload) as response:
-                    response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        token = self._parse_line(provider, line)
-                        if token:
-                            yield token
-            except httpx.HTTPError as exc:
-                logger.exception("AI 流式请求上游服务失败：provider=%s", provider)
-                raise AiProviderError(f"{provider} 模型请求失败") from exc
-
-    def _config(self, provider: str) -> tuple[Any, str, str | None]:
-        if provider == "openai":
-            return (
-                self.settings.text_openai_api_key,
-                self.settings.text_openai_base_url,
-                self.settings.text_openai_model,
+    async def stream(
+        self, request: AiChatRequest, *, thread_id: str
+    ) -> AsyncIterator[str]:
+        headers = {}
+        if self.settings.agent_internal_token is not None:
+            headers["x-genesis-internal-token"] = (
+                self.settings.agent_internal_token.get_secret_value()
             )
-        if provider == "grok":
-            return (
-                self.settings.text_grok_api_key,
-                self.settings.text_grok_base_url,
-                self.settings.text_grok_model,
-            )
-        if provider == "gemini":
-            return (
-                self.settings.text_gemini_api_key,
-                self.settings.text_gemini_base_url,
-                self.settings.text_gemini_model,
-            )
-        return (
-            self.settings.text_claude_api_key,
-            self.settings.text_claude_base_url,
-            self.settings.text_claude_model,
-        )
-
-    @staticmethod
-    def _url(provider: str, base_url: str) -> str:
-        base = base_url.rstrip("/")
-        if provider in ("openai", "grok", "gemini") and not base.endswith("/v1"):
-            base = f"{base}/v1"
-        return f"{base}/messages" if provider == "claude" else f"{base}/chat/completions"
-
-    @staticmethod
-    def _headers(provider: str, api_key: str) -> dict[str, str]:
-        if provider == "claude":
-            return {
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            }
-        return {"authorization": f"Bearer {api_key}", "content-type": "application/json"}
-
-    def _payload(self, request: AiChatRequest, model: str, provider: str) -> dict[str, Any]:
-        system = AgentPrompt.system_message(request)
-        if request.context:
-            context = request.context.model_dump(exclude_none=True)
-            system += f"\n当前页面上下文：{json.dumps(context, ensure_ascii=False)}"
-        messages = [{"role": item.role, "content": item.content} for item in request.messages]
-        if provider == "claude":
-            return {
-                "model": model,
-                "system": system,
-                "messages": messages,
-                "max_tokens": self.settings.text_max_tokens,
-                "temperature": self.settings.text_temperature,
-                "stream": True,
-            }
-        return {
-            "model": model,
-            "messages": [{"role": "system", "content": system}, *messages],
-            "max_tokens": self.settings.text_max_tokens,
-            "temperature": self.settings.text_temperature,
-            "stream": True,
+        client = get_client(url=self.settings.agent_url, headers=headers or None, timeout=None)
+        input_data = {
+            "messages": [item.model_dump() for item in request.messages],
+            "context": request.context.model_dump(exclude_none=True) if request.context else {},
         }
+        async for part in client.runs.stream(
+            thread_id,
+            "genesis_agent",
+            input=cast(Any, input_data),
+            stream_mode="messages",
+        ):
+            for text in _extract_stream_text(part.data):
+                yield text
 
-    @staticmethod
-    def _parse_line(provider: str, line: str) -> str | None:
-        if not line or line.startswith(":"):
-            return None
-        data = line.removeprefix("data: ").strip()
-        if data == "[DONE]":
-            return None
-        try:
-            payload = json.loads(data)
-        except json.JSONDecodeError:
-            return None
-        if not isinstance(payload, dict):
-            return None
-        if provider == "claude":
-            delta = payload.get("delta")
-            if payload.get("type") == "content_block_delta" and isinstance(delta, dict):
-                text = delta.get("text")
-                return text if isinstance(text, str) else None
-            return None
-        choices = payload.get("choices")
-        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
-            return None
-        delta = choices[0].get("delta")
-        if not isinstance(delta, dict):
-            return None
-        text = delta.get("content")
-        return text if isinstance(text, str) else None
+
+def _extract_stream_text(data: object) -> list[str]:
+    """兼容 LangGraph messages/v1 与 messages/v2 的序列化形态。"""
+    if isinstance(data, dict):
+        content = data.get("content")
+        if isinstance(content, str):
+            return [content]
+        if isinstance(content, list):
+            return [
+                block["text"]
+                for block in content
+                if isinstance(block, dict) and isinstance(block.get("text"), str)
+            ]
+        return []
+    if isinstance(data, (list, tuple)):
+        texts: list[str] = []
+        for item in data:
+            texts.extend(_extract_stream_text(item))
+        return texts
+    return []
+
+
+class AiProviderError(RuntimeError):
+    """文本模型调用失败。"""

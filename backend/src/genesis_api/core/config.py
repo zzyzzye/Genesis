@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     text_temperature: float = 0.7
     text_max_tokens: int = 4096
 
+    agent_url: str = "http://agent:8123"
+    agent_internal_token: SecretStr | None = None
+
     @model_validator(mode="after")
     def validate_production_secrets(self) -> Settings:
         if (

@@ -58,3 +58,9 @@ class AiChatRunSnapshot(BaseModel):
 
 class AiError(BaseModel):
     error: str
+
+class AiActionConfirmation(BaseModel):
+    """用户确认 Agent 提议后，由后端执行的最小命令。"""
+
+    action: Literal["create_draft", "update_post", "delete_post", "publish_post"]
+    payload: dict[str, object] = Field(default_factory=dict)

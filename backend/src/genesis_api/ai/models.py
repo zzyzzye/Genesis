@@ -31,6 +31,9 @@ class AiChatRun(Base):
     surface: Mapped[str] = mapped_column(String(20))
     provider: Mapped[str] = mapped_column(String(20))
     model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    thread_id: Mapped[str] = mapped_column(
+        String(255), default=lambda: str(uuid4()), unique=True, index=True
+    )
     status: Mapped[AiChatRunStatus] = mapped_column(
         Enum(
             AiChatRunStatus,

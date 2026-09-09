@@ -4,7 +4,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus
 from genesis_api.ai.schemas import AiChatRequest, AiChatRunCreated, AiChatRunSnapshot
-from genesis_api.ai.service import AiChatService, AiProviderError
+from genesis_api.ai.service import LangGraphAgentService
 from genesis_api.core.config import Settings
 from genesis_api.database.session import SessionLocal
 
@@ -21,7 +21,7 @@ SessionFactory = Callable[[], Session]
 
 
 class ChatStreamer(Protocol):
-    def stream(self, request: AiChatRequest) -> AsyncIterator[str]:
+    def stream(self, request: AiChatRequest, *, thread_id: str) -> AsyncIterator[str]:
         ...
 
 
@@ -51,7 +51,9 @@ def create_ai_chat_run(
         surface=request.surface,
         provider=provider,
         model=request.model or _configured_model(settings, provider),
+        thread_id="pending",
     )
+    run.thread_id = str(run.id)
     session.add(run)
     session.commit()
     session.refresh(run)
@@ -91,7 +93,7 @@ class AiChatRunManager:
     ) -> None:
         self._session_factory = session_factory
         self._chat_service_factory = chat_service_factory or (
-            lambda settings: AiChatService(settings)
+            lambda settings: LangGraphAgentService(settings)
         )
         self._flush_interval = flush_interval
         self._flush_size = flush_size
@@ -125,7 +127,14 @@ class AiChatRunManager:
         pending = ""
         last_flush = asyncio.get_running_loop().time()
         try:
-            async for token in self._chat_service_factory(settings).stream(request):
+            streamer = self._chat_service_factory(settings)
+            try:
+                token_stream = streamer.stream(request, thread_id=str(run_id))
+            except TypeError as exc:
+                if "thread_id" not in str(exc):
+                    raise
+                token_stream = cast(Any, streamer).stream(request)
+            async for token in token_stream:
                 pending += token
                 now = asyncio.get_running_loop().time()
                 if len(pending) >= self._flush_size or now - last_flush >= self._flush_interval:
@@ -145,7 +154,7 @@ class AiChatRunManager:
                 error="服务已停止，生成任务中断，请重新发起。",
             )
             raise
-        except AiProviderError as exc:
+        except RuntimeError as exc:
             await self._persist(
                 run_id,
                 append_content=pending,

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import cast
 from uuid import uuid4
+
+import pytest
+from sqlalchemy.orm import Session
 
 from genesis_api.agent import context as agent_context
 from genesis_api.blog.models import BlogPostStatus
@@ -21,7 +25,9 @@ def make_post(*, title: str, status: BlogPostStatus, content: str) -> SimpleName
     )
 
 
-def test_posts_list_context_uses_database_metadata_without_article_bodies(monkeypatch) -> None:
+def test_posts_list_context_uses_database_metadata_without_article_bodies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     published = make_post(
         title="已发布文章",
         status=BlogPostStatus.PUBLISHED,
@@ -35,7 +41,7 @@ def test_posts_list_context_uses_database_metadata_without_article_bodies(monkey
     monkeypatch.setattr(agent_context, "list_admin_posts", lambda _: [published, draft])
 
     result = agent_context.build_studio_agent_context(
-        object(),
+        cast(Session, object()),
         route="/blog/studio/posts",
         section="posts",
         page_type="posts_list",
@@ -71,12 +77,14 @@ def test_posts_list_context_uses_database_metadata_without_article_bodies(monkey
     assert "content_markdown" not in result["articles"][0]
 
 
-def test_post_editor_context_distinguishes_persisted_status_from_unsaved_draft(monkeypatch) -> None:
+def test_post_editor_context_distinguishes_persisted_status_from_unsaved_draft(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     post = make_post(title="数据库标题", status=BlogPostStatus.PUBLISHED, content="# 数据库正文")
     monkeypatch.setattr(agent_context, "get_blog_post_by_id", lambda _, __: post)
 
     result = agent_context.build_studio_agent_context(
-        object(),
+        cast(Session, object()),
         route=f"/blog/studio/posts/{post.id}/edit",
         section="posts",
         page_type="post_editor",

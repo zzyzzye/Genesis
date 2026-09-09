@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus
-from genesis_api.ai.runs import AiChatRunManager, create_ai_chat_run, get_ai_chat_run_snapshot
+from genesis_api.ai.runs import (
+    AiChatRunManager,
+    ChatStreamer,
+    create_ai_chat_run,
+    get_ai_chat_run_snapshot,
+)
 from genesis_api.ai.schemas import AiChatRequest, AiChatRunSnapshot, AiMessage
 from genesis_api.api.routes import ai as ai_route
 from genesis_api.core.config import Settings
@@ -24,7 +29,7 @@ class FakeChatService:
     def __init__(self, _: Settings) -> None:
         pass
 
-    async def stream(self, _: AiChatRequest) -> AsyncIterator[str]:
+    async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
         yield "断点"
         await asyncio.sleep(0.01)
         yield "续传"
@@ -66,7 +71,7 @@ async def test_background_run_persists_output_without_stream_subscriber() -> Non
 
     manager = AiChatRunManager(
         session_factory,
-        FakeChatService,
+        cast(type[ChatStreamer], FakeChatService),
         flush_interval=0,
         flush_size=1,
     )
@@ -156,7 +161,7 @@ async def test_startup_marks_interrupted_runs_as_failed() -> None:
         )
         session.commit()
 
-    manager = AiChatRunManager(session_factory, FakeChatService)
+    manager = AiChatRunManager(session_factory, cast(type[ChatStreamer], FakeChatService))
     await manager.fail_interrupted_runs()
 
     with session_factory() as session:
@@ -209,3 +214,14 @@ async def test_stream_response_replays_snapshot_before_live_delta(
     assert '"type": "token"' in body
     assert '"content": "，刷新后继续"' in body
     assert '"type": "done"' in body
+
+
+def test_extract_stream_text_supports_langgraph_message_shapes() -> None:
+    from genesis_api.ai.service import _extract_stream_text
+
+    assert _extract_stream_text({"content": "纯文本"}) == ["纯文本"]
+    assert _extract_stream_text({"content": [{"text": "块一"}, {"text": "块二"}]}) == [
+        "块一",
+        "块二",
+    ]
+    assert _extract_stream_text(({"content": "消息"}, {"langgraph_node": "agent"})) == ["消息"]
