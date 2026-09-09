@@ -281,6 +281,21 @@ export interface AiChatRunSnapshot {
 
 export class AiChatRunTerminalError extends Error {}
 
+export type AiAction = 'create_draft' | 'update_post' | 'delete_post' | 'publish_post'
+
+export interface AiActionConfirmation {
+  action: AiAction
+  payload: Record<string, unknown>
+}
+
+export function confirmAiAction(token: string, confirmation: AiActionConfirmation): Promise<Record<string, unknown>> {
+  return request<Record<string, unknown>>('/ai/actions/confirm', {
+    method: 'POST',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(confirmation),
+  })
+}
+
 export function createAiChatRun(token: string, chatRequest: AiChatRequest): Promise<AiChatRunCreated> {
   return request<AiChatRunCreated>('/ai/chat/runs', {
     method: 'POST',

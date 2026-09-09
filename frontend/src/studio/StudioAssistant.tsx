@@ -20,10 +20,12 @@ function ProviderIcon({ provider }: { provider: AiProvider }) {
 }
 import {
   AiChatRunTerminalError,
+  confirmAiAction,
   createAiChatRun,
   getProviderModels,
   streamAiChatRun,
   type AiChatMessage,
+  type AiActionConfirmation,
   type AiProvider,
 } from '../lib/api'
 import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
@@ -80,8 +82,25 @@ function readAssistantSession(): AssistantSession {
   }
 }
 
-function MarkdownMessage({ content }: { content: string }) {
-  return <div className="studio-assistant__markdown"><Markdown remarkPlugins={[remarkGfm]}>{content || '正在生成…'}</Markdown></div>
+function parsePendingAction(content: string): AiActionConfirmation | null {
+  const match = content.match(/\{[\s\S]*"type"\s*:\s*"pending_action"[\s\S]*\}/)
+  if (!match) return null
+  try {
+    const value = JSON.parse(match[0]) as { type?: unknown; action?: unknown; payload?: unknown }
+    if (value.type !== 'pending_action' || typeof value.action !== 'string' || !value.payload || typeof value.payload !== 'object') return null
+    return { action: value.action as AiActionConfirmation['action'], payload: value.payload as Record<string, unknown> }
+  } catch { return null }
+}
+
+function MarkdownMessage({ content, onConfirm, confirming }: { content: string; onConfirm?: (action: AiActionConfirmation) => void; confirming?: boolean }) {
+  const action = parsePendingAction(content)
+  return <>
+    <div className="studio-assistant__markdown"><Markdown remarkPlugins={[remarkGfm]}>{content || '正在生成…'}</Markdown></div>
+    {action && onConfirm && <div className="studio-assistant__action-card">
+      <strong>待确认操作</strong><span>{action.action}</span>
+      <button type="button" disabled={confirming} onClick={() => onConfirm(action)}>{confirming ? '执行中…' : '确认执行'}</button>
+    </div>}
+  </>
 }
 
 function updateAssistantMessage(
@@ -104,6 +123,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
   const [streamStatus, setStreamStatus] = useState<string | null>(initialSession.activeRun ? '正在恢复输出…' : null)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [confirmingAction, setConfirmingAction] = useState<number | null>(null)
   const [provider, setProvider] = useState<AiProvider>('openai')
   const [model, setModel] = useState('')
   const [models, setModels] = useState<{ id: string; name: string | null }[]>([])
@@ -277,6 +297,20 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     setDraft(suggestion)
   }
 
+  async function handleConfirmAction(messageIndex: number, action: AiActionConfirmation) {
+    const token = getStoredAuthToken(studioAuthTokenKey)
+    if (!token) return
+    setConfirmingAction(messageIndex)
+    try {
+      await confirmAiAction(token, action)
+      setMessages((current) => current.map((message, index) => index === messageIndex
+        ? { ...message, content: `${message.content}\n\n✅ 已确认并执行：${action.action}` }
+        : message))
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '操作执行失败，请稍后重试。')
+    } finally { setConfirmingAction(null) }
+  }
+
   return (
     <div className={`studio-assistant${isOpen ? ' is-open' : ''}`}>
       {isOpen && (
@@ -309,7 +343,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
               {messages.map((message, index) => (
                 <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${message.role}-${index}`}>
                   {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
-                  {message.role === 'assistant' ? <MarkdownMessage content={message.content} /> : <p>{message.content}</p>}
+                  {message.role === 'assistant' ? <MarkdownMessage content={message.content} onConfirm={(action) => { void handleConfirmAction(index, action) }} confirming={confirmingAction === index} /> : <p>{message.content}</p>}
                 </div>
               ))}
             </div>

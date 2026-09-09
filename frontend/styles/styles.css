@@ -3652,3 +3652,25 @@ nav span {
 .account-entry:focus-visible,
 .account-pass__brand:focus-visible,
 .account-pass__back:focus-visible { outline-color: rgb(201 106 66 / 45%); }
+
+
+/* Agent proposal confirmation */
+.studio-assistant__action-card {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  margin-top: .7rem;
+  padding: .65rem .75rem;
+  border: 1px solid rgb(201 106 66 / 28%);
+  border-radius: .55rem;
+  background: rgb(255 247 236 / 86%);
+  color: #53656b;
+  font-size: .78rem;
+}
+.studio-assistant__action-card strong { color: #30424a; }
+.studio-assistant__action-card span { flex: 1; color: #a95134; font-family: ui-monospace, SFMono-Regular, monospace; }
+.studio-assistant__action-card button {
+  border: 0; border-radius: .4rem; padding: .42rem .65rem;
+  background: #c96a42; color: #fffaf3; cursor: pointer; font: inherit;
+}
+.studio-assistant__action-card button:disabled { opacity: .58; cursor: wait; }
