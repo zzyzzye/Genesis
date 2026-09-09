@@ -4,9 +4,25 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from genesis_api.agent.tools import tool_manifest
 from genesis_api.blog.models import BlogPost, BlogPostStatus
 from genesis_api.blog.service import get_blog_post_by_id, list_admin_posts
+
+
+def tool_manifest() -> list[dict[str, str | bool]]:
+    return [
+        {"name": name, "description": description, "mode": mode, "requires_confirmation": requires}
+        for name, description, mode, requires in (
+            ("list_posts", "列出博客文章及其状态", "read", False),
+            ("get_post", "读取当前上下文中的文章内容", "read", False),
+            ("search_posts", "按标题、摘要、正文和标签搜索文章", "read", False),
+            ("analyze_post", "分析文章结构、表达和内容质量", "read", False),
+            ("suggest_revision", "生成文章优化建议或完整修改稿", "read", False),
+            ("create_draft", "创建一篇新的文章草稿", "write", True),
+            ("update_post", "修改现有文章内容或元数据", "write", True),
+            ("delete_post", "删除文章", "write", True),
+            ("publish_post", "发布文章", "write", True),
+        )
+    ]
 
 
 def _post_list_item(post: BlogPost) -> dict[str, object]:

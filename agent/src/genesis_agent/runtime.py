@@ -5,11 +5,12 @@ from typing import Any, TypedDict, cast
 
 from deepagents import create_deep_agent
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage, SystemMessage
 from langchain_core.tools import BaseTool
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
-from genesis_api.agent.service import AgentPrompt
+from genesis_agent.service import AgentPrompt
 
 
 class BlogAgentState(TypedDict, total=False):
@@ -25,7 +26,12 @@ class BlogAgentState(TypedDict, total=False):
 class BlogAgentRuntime:
     """把 LangChain 工具、LangGraph 编排和 DeepAgents 执行层组合起来。"""
 
-    def __init__(self, model: BaseChatModel, tools: Sequence[BaseTool]) -> None:
+    def __init__(
+        self,
+        model: BaseChatModel,
+        tools: Sequence[BaseTool],
+        checkpointer: BaseCheckpointSaver[Any] | None = None,
+    ) -> None:
         self._deep_agent = create_deep_agent(
             model=model,
             tools=list(tools),
@@ -44,7 +50,11 @@ class BlogAgentRuntime:
         graph.add_edge(START, "prepare")
         graph.add_edge("prepare", "execute")
         graph.add_edge("execute", END)
-        self._graph = graph.compile()
+        self._graph = graph.compile(checkpointer=checkpointer)
+
+    @property
+    def graph(self) -> Any:
+        return self._graph
 
     async def ainvoke(
         self,
@@ -60,8 +70,13 @@ class BlogAgentRuntime:
         return {"intent": "blog_workflow", "proposed_actions": []}
 
     async def _execute(self, state: BlogAgentState) -> dict[str, Any]:
+        context = state.get("context", {})
+        messages = [
+            SystemMessage(content=f"可信页面上下文：{context}"),
+            *state.get("messages", []),
+        ]
         result = await self._deep_agent.ainvoke(  # type: ignore[call-overload]
-            {"messages": state.get("messages", [])},
-            context=state.get("context", {}),
+            {"messages": messages},
+            context=context,
         )
         return {"result": cast(dict[str, Any], result)}

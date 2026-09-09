@@ -51,6 +51,8 @@ services:
       GENESIS_TEXT_CLAUDE_MODEL: ${GENESIS_TEXT_CLAUDE_MODEL:-}
       GENESIS_TEXT_TEMPERATURE: ${GENESIS_TEXT_TEMPERATURE:-0.7}
       GENESIS_TEXT_MAX_TOKENS: ${GENESIS_TEXT_MAX_TOKENS:-4096}
+      GENESIS_AGENT_URL: ${GENESIS_AGENT_URL:-http://agent:8123}
+      GENESIS_AGENT_INTERNAL_TOKEN: ${GENESIS_AGENT_INTERNAL_TOKEN:-development-only-agent-token}
     init: true
     command: >-
       sh -c "alembic upgrade head && python -m genesis_api.database.seed && fastapi dev src/genesis_api/main.py --host 0.0.0.0 --port 8000"
@@ -72,6 +74,33 @@ services:
       retries: 10
       start_period: 5s
 
+  agent:
+    platform: linux/amd64
+    build:
+      context: ./agent
+    environment:
+      GENESIS_ENVIRONMENT: ${GENESIS_ENVIRONMENT:-development}
+      GENESIS_DATABASE_HOST: postgres
+      GENESIS_DATABASE_PORT: 5432
+      GENESIS_DATABASE_NAME: genesis
+      GENESIS_DATABASE_USER: genesis
+      GENESIS_DATABASE_PASSWORD: genesis
+      GENESIS_JWT_SECRET: ${GENESIS_JWT_SECRET:-development-only-jwt-secret-do-not-use-in-production}
+      GENESIS_TEXT_OPENAI_API_KEY: ${GENESIS_TEXT_OPENAI_API_KEY:-}
+      GENESIS_TEXT_OPENAI_BASE_URL: ${GENESIS_TEXT_OPENAI_BASE_URL:-https://api.openai.com/v1}
+      GENESIS_TEXT_OPENAI_MODEL: ${GENESIS_TEXT_OPENAI_MODEL:-}
+      GENESIS_TEXT_TEMPERATURE: ${GENESIS_TEXT_TEMPERATURE:-0.7}
+      GENESIS_TEXT_MAX_TOKENS: ${GENESIS_TEXT_MAX_TOKENS:-4096}
+    init: true
+    command: langgraph dev --host 0.0.0.0 --port 8123 --config langgraph.json
+    expose:
+      - "8123"
+    volumes:
+      - ./agent:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   frontend:
     platform: linux/amd64
     build:
@@ -91,6 +120,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      agent:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:5173/"]
       interval: 5s
