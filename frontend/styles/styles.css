@@ -3674,3 +3674,39 @@ nav span {
   background: #c96a42; color: #fffaf3; cursor: pointer; font: inherit;
 }
 .studio-assistant__action-card button:disabled { opacity: .58; cursor: wait; }
+
+
+.studio-assistant__runtime-meta { display: flex; align-items: center; gap: .4rem; margin-left: .65rem; color: #71817f; font-size: .58rem; white-space: nowrap; }
+.studio-assistant__context-usage { color: #536b70; font-variant-numeric: tabular-nums; }
+.studio-assistant__mode { padding: .18rem .38rem; border-radius: .3rem; background: rgb(129 180 92 / 14%); color: #5f8d4a; }
+.studio-assistant__mode--approval_required { background: rgb(201 106 66 / 12%); color: #a95134; }
+.studio-assistant__mode-button { border: 1px solid rgb(113 129 127 / 28%); border-radius: .4rem; padding: .35rem .5rem; background: transparent; color: #607177; cursor: pointer; font: inherit; font-size: .62rem; }
+.studio-assistant__mode-button:hover { border-color: #c96a42; color: #a95134; }
+@media (max-width: 640px) { .studio-assistant__runtime-meta { display: none; } }
+.studio-assistant__model-menu button { display: flex; align-items: center; justify-content: space-between; gap: .8rem; }
+.studio-assistant__model-menu button small { color: #879490; font-size: .58rem; white-space: nowrap; }
+
+/* 助手窄面板布局修复：头部元信息和底部模式按钮不得挤压换行。 */
+.studio-assistant__identity { min-width: 0; flex: 1 1 auto; }
+.studio-assistant__identity > div:first-of-type { min-width: 0; }
+.studio-assistant__runtime-meta { flex: 0 0 auto; margin-left: .35rem; }
+.studio-assistant__runtime-meta > span { white-space: nowrap; }
+.studio-assistant__composer-tools { display: flex; align-items: center; flex-wrap: nowrap; }
+.studio-assistant__composer .studio-assistant__mode-button { flex: 0 0 auto; min-width: 3.65rem; white-space: nowrap; }
+.studio-assistant__composer .studio-assistant__tool-button { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.studio-assistant__composer .studio-assistant__tool-button svg { flex: 0 0 auto; }
+.studio-assistant__composer .studio-assistant__composer-status { min-width: 0; }
+.studio-assistant__model-menu { max-width: calc(100vw - 2.5rem); }
+.studio-assistant__model-menu button { min-width: 0; }
+@media (max-width: 520px) {
+  .studio-assistant__runtime-meta { display: none; }
+  .studio-assistant__composer-tools { gap: .3rem; }
+  .studio-assistant__composer .studio-assistant__mode-button { min-width: 3.35rem; padding-inline: .35rem; font-size: .58rem; }
+  .studio-assistant__composer .studio-assistant__tool-button { max-width: 9rem; }
+}
+/* 工具栏内部控件按顺序靠左排列，只有状态文本把发送按钮推到右侧。 */
+.studio-assistant__composer > .studio-assistant__composer-tools { justify-content: flex-start; }
+/* 发送按钮始终固定在工具栏最右侧，即使没有状态文本。 */
+.studio-assistant__composer > .studio-assistant__composer-tools > button[type='submit'] {
+  margin-left: auto;
+}

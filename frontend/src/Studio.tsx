@@ -52,6 +52,7 @@ import {
   getAdminBlogPosts,
   getAdminBlogTags,
   getCurrentUser,
+  developmentLogin,
   login,
   updateAdminBlogPost,
   type BlogCategory,
@@ -942,12 +943,25 @@ function Dashboard({
 export function Studio() {
   const [token, setToken] = useState<string | null>(() => getStoredAuthToken(studioAuthTokenKey))
   const [state, setState] = useState<StudioState>(() =>
-    getStoredAuthToken(studioAuthTokenKey) === null ? { status: 'login', error: null } : { status: 'loading' },
+    getStoredAuthToken(studioAuthTokenKey) === null && !import.meta.env.DEV
+      ? { status: 'login', error: null }
+      : { status: 'loading' },
   )
 
   useEffect(() => {
     if (token === null) {
-      return
+      if (!import.meta.env.DEV) return
+      let cancelled = false
+      void developmentLogin()
+        .then((data) => {
+          if (cancelled) return
+          storeAuthToken(data.access_token, studioAuthTokenKey)
+          setToken(data.access_token)
+        })
+        .catch(() => {
+          if (!cancelled) setState({ status: 'login', error: '开发环境自动登录失败，请手动登录。' })
+        })
+      return () => { cancelled = true }
     }
 
     let cancelled = false

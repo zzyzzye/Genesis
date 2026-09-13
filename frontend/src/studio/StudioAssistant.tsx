@@ -25,7 +25,8 @@ import {
   getProviderModels,
   streamAiChatRun,
   type AiChatMessage,
-  type AiActionConfirmation,
+  type AiActionProposal,
+  type AiExecutionMode,
   type AiProvider,
 } from '../lib/api'
 import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
@@ -82,17 +83,17 @@ function readAssistantSession(): AssistantSession {
   }
 }
 
-function parsePendingAction(content: string): AiActionConfirmation | null {
+function parsePendingAction(content: string): AiActionProposal | null {
   const match = content.match(/\{[\s\S]*"type"\s*:\s*"pending_action"[\s\S]*\}/)
   if (!match) return null
   try {
-    const value = JSON.parse(match[0]) as { type?: unknown; action?: unknown; payload?: unknown }
-    if (value.type !== 'pending_action' || typeof value.action !== 'string' || !value.payload || typeof value.payload !== 'object') return null
-    return { action: value.action as AiActionConfirmation['action'], payload: value.payload as Record<string, unknown> }
+    const value = JSON.parse(match[0]) as { type?: unknown; action?: unknown; payload?: unknown; proposal_token?: unknown }
+    if (value.type !== 'pending_action' || typeof value.action !== 'string' || !value.payload || typeof value.payload !== 'object' || typeof value.proposal_token !== 'string') return null
+    return value as unknown as AiActionProposal
   } catch { return null }
 }
 
-function MarkdownMessage({ content, onConfirm, confirming }: { content: string; onConfirm?: (action: AiActionConfirmation) => void; confirming?: boolean }) {
+function MarkdownMessage({ content, onConfirm, confirming }: { content: string; onConfirm?: (action: AiActionProposal) => void; confirming?: boolean }) {
   const action = parsePendingAction(content)
   return <>
     <div className="studio-assistant__markdown"><Markdown remarkPlugins={[remarkGfm]}>{content || '正在生成…'}</Markdown></div>
@@ -124,15 +125,26 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [confirmingAction, setConfirmingAction] = useState<number | null>(null)
+  const [executionMode, setExecutionMode] = useState<AiExecutionMode>("approval_required")
   const [provider, setProvider] = useState<AiProvider>('openai')
   const [model, setModel] = useState('')
-  const [models, setModels] = useState<{ id: string; name: string | null }[]>([])
-  const modelsCache = useRef<Partial<Record<AiProvider, { id: string; name: string | null }[]>>>({})
+  const [models, setModels] = useState<{ id: string; name: string | null; context_window: number | null }[]>([])
+  const modelsCache = useRef<Partial<Record<AiProvider, { id: string; name: string | null; context_window: number | null }[]>>>({})
   const selectedModels = useRef<Partial<Record<AiProvider, string>>>({})
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const shouldStickToBottomRef = useRef(true)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const isBusy = isStarting || activeRun !== null
+  const selectedModel = models.find((item) => item.id === model)
+  const contextWindow = selectedModel?.context_window ?? null
+  const contextCharacters = JSON.stringify({ page, editor, messages, draft }).length
+  const contextTokens = Math.ceil(contextCharacters / 4)
+  const formatTokens = (value: number | null) => {
+    if (value === null) return '—'
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 ? 1 : 0)}M`
+    if (value >= 1_000) return `${Math.round(value / 1_000)}K`
+    return value.toLocaleString()
+  }
   const suggestions = editor ? ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '为当前文章生成更好的标题'] : defaultSuggestions
 
   useEffect(() => {
@@ -269,6 +281,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
         messages: nextMessages,
         provider,
         model: model || undefined,
+        execution_mode: executionMode,
         context: {
           route: page.route,
           section: page.section,
@@ -297,12 +310,12 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     setDraft(suggestion)
   }
 
-  async function handleConfirmAction(messageIndex: number, action: AiActionConfirmation) {
+  async function handleConfirmAction(messageIndex: number, action: AiActionProposal) {
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!token) return
     setConfirmingAction(messageIndex)
     try {
-      await confirmAiAction(token, action)
+      await confirmAiAction(token, action.proposal_token)
       setMessages((current) => current.map((message, index) => index === messageIndex
         ? { ...message, content: `${message.content}\n\n✅ 已确认并执行：${action.action}` }
         : message))
@@ -319,6 +332,15 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
             <div className="studio-assistant__identity">
               <span className="studio-assistant__avatar"><StudioIcon name="assistant" /></span>
               <div><strong>Genesis AI</strong><span><i />在线 · 创作助手</span></div>
+              <div className="studio-assistant__runtime-meta">
+                <span
+                  className="studio-assistant__context-usage"
+                  title="当前对话、页面和编辑器内容的估算 token 数 / 当前模型原生上下文窗口"
+                >{formatTokens(contextTokens)} / {formatTokens(contextWindow)}</span>
+                <span className={`studio-assistant__mode studio-assistant__mode--${executionMode}`}>
+                  {executionMode === 'automatic' ? '自动模式' : '请求批准'}
+                </span>
+              </div>
             </div>
             <div className="studio-assistant__header-actions">
               <button className="studio-assistant__new-conversation" type="button" aria-label="新建对话" disabled={isBusy} onClick={startNewConversation}>
@@ -368,12 +390,18 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
               }}
             />
             <div className="studio-assistant__composer-tools">
+              <button
+                className="studio-assistant__mode-button"
+                type="button"
+                aria-label="切换 Agent 执行模式"
+                onClick={() => setExecutionMode((mode) => mode === 'automatic' ? 'approval_required' : 'automatic')}
+              >{executionMode === 'automatic' ? '自动模式' : '请求批准'}</button>
               <button className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
                 <ProviderIcon provider={provider} /> {model || '选择模型'} <StudioIcon name="chevron" />
               </button>
               {modelMenuOpen && <div className="studio-assistant__model-menu">
                 <div className="studio-assistant__provider-tabs">{(['openai', 'grok', 'gemini', 'claude'] as AiProvider[]).map((item) => <button key={item} type="button" className={provider === item ? 'is-active' : ''} aria-label={`切换到 ${item} 模型`} onClick={() => { setProvider(item); setModels(modelsCache.current[item] ?? []); setModel(selectedModels.current[item] ?? modelsCache.current[item]?.[0]?.id ?? '') }}><ProviderIcon provider={item} /><span>{item}</span></button>)}</div>
-                {models.length === 0 ? <span className="studio-assistant__model-empty">暂无可用模型</span> : models.map((item) => <button key={item.id} type="button" onClick={() => { selectedModels.current[provider] = item.id; setModel(item.id); setModelMenuOpen(false) }}>{item.name || item.id}</button>)}
+                {models.length === 0 ? <span className="studio-assistant__model-empty">暂无可用模型</span> : models.map((item) => <button key={item.id} type="button" onClick={() => { selectedModels.current[provider] = item.id; setModel(item.id); setModelMenuOpen(false) }}><span>{item.name || item.id}</span><small>{formatTokens(item.context_window)} context</small></button>)}
               </div>}
               {(isBusy || error || streamStatus) && <span className="studio-assistant__composer-status">{error ?? streamStatus ?? '正在生成…'}</span>}
               <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>

@@ -123,6 +123,10 @@ function authHeaders(token: string): HeadersInit {
   return { Authorization: `Bearer ${token}` }
 }
 
+export function developmentLogin(): Promise<AccessToken> {
+  return request<AccessToken>('/auth/dev-login', { method: 'POST' })
+}
+
 export function login(handle: string, password: string): Promise<AccessToken> {
   const body = new URLSearchParams({ username: handle, password })
   return request<AccessToken>('/auth/login', {
@@ -221,6 +225,8 @@ export function getSystemHealth(system: 'tools' | 'media', signal?: AbortSignal)
 
 export type AiSurface = 'blog' | 'studio' | 'tools'
 
+export type AiExecutionMode = 'automatic' | 'approval_required'
+
 export type AiProvider = 'openai' | 'grok' | 'gemini' | 'claude'
 
 export interface AvailableModel {
@@ -262,6 +268,7 @@ export interface AiChatRequest {
   context?: AiChatContext
   provider?: AiProvider
   model?: string
+  execution_mode?: AiExecutionMode
 }
 
 export type AiChatRunStatus = 'pending' | 'running' | 'completed' | 'failed'
@@ -283,16 +290,28 @@ export class AiChatRunTerminalError extends Error {}
 
 export type AiAction = 'create_draft' | 'update_post' | 'delete_post' | 'publish_post'
 
-export interface AiActionConfirmation {
+export interface AiActionProposal {
+  type: 'pending_action'
+  proposal_id: string
   action: AiAction
   payload: Record<string, unknown>
+  summary: string
+  requires_confirmation: true
+  expires_at: string
+  proposal_token: string
 }
 
-export function confirmAiAction(token: string, confirmation: AiActionConfirmation): Promise<Record<string, unknown>> {
-  return request<Record<string, unknown>>('/ai/actions/confirm', {
+export interface AiActionConfirmationResult {
+  action: AiAction
+  post_id?: string
+  status: string
+}
+
+export function confirmAiAction(token: string, proposalToken: string): Promise<AiActionConfirmationResult> {
+  return request<AiActionConfirmationResult>('/ai/actions/confirm', {
     method: 'POST',
     headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify(confirmation),
+    body: JSON.stringify({ proposal_token: proposalToken }),
   })
 }
 
