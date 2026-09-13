@@ -24,6 +24,9 @@ class AgentSettings(BaseSettings):
     text_temperature: float = 0.7
     text_max_tokens: int = 4096
     database_url: str = "postgresql+psycopg://genesis:genesis@postgres:5432/genesis"
+    backend_internal_url: str = "http://backend:8000"
+    agent_internal_token: str = "development-only-agent-token"
+    agent_http_timeout: float = 15.0
 
 @lru_cache
 def get_settings() -> AgentSettings:

@@ -5,7 +5,7 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -51,9 +51,8 @@ def create_ai_chat_run(
         surface=request.surface,
         provider=provider,
         model=request.model or _configured_model(settings, provider),
-        thread_id="pending",
+        thread_id=str(uuid4()),
     )
-    run.thread_id = str(run.id)
     session.add(run)
     session.commit()
     session.refresh(run)

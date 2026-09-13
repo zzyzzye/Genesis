@@ -116,6 +116,25 @@ def login(
     return AccessToken(access_token=create_access_token(user))
 
 
+@router.post("/dev-login", response_model=AccessToken)
+def development_login(session: SessionDependency) -> AccessToken:
+    """仅开发环境使用的本地 Owner 自动登录入口。"""
+    from genesis_api.core.config import get_settings
+
+    settings = get_settings()
+    if settings.environment != "development":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="接口不存在")
+    user = session.scalar(
+        select(User).where(User.handle == "genesis").options(selectinload(User.credential))
+    )
+    if user is None or user.role is not UserRole.OWNER:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="开发 Owner 尚未初始化",
+        )
+    return AccessToken(access_token=create_access_token(user))
+
+
 @router.get("/me", response_model=CurrentUser)
 def get_me(current_user: CurrentUserDependency) -> CurrentUser:
     return CurrentUser.model_validate(current_user)

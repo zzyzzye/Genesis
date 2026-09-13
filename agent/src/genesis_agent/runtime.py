@@ -10,6 +10,7 @@ from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
+from genesis_agent.backend_client import set_invocation_context
 from genesis_agent.service import AgentPrompt
 
 
@@ -18,6 +19,9 @@ class BlogAgentState(TypedDict, total=False):
 
     messages: list[BaseMessage]
     context: dict[str, Any]
+    actor_context: str | None
+    request_id: str | None
+    execution_mode: str | None
     intent: str
     proposed_actions: list[dict[str, Any]]
     result: dict[str, Any]
@@ -62,7 +66,9 @@ class BlogAgentRuntime:
         *,
         context: dict[str, Any] | None = None,
     ) -> BlogAgentState:
-        result = await self._graph.ainvoke({"messages": messages, "context": context or {}})
+        result = await self._graph.ainvoke(
+            {"messages": messages, "context": context or {}, "actor_context": None, "request_id": None, "execution_mode": None}
+        )
         return cast(BlogAgentState, result)
 
     @staticmethod
@@ -71,6 +77,7 @@ class BlogAgentRuntime:
 
     async def _execute(self, state: BlogAgentState) -> dict[str, Any]:
         context = state.get("context", {})
+        set_invocation_context(state.get("actor_context"))
         messages = [
             SystemMessage(content=f"可信页面上下文：{context}"),
             *state.get("messages", []),

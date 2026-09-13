@@ -30,6 +30,8 @@ class LangGraphAgentService:
         input_data = {
             "messages": [item.model_dump() for item in request.messages],
             "context": request.context.model_dump(exclude_none=True) if request.context else {},
+            "actor_context": request.agent_context,
+            "execution_mode": request.execution_mode,
         }
         async for part in client.runs.stream(
             thread_id,

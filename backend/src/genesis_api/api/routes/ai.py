@@ -6,12 +6,15 @@ import logging
 from collections.abc import AsyncIterator
 from time import monotonic
 from typing import Annotated
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from jwt import InvalidTokenError, decode
 
+from genesis_api.agent.auth import issue_agent_context
 from genesis_api.agent.context import build_studio_agent_context
+from genesis_api.agent.contracts import AgentActionConfirmation
 from genesis_api.ai.models import AiChatRunStatus
 from genesis_api.ai.runs import (
     ai_chat_run_manager,
@@ -19,7 +22,6 @@ from genesis_api.ai.runs import (
     get_ai_chat_run_snapshot,
 )
 from genesis_api.ai.schemas import (
-    AiActionConfirmation,
     AiChatRequest,
     AiChatRunCreated,
     AiChatRunSnapshot,
@@ -28,7 +30,7 @@ from genesis_api.ai.schemas import (
 from genesis_api.api.dependencies import CurrentUserDependency, OwnerDependency, SessionDependency
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.database.session import SessionLocal
-from genesis_api.identity.models import UserRole
+from genesis_api.identity.models import User, UserRole
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
@@ -38,6 +40,7 @@ logger = logging.getLogger(__name__)
 def _prepare_request(
     request: AiChatRequest,
     *,
+    current_user: User,
     current_user_role: UserRole,
     session: SessionDependency,
 ) -> AiChatRequest:
@@ -48,7 +51,13 @@ def _prepare_request(
         )
 
     if request.surface != "studio":
-        return request
+        return request.model_copy(
+            update={
+                "agent_context": issue_agent_context(
+                    current_user, str(uuid4()), get_settings()
+                )
+            }
+        )
 
     context = request.context or AiContext()
     agent_context = build_studio_agent_context(
@@ -62,7 +71,12 @@ def _prepare_request(
         content_markdown=context.content_markdown,
         editor_status=context.editor_status,
     )
-    return request.model_copy(update={"context": context.model_copy(update=agent_context)})
+    return request.model_copy(
+        update={
+            "context": context.model_copy(update=agent_context),
+            "agent_context": issue_agent_context(current_user, str(uuid4()), get_settings()),
+        }
+    )
 
 
 def _load_snapshot(run_id: UUID, user_id: UUID) -> AiChatRunSnapshot | None:
@@ -167,6 +181,7 @@ def _start_run(
 ) -> AiChatRunCreated:
     prepared_request = _prepare_request(
         request,
+        current_user=current_user,
         current_user_role=current_user.role,
         session=session,
     )
@@ -243,35 +258,51 @@ async def stream_chat(
 
 @router.post("/actions/confirm", response_model=object)
 def confirm_agent_action(
-    confirmation: AiActionConfirmation,
+    confirmation: AgentActionConfirmation,
     current_user: OwnerDependency,
     session: SessionDependency,
+    settings: SettingsDependency,
 ) -> object:
-    """执行已由用户确认的 Agent proposal；Agent 本身永远不直接写业务库。"""
+    """执行已由用户确认的签名 proposal；Agent 本身永远不直接写业务库。"""
+    try:
+        proposal = decode(
+            confirmation.proposal_token,
+            settings.agent_context_secret.get_secret_value(),
+            algorithms=["HS256"],
+        )
+    except InvalidTokenError as exc:
+        raise HTTPException(status_code=422, detail="操作提议无效或已过期") from exc
+    if proposal.get("actor_id") != str(current_user.id):
+        raise HTTPException(status_code=403, detail="操作提议不属于当前用户")
+    action = proposal.get("action")
+    payload = proposal.get("payload")
+    if action not in {"create_draft", "update_post", "delete_post", "publish_post"}:
+        raise HTTPException(status_code=422, detail="操作类型无效")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=422, detail="操作参数无效")
     from genesis_api.blog.models import BlogPost, BlogPostStatus
     from genesis_api.blog.schemas import BlogPostWrite
     from genesis_api.blog.service import apply_post_data, get_blog_post_by_id
 
-    payload = confirmation.payload
-    if confirmation.action == "delete_post":
+    if action == "delete_post":
         post_id = _payload_uuid(payload, "post_id")
         post = get_blog_post_by_id(session, post_id)
         if post is None:
             raise HTTPException(status_code=404, detail="文章不存在")
         session.delete(post)
         session.commit()
-        return {"action": confirmation.action, "post_id": str(post_id), "status": "deleted"}
+        return {"action": action, "post_id": str(post_id), "status": "deleted"}
 
-    if confirmation.action == "publish_post":
+    if action == "publish_post":
         post_id = _payload_uuid(payload, "post_id")
         post = get_blog_post_by_id(session, post_id)
         if post is None:
             raise HTTPException(status_code=404, detail="文章不存在")
         post.status = BlogPostStatus.PUBLISHED
         session.commit()
-        return {"action": confirmation.action, "post_id": str(post_id), "status": "published"}
+        return {"action": action, "post_id": str(post_id), "status": "published"}
 
-    if confirmation.action == "update_post":
+    if action == "update_post":
         post_id = _payload_uuid(payload, "post_id")
         post = get_blog_post_by_id(session, post_id)
         if post is None:
@@ -305,7 +336,7 @@ def confirm_agent_action(
         except ValueError as exc:
             session.rollback()
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return {"action": confirmation.action, "post_id": str(post_id), "status": "updated"}
+        return {"action": action, "post_id": str(post_id), "status": "updated"}
 
     required = ("title", "excerpt", "content_markdown", "slug")
     if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
@@ -323,7 +354,7 @@ def confirm_agent_action(
     except ValueError as exc:
         session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"action": confirmation.action, "post_id": str(post.id), "status": "created"}
+    return {"action": action, "post_id": str(post.id), "status": "created"}
 
 
 def _payload_uuid(payload: dict[str, object], key: str) -> UUID:

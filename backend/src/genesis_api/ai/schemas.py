@@ -9,6 +9,7 @@ from genesis_api.ai.models import AiChatRunStatus
 
 AiSurface = Literal["blog", "studio", "tools"]
 AiProvider = Literal["openai", "grok", "gemini", "claude"]
+AiExecutionMode = Literal["automatic", "approval_required"]
 MessageRole = Literal["user", "assistant"]
 
 
@@ -41,6 +42,8 @@ class AiChatRequest(BaseModel):
     context: AiContext | None = None
     provider: AiProvider | None = None
     model: str | None = None
+    agent_context: str | None = Field(default=None, exclude=True)
+    execution_mode: AiExecutionMode = "approval_required"
 
 
 class AiChatRunCreated(BaseModel):
@@ -58,9 +61,3 @@ class AiChatRunSnapshot(BaseModel):
 
 class AiError(BaseModel):
     error: str
-
-class AiActionConfirmation(BaseModel):
-    """用户确认 Agent 提议后，由后端执行的最小命令。"""
-
-    action: Literal["create_draft", "update_post", "delete_post", "publish_post"]
-    payload: dict[str, object] = Field(default_factory=dict)

@@ -47,6 +47,8 @@ class Settings(BaseSettings):
 
     agent_url: str = "http://agent:8123"
     agent_internal_token: SecretStr | None = None
+    agent_context_secret: SecretStr = SecretStr("development-only-agent-context-secret")
+    agent_context_expire_seconds: int = 300
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> Settings:
