@@ -160,13 +160,16 @@ class AiChatRunManager:
                 status=AiChatRunStatus.FAILED,
                 error=str(exc),
             )
-        except Exception:
+        except Exception as exc:
             logger.exception("AI 后台生成任务失败：run_id=%s", run_id)
+            error = "AI 生成失败，请稍后重试。"
+            if "PermissionDenied" in type(exc).__name__ or "blocked" in str(exc).lower():
+                error = "模型服务拒绝了请求，请检查当前模型的 API Key、模型名称和服务商配置。"
             await self._persist(
                 run_id,
                 append_content=pending,
                 status=AiChatRunStatus.FAILED,
-                error="AI 生成失败，请稍后重试。",
+                error=error,
             )
 
     async def _persist(

@@ -106,7 +106,9 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, init)
   if (!response.ok) {
-    throw new Error(`请求失败：HTTP ${response.status}`)
+    const error: unknown = await response.json().catch((): null => null)
+    const detail = formatApiErrorDetail(error)
+    throw new Error(`请求失败：HTTP ${response.status}${detail ? `（${detail}）` : ''}`)
   }
   return (await response.json()) as T
 }
@@ -117,6 +119,23 @@ export function getBlogPosts(signal?: AbortSignal): Promise<BlogPostListResponse
 
 export function getBlogPost(slug: string, signal?: AbortSignal): Promise<BlogPostDetail> {
   return request<BlogPostDetail>(`/blog/posts/${encodeURIComponent(slug)}`, { signal })
+}
+
+function formatApiErrorDetail(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null
+  const detail = (error as { detail?: unknown }).detail
+
+  if (typeof detail === 'string') return detail
+  if (!Array.isArray(detail) || detail.length === 0) return null
+
+  const first: unknown = detail[0]
+  if (!first || typeof first !== 'object') return null
+  const value = first as { loc?: unknown; msg?: unknown }
+  if (typeof value.msg !== 'string') return null
+  const location = Array.isArray(value.loc)
+    ? value.loc.filter((item) => typeof item === 'string' || typeof item === 'number').join('.')
+    : ''
+  return location ? `${location}：${value.msg}` : value.msg
 }
 
 function authHeaders(token: string): HeadersInit {
@@ -210,7 +229,9 @@ export async function deleteAdminBlogPost(token: string, id: string): Promise<vo
     headers: authHeaders(token),
   })
   if (!response.ok) {
-    throw new Error(`请求失败：HTTP ${response.status}`)
+    const error: unknown = await response.json().catch((): null => null)
+    const detail = formatApiErrorDetail(error)
+    throw new Error(`请求失败：HTTP ${response.status}${detail ? `（${detail}）` : ''}`)
   }
 }
 export interface SystemHealth {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { streamAiChatRun } from '../src/lib/api'
+import { createAiChatRun, streamAiChatRun } from '../src/lib/api'
 
 describe('AI 可恢复流', () => {
   afterEach(() => {
@@ -31,4 +31,18 @@ describe('AI 可恢复流', () => {
     expect(result).toBe('completed')
     expect(content).toBe('已经生成完成')
   })
+  it('展示 FastAPI 的请求校验详情', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      detail: [{ loc: ['body', 'messages', 0, 'content'], msg: 'String should have at least 1 character' }],
+    }), {
+      status: 422,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+
+    await expect(createAiChatRun('test-token', {
+      surface: 'studio',
+      messages: [{ role: 'user', content: '测试' }],
+    })).rejects.toThrow('请求失败：HTTP 422（body.messages.0.content：String should have at least 1 character）')
+  })
+
 })

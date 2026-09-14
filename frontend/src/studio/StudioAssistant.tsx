@@ -141,7 +141,9 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
   const contextTokens = Math.ceil(contextCharacters / 4)
   const formatTokens = (value: number | null) => {
     if (value === null) return '—'
-    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value % 1_000_000 ? 1 : 0)}M`
+    if (value >= 1_000_000) {
+      return `${(value / 1_000_000).toFixed(2).replace(/\.0+$/, '').replace(/(\.\d)0$/, '$1')}M`
+    }
     if (value >= 1_000) return `${Math.round(value / 1_000)}K`
     return value.toLocaleString()
   }
@@ -338,7 +340,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
                   title="当前对话、页面和编辑器内容的估算 token 数 / 当前模型原生上下文窗口"
                 >{formatTokens(contextTokens)} / {formatTokens(contextWindow)}</span>
                 <span className={`studio-assistant__mode studio-assistant__mode--${executionMode}`}>
-                  {executionMode === 'automatic' ? '自动模式' : '请求批准'}
+                  {executionMode === 'automatic' ? '自动' : '审阅'}
                 </span>
               </div>
             </div>
@@ -390,18 +392,68 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
               }}
             />
             <div className="studio-assistant__composer-tools">
-              <button
-                className="studio-assistant__mode-button"
-                type="button"
-                aria-label="切换 Agent 执行模式"
-                onClick={() => setExecutionMode((mode) => mode === 'automatic' ? 'approval_required' : 'automatic')}
-              >{executionMode === 'automatic' ? '自动模式' : '请求批准'}</button>
+              <div className="studio-assistant__mode-switch" role="group" aria-label="Agent 执行方式">
+                <button
+                  className={executionMode === 'approval_required' ? 'is-active' : ''}
+                  type="button"
+                  aria-pressed={executionMode === 'approval_required'}
+                  title="执行操作前先请求你的确认"
+                  onClick={() => setExecutionMode('approval_required')}
+                >审阅</button>
+                <button
+                  className={executionMode === 'automatic' ? 'is-active' : ''}
+                  type="button"
+                  aria-pressed={executionMode === 'automatic'}
+                  title="允许助手自动执行已请求的操作"
+                  onClick={() => setExecutionMode('automatic')}
+                >自动</button>
+              </div>
               <button className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
                 <ProviderIcon provider={provider} /> {model || '选择模型'} <StudioIcon name="chevron" />
               </button>
               {modelMenuOpen && <div className="studio-assistant__model-menu">
-                <div className="studio-assistant__provider-tabs">{(['openai', 'grok', 'gemini', 'claude'] as AiProvider[]).map((item) => <button key={item} type="button" className={provider === item ? 'is-active' : ''} aria-label={`切换到 ${item} 模型`} onClick={() => { setProvider(item); setModels(modelsCache.current[item] ?? []); setModel(selectedModels.current[item] ?? modelsCache.current[item]?.[0]?.id ?? '') }}><ProviderIcon provider={item} /><span>{item}</span></button>)}</div>
-                {models.length === 0 ? <span className="studio-assistant__model-empty">暂无可用模型</span> : models.map((item) => <button key={item.id} type="button" onClick={() => { selectedModels.current[provider] = item.id; setModel(item.id); setModelMenuOpen(false) }}><span>{item.name || item.id}</span><small>{formatTokens(item.context_window)} context</small></button>)}
+                <div className="studio-assistant__provider-tabs">
+                  {(['openai', 'grok', 'gemini', 'claude'] as AiProvider[]).map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      className={provider === item ? 'is-active' : ''}
+                      aria-label={`切换到 ${item} 模型`}
+                      onClick={() => {
+                        setProvider(item)
+                        setModels(modelsCache.current[item] ?? [])
+                        setModel(selectedModels.current[item] ?? modelsCache.current[item]?.[0]?.id ?? '')
+                      }}
+                    >
+                      <ProviderIcon provider={item} />
+                      <span>{item}</span>
+                    </button>
+                  ))}
+                </div>
+                {models.length === 0 ? <span className="studio-assistant__model-empty">暂无可用模型</span> : (
+                  <div className="studio-assistant__model-list" aria-label={`${provider} 模型列表`}>
+                    {models.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        className={`studio-assistant__model-option${model === item.id ? ' is-selected' : ''}`}
+                        aria-pressed={model === item.id}
+                        onClick={() => {
+                          selectedModels.current[provider] = item.id
+                          setModel(item.id)
+                          setModelMenuOpen(false)
+                        }}
+                      >
+                        <span className="studio-assistant__model-name">{item.name || item.id}</span>
+                        {item.context_window !== null && (
+                          <span className="studio-assistant__context-chip">
+                            <strong>{formatTokens(item.context_window)}</strong>
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>}
               {(isBusy || error || streamStatus) && <span className="studio-assistant__composer-status">{error ?? streamStatus ?? '正在生成…'}</span>}
               <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>

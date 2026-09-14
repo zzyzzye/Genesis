@@ -3304,8 +3304,9 @@ nav span {
 }
 
 /* AI 对话：用户消息四角完整圆润；Markdown 回复收紧段落与列表节奏。 */
-.studio-assistant__message--user > p {
-  border-radius: .8rem;
+.studio-assistant__message--user > p,
+.studio-assistant__message > .studio-assistant__markdown {
+  border-radius: .8rem !important;
 }
 .studio-assistant__messages {
   gap: .55rem;
@@ -3709,4 +3710,169 @@ nav span {
 /* 发送按钮始终固定在工具栏最右侧，即使没有状态文本。 */
 .studio-assistant__composer > .studio-assistant__composer-tools > button[type='submit'] {
   margin-left: auto;
+}
+
+
+/* 模型目录：将模型名称与上下文容量拆分为两个清晰的信息层级。 */
+.studio-assistant__model-menu {
+  width: min(20rem, calc(100vw - 2rem));
+  min-width: 17.5rem;
+  padding: .45rem;
+  border: 1px solid rgb(53 76 79 / 14%);
+  border-radius: .85rem;
+  background: linear-gradient(155deg, #ffffff 0%, #fbfcfa 100%);
+  box-shadow: 0 1.1rem 2.5rem rgb(31 44 57 / 18%), 0 .2rem .6rem rgb(31 44 57 / 8%);
+}
+.studio-assistant__composer .studio-assistant__provider-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .18rem;
+  margin: 0 0 .4rem;
+  padding: .2rem;
+  border: 1px solid rgb(65 87 87 / 7%);
+  border-radius: .55rem;
+  background: #f3f6f2;
+}
+.studio-assistant__composer .studio-assistant__provider-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .22rem;
+  min-width: 0;
+  min-height: 1.7rem;
+  padding: .28rem .2rem;
+  border-radius: .38rem;
+  color: #71817f;
+  font-size: .58rem;
+}
+.studio-assistant__composer .studio-assistant__provider-tabs button svg { width: .76rem; flex: 0 0 auto; }
+.studio-assistant__composer .studio-assistant__provider-tabs button.is-active {
+  background: #ffffff;
+  box-shadow: 0 .08rem .24rem rgb(46 67 69 / 12%);
+  color: #294047;
+}
+.studio-assistant__model-list {
+  display: grid;
+  gap: .12rem;
+  max-height: 15.5rem;
+  padding: .08rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cad4cf transparent;
+}
+.studio-assistant__composer .studio-assistant__model-menu .studio-assistant__model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+  width: 100%;
+  min-height: 2.15rem;
+  padding: .42rem .48rem .42rem .62rem;
+  border: 1px solid transparent;
+  border-radius: .48rem;
+  background: transparent;
+  color: #42585e;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.studio-assistant__composer .studio-assistant__model-menu .studio-assistant__model-option:hover {
+  border-color: rgb(91 130 116 / 14%);
+  background: #f1f6ef;
+  color: #263f45;
+}
+.studio-assistant__composer .studio-assistant__model-menu .studio-assistant__model-option.is-selected {
+  border-color: rgb(123 167 98 / 24%);
+  background: #eaf4e7;
+  color: #29483a;
+}
+.studio-assistant__model-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: .67rem;
+  font-weight: 520;
+  letter-spacing: -.01em;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.studio-assistant__context-chip {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: .28rem;
+  padding: .2rem .32rem;
+  border: 1px solid rgb(77 108 98 / 13%);
+  border-radius: .3rem;
+  background: rgb(255 255 255 / 76%);
+  color: #60756c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .53rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .025em;
+  line-height: 1;
+}
+.studio-assistant__context-chip > span { color: #8a9c92; font-size: .47rem; letter-spacing: .08em; }
+.studio-assistant__context-chip strong { color: #436452; font-size: .58rem; font-weight: 700; }
+.studio-assistant__composer .studio-assistant__model-menu .studio-assistant__model-option:focus-visible,
+.studio-assistant__composer .studio-assistant__provider-tabs button:focus-visible {
+  outline: 2px solid #a6c773;
+  outline-offset: 2px;
+}
+@media (max-width: 520px) {
+  .studio-assistant__model-menu { min-width: min(17.5rem, calc(100vw - 2rem)); }
+  .studio-assistant__model-list { max-height: 13rem; }
+}
+
+
+/* 执行方式使用显式双态切换，避免把“请求批准”误读为状态文本。 */
+.studio-assistant__composer .studio-assistant__mode-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .12rem;
+  padding: .16rem;
+  border: 1px solid rgb(63 85 83 / 12%);
+  border-radius: .5rem;
+  background: #f1f4f0;
+}
+.studio-assistant__composer .studio-assistant__mode-switch button {
+  display: inline-flex;
+  width: auto;
+  height: 1.5rem;
+  min-width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 .42rem;
+  border: 0;
+  border-radius: .34rem;
+  background: transparent;
+  color: #84928f;
+  cursor: pointer;
+  font: inherit;
+  font-size: .58rem;
+  font-weight: 600;
+  transition: background-color 140ms ease, box-shadow 140ms ease, color 140ms ease;
+}
+.studio-assistant__composer .studio-assistant__mode-switch button:hover { color: #4e6660; }
+.studio-assistant__composer .studio-assistant__mode-switch button.is-active {
+  background: #ffffff;
+  box-shadow: 0 .08rem .22rem rgb(40 61 59 / 13%);
+  color: #365047;
+}
+.studio-assistant__composer .studio-assistant__mode-switch button:last-child.is-active {
+  background: #eaf4e7;
+  color: #396548;
+}
+.studio-assistant__composer .studio-assistant__mode-switch button:focus-visible {
+  outline: 2px solid #a6c773;
+  outline-offset: 2px;
+}
+.studio-assistant__context-chip {
+  min-width: 3.25rem;
+  justify-content: center;
+  padding: .22rem .38rem;
+}
+.studio-assistant__context-chip strong { font-size: .59rem; }
+@media (max-width: 520px) {
+  .studio-assistant__composer .studio-assistant__mode-switch button { min-width: 2.05rem; padding-inline: .32rem; }
 }

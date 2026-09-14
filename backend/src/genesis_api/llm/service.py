@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from pydantic import SecretStr
 
 from genesis_api.core.config import Settings
+from genesis_api.llm.context_windows import context_window_for
 from genesis_api.llm.models import AvailableModel, ProviderModels, ProviderName
 
 logger = logging.getLogger(__name__)
@@ -35,12 +36,29 @@ class ModelDiscoveryService:
 
         try:
             response = await client.get(
-                self._models_url(provider, base_url),
+                self._models_url(base_url),
                 headers=self._headers(provider, api_key.get_secret_value()),
             )
             response.raise_for_status()
             payload = response.json()
         except (httpx.HTTPError, ValueError) as exc:
+            fallback_model = self._provider_model(provider)
+            if fallback_model and fallback_model.strip():
+                logger.warning(
+                    "模型列表发现不可用，使用已配置的模型：provider=%s，error=%s",
+                    provider,
+                    type(exc).__name__,
+                )
+                return ProviderModels(
+                    provider=provider,
+                    models=[
+                        AvailableModel(
+                            id=fallback_model,
+                            name=fallback_model,
+                            context_window=context_window_for(provider, fallback_model),
+                        )
+                    ],
+                )
             logger.exception("获取模型列表时调用上游服务失败：provider=%s", provider)
             raise ModelDiscoveryError(f"获取 {provider} 模型列表失败") from exc
         finally:
@@ -49,7 +67,11 @@ class ModelDiscoveryService:
 
         if not isinstance(payload, dict):
             raise ModelDiscoveryError("模型列表响应格式无效")
-        return ProviderModels(provider=provider, models=self._parse_models(payload, provider))
+        models = self._parse_models(payload, provider)
+        return ProviderModels(
+            provider=provider,
+            models=self._prioritize_configured_model(provider, models),
+        )
 
     def _provider_config(self, provider: ProviderName) -> tuple[SecretStr | None, str]:
         if provider == "openai":
@@ -60,12 +82,42 @@ class ModelDiscoveryService:
             return self.settings.text_gemini_api_key, self.settings.text_gemini_base_url
         return self.settings.text_claude_api_key, self.settings.text_claude_base_url
 
+    def _provider_model(self, provider: ProviderName) -> str | None:
+        if provider == "openai":
+            return self.settings.text_openai_model
+        if provider == "grok":
+            return self.settings.text_grok_model
+        if provider == "gemini":
+            return self.settings.text_gemini_model
+        return self.settings.text_claude_model
+
+    def _prioritize_configured_model(
+        self,
+        provider: ProviderName,
+        models: list[AvailableModel],
+    ) -> list[AvailableModel]:
+        """将已配置的默认模型置顶，即使网关模型目录暂未返回该模型。"""
+        configured_model = self._provider_model(provider)
+        if not configured_model or not configured_model.strip():
+            return models
+
+        matched = next((item for item in models if item.id == configured_model), None)
+        default_model = matched or AvailableModel(
+            id=configured_model,
+            name=configured_model,
+            context_window=context_window_for(provider, configured_model),
+        )
+        return [default_model, *(item for item in models if item.id != configured_model)]
+
     @staticmethod
-    def _models_url(provider: ProviderName, base_url: str) -> str:
+    def _models_url(base_url: str) -> str:
         normalized = base_url.rstrip("/")
         if normalized.endswith("/models"):
             return normalized
-        if provider in ("openai", "grok", "gemini", "claude") and not normalized.endswith("/v1"):
+        # yyapi 基于 New API：供应商调用可以使用根地址，但其统一模型目录
+        # 位于 /v1/models。只在该网关的根地址上补充 /v1，不影响其余配置。
+        parsed = urlparse(normalized)
+        if parsed.hostname == "www.yyapi.cloud" and parsed.path.rstrip("/") == "":
             normalized = f"{normalized}/v1"
         return urljoin(f"{normalized}/", "models")
 
@@ -96,13 +148,15 @@ class ModelDiscoveryService:
                     model_id = native_name.removeprefix("models/")
             if not isinstance(model_id, str):
                 continue
+            context_window = raw_model.get("context_window") or raw_model.get("context_length")
+            if not isinstance(context_window, int) or context_window <= 0:
+                context_window = context_window_for(provider, model_id)
             models.append(
                 AvailableModel(
                     id=model_id,
                     name=raw_model.get("display_name") or raw_model.get("name"),
                     created=raw_model.get("created"),
-                    context_window=raw_model.get("context_window")
-                    or raw_model.get("context_length"),
+                    context_window=context_window,
                 )
             )
         return models

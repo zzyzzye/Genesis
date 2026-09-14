@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, TypedDict, cast
 
 from deepagents import create_deep_agent
@@ -22,6 +22,8 @@ class BlogAgentState(TypedDict, total=False):
     actor_context: str | None
     request_id: str | None
     execution_mode: str | None
+    provider: str | None
+    model: str | None
     intent: str
     proposed_actions: list[dict[str, Any]]
     result: dict[str, Any]
@@ -35,7 +37,9 @@ class BlogAgentRuntime:
         model: BaseChatModel,
         tools: Sequence[BaseTool],
         checkpointer: BaseCheckpointSaver[Any] | None = None,
+        deep_agent_factory: Callable[[str | None, str | None], Any] | None = None,
     ) -> None:
+        self._deep_agent_factory = deep_agent_factory
         self._deep_agent = create_deep_agent(
             model=model,
             tools=list(tools),
@@ -82,7 +86,12 @@ class BlogAgentRuntime:
             SystemMessage(content=f"可信页面上下文：{context}"),
             *state.get("messages", []),
         ]
-        result = await self._deep_agent.ainvoke(  # type: ignore[call-overload]
+        deep_agent = (
+            self._deep_agent_factory(state.get("provider"), state.get("model"))
+            if self._deep_agent_factory is not None
+            else self._deep_agent
+        )
+        result = await deep_agent.ainvoke(  # type: ignore[call-overload]
             {"messages": messages},
             context=context,
         )

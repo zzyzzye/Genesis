@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Any, cast
 
 from langgraph_sdk import get_client
+from langgraph_sdk.errors import NotFoundError
 
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
@@ -32,15 +33,36 @@ class LangGraphAgentService:
             "context": request.context.model_dump(exclude_none=True) if request.context else {},
             "actor_context": request.agent_context,
             "execution_mode": request.execution_mode,
+            # Agent 图按单次请求选择模型；不能只在后端记录 provider/model，
+            # 否则前端切换模型不会影响实际的模型调用。
+            "provider": request.provider,
+            "model": request.model,
         }
-        async for part in client.runs.stream(
-            thread_id,
-            "genesis_agent",
-            input=cast(Any, input_data),
-            stream_mode="messages",
-        ):
-            for text in _extract_stream_text(part.data):
-                yield text
+        # LangGraph API 的 runs.stream 不会自动创建 thread；
+        # Backend 的 run ID 同时作为 Agent thread ID，
+        # 这样任务重试和断线续传都能复用同一个对话线程。开发环境的 LangGraph server 使用内存存储，
+        # 重启后数据库里的 run 仍然存在，但对应 thread 已丢失，因此在首次请求发现 thread 不存在时
+        # 重新创建一次并重试。已经产出过 token 后不重试，避免向调用方重复输出内容。
+        retried = False
+        while True:
+            await client.threads.create(thread_id=thread_id, if_exists="do_nothing")
+            emitted = False
+            try:
+                async for part in client.runs.stream(
+                    thread_id,
+                    "genesis_agent",
+                    input=cast(Any, input_data),
+                    stream_mode="messages",
+                ):
+                    for text in _extract_stream_text(part.data):
+                        emitted = True
+                        yield text
+                return
+            except NotFoundError:
+                if retried or emitted:
+                    raise
+                logger.warning("LangGraph thread 丢失，重新创建后重试：thread_id=%s", thread_id)
+                retried = True
 
 
 def _extract_stream_text(data: object) -> list[str]:

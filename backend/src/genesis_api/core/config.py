@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     text_provider: Literal["openai", "grok", "gemini", "claude"] = "openai"
     text_openai_api_key: SecretStr | None = None
     text_openai_base_url: str = "https://api.openai.com/v1"
-    text_openai_model: str | None = None
+    text_openai_model: str = "gpt-5.6-luna"
     text_grok_api_key: SecretStr | None = None
     text_grok_base_url: str = "https://api.x.ai/v1"
     text_grok_model: str | None = None
