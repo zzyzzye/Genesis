@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from genesis_api.database.base import Base
@@ -34,6 +34,7 @@ class AiChatRun(Base):
     thread_id: Mapped[str] = mapped_column(
         String(255), default=lambda: str(uuid4()), unique=True, index=True
     )
+    request_payload: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
     status: Mapped[AiChatRunStatus] = mapped_column(
         Enum(
             AiChatRunStatus,

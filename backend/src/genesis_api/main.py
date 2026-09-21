@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from genesis_api.agent.runtime import embedded_agent_runtime
 from genesis_api.ai.runs import ai_chat_run_manager
 from genesis_api.api.router import api_router
 from genesis_api.core.config import get_settings
@@ -11,11 +12,14 @@ from genesis_api.core.config import get_settings
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    await ai_chat_run_manager.fail_interrupted_runs()
+    settings = get_settings()
+    await embedded_agent_runtime.startup(settings)
+    await ai_chat_run_manager.recover_interrupted_runs(settings)
     try:
         yield
     finally:
         await ai_chat_run_manager.shutdown()
+        await embedded_agent_runtime.shutdown()
 
 
 def create_app() -> FastAPI:

@@ -42,7 +42,9 @@ class AiChatRequest(BaseModel):
     context: AiContext | None = None
     provider: AiProvider | None = None
     model: str | None = None
-    agent_context: str | None = Field(default=None, exclude=True)
+    actor_id: UUID | None = Field(default=None, exclude=True)
+    actor_role: str | None = Field(default=None, exclude=True)
+    resume_from_checkpoint: bool = Field(default=False, exclude=True)
     execution_mode: AiExecutionMode = "approval_required"
 
 

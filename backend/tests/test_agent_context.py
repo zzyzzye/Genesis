@@ -106,3 +106,29 @@ def test_post_editor_context_distinguishes_persisted_status_from_unsaved_draft(
         "editor_status": "draft",
         "has_unsaved_changes": True,
     }
+
+
+def test_editor_context_handles_new_and_empty_posts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(agent_context, "get_blog_post_by_id", lambda *_: None)
+    new_post = agent_context.build_studio_agent_context(
+        cast(Session, object()),
+        post_id="not-a-uuid",
+        title="新文章",
+        content_markdown="# 草稿",
+    )
+    assert new_post["current_post"] == {
+        "id": None,
+        "database_status": None,
+        "editor_draft": {
+            "title": "新文章",
+            "excerpt": None,
+            "content_markdown": "# 草稿",
+            "editor_status": None,
+            "has_unsaved_changes": True,
+        },
+    }
+
+    empty = agent_context.build_studio_agent_context(cast(Session, object()))
+    assert empty["current_post"] is None

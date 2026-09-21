@@ -45,10 +45,9 @@ class Settings(BaseSettings):
     text_temperature: float = 0.7
     text_max_tokens: int = 4096
 
-    agent_url: str = "http://agent:8123"
-    agent_internal_token: SecretStr | None = None
-    agent_context_secret: SecretStr = SecretStr("development-only-agent-context-secret")
-    agent_context_expire_seconds: int = 300
+    agent_action_secret: SecretStr = SecretStr("development-only-agent-action-secret")
+    agent_action_expire_seconds: int = 600
+    agent_max_concurrent_runs: int = 4
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> Settings:
@@ -58,6 +57,14 @@ class Settings(BaseSettings):
             == "development-only-jwt-secret-do-not-use-in-production"
         ):
             raise ValueError("生产环境必须设置 GENESIS_JWT_SECRET")
+        if (
+            self.environment == "production"
+            and self.agent_action_secret.get_secret_value()
+            == "development-only-agent-action-secret"
+        ):
+            raise ValueError("生产环境必须设置 GENESIS_AGENT_ACTION_SECRET")
+        if self.agent_max_concurrent_runs < 1:
+            raise ValueError("GENESIS_AGENT_MAX_CONCURRENT_RUNS 必须大于 0")
         return self
 
     @property
@@ -73,6 +80,11 @@ class Settings(BaseSettings):
             port=self.database_port,
             database=self.database_name,
         ).render_as_string(hide_password=False)
+
+    @property
+    def resolved_postgres_uri(self) -> str:
+        """返回 psycopg/LangGraph checkpoint 可直接使用的连接串。"""
+        return self.resolved_database_url.replace("postgresql+psycopg://", "postgresql://", 1)
 
 
 @lru_cache

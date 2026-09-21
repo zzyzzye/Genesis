@@ -6,13 +6,12 @@ import logging
 from collections.abc import AsyncIterator
 from time import monotonic
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from jwt import InvalidTokenError, decode
 
-from genesis_api.agent.auth import issue_agent_context
 from genesis_api.agent.context import build_studio_agent_context
 from genesis_api.agent.contracts import AgentActionConfirmation
 from genesis_api.ai.models import AiChatRunStatus
@@ -53,9 +52,8 @@ def _prepare_request(
     if request.surface != "studio":
         return request.model_copy(
             update={
-                "agent_context": issue_agent_context(
-                    current_user, str(uuid4()), get_settings()
-                )
+                "actor_id": current_user.id,
+                "actor_role": current_user.role.value,
             }
         )
 
@@ -74,7 +72,8 @@ def _prepare_request(
     return request.model_copy(
         update={
             "context": context.model_copy(update=agent_context),
-            "agent_context": issue_agent_context(current_user, str(uuid4()), get_settings()),
+            "actor_id": current_user.id,
+            "actor_role": current_user.role.value,
         }
     )
 
@@ -267,7 +266,7 @@ def confirm_agent_action(
     try:
         proposal = decode(
             confirmation.proposal_token,
-            settings.agent_context_secret.get_secret_value(),
+            settings.agent_action_secret.get_secret_value(),
             algorithms=["HS256"],
         )
     except InvalidTokenError as exc:

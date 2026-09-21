@@ -373,5 +373,14 @@ def test_production_settings_require_a_non_default_jwt_secret() -> None:
     settings = Settings(
         environment="production",
         jwt_secret=SecretStr("a-different-production-secret"),
+        agent_action_secret=SecretStr("a-different-agent-action-secret"),
     )
     assert settings.jwt_secret.get_secret_value() == "a-different-production-secret"
+
+    with pytest.raises(ValidationError):
+        Settings(
+            environment="production",
+            jwt_secret=SecretStr("a-different-production-secret"),
+        )
+    with pytest.raises(ValidationError):
+        Settings(agent_max_concurrent_runs=0)

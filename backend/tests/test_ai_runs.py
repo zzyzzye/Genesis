@@ -15,6 +15,7 @@ from genesis_api.ai.models import AiChatRun, AiChatRunStatus
 from genesis_api.ai.runs import (
     AiChatRunManager,
     ChatStreamer,
+    _configured_model,
     create_ai_chat_run,
     get_ai_chat_run_snapshot,
 )
@@ -134,8 +135,41 @@ def test_run_snapshot_is_scoped_to_owner() -> None:
     assert snapshot is None
 
 
+def test_provider_model_selection_and_request_persistence() -> None:
+    settings = Settings(
+        text_grok_model="grok-model",
+        text_gemini_model="gemini-model",
+        text_claude_model="claude-model",
+    )
+    assert _configured_model(settings, "openai") == settings.text_openai_model
+    assert _configured_model(settings, "grok") == "grok-model"
+    assert _configured_model(settings, "gemini") == "gemini-model"
+    assert _configured_model(settings, "claude") == "claude-model"
+
+    session_factory = build_session_factory()
+    user_id = uuid4()
+    with session_factory() as session:
+        session.add(User(id=user_id, handle="owner", display_name="Owner", role=UserRole.OWNER))
+        session.commit()
+        created = create_ai_chat_run(
+            session,
+            user_id=user_id,
+            request=AiChatRequest(
+                surface="studio",
+                messages=[AiMessage(role="user", content="保存")],
+                actor_id=user_id,
+                actor_role="owner",
+            ),
+            settings=settings,
+        )
+        run = session.get(AiChatRun, created.id)
+        assert run is not None
+        assert run.request_payload["actor_id"] == str(user_id)
+        assert run.request_payload["messages"] == [{"role": "user", "content": "保存"}]
+
+
 @pytest.mark.anyio
-async def test_startup_marks_interrupted_runs_as_failed() -> None:
+async def test_startup_recovers_interrupted_runs() -> None:
     session_factory = build_session_factory()
     user_id = uuid4()
     run_id = uuid4()
@@ -157,19 +191,152 @@ async def test_startup_marks_interrupted_runs_as_failed() -> None:
                 model="test-model",
                 status=AiChatRunStatus.RUNNING,
                 content="已有内容",
+                request_payload={
+                    "surface": "studio",
+                    "messages": [{"role": "user", "content": "恢复任务"}],
+                    "execution_mode": "approval_required",
+                    "actor_id": str(user_id),
+                    "actor_role": "owner",
+                },
             )
         )
         session.commit()
 
     manager = AiChatRunManager(session_factory, cast(type[ChatStreamer], FakeChatService))
-    await manager.fail_interrupted_runs()
+    await manager.recover_interrupted_runs(Settings(text_openai_model="test-model"))
+
+    for _ in range(100):
+        await asyncio.sleep(0.01)
+        with session_factory() as session:
+            current = session.get(AiChatRun, run_id)
+            if current is not None and current.status is AiChatRunStatus.COMPLETED:
+                break
 
     with session_factory() as session:
         run = session.get(AiChatRun, run_id)
         assert run is not None
+        assert run.status is AiChatRunStatus.COMPLETED
+        assert run.content == "断点续传"
+        assert run.error is None
+        assert run.sequence == 2
+    await manager.shutdown()
+
+
+@pytest.mark.anyio
+async def test_unrecoverable_legacy_run_is_failed() -> None:
+    session_factory = build_session_factory()
+    user_id = uuid4()
+    run_id = uuid4()
+    with session_factory() as session:
+        session.add(User(id=user_id, handle="owner", display_name="Owner", role=UserRole.OWNER))
+        session.add(
+            AiChatRun(
+                id=run_id,
+                user_id=user_id,
+                surface="studio",
+                provider="openai",
+                status=AiChatRunStatus.RUNNING,
+                request_payload={},
+            )
+        )
+        session.commit()
+    manager = AiChatRunManager(session_factory, cast(type[ChatStreamer], FakeChatService))
+    await manager.recover_interrupted_runs(Settings())
+    with session_factory() as session:
+        run = session.get(AiChatRun, run_id)
+        assert run is not None
         assert run.status is AiChatRunStatus.FAILED
-        assert run.content == "已有内容"
-        assert run.error == "服务已重启，生成任务中断，请重新发起。"
+        assert "缺少可恢复" in (run.error or "")
+
+
+@pytest.mark.anyio
+async def test_run_manager_persists_runtime_and_provider_errors() -> None:
+    session_factory = build_session_factory()
+    user_id = uuid4()
+    with session_factory() as session:
+        session.add(User(id=user_id, handle="owner", display_name="Owner", role=UserRole.OWNER))
+        session.commit()
+
+    class RuntimeFailure:
+        def __init__(self, _: Settings) -> None:
+            pass
+
+        async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
+            if False:
+                yield thread_id
+            raise RuntimeError("配置错误")
+
+    class PermissionDeniedError(Exception):
+        pass
+
+    class ProviderFailure:
+        def __init__(self, _: Settings) -> None:
+            pass
+
+        async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
+            if False:
+                yield thread_id
+            raise PermissionDeniedError("blocked")
+
+    async def execute(factory: object) -> AiChatRun:
+        request = AiChatRequest(
+            surface="studio", messages=[AiMessage(role="user", content="失败")]
+        )
+        with session_factory() as session:
+            created = create_ai_chat_run(
+                session, user_id=user_id, request=request, settings=Settings()
+            )
+        manager = AiChatRunManager(
+            session_factory,
+            cast(type[ChatStreamer], factory),
+            flush_interval=0,
+        )
+        manager.start(created.id, request, Settings())
+        for _ in range(100):
+            await asyncio.sleep(0.01)
+            with session_factory() as session:
+                run = session.get(AiChatRun, created.id)
+                if run is not None and run.status is AiChatRunStatus.FAILED:
+                    await manager.shutdown()
+                    return run
+        raise AssertionError("run did not fail")
+
+    runtime_run = await execute(RuntimeFailure)
+    assert runtime_run.error == "配置错误"
+    provider_run = await execute(ProviderFailure)
+    assert "模型服务拒绝" in (provider_run.error or "")
+
+
+@pytest.mark.anyio
+async def test_shutdown_leaves_cancelled_run_recoverable() -> None:
+    session_factory = build_session_factory()
+    user_id = uuid4()
+    with session_factory() as session:
+        session.add(User(id=user_id, handle="owner", display_name="Owner", role=UserRole.OWNER))
+        session.commit()
+        request = AiChatRequest(
+            surface="studio", messages=[AiMessage(role="user", content="等待")]
+        )
+        created = create_ai_chat_run(
+            session, user_id=user_id, request=request, settings=Settings()
+        )
+
+    class SlowService:
+        def __init__(self, _: Settings) -> None:
+            pass
+
+        async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
+            await asyncio.sleep(10)
+            yield thread_id
+
+    manager = AiChatRunManager(session_factory, cast(type[ChatStreamer], SlowService))
+    manager.start(created.id, request, Settings())
+    await asyncio.sleep(0.01)
+    await manager.shutdown()
+    with session_factory() as session:
+        run = session.get(AiChatRun, created.id)
+        assert run is not None
+        assert run.status is AiChatRunStatus.RUNNING
 
 @pytest.mark.anyio
 async def test_stream_response_replays_snapshot_before_live_delta(
@@ -217,11 +384,12 @@ async def test_stream_response_replays_snapshot_before_live_delta(
 
 
 def test_extract_stream_text_supports_langgraph_message_shapes() -> None:
-    from genesis_api.ai.service import _extract_stream_text
+    from langchain_core.messages import AIMessage, HumanMessage
 
-    assert _extract_stream_text({"content": "纯文本"}) == ["纯文本"]
-    assert _extract_stream_text({"content": [{"text": "块一"}, {"text": "块二"}]}) == [
+    from genesis_api.agent.runtime import _message_text
+
+    assert _message_text(AIMessage(content="纯文本")) == ["纯文本"]
+    assert _message_text(AIMessage(content=[{"type": "text", "text": "块一"}])) == [
         "块一",
-        "块二",
     ]
-    assert _extract_stream_text(({"content": "消息"}, {"langgraph_node": "agent"})) == ["消息"]
+    assert _message_text(HumanMessage(content="用户消息")) == []
