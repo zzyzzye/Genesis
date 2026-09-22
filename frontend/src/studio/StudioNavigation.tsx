@@ -1,3 +1,5 @@
+import './StudioNavigation.css'
+
 import { Link } from 'react-router-dom'
 
 import type { CurrentUser } from '../lib/api'

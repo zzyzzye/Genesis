@@ -37,6 +37,15 @@ import {
   type Translation,
 } from '@mdxeditor/editor'
 import '@mdxeditor/editor/style.css'
+import './studio/styles/shell.css'
+import './studio/styles/login.css'
+import './studio/styles/posts.css'
+import './studio/styles/editor.css'
+import './studio/styles/editor-content.css'
+import './studio/styles/editor-outline.css'
+import './studio/styles/article-settings.css'
+import './studio/styles/article-reader.css'
+
 
 import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey } from './lib/auth'
 import { StudioIcon } from './studio/StudioIcon'

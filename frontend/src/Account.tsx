@@ -1,3 +1,5 @@
+import './Account.css'
+
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 

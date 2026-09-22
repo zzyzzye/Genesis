@@ -1,0 +1,172 @@
+.markdown-editor__source--mdx {
+  display: block;
+  height: 100%;
+  min-height: calc(100vh - 11rem);
+  border-right: 0;
+  background: #fff;
+}
+.markdown-editor__source--mdx > .genesis-mdx-editor {
+  min-height: calc(100vh - 11rem);
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  border-bottom: 1px solid #dce3e9;
+  background: #f8fafb;
+}
+.genesis-mdx-content {
+  max-width: 58rem;
+  margin: 0 auto;
+  padding: 1.5rem clamp(1rem, 4vw, 3.5rem) 5rem;
+  font-family: var(--studio-display);
+  font-size: 1rem;
+  line-height: 1.85;
+}
+.genesis-mdx-content h1,
+.genesis-mdx-content h2,
+.genesis-mdx-content h3 {
+  font-family: var(--studio-display);
+}
+@media (max-width: 680px) {
+  .markdown-editor__source--mdx,
+.markdown-editor__source--mdx > .genesis-mdx-editor { min-height: calc(100vh - 9rem); }
+  .genesis-mdx-content { padding: 1rem 1rem 3rem; font-size: .95rem; }
+}
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
+  min-height: 2.75rem;
+  box-sizing: border-box;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) {
+  margin: 1.9rem 0;
+  overflow: hidden;
+  border: 1px solid #d8e1ee;
+  border-radius: .65rem;
+  background: #fff;
+  box-shadow: 0 .8rem 1.8rem rgba(30, 41, 59, .08);
+  transition: border-color .16s ease, box-shadow .16s ease;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-focused) {
+  border-color: #5b8def;
+  box-shadow: 0 0 0 2px rgba(91, 141, 239, .16), 0 .8rem 1.8rem rgba(30, 41, 59, .08);
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: .35rem;
+  min-height: 2.65rem;
+  padding: 0 .6rem 0 .9rem;
+  border-bottom: 1px solid #e8edf4;
+  background: #f8fafc;
+  color: #64748b;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) [role="combobox"],
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) button {
+  min-height: 1.85rem;
+  border: 1px solid transparent;
+  border-radius: .38rem;
+  background: transparent;
+  color: #64748b;
+  font-family: var(--studio-sans);
+  font-size: .72rem;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) [role="combobox"] {
+  min-width: 7.2rem;
+  padding-inline: .55rem;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) [role="combobox"]:hover,
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) button:hover {
+  border-color: #d8e1ee;
+  background: #eef4ff;
+  color: #315eac;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div > div:first-child {
+  width: 100%;
+  box-sizing: border-box;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div > div:first-child::before {
+  content: "代码块";
+  margin-right: auto;
+  color: #94a3b8;
+  font-family: var(--studio-sans);
+  font-size: .72rem;
+  letter-spacing: .04em;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) button[title="删除代码块"] {
+  opacity: 0;
+  transition: opacity .16s ease, background-color .16s ease, color .16s ease;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor):hover button[title="删除代码块"],
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-focused) button[title="删除代码块"] {
+  opacity: 1;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) .cm-content {
+  padding-inline: 3rem 2.85rem !important;
+}
+@media (min-width: 681px) {
+  .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
+    padding-inline: clamp(2rem, 3.5vw, 4.5rem);
+  }
+}
+.markdown-editor__source--mdx {
+  min-width: 0;
+  overflow: auto;
+}
+@media (max-width: 1100px) {
+  .markdown-editor__source--mdx { overflow: visible; }
+}
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar::-webkit-scrollbar {
+  display: none;
+}
+.markdown-editor__source--mdx {
+  position: relative;
+  overflow: visible;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) {
+  margin: 1.2rem 0 .35rem;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) + p {
+  margin-top: .4rem;
+  margin-bottom: .6rem;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) .cm-content {
+  min-height: 2.3rem !important;
+  padding-block: .4rem .35rem !important;
+}
+@media (min-width: 1281px) {
+  .markdown-editor__source--mdx:has(.markdown-editor__outline--expanded) .genesis-mdx-content {
+    box-sizing: border-box;
+    width: min(54rem, calc(100% - 21rem));
+    max-width: none;
+    margin-left: clamp(2rem, 4vw, 5rem);
+    margin-right: auto;
+  }
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div > div:first-child {
+  position: static !important;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) .cm-content {
+  padding-left: .75rem !important;
+  padding-right: 1rem !important;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) [role="combobox"] {
+  width: fit-content !important;
+  min-width: 0 !important;
+  padding-right: .25rem !important;
+  gap: .2rem;
+}
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) [role="combobox"] > span:first-child {
+  flex: 0 0 auto;
+}

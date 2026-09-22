@@ -1,0 +1,36 @@
+.home-systems {
+  width: min(100% - 3rem, 78rem);
+  margin: 0 auto;
+  padding: 0 0 clamp(5rem, 9vw, 8rem);
+}
+
+.home-system-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: #d8d2c8;
+}
+
+.home-system-card {
+  min-height: 20rem;
+  padding: 1.6rem;
+  background: #fffdf9;
+  color: #202838;
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.home-system-card:hover { transform: translateY(-.35rem); background: #f1ebe2; }
+.home-system-card > span { color: #cf5337; font-size: .75rem; font-weight: 800; letter-spacing: .12em; }
+.home-system-card h3 { margin: 4rem 0 1rem; font-family: Georgia, "Noto Serif SC", serif; font-size: clamp(2rem, 4vw, 3.4rem); font-weight: 500; letter-spacing: -.08em; }
+.home-system-card p { max-width: 18rem; min-height: 3.5rem; color: #686259; line-height: 1.75; }
+.home-system-card strong { display: block; margin-top: 2rem; font-size: .78rem; }
+.home-system-card--tools { background: #e7edf0; }
+.home-system-card--media { background: #202838; color: #fffdf9; }
+.home-system-card--media p { color: #c6c8c9; }
+
+@media (max-width: 680px) {
+  .home-systems { width: min(100% - 2rem, 78rem); }
+  .home-system-grid { grid-template-columns: 1fr; }
+  .home-system-card { min-height: 15rem; }
+  .home-system-card h3 { margin-top: 2.5rem; }
+}

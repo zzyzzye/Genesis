@@ -1,3 +1,6 @@
+import '../../../styles/public-shell.css'
+import './BlogPage.css'
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import Markdown from 'react-markdown'

@@ -1,3 +1,5 @@
+import './StudioAssistant.css'
+
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
