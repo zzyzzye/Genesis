@@ -14,6 +14,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from pydantic import SecretStr
 
+from genesis_api.agent.mimo import ChatMiMo
 from genesis_api.agent.prompt import AgentPrompt
 from genesis_api.agent.tools import agent_invocation_context, build_blog_tools
 from genesis_api.ai.schemas import AiChatRequest
@@ -83,6 +84,10 @@ class EmbeddedAgentRuntime:
                 "google_genai", settings.text_gemini_api_key,
                 settings.text_gemini_model, settings.text_gemini_base_url,
             ),
+            "mimo": (
+                "openai", settings.text_mimo_api_key,
+                settings.text_mimo_model, settings.text_mimo_base_url,
+            ),
             "claude": (
                 "anthropic", settings.text_claude_api_key,
                 settings.text_claude_model, settings.text_claude_base_url,
@@ -104,6 +109,14 @@ class EmbeddedAgentRuntime:
             "temperature": settings.text_temperature,
             "max_tokens": settings.text_max_tokens,
         }
+        if provider == "mimo":
+            return ChatMiMo(
+                model=model, api_key=api_key, base_url=base_url,
+                default_headers={"api-key": api_key.get_secret_value()},
+                temperature=settings.text_temperature,
+                max_completion_tokens=settings.text_max_tokens,
+                use_responses_api=False,
+            )
         if is_compatible_gateway:
             normalized_base_url = base_url.rstrip("/")
             if not normalized_base_url.endswith("/v1"):
@@ -166,7 +179,7 @@ class EmbeddedAgentRuntime:
 
 def _message_text(message: object) -> list[str]:
     """只提取模型消息文本，忽略工具结果和元数据。"""
-    if getattr(message, "type", None) != "ai":
+    if getattr(message, "type", None) not in ("ai", "AIMessageChunk"):
         return []
     content = getattr(message, "content", None)
     if isinstance(content, str):

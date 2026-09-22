@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from genesis_api.ai.models import AiChatRunStatus
 
 AiSurface = Literal["blog", "studio", "tools"]
-AiProvider = Literal["openai", "grok", "gemini", "claude"]
+AiProvider = Literal["openai", "grok", "gemini", "claude", "mimo"]
 AiExecutionMode = Literal["automatic", "approval_required"]
 MessageRole = Literal["user", "assistant"]
 

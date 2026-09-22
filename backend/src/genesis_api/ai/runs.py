@@ -35,6 +35,8 @@ def _configured_model(settings: Settings, provider: str) -> str | None:
         return settings.text_grok_model
     if provider == "gemini":
         return settings.text_gemini_model
+    if provider == "mimo":
+        return settings.text_mimo_model
     return settings.text_claude_model
 
 

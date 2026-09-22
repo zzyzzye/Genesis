@@ -154,7 +154,7 @@ describe('App', () => {
     window.history.pushState({}, '', '/studio')
     const view = render(<App />)
 
-    fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'test-password' } })
+    fireEvent.change(await screen.findByLabelText('密码'), { target: { value: 'test-password' } })
     fireEvent.click(screen.getByRole('button', { name: '进入写作台' }))
 
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()

@@ -14,6 +14,7 @@ MODEL_CONTEXT_WINDOWS: Mapping[ProviderName, Mapping[str, int]] = {
         "gpt-6-astra": 1_050_000,
     },
     "grok": {},
+    "mimo": {},
     "gemini": {
         "gemini-2.5-flash": 1_048_576,
         "gemini-2.5-pro": 1_048_576,

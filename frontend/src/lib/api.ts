@@ -248,7 +248,7 @@ export type AiSurface = 'blog' | 'studio' | 'tools'
 
 export type AiExecutionMode = 'automatic' | 'approval_required'
 
-export type AiProvider = 'openai' | 'grok' | 'gemini' | 'claude'
+export type AiProvider = 'openai' | 'grok' | 'gemini' | 'claude' | 'mimo'
 
 export interface AvailableModel {
   id: string

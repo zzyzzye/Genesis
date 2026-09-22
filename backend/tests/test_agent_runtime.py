@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from pydantic import SecretStr
 
 from genesis_api.agent import tools as agent_tools
@@ -39,6 +39,7 @@ class FakeSession:
 def test_prompt_and_message_text() -> None:
     assert "写入任务" in AgentPrompt.system_message()
     assert _message_text(AIMessage(content="回答")) == ["回答"]
+    assert _message_text(AIMessageChunk(content="流式回答")) == ["流式回答"]
     assert _message_text(AIMessage(content=[{"type": "text", "text": "分块"}])) == ["分块"]
     assert _message_text(HumanMessage(content="问题")) == []
     assert _message_text(object()) == []

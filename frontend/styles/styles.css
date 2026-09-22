@@ -2243,6 +2243,7 @@ nav span {
 .provider-icon--grok { color: #111; }
 .provider-icon--gemini { color: #4f6fe8; }
 .provider-icon--claude { color: #191919; }
+.provider-icon--mimo { color: #e96500; white-space: nowrap; flex-shrink: 0; }
 
 .studio-assistant__provider-tabs button {
   display: inline-flex;
@@ -3725,7 +3726,7 @@ nav span {
 }
 .studio-assistant__composer .studio-assistant__provider-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: .18rem;
   margin: 0 0 .4rem;
   padding: .2rem;

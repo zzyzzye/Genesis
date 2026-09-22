@@ -80,6 +80,8 @@ class ModelDiscoveryService:
             return self.settings.text_grok_api_key, self.settings.text_grok_base_url
         if provider == "gemini":
             return self.settings.text_gemini_api_key, self.settings.text_gemini_base_url
+        if provider == "mimo":
+            return self.settings.text_mimo_api_key, self.settings.text_mimo_base_url
         return self.settings.text_claude_api_key, self.settings.text_claude_base_url
 
     def _provider_model(self, provider: ProviderName) -> str | None:
@@ -89,6 +91,8 @@ class ModelDiscoveryService:
             return self.settings.text_grok_model
         if provider == "gemini":
             return self.settings.text_gemini_model
+        if provider == "mimo":
+            return self.settings.text_mimo_model
         return self.settings.text_claude_model
 
     def _prioritize_configured_model(
@@ -123,6 +127,8 @@ class ModelDiscoveryService:
 
     @staticmethod
     def _headers(provider: ProviderName, api_key: str) -> dict[str, str]:
+        if provider == "mimo":
+            return {"api-key": api_key, "accept": "application/json"}
         if provider == "claude":
             return {
                 "x-api-key": api_key,
@@ -147,6 +153,11 @@ class ModelDiscoveryService:
                 if isinstance(native_name, str):
                     model_id = native_name.removeprefix("models/")
             if not isinstance(model_id, str):
+                continue
+            # 官方目录同时包含语音识别/合成模型，不能用于文本 Agent。
+            if provider == "mimo" and any(
+                part in {"asr", "tts"} for part in model_id.split("-")
+            ):
                 continue
             context_window = raw_model.get("context_window") or raw_model.get("context_length")
             if not isinstance(context_window, int) or context_window <= 0:

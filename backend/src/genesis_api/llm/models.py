@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-ProviderName = Literal["openai", "grok", "gemini", "claude"]
+ProviderName = Literal["openai", "grok", "gemini", "claude", "mimo"]
 
 
 class AvailableModel(BaseModel):

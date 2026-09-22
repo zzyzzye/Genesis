@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 120
     development_owner_password: SecretStr = SecretStr("genesis-local-only")
 
-    text_provider: Literal["openai", "grok", "gemini", "claude"] = "openai"
+    text_provider: Literal["openai", "grok", "gemini", "claude", "mimo"] = "openai"
     text_openai_api_key: SecretStr | None = None
     text_openai_base_url: str = "https://api.openai.com/v1"
     text_openai_model: str = "gpt-5.6-luna"
@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     text_claude_api_key: SecretStr | None = None
     text_claude_base_url: str = "https://api.anthropic.com"
     text_claude_model: str | None = None
+    text_mimo_api_key: SecretStr | None = None
+    text_mimo_base_url: str = "https://api.xiaomimimo.com/v1"
+    text_mimo_model: str = "mimo-v2.6-flash"
     text_temperature: float = 0.7
     text_max_tokens: int = 4096
 

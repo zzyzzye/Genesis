@@ -122,6 +122,7 @@ async def test_list_claude_models_supports_base_url_with_v1() -> None:
     settings = Settings(
         text_claude_api_key=SecretStr("claude-test-key"),
         text_claude_base_url="https://gateway.example/v1",
+        text_claude_model=None,
     )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         result = await ModelDiscoveryService(settings, client).list_models("claude")
