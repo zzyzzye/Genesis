@@ -37,7 +37,8 @@ import {
 } from '../lib/api'
 import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
 
-type AssistantMessage = { role: 'assistant' | 'user'; content: string }
+type AssistantTiming = { startedAt: number; firstTokenAt?: number; completedAt?: number }
+type AssistantMessage = { role: 'assistant' | 'user'; content: string; timing?: AssistantTiming }
 type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string; status: 'draft' | 'published' }
 type AssistantPageContext = { route: string; section: string; pageType: 'overview' | 'posts_list' | 'post_editor' | 'post_preview' | 'section' }
 type ActiveAssistantRun = { id: string; assistantMessageIndex: number }
@@ -106,15 +107,41 @@ function parsePendingAction(content: string): AiActionProposal | null {
   } catch { return null }
 }
 
-const MarkdownMessage = memo(function MarkdownMessage({ content, index, onConfirm, confirming, streaming, onProgress }: { content: string; index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void }) {
+function formatDuration(milliseconds: number) {
+  const seconds = Math.max(0, milliseconds) / 1000
+  if (seconds < 10) return `${seconds.toFixed(1)} 秒`
+  if (seconds < 60) return `${Math.round(seconds)} 秒`
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes} 分 ${Math.round(seconds % 60)} 秒`
+}
+
+const ResponseTiming = memo(function ResponseTiming({ timing, streaming }: { timing?: AssistantTiming; streaming: boolean }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!streaming || !timing) return
+    const timer = window.setInterval(() => setNow(Date.now()), 100)
+    return () => window.clearInterval(timer)
+  }, [streaming, timing])
+  if (!timing) return null
+  const end = timing.completedAt ?? now
+  const firstToken = timing.firstTokenAt
+  return <div className="studio-assistant__timing" aria-label="生成耗时">
+    <span>思考 {formatDuration((firstToken ?? end) - timing.startedAt)}</span>
+    <span>输出 {firstToken ? formatDuration(end - firstToken) : '等待中'}</span>
+    <span>总计 {formatDuration(end - timing.startedAt)}</span>
+  </div>
+})
+
+const MarkdownMessage = memo(function MarkdownMessage({ content, timing, index, onConfirm, confirming, streaming, onProgress }: { content: string; timing?: AssistantTiming; index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void }) {
   const action = streaming ? null : parsePendingAction(content)
-  return <>
+  return <div className="studio-assistant__response">
     <div className="studio-assistant__markdown">{streaming ? <TypewriterText content={content} onProgress={onProgress} /> : <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>}</div>
+    <ResponseTiming timing={timing} streaming={streaming} />
     {action && onConfirm && <div className="studio-assistant__action-card">
       <strong>待确认操作</strong><span>{action.action}</span>
       <button type="button" disabled={confirming} onClick={() => { void onConfirm(index, action) }}>{confirming ? '执行中…' : '确认执行'}</button>
     </div>}
-  </>
+  </div>
 })
 
 function updateAssistantMessage(
@@ -261,6 +288,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     let cancelled = false
     const controller = new AbortController()
     let received = sessionRef.current.messages[run.assistantMessageIndex]?.content ?? ''
+    let firstTokenAt = sessionRef.current.messages[run.assistantMessageIndex]?.timing?.firstTokenAt
     let pendingFrame: number | null = null
     const flush = () => {
       if (pendingFrame !== null) cancelAnimationFrame(pendingFrame)
@@ -268,6 +296,13 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
       setMessages((current) => updateAssistantMessage(current, run.assistantMessageIndex, () => received))
     }
     const queue = () => { if (pendingFrame === null) pendingFrame = requestAnimationFrame(flush) }
+    const markFirstToken = (content: string) => {
+      if (firstTokenAt || !content) return
+      firstTokenAt = Date.now()
+      setMessages((current) => current.map((message, index) => index === run.assistantMessageIndex
+        ? { ...message, timing: { ...(message.timing ?? { startedAt: firstTokenAt! }), firstTokenAt } }
+        : message))
+    }
 
     async function consumeRun() {
       setError(null)
@@ -275,13 +310,18 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
       while (!cancelled) {
         try {
           const result = await streamAiChatRun(token!, run.id, {
-            onSnapshot: (content) => { received = content; queue(); setStreamStatus('正在生成…') },
-            onToken: (content) => { received += content; queue() },
+            onSnapshot: (content) => { received = content; markFirstToken(content); queue(); setStreamStatus('正在生成…') },
+            onToken: (content) => { received += content; markFirstToken(content); queue() },
           }, controller.signal)
           if (cancelled) return
           if (result === 'completed') {
             flush()
-            setMessages((current) => current.filter((message) => message.content.trim().length > 0))
+            const completedAt = Date.now()
+            setMessages((current) => current
+              .map((message, index) => index === run.assistantMessageIndex && message.timing
+                ? { ...message, timing: { ...message.timing, firstTokenAt, completedAt } }
+                : message)
+              .filter((message) => message.content.trim().length > 0))
             setActiveRun((current) => current?.id === run.id ? null : current)
             setStreamStatus(null)
             setError(null)
@@ -327,7 +367,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!content || isBusy || !token) return
     const nextMessages: AiChatMessage[] = [
-      ...messages.filter((message) => message.content.trim().length > 0),
+      ...messages.filter((message) => message.content.trim().length > 0).map(({ role, content: messageContent }) => ({ role, content: messageContent })),
       { role: 'user', content },
     ]
     if (nextMessages.length > 40) {
@@ -336,7 +376,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     }
     const assistantMessageIndex = nextMessages.length
     shouldStickToBottomRef.current = true
-    setMessages([...nextMessages, { role: 'assistant', content: '' }])
+    setMessages([...nextMessages, { role: 'assistant', content: '', timing: { startedAt: Date.now() } }])
     setDraft('')
     setError(null)
     setStreamStatus('正在创建生成任务…')
@@ -431,7 +471,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
               {messages.map((message, index) => (
                 <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${message.role}-${index}`}>
                   {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
-                  {message.role === 'assistant' ? <MarkdownMessage content={message.content} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} /> : <p>{message.content}</p>}
+                  {message.role === 'assistant' ? <MarkdownMessage content={message.content} timing={message.timing} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} /> : <p>{message.content}</p>}
                 </div>
               ))}
             </div>

@@ -26,7 +26,7 @@
 .studio-assistant__messages { display: grid; gap: .85rem; }
 .studio-assistant__message { display: flex; gap: .45rem; align-items: flex-start; }
 .studio-assistant__message > p,
-.studio-assistant__message > .studio-assistant__markdown {
+.studio-assistant__message > .studio-assistant__response {
   display: block;
   max-width: 100%;
   min-width: 0;
@@ -261,13 +261,13 @@
 }
 .studio-assistant__composer > .studio-assistant__composer-tools > button[type='submit'] svg { width: .95rem; }
 .studio-assistant__message--user > p,
-.studio-assistant__message > .studio-assistant__markdown {
+.studio-assistant__message > .studio-assistant__response {
   border-radius: .8rem !important;
 }
 .studio-assistant__messages {
   gap: .55rem;
 }
-.studio-assistant__message > .studio-assistant__markdown {
+.studio-assistant__message > .studio-assistant__response {
   white-space: normal;
   padding: .62rem .75rem;
   line-height: 1.55;
@@ -304,7 +304,7 @@
 .studio-assistant__messages,
 .studio-assistant__message,
 .studio-assistant__message > p,
-.studio-assistant__message > .studio-assistant__markdown {
+.studio-assistant__message > .studio-assistant__response {
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
@@ -581,6 +581,9 @@
 }
 
 .studio-assistant__composer textarea::placeholder { color: var(--studio-text); opacity: 1; }
+.studio-assistant__response { display: grid; gap: .38rem; }
+.studio-assistant__timing { display: flex; flex-wrap: wrap; gap: .28rem .65rem; padding: 0 .15rem; color: var(--studio-text, #000); font-size: .59rem; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.studio-assistant__timing span + span::before { content: '·'; margin-right: .65rem; }
 .studio-assistant__stream-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
 .studio-assistant__typing-cursor { display: inline-block; width: .12em; height: 1em; margin-left: .16em; background: currentColor; vertical-align: -.12em; animation: studio-caret 1s steps(2, start) infinite; }
 @keyframes studio-caret { to { visibility: hidden; } }
