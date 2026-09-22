@@ -1,0 +1,28 @@
+.tools-page { --tools-ink: #15242c; min-height: 100vh; display: grid; grid-template-columns: 4.5rem 1fr; background: #dfe8e9; color: var(--tools-ink); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+.tools-rail { position: sticky; top: 0; display: flex; height: 100vh; flex-direction: column; align-items: center; justify-content: space-between; padding: 1.5rem 0 2rem; border-right: 1px solid rgb(21 36 44 / 20%); }
+.tools-rail a { display: grid; width: 2.3rem; height: 2.3rem; place-items: center; border: 1px solid var(--tools-ink); font-size: 1.1rem; font-weight: 800; }
+.tools-rail span { color: #587078; font-size: .7rem; letter-spacing: .15em; writing-mode: vertical-rl; }
+.tools-main { min-width: 0; }
+.tools-header { display: flex; min-height: 4.5rem; align-items: center; justify-content: space-between; padding: 0 clamp(1.25rem, 4vw, 4rem); border-bottom: 1px solid rgb(21 36 44 / 20%); font-size: .68rem; font-weight: 800; letter-spacing: .12em; }
+.tools-header div { display: flex; align-items: center; gap: .65rem; }
+.tools-status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: #2e8b68; box-shadow: 0 0 0 .25rem rgb(46 139 104 / 13%); }
+.tools-header a:focus-visible, .tools-rail a:focus-visible { outline: 3px solid #2e8b68; outline-offset: 4px; }
+.tools-hero { padding: clamp(4rem, 10vw, 9rem) clamp(1.25rem, 6vw, 7rem) clamp(4rem, 8vw, 7rem); border-bottom: 1px solid rgb(21 36 44 / 20%); background-image: linear-gradient(rgb(21 36 44 / 7%) 1px, transparent 1px), linear-gradient(90deg, rgb(21 36 44 / 7%) 1px, transparent 1px); background-size: 4rem 4rem; }
+.tools-hero > p:first-child { margin: 0 0 1.5rem; color: #527079; font-size: .7rem; font-weight: 800; letter-spacing: .16em; }
+.tools-hero h1 { max-width: 15ch; margin: 0; font-family: Inter, "PingFang SC", sans-serif; font-size: clamp(3rem, 7vw, 7.5rem); letter-spacing: -.085em; line-height: .98; text-wrap: balance; }
+.tools-hero h1 span { color: #2b6970; }
+.tools-lead { max-width: 42rem; margin: 2.5rem 0 0; color: #4d6268; font-family: Inter, "PingFang SC", sans-serif; font-size: clamp(.95rem, 1.4vw, 1.15rem); line-height: 1.8; }
+.tools-directory { padding: clamp(3rem, 6vw, 6rem) clamp(1.25rem, 4vw, 4rem) 5rem; }
+.tools-section-title { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: .4rem 2rem; margin-bottom: 2rem; }
+.tools-section-title span { color: #60777d; font-size: .66rem; letter-spacing: .14em; }
+.tools-section-title h2 { margin: 0; font-family: Inter, "PingFang SC", sans-serif; font-size: clamp(2rem, 4vw, 4rem); letter-spacing: -.06em; }
+.tools-section-title strong { grid-row: 1 / 3; grid-column: 2; color: #60777d; font-size: .68rem; }
+.tools-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid rgb(21 36 44 / 25%); border-left: 1px solid rgb(21 36 44 / 25%); }
+.tool-tile { min-height: 23rem; padding: 1.4rem; border-right: 1px solid rgb(21 36 44 / 25%); border-bottom: 1px solid rgb(21 36 44 / 25%); }
+.tool-tile > span, .tool-tile small { color: #60777d; font-size: .66rem; letter-spacing: .12em; }
+.tool-glyph { display: grid; width: 4.5rem; height: 4.5rem; margin: 4rem 0 2rem; place-items: center; border: 1px solid var(--tools-ink); font-weight: 900; }
+.tool-tile h3 { margin: 0 0 .8rem; font-family: Inter, "PingFang SC", sans-serif; font-size: 1.4rem; }
+.tool-tile p { min-height: 3.5rem; color: #53686e; font-family: Inter, "PingFang SC", sans-serif; line-height: 1.7; }
+.tool-tile small { display: block; margin-top: 2.5rem; }
+@media (max-width: 760px) { .tools-page { grid-template-columns: 1fr; } .tools-rail { position: static; width: 100%; height: 3.75rem; flex-direction: row; padding: 0 1rem; border-right: 0; border-bottom: 1px solid rgb(21 36 44 / 20%); } .tools-rail span { writing-mode: initial; } .tools-header { min-height: 3.75rem; } .tools-grid { grid-template-columns: 1fr; } .tool-tile { min-height: 17rem; } .tool-glyph { margin-top: 2.5rem; } }
+@media (prefers-reduced-motion: reduce) { .tools-page * { scroll-behavior: auto !important; } }

@@ -1,9 +1,0 @@
-.module-placeholder { width: min(100% - 3rem, 78rem); margin: 0 auto; padding: clamp(7rem, 15vw, 12rem) 0; }
-.module-placeholder h1 { max-width: 10ch; margin: 1rem 0 1.5rem; font-family: Georgia, "Noto Serif SC", serif; font-size: clamp(3rem, 7vw, 6rem); font-weight: 500; letter-spacing: -.08em; }
-.module-placeholder h1 em { display: block; color: #cf5337; font-style: normal; }
-.module-placeholder p:not(.eyebrow) { max-width: 30rem; color: #686259; line-height: 1.8; }
-.module-placeholder .primary-button { width: fit-content; margin-top: 2rem; }
-
-@media (max-width: 680px) {
-  .module-placeholder { width: min(100% - 2rem, 78rem); }
-}

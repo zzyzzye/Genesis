@@ -1,0 +1,34 @@
+.media-page { min-height: 100vh; overflow: hidden; background: #08090d; color: #f3f0e8; font-family: Inter, "PingFang SC", sans-serif; }
+.media-header { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr auto 1fr; min-height: 4.75rem; align-items: center; padding: 0 clamp(1.25rem, 4vw, 4rem); border-bottom: 1px solid rgb(255 255 255 / 13%); font-size: .68rem; font-weight: 750; letter-spacing: .14em; }
+.media-header a:last-child { justify-self: end; }
+.media-header a:focus-visible { outline: 3px solid #deff67; outline-offset: 4px; }
+.media-wordmark { color: #deff67; }
+.media-hero { position: relative; min-height: min(47rem, calc(100vh - 4.75rem)); padding: clamp(5rem, 12vw, 10rem) clamp(1.25rem, 7vw, 8rem) 5rem; background: radial-gradient(circle at 75% 42%, rgb(116 69 255 / 28%), transparent 28rem), linear-gradient(115deg, #08090d 50%, #11101c); }
+.media-hero > p { margin: 0 0 1.5rem; color: #9d95b5; font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .68rem; font-weight: 800; letter-spacing: .18em; }
+.media-hero h1 { position: relative; z-index: 1; max-width: 15ch; margin: 0; font-family: Georgia, "Noto Serif SC", serif; font-size: clamp(3.1rem, 7.5vw, 8rem); font-weight: 400; letter-spacing: -.075em; line-height: 1.02; text-wrap: balance; }
+.media-hero h1 em { color: #deff67; font-style: italic; }
+.media-now { position: absolute; right: clamp(1.25rem, 5vw, 5rem); bottom: 4rem; display: grid; gap: .45rem; min-width: 14rem; padding: 1.2rem 0; border-top: 1px solid rgb(255 255 255 / 25%); border-bottom: 1px solid rgb(255 255 255 / 25%); font-family: ui-monospace, "SFMono-Regular", monospace; }
+.media-now span { color: #8f899e; font-size: .6rem; letter-spacing: .16em; }
+.media-now strong { font-size: .72rem; letter-spacing: .1em; }
+.media-orbit { position: absolute; top: 50%; right: 7%; width: clamp(15rem, 32vw, 30rem); aspect-ratio: 1; transform: translateY(-50%); border: 1px solid rgb(222 255 103 / 30%); border-radius: 50%; }
+.media-orbit span { position: absolute; inset: 16%; border: 1px solid rgb(255 255 255 / 15%); border-radius: 50%; }
+.media-orbit span + span { inset: 34%; background: rgb(116 69 255 / 20%); }
+.media-orbit i { position: absolute; top: 8%; left: 50%; width: .7rem; height: .7rem; border-radius: 50%; background: #deff67; box-shadow: 0 0 2rem #deff67; }
+.media-library { padding: clamp(4rem, 8vw, 7rem) clamp(1.25rem, 4vw, 4rem) 6rem; border-top: 1px solid rgb(255 255 255 / 13%); }
+.media-library-heading p { margin: 0; color: #817b91; font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .65rem; letter-spacing: .15em; }
+.media-library-heading h2 { margin: .5rem 0 2rem; font-family: Georgia, "Noto Serif SC", serif; font-size: clamp(2.7rem, 5vw, 5rem); font-weight: 400; letter-spacing: -.06em; }
+.media-collection-grid { display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.media-collection { position: relative; min-height: 28rem; display: flex; flex-direction: column; justify-content: space-between; padding: 1.5rem; overflow: hidden; background: #15141d; }
+.media-collection::before { position: absolute; inset: 0; background: radial-gradient(circle at 65% 25%, var(--glow), transparent 47%); content: ""; }
+.media-collection--live { --glow: rgb(224 72 81 / 45%); }
+.media-collection--bilibili { --glow: rgb(66 173 212 / 40%); }
+.media-collection--archive { --glow: rgb(132 92 214 / 38%); }
+.media-collection > * { position: relative; }
+.media-collection > span, .media-collection strong, .media-collection small { font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .62rem; letter-spacing: .14em; }
+.media-collection > span { color: #8b8498; }
+.media-collection h3 { margin: .35rem 0 .7rem; font-family: Georgia, serif; font-size: clamp(2.2rem, 4vw, 4rem); font-weight: 400; }
+.media-collection p { margin: 0; color: #aaa5b5; }
+.media-collection strong { color: #deff67; }
+.media-footer { display: flex; justify-content: space-between; padding: 1.5rem clamp(1.25rem, 4vw, 4rem); border-top: 1px solid rgb(255 255 255 / 13%); color: #777282; font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .6rem; letter-spacing: .14em; }
+@media (max-width: 760px) { .media-header { grid-template-columns: 1fr auto; } .media-wordmark { display: none; } .media-hero { min-height: 42rem; } .media-orbit { top: 67%; right: -6rem; opacity: .7; } .media-now { right: auto; bottom: 2.5rem; left: 1.25rem; } .media-collection-grid { grid-template-columns: 1fr; } .media-collection { min-height: 19rem; } }
+@media (prefers-reduced-motion: reduce) { .media-page * { scroll-behavior: auto !important; } }

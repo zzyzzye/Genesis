@@ -121,6 +121,19 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '返回文章列表' })).toBeInTheDocument()
   })
 
+  it.each([
+    ['/tools', '把重复工作，压缩成一次点击。', '工具系统标识'],
+    ['/media', '让喜欢的声音与画面，留下轨迹。', null],
+  ])('为 %s 使用独立系统界面且不显示跨系统导航', (path, heading, landmark) => {
+    window.history.pushState({}, '', path)
+
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: '主导航' })).not.toBeInTheDocument()
+    if (landmark) expect(screen.getByRole('complementary', { name: landmark })).toBeInTheDocument()
+  })
+
   it('写作台登录后展示博客管理导航和仪表盘，并可进入文章编辑', async () => {
     const adminPosts = posts.items.map((post) => ({
       ...post,

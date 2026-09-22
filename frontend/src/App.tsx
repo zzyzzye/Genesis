@@ -3,9 +3,10 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { Account } from './Account'
 import { Studio } from './Studio'
 import { StudioPortal } from './studio/StudioPortal'
-import { SystemLanding } from './SystemLanding'
 import { Home } from './pages/home/Home'
 import { PublicBlog } from './pages/blog/BlogPage'
+import { MediaPage } from './pages/media/MediaPage'
+import { ToolsPage } from './pages/tools/ToolsPage'
 
 function LegacyStudioRedirect() {
   const location = useLocation()
@@ -24,8 +25,8 @@ export function App() {
         <Route path="/" element={<Home />} />
         <Route path="/blog/*" element={<PublicBlog />} />
         <Route path="/articles/:slug" element={<PublicBlog />} />
-        <Route path="/tools/*" element={<SystemLanding system="tools" />} />
-        <Route path="/media/*" element={<SystemLanding system="media" />} />
+        <Route path="/tools/*" element={<ToolsPage />} />
+        <Route path="/media/*" element={<MediaPage />} />
         <Route path="/blog/studio/*" element={<LegacyStudioRedirect />} />
         <Route path="/studio/blog/*" element={<Studio />} />
         <Route path="/studio" element={<StudioPortal />} />

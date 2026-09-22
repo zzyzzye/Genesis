@@ -1,4 +1,3 @@
-import '../../../styles/public-shell.css'
 import './BlogPage.css'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -119,19 +118,13 @@ function PublicBlog() {
   }, [location.pathname, slug])
 
   return (
-    <div className="page" id="top">
-      <header className="site-header">
-        <Link className="brand" to="/blog" onClick={closeArticle}>
-          Genesis<span>.</span>
+    <div className="blog-page" id="top">
+      <header className="blog-masthead">
+        <Link className="blog-home-link" to="/" aria-label="返回 Genesis 首页">
+          <span aria-hidden="true">←</span> Genesis
         </Link>
-        <nav aria-label="主导航">
-          <Link to="/blog" onClick={closeArticle}>
-            博客
-          </Link>
-          <Link to="/tools">工具</Link>
-          <Link to="/media">影音</Link>
-        </nav>
-        <div className="header-utilities"><span className="module-state">01 / Blog</span><Link className="account-entry" to="/account"><span aria-hidden="true">◌</span> 账户</Link></div>
+        <Link className="blog-wordmark" to="/blog" onClick={closeArticle}>Genesis Journal</Link>
+        <Link className="blog-account-link" to="/account" aria-label="打开账户">账户 <span aria-hidden="true">↗</span></Link>
       </header>
 
       <main>
@@ -287,7 +280,7 @@ function PublicBlog() {
         )}
       </main>
 
-      <footer className="site-footer">
+      <footer className="blog-footer">
         <span>Genesis · 个人内容系统</span>
         <span>Blog is the beginning.</span>
       </footer>
