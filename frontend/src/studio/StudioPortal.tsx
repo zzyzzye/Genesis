@@ -22,7 +22,7 @@ const systems: PortalSystem[] = [
     title: '博客',
     eyebrow: 'CONTENT STUDIO',
     description: '写作、整理和发布长期内容，在文章所在的页面调用博客助手。',
-    href: '/blog/studio',
+    href: '/studio/blog',
     icon: 'articles',
     status: 'available',
   },

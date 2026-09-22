@@ -128,7 +128,6 @@ function PublicBlog() {
           <Link to="/blog" onClick={closeArticle}>
             博客
           </Link>
-          <Link to="/blog/studio">博客 Studio</Link>
           <Link to="/tools">工具</Link>
           <Link to="/media">影音</Link>
         </nav>

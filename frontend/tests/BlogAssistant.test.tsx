@@ -13,7 +13,7 @@ vi.mock('../src/lib/api', async (importOriginal) => ({
   getProviderModels: vi.fn().mockResolvedValue({ models: [] }),
 }))
 
-const page = { route: '/blog/studio/posts', section: 'posts', pageType: 'posts_list' as const }
+const page = { route: '/studio/blog/posts', section: 'posts', pageType: 'posts_list' as const }
 const sessionKey = 'genesis-blog-ai-conversation'
 
 function mount(messages: { role: string; content: string }[], activeRun: object | null = null) {

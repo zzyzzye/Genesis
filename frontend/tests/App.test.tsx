@@ -197,7 +197,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^文章$/ }))
 
-    expect(window.location.pathname).toBe('/blog/studio/posts')
+    expect(window.location.pathname).toBe('/studio/blog/posts')
     expect(screen.getByRole('heading', { name: '文章管理' })).toBeInTheDocument()
     expect(screen.queryByText('一级')).not.toBeInTheDocument()
     expect(screen.queryByText('二级')).not.toBeInTheDocument()
@@ -206,7 +206,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /从一个完整模块开始/ }))
 
-    expect(window.location.pathname).toBe('/blog/studio/posts/post-1/edit')
+    expect(window.location.pathname).toBe('/studio/blog/posts/post-1/edit')
     expect(screen.queryByRole('region', { name: '文章列表' })).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Markdown 编辑区' })).toBeInTheDocument()
     expect(document.querySelector('.studio-topbar')).not.toBeInTheDocument()
@@ -218,7 +218,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '关闭文章设置' }))
     expect(screen.queryByRole('dialog', { name: '文章设置' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '预览' }))
-    expect(window.location.pathname).toBe('/blog/studio/posts/post-1')
+    expect(window.location.pathname).toBe('/studio/blog/posts/post-1')
     expect(screen.getByRole('region', { name: '从一个完整模块开始' })).toBeInTheDocument()
 
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('test-token')
@@ -232,7 +232,7 @@ describe('App', () => {
       ],
       activeRun: { id: 'resumable-run', assistantMessageIndex: 2 },
     }))
-    window.history.pushState({}, '', '/blog/studio')
+    window.history.pushState({}, '', '/studio/blog')
     render(<App />)
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '打开博客 AI 助手' })).not.toBeInTheDocument()
@@ -248,6 +248,15 @@ describe('App', () => {
     expect(screen.queryByText('一级')).not.toBeInTheDocument()
     expect(screen.queryByText('二级')).not.toBeInTheDocument()
     expect(screen.queryByText('三级')).not.toBeInTheDocument()
+  })
+
+  it('旧博客后台入口先返回系统工作区选择页', async () => {
+    window.history.pushState({}, '', '/blog/studio')
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: '选择工作区' })).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/studio')
   })
 
 })
