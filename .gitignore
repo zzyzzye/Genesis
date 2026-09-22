@@ -43,6 +43,9 @@ Thumbs.db
 
 # 本地浏览器自动化产物
 .playwright-mcp/
+.playwright-cli/
+output/
 
 # LangGraph 本地运行时状态
 .langgraph_api/
+
