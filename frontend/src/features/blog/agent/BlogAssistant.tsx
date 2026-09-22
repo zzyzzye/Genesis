@@ -1,11 +1,11 @@
-import './StudioAssistant.css'
+import './BlogAssistant.css'
 
 import { type FormEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-import { StudioIcon } from './StudioIcon'
-import { TypewriterText } from './TypewriterText'
+import { StudioIcon } from '../../../studio/StudioIcon'
+import { TypewriterText } from '../../../studio/TypewriterText'
 
 function ProviderIcon({ provider }: { provider: AiProvider }) {
   const common = { viewBox: '0 0 24 24', role: 'img' as const, focusable: 'false' as const }
@@ -35,8 +35,8 @@ import {
   type AiActionProposal,
   type AiExecutionMode,
   type AiProvider,
-} from '../lib/api'
-import { getStoredAuthToken, studioAuthTokenKey } from '../lib/auth'
+} from '../../../lib/api'
+import { getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
 
 type AssistantTiming = { startedAt: number; firstTokenAt?: number; completedAt?: number }
 type AssistantMessage = { role: 'assistant' | 'user'; content: string; timing?: AssistantTiming }
@@ -54,10 +54,10 @@ const pageLabels: Record<AssistantPageContext['pageType'], string> = {
 }
 
 const defaultSuggestions = ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '创建一篇新的文章草稿']
-const assistantSessionKey = 'genesis-studio-ai-conversation'
+const assistantSessionKey = 'genesis-blog-ai-conversation'
 
 function initialAssistantMessages(): AssistantMessage[] {
-  return [{ role: 'assistant', content: '你好，我是 Genesis 助手。\n我可以帮你构思、改写和整理内容。' }]
+  return [{ role: 'assistant', content: '你好，我是博客助手。\n我会结合当前文章和页面帮你构思、改写与整理内容。' }]
 }
 
 function readAssistantSession(): AssistantSession {
@@ -156,7 +156,7 @@ function updateAssistantMessage(
   ))
 }
 
-export function StudioAssistant({ page, editor }: { page: AssistantPageContext; editor: AssistantEditorContext | null }) {
+export function BlogAssistant({ page, editor }: { page: AssistantPageContext; editor: AssistantEditorContext | null }) {
   const [initialSession] = useState(readAssistantSession)
   const [isOpen, setIsOpen] = useState(initialSession.isOpen)
   const [messages, setMessages] = useState<AssistantMessage[]>(initialSession.messages)
@@ -396,6 +396,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
         model: model || undefined,
         execution_mode: executionMode,
         context: {
+          module: 'blog',
           route: page.route,
           section: page.section,
           page_type: page.pageType,
@@ -464,11 +465,11 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
   return (
     <div className={`studio-assistant${isOpen ? ' is-open' : ''}`}>
       {isOpen && (
-        <section className="studio-assistant__panel" aria-label="Genesis AI 助手">
+        <section className="studio-assistant__panel" aria-label="博客 AI 助手">
           <header className="studio-assistant__header">
             <div className="studio-assistant__identity">
               <span className="studio-assistant__avatar"><StudioIcon name="assistant" /></span>
-              <div><strong>Genesis AI</strong><span><i />在线 · 创作助手</span></div>
+              <div><strong>博客助手</strong><span><i />在线 · 当前模块</span></div>
               <div className="studio-assistant__runtime-meta">
                 <span
                   className="studio-assistant__context-usage"
@@ -515,7 +516,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
           </div>
           <form className="studio-assistant__composer" onSubmit={(event) => { void submit(event) }}>
             <textarea
-              aria-label="向 Genesis AI 提问"
+              aria-label="向博客助手提问"
               placeholder="告诉我你想完成什么…"
               rows={2}
               value={draft}
@@ -599,9 +600,9 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
           </form>
         </section>
       )}
-      <button className="studio-assistant__launcher" type="button" aria-expanded={isOpen} aria-label={isOpen ? '关闭 Genesis AI 助手' : '打开 Genesis AI 助手'} onClick={() => setIsOpen((open) => !open)}>
+      <button className="studio-assistant__launcher" type="button" aria-expanded={isOpen} aria-label={isOpen ? '关闭博客 AI 助手' : '打开博客 AI 助手'} onClick={() => setIsOpen((open) => !open)}>
         <span className="studio-assistant__launcher-icon"><StudioIcon name={isOpen ? 'close' : 'assistant'} /></span>
-        <span className="studio-assistant__launcher-copy"><strong>{isOpen ? '收起助手' : 'Genesis AI'}</strong><small>{isOpen ? '继续你的工作' : '你的创作搭档'}</small></span>
+        <span className="studio-assistant__launcher-copy"><strong>{isOpen ? '收起助手' : '博客助手'}</strong><small>{isOpen ? '继续当前文章' : '当前模块的创作搭档'}</small></span>
         {!isOpen && <span className="studio-assistant__launcher-signal" />}
       </button>
     </div>

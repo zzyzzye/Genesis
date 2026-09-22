@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from jwt import InvalidTokenError, decode
 
-from genesis_api.agent.context import build_studio_agent_context
+from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.contracts import AgentActionConfirmation
 from genesis_api.ai.models import AiChatRunStatus
 from genesis_api.ai.runs import (
@@ -27,6 +27,7 @@ from genesis_api.ai.schemas import (
     AiContext,
 )
 from genesis_api.api.dependencies import CurrentUserDependency, OwnerDependency, SessionDependency
+from genesis_api.blog.agent.context import build_blog_agent_context
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.database.session import SessionLocal
 from genesis_api.identity.models import User, UserRole
@@ -58,7 +59,12 @@ def _prepare_request(
         )
 
     context = request.context or AiContext()
-    agent_context = build_studio_agent_context(
+    if context.module not in (None, "blog") or context.section not in (None, "posts"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="当前后台模块尚未提供 Agent 能力",
+        )
+    agent_context = build_blog_agent_context(
         session,
         route=context.route,
         section=context.section,
@@ -286,92 +292,16 @@ def confirm_agent_action(
         raise HTTPException(status_code=422, detail="操作提议无效或已过期") from exc
     if proposal.get("actor_id") != str(current_user.id):
         raise HTTPException(status_code=403, detail="操作提议不属于当前用户")
+    module = proposal.get("module", "blog")
     action = proposal.get("action")
     payload = proposal.get("payload")
-    if action not in {"create_draft", "update_post", "delete_post", "publish_post"}:
+    if not isinstance(module, str) or not isinstance(action, str):
         raise HTTPException(status_code=422, detail="操作类型无效")
     if not isinstance(payload, dict):
         raise HTTPException(status_code=422, detail="操作参数无效")
-    from genesis_api.blog.models import BlogPost, BlogPostStatus
-    from genesis_api.blog.schemas import BlogPostWrite
-    from genesis_api.blog.service import apply_post_data, get_blog_post_by_id
-
-    if action == "delete_post":
-        post_id = _payload_uuid(payload, "post_id")
-        post = get_blog_post_by_id(session, post_id)
-        if post is None:
-            raise HTTPException(status_code=404, detail="文章不存在")
-        session.delete(post)
-        session.commit()
-        return {"action": action, "post_id": str(post_id), "status": "deleted"}
-
-    if action == "publish_post":
-        post_id = _payload_uuid(payload, "post_id")
-        post = get_blog_post_by_id(session, post_id)
-        if post is None:
-            raise HTTPException(status_code=404, detail="文章不存在")
-        post.status = BlogPostStatus.PUBLISHED
-        session.commit()
-        return {"action": action, "post_id": str(post_id), "status": "published"}
-
-    if action == "update_post":
-        post_id = _payload_uuid(payload, "post_id")
-        post = get_blog_post_by_id(session, post_id)
-        if post is None:
-            raise HTTPException(status_code=404, detail="文章不存在")
-        changes = payload.get("changes")
-        if isinstance(changes, str):
-            try:
-                changes = json.loads(changes)
-            except json.JSONDecodeError as exc:
-                raise HTTPException(status_code=422, detail="changes 必须是 JSON") from exc
-        if not isinstance(changes, dict):
-            raise HTTPException(status_code=422, detail="changes 必须是 JSON 对象")
-        data = BlogPostWrite.model_validate({
-            "slug": changes.get("slug", post.slug),
-            "title": changes.get("title", post.title),
-            "excerpt": changes.get("excerpt", post.excerpt),
-            "content_markdown": changes.get("content_markdown", post.content_markdown),
-            "cover_image_url": changes.get("cover_image_url", post.cover_image_url),
-            "category_id": changes.get("category_id", post.category_id),
-            "status": changes.get("status", post.status),
-            "is_featured": changes.get("is_featured", post.is_featured),
-            "read_time_minutes": changes.get("read_time_minutes", post.read_time_minutes),
-            "published_at": changes.get("published_at", post.published_at),
-            "tags": changes.get(
-                "tags", [{"name": tag.name, "slug": tag.slug} for tag in post.tags]
-            ),
-        })
-        try:
-            apply_post_data(session, post, data)
-            session.commit()
-        except ValueError as exc:
-            session.rollback()
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return {"action": action, "post_id": str(post_id), "status": "updated"}
-
-    required = ("title", "excerpt", "content_markdown", "slug")
-    if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
-        raise HTTPException(status_code=422, detail="创建草稿缺少必要字段")
-    post = BlogPost(author=current_user)
-    session.add(post)
-    data = BlogPostWrite.model_validate({
-        "title": payload["title"], "excerpt": payload["excerpt"],
-        "content_markdown": payload["content_markdown"], "slug": payload["slug"],
-        "status": BlogPostStatus.DRAFT,
-    })
     try:
-        apply_post_data(session, post, data)
-        session.commit()
+        return agent_capabilities.confirm_action(
+            module, action, payload, current_user=current_user, session=session
+        )
     except ValueError as exc:
-        session.rollback()
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {"action": action, "post_id": str(post.id), "status": "created"}
-
-
-def _payload_uuid(payload: dict[str, object], key: str) -> UUID:
-    value = payload.get(key)
-    try:
-        return UUID(str(value))
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=422, detail=f"{key} 无效") from exc

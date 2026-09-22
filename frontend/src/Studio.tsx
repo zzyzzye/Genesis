@@ -51,7 +51,7 @@ import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTok
 import { StudioIcon } from './studio/StudioIcon'
 import { StudioNavigation } from './studio/StudioNavigation'
 import type { StudioSection } from './studio/StudioNavigationModel'
-import { StudioAssistant } from './studio/StudioAssistant'
+import { BlogAssistant } from './features/blog/agent/BlogAssistant'
 import { StudioOverview } from './studio/StudioOverview'
 
 import {
@@ -922,19 +922,15 @@ function Dashboard({
           {activeSection !== 'overview' && activeSection !== 'posts' && <SectionPlaceholder section={activeSection} />}
         </main>
       </div>
-      <StudioAssistant
+      {activeSection === 'posts' && <BlogAssistant
         page={{
           route: location.pathname,
           section: activeSection,
-          pageType: activeSection === 'overview'
-            ? 'overview'
-            : activeSection !== 'posts'
-              ? 'section'
-              : isEditorOpen
-                ? 'post_editor'
-                : postId !== null
-                  ? 'post_preview'
-                  : 'posts_list',
+          pageType: isEditorOpen
+            ? 'post_editor'
+            : postId !== null
+              ? 'post_preview'
+              : 'posts_list',
         }}
         editor={activeSection === 'posts' && (isEditorOpen || postId !== null) ? {
           id: activeEditor.id,
@@ -944,7 +940,7 @@ function Dashboard({
           slug: activeEditor.slug,
           status: activeEditor.status,
         } : null}
-      />
+      />}
     </div>
   )
 }

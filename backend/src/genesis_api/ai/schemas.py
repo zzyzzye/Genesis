@@ -19,6 +19,7 @@ class AiMessage(BaseModel):
 
 
 class AiContext(BaseModel):
+    module: str | None = None
     route: str | None = None
     section: str | None = None
     page_type: str | None = None

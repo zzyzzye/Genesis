@@ -190,7 +190,7 @@ describe('App', () => {
 
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('test-token')
     view.unmount()
-    window.sessionStorage.setItem('genesis-studio-ai-conversation', JSON.stringify({
+    window.sessionStorage.setItem('genesis-blog-ai-conversation', JSON.stringify({
       isOpen: false,
       messages: [
         { role: 'assistant', content: '上一轮回复' },
@@ -202,15 +202,16 @@ describe('App', () => {
     window.history.pushState({}, '', '/blog/studio')
     render(<App />)
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Genesis AI 助手' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '打开 Genesis AI 助手' }))
-    expect(screen.getByRole('region', { name: 'Genesis AI 助手' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '打开博客 AI 助手' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '文章' }))
+    fireEvent.click(await screen.findByRole('button', { name: '打开博客 AI 助手' }))
+    expect(screen.getByRole('region', { name: '博客 AI 助手' })).toBeInTheDocument()
     expect(screen.getByText('请继续保留这段对话')).toBeInTheDocument()
     expect(await screen.findByText('恢复后的完整回复')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('button', { name: '新建对话' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: '新建对话' }))
     expect(screen.queryByText('请继续保留这段对话')).not.toBeInTheDocument()
-    expect(screen.getByText('你好，我是 Genesis 助手。', { exact: false })).toBeInTheDocument()
+    expect(screen.getByText('你好，我是博客助手。', { exact: false })).toBeInTheDocument()
     expect(screen.queryByText('一级')).not.toBeInTheDocument()
     expect(screen.queryByText('二级')).not.toBeInTheDocument()
     expect(screen.queryByText('三级')).not.toBeInTheDocument()

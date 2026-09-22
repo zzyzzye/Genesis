@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import contextvars
 import json
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 from uuid import UUID, uuid4
 
 from jwt import encode
@@ -13,38 +11,18 @@ from langchain_core.tools import BaseTool, tool
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
-from genesis_api.agent.contracts import AgentAction, AgentActionProposal
+from genesis_api.agent.context import require_owner
+from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.blog.models import BlogPost
 from genesis_api.blog.service import get_blog_post_by_id, list_admin_posts
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.database.session import SessionLocal
-from genesis_api.identity.models import UserRole
 
-_actor_id: contextvars.ContextVar[UUID | None] = contextvars.ContextVar(
-    "genesis_agent_actor_id", default=None
-)
-_actor_role: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "genesis_agent_actor_role", default=None
-)
-
-
-@contextmanager
-def agent_invocation_context(actor_id: UUID, actor_role: str) -> Iterator[None]:
-    """为单次异步执行隔离工具身份，结束时恢复原上下文。"""
-    id_token = _actor_id.set(actor_id)
-    role_token = _actor_role.set(actor_role)
-    try:
-        yield
-    finally:
-        _actor_id.reset(id_token)
-        _actor_role.reset(role_token)
+BlogAgentAction = Literal["create_draft", "update_post", "delete_post", "publish_post"]
 
 
 def _owner_id() -> UUID:
-    actor_id = _actor_id.get()
-    if actor_id is None or _actor_role.get() != UserRole.OWNER.value:
-        raise RuntimeError("Agent 工具需要站点所有者权限")
-    return actor_id
+    return require_owner(module="blog")
 
 
 def _summary(post: BlogPost) -> dict[str, object]:
@@ -103,7 +81,7 @@ def _search_posts(query: str) -> str:
         return json.dumps([_summary(post) for post in posts], ensure_ascii=False)
 
 
-def _preview(action: AgentAction, payload: dict[str, object], settings: Settings) -> str:
+def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Settings) -> str:
     actor_id = _owner_id()
     with SessionLocal() as session:
         if action in {"update_post", "delete_post", "publish_post"}:
@@ -123,6 +101,7 @@ def _preview(action: AgentAction, payload: dict[str, object], settings: Settings
         {
             "proposal_id": str(proposal_id),
             "actor_id": str(actor_id),
+            "module": "blog",
             "action": action,
             "payload": payload,
             "iat": datetime.now(UTC),
@@ -133,6 +112,7 @@ def _preview(action: AgentAction, payload: dict[str, object], settings: Settings
     )
     proposal = AgentActionProposal(
         proposal_id=proposal_id,
+        module="blog",
         action=action,
         payload=payload,
         summary=f"确认{action}操作",

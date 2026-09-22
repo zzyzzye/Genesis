@@ -75,21 +75,21 @@ def test_prepare_request_embeds_authenticated_actor_and_studio_context(
 
     monkeypatch.setattr(
         ai_route,
-        "build_studio_agent_context",
-        lambda *_args, **_kwargs: {"page": {"type": "overview"}},
+        "build_blog_agent_context",
+        lambda *_args, **_kwargs: {"module": "blog", "page": {"type": "posts_list"}},
     )
     studio = ai_route._prepare_request(
         AiChatRequest(
             surface="studio",
             messages=[AiMessage(role="user", content="后台")],
-            context=AiContext(route="/studio"),
+            context=AiContext(module="blog", route="/studio", section="posts"),
         ),
         current_user=owner,
         current_user_role=owner.role,
         session=pytest.MonkeyPatch(),  # type: ignore[arg-type]
     )
     assert studio.context is not None
-    assert studio.context.page == {"type": "overview"}
+    assert studio.context.page == {"type": "posts_list"}
 
     member = User(id=uuid4(), handle="member", display_name="Member", role=UserRole.MEMBER)
     with pytest.raises(HTTPException) as exc_info:
@@ -248,7 +248,7 @@ async def test_chat_run_routes_keep_public_contract(monkeypatch: pytest.MonkeyPa
         request, user, cast(Any, object()), Settings()
     ) == created
     assert await ai_route.get_chat_run(run_id, user, cast(Any, object())) == snapshot
-    assert await ai_route.cancel_chat_run(run_id, user, cast(Any, object())) is None
+    await ai_route.cancel_chat_run(run_id, user, cast(Any, object()))
     assert cancellations == [run_id]
     assert await ai_route.stream_chat_run(
         run_id, cast(Request, object()), user, cast(Any, object())

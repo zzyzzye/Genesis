@@ -14,9 +14,9 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from pydantic import SecretStr
 
+from genesis_api.agent.capabilities import agent_capabilities
+from genesis_api.agent.context import agent_invocation_context
 from genesis_api.agent.mimo import ChatMiMo
-from genesis_api.agent.prompt import AgentPrompt
-from genesis_api.agent.tools import agent_invocation_context, build_blog_tools
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
 
@@ -44,7 +44,7 @@ class EmbeddedAgentRuntime:
     def __init__(self) -> None:
         self._checkpointer_context: AbstractAsyncContextManager[AsyncPostgresSaver] | None = None
         self._checkpointer: AsyncPostgresSaver | None = None
-        self._graphs: dict[tuple[str, str], Any] = {}
+        self._graphs: dict[tuple[str, str, str], Any] = {}
 
     async def startup(self, settings: Settings) -> None:
         if self._checkpointer is not None:
@@ -129,17 +129,18 @@ class EmbeddedAgentRuntime:
             kwargs["base_url"] = base_url
         return cast(BaseChatModel, init_chat_model(**kwargs))
 
-    def _graph(self, settings: Settings, provider: str, model: str) -> Any:
+    def _graph(self, settings: Settings, provider: str, model: str, module: str) -> Any:
         if self._checkpointer is None:
             raise RuntimeError("Agent runtime 尚未初始化")
-        key = (provider, model)
+        key = (provider, model, module)
         if key not in self._graphs:
+            capability = agent_capabilities.resolve(module, settings)
             self._graphs[key] = create_deep_agent(
                 model=self._build_model(settings, provider, model),
-                tools=build_blog_tools(settings),
-                system_prompt=AgentPrompt.system_message(),
+                tools=capability.tools,
+                system_prompt=capability.prompt,
                 checkpointer=self._checkpointer,
-                name="genesis-blog-agent",
+                name=capability.name,
             )
         return self._graphs[key]
 
@@ -153,7 +154,10 @@ class EmbeddedAgentRuntime:
         model = request.model or configured_model
         if not model:
             raise RuntimeError(f"未配置 {provider} 的模型名称")
-        graph = self._graph(settings, provider, model)
+        module = request.context.module if request.context and request.context.module else (
+            "blog" if request.surface in ("blog", "studio") else request.surface
+        )
+        graph = self._graph(settings, provider, model, module)
         messages: list[BaseMessage | dict[str, str]] = [
             SystemMessage(
                 content=f"可信页面上下文：{request.context.model_dump() if request.context else {}}"
@@ -166,7 +170,7 @@ class EmbeddedAgentRuntime:
             checkpoint = await self._checkpointer.aget_tuple(config)
             if checkpoint is not None:
                 graph_input = None
-        with agent_invocation_context(request.actor_id, request.actor_role):
+        with agent_invocation_context(request.actor_id, request.actor_role, module):
             async for message, _metadata in graph.astream(
                 graph_input,
                 config=config,

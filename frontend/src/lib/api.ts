@@ -273,6 +273,7 @@ export interface AiChatMessage {
 }
 
 export interface AiChatContext {
+  module?: string
   route?: string
   section?: string
   page_type?: string
@@ -313,6 +314,7 @@ export class AiChatRunTerminalError extends Error {}
 export type AiAction = 'create_draft' | 'update_post' | 'delete_post' | 'publish_post'
 
 export interface AiActionProposal {
+  module: string
   type: 'pending_action'
   proposal_id: string
   action: AiAction

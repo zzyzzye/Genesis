@@ -12,8 +12,7 @@ import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from pydantic import SecretStr
 
-from genesis_api.agent import tools as agent_tools
-from genesis_api.agent.prompt import AgentPrompt
+from genesis_api.agent.context import agent_invocation_context
 from genesis_api.agent.runtime import (
     EmbeddedAgentRuntime,
     YyapiAsyncTransport,
@@ -21,6 +20,8 @@ from genesis_api.agent.runtime import (
 )
 from genesis_api.ai.schemas import AiChatRequest, AiMessage
 from genesis_api.ai.service import AgentService
+from genesis_api.blog.agent import tools as agent_tools
+from genesis_api.blog.agent.prompt import BlogAgentPrompt
 from genesis_api.core.config import Settings
 from genesis_api.identity.models import UserRole
 
@@ -37,7 +38,7 @@ class FakeSession:
 
 
 def test_prompt_and_message_text() -> None:
-    assert "写入任务" in AgentPrompt.system_message()
+    assert "写入任务" in BlogAgentPrompt.system_message()
     assert _message_text(AIMessage(content="回答")) == ["回答"]
     assert _message_text(AIMessageChunk(content="流式回答")) == ["流式回答"]
     assert _message_text(AIMessage(content=[{"type": "text", "text": "分块"}])) == ["分块"]
@@ -204,15 +205,14 @@ async def test_runtime_validates_context_and_model(monkeypatch: pytest.MonkeyPat
 def test_runtime_builds_and_caches_graph(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime = EmbeddedAgentRuntime()
     with pytest.raises(RuntimeError, match="尚未初始化"):
-        runtime._graph(Settings(), "openai", "model")
+        runtime._graph(Settings(), "openai", "model", "blog")
 
     runtime._checkpointer = cast(Any, object())
     sentinel = object()
     monkeypatch.setattr(runtime, "_build_model", lambda *_: cast(Any, object()))
-    monkeypatch.setattr("genesis_api.agent.runtime.build_blog_tools", lambda *_: [])
     monkeypatch.setattr("genesis_api.agent.runtime.create_deep_agent", lambda **_: sentinel)
-    assert runtime._graph(Settings(), "openai", "model") is sentinel
-    assert runtime._graph(Settings(), "openai", "model") is sentinel
+    assert runtime._graph(Settings(), "openai", "model", "blog") is sentinel
+    assert runtime._graph(Settings(), "openai", "model", "blog") is sentinel
 
 
 @pytest.mark.anyio
@@ -223,7 +223,7 @@ async def test_blog_tools_keep_invocation_context_isolated(
     second = uuid4()
 
     async def observe(actor_id: object) -> tuple[object, object]:
-        with agent_tools.agent_invocation_context(cast(Any, actor_id), "owner"):
+        with agent_invocation_context(cast(Any, actor_id), "owner", "blog"):
             before = agent_tools._owner_id()
             await asyncio.sleep(0)
             return before, agent_tools._owner_id()
@@ -250,7 +250,7 @@ async def test_blog_tools_keep_invocation_context_isolated(
     monkeypatch.setattr(agent_tools, "get_blog_post_by_id", lambda *_: post)
     monkeypatch.setattr(agent_tools, "get_settings", lambda: Settings())
 
-    with agent_tools.agent_invocation_context(first, UserRole.OWNER.value):
+    with agent_invocation_context(first, UserRole.OWNER.value, "blog"):
         assert "标题" in agent_tools._list_posts()
         assert "正文" in agent_tools._get_post(str(post.id))
         assert agent_tools._search_posts("标题") == "[]"

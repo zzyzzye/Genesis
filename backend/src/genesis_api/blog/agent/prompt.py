@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 
-from genesis_api.agent.context import tool_manifest
+from genesis_api.blog.agent.context import tool_manifest
 
 
-class AgentPrompt:
+class BlogAgentPrompt:
     """集中定义 Agent 的能力边界和写操作策略。"""
 
     @staticmethod

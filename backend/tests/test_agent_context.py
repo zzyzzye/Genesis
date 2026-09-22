@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.orm import Session
 
-from genesis_api.agent import context as agent_context
+from genesis_api.blog.agent import context as agent_context
 from genesis_api.blog.models import BlogPostStatus
 
 
@@ -40,7 +40,7 @@ def test_posts_list_context_uses_database_metadata_without_article_bodies(
     )
     monkeypatch.setattr(agent_context, "list_admin_posts", lambda _: [published, draft])
 
-    result = agent_context.build_studio_agent_context(
+    result = agent_context.build_blog_agent_context(
         cast(Session, object()),
         route="/blog/studio/posts",
         section="posts",
@@ -48,6 +48,7 @@ def test_posts_list_context_uses_database_metadata_without_article_bodies(
     )
 
     assert result["page"] == {
+        "module": "blog",
         "route": "/blog/studio/posts",
         "section": "posts",
         "type": "posts_list",
@@ -83,7 +84,7 @@ def test_post_editor_context_distinguishes_persisted_status_from_unsaved_draft(
     post = make_post(title="数据库标题", status=BlogPostStatus.PUBLISHED, content="# 数据库正文")
     monkeypatch.setattr(agent_context, "get_blog_post_by_id", lambda _, __: post)
 
-    result = agent_context.build_studio_agent_context(
+    result = agent_context.build_blog_agent_context(
         cast(Session, object()),
         route=f"/blog/studio/posts/{post.id}/edit",
         section="posts",
@@ -112,7 +113,8 @@ def test_editor_context_handles_new_and_empty_posts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(agent_context, "get_blog_post_by_id", lambda *_: None)
-    new_post = agent_context.build_studio_agent_context(
+    monkeypatch.setattr(agent_context, "list_admin_posts", lambda *_: [])
+    new_post = agent_context.build_blog_agent_context(
         cast(Session, object()),
         post_id="not-a-uuid",
         title="新文章",
@@ -130,5 +132,5 @@ def test_editor_context_handles_new_and_empty_posts(
         },
     }
 
-    empty = agent_context.build_studio_agent_context(cast(Session, object()))
+    empty = agent_context.build_blog_agent_context(cast(Session, object()))
     assert empty["current_post"] is None

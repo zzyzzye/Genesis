@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, cleanup, act } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { StudioAssistant } from '../src/studio/StudioAssistant'
+import { BlogAssistant } from '../src/features/blog/agent/BlogAssistant'
 import { AiChatRunTerminalError, cancelAiChatRun, createAiChatRun, streamAiChatRun } from '../src/lib/api'
 import { studioAuthTokenKey } from '../src/lib/auth'
 
@@ -13,13 +13,13 @@ vi.mock('../src/lib/api', async (importOriginal) => ({
   getProviderModels: vi.fn().mockResolvedValue({ models: [] }),
 }))
 
-const page = { route: '/blog/studio', section: 'dashboard', pageType: 'overview' as const }
-const sessionKey = 'genesis-studio-ai-conversation'
+const page = { route: '/blog/studio/posts', section: 'posts', pageType: 'posts_list' as const }
+const sessionKey = 'genesis-blog-ai-conversation'
 
 function mount(messages: { role: string; content: string }[], activeRun: object | null = null) {
   localStorage.setItem(studioAuthTokenKey, 'test-placeholder')
   sessionStorage.setItem(sessionKey, JSON.stringify({ isOpen: true, messages, activeRun }))
-  return render(<StudioAssistant page={page} editor={null} />)
+  return render(<BlogAssistant page={page} editor={null} />)
 }
 
 describe('助手失败后的继续对话', () => {
