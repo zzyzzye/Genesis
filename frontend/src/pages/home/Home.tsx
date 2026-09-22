@@ -10,7 +10,6 @@ function Home() {
         <Link className="brand" to="/">Genesis<span>.</span></Link>
         <nav aria-label="主导航">
           <Link to="/blog">博客</Link>
-          <Link to="/blog/studio">博客 Studio</Link>
           <Link to="/tools">工具</Link>
           <Link to="/media">影音</Link>
         </nav>
@@ -33,7 +32,10 @@ function Home() {
           </div>
         </section>
       </main>
-      <footer className="site-footer"><span>Genesis · 个人内容系统</span><span>Build slowly. Keep growing.</span></footer>
+      <footer className="site-footer">
+        <span>Genesis · 个人内容系统</span>
+        <span className="home-footer-meta">Build slowly. Keep growing.<Link to="/studio">系统入口</Link></span>
+      </footer>
     </div>
   )
 }

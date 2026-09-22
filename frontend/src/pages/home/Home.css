@@ -27,10 +27,15 @@
 .home-system-card--tools { background: #e7edf0; }
 .home-system-card--media { background: #202838; color: #fffdf9; }
 .home-system-card--media p { color: #c6c8c9; }
+.home-footer-meta { display: flex; align-items: center; gap: 1rem; }
+.home-footer-meta a { color: #6f7780; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: .25rem; transition: color 160ms ease, text-decoration-color 160ms ease; }
+.home-footer-meta a:hover { color: #202838; text-decoration-color: currentColor; }
+.home-footer-meta a:focus-visible { border-radius: .15rem; outline: 3px solid rgb(214 87 56 / 24%); outline-offset: 3px; }
 
 @media (max-width: 680px) {
   .home-systems { width: min(100% - 2rem, 78rem); }
   .home-system-grid { grid-template-columns: 1fr; }
   .home-system-card { min-height: 15rem; }
   .home-system-card h3 { margin-top: 2.5rem; }
+  .home-footer-meta { align-items: flex-start; flex-direction: column; gap: .55rem; }
 }

@@ -52,6 +52,18 @@ describe('App', () => {
     vi.restoreAllMocks()
   })
 
+  it('公开首页保持内容导航并将后台入口收进页脚', () => {
+    window.history.pushState({}, '', '/')
+    render(<App />)
+
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(navigation).toHaveTextContent('博客')
+    expect(navigation).toHaveTextContent('工具')
+    expect(navigation).toHaveTextContent('影音')
+    expect(navigation).not.toHaveTextContent('Studio')
+    expect(screen.getByRole('link', { name: '系统入口' })).toHaveAttribute('href', '/studio')
+  })
+
   it('展示博客文章并可打开详情', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url =
