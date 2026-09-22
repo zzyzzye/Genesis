@@ -183,9 +183,9 @@ describe('App', () => {
     window.history.pushState({}, '', '/studio')
     const view = render(<App />)
 
-    expect(await screen.findByRole('heading', { name: /从这里进入/ })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '选择工作区' })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: '系统导航' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('link', { name: /博客.*进入系统/ }))
+    fireEvent.click(screen.getByRole('link', { name: /博客.*OPEN/ }))
 
     fireEvent.change(await screen.findByLabelText('密码'), { target: { value: 'test-password' } })
     fireEvent.click(screen.getByRole('button', { name: '进入写作台' }))

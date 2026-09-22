@@ -53,23 +53,29 @@ export function StudioPortal() {
     <div className="studio-portal">
       <header className="studio-portal__header">
         <Link className="studio-portal__brand" to="/" aria-label="返回 Genesis 公开首页">
-          <span>G<span>.</span></span>
-          <strong>Genesis</strong>
+          <span><StudioIcon name="arrow-left" /></span>
+          <strong>退出系统</strong>
         </Link>
         <div className="studio-portal__header-copy">
-          <span>个人系统</span>
-          <small>选择一个工作区继续</small>
+          <span>GENESIS CONTROL CENTER</span>
+          <small><i /> SYSTEM ONLINE</small>
         </div>
         <Link className="studio-portal__public-link" to="/">
-          查看公开站点 <StudioIcon name="arrow-up-right" />
+          genesis.local <StudioIcon name="arrow-up-right" />
         </Link>
       </header>
 
       <main className="studio-portal__main">
         <section className="studio-portal__intro" aria-labelledby="studio-portal-title">
-          <p>GENESIS / SYSTEMS</p>
-          <h1 id="studio-portal-title">从这里进入<br />你的每个系统。</h1>
-          <span>首页只负责导航。进入模块后，内容、操作和 Agent 都留在各自的工作区。</span>
+          <div className="studio-portal__system-mark" aria-hidden="true">G<span>:</span></div>
+          <p>WORKSPACE SELECTOR</p>
+          <h1 id="studio-portal-title">选择工作区</h1>
+          <span>每个模块独立运行，并拥有自己的数据、操作界面与 Agent 上下文。</span>
+          <dl className="studio-portal__status" aria-label="系统状态">
+            <div><dt>运行环境</dt><dd>LOCAL</dd></div>
+            <div><dt>可用模块</dt><dd>01 / 03</dd></div>
+            <div><dt>Agent</dt><dd>READY</dd></div>
+          </dl>
         </section>
 
         <nav className="studio-portal__systems" aria-label="系统导航">
@@ -87,7 +93,7 @@ export function StudioPortal() {
                 <em>{system.description}</em>
               </span>
               <span className={`studio-portal-card__status is-${system.status}`}>
-                {system.status === 'available' ? '进入系统' : '建设中'}
+                {system.status === 'available' ? 'OPEN' : 'SOON'}
                 <StudioIcon name="chevron" />
               </span>
             </Link>
@@ -96,8 +102,8 @@ export function StudioPortal() {
       </main>
 
       <footer className="studio-portal__footer">
-        <span>一个入口，多个彼此独立的工作区</span>
-        <span>GENESIS OS · 2026</span>
+        <span>ROOT / WORKSPACES</span>
+        <span>GENESIS OS · BUILD 2026.09</span>
       </footer>
     </div>
   )
