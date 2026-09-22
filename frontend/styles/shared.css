@@ -51,7 +51,7 @@
 .error-state,
 .empty-state {
   margin: 1.5rem 0;
-  color: #6b655c;
+  color: var(--studio-text, #6b655c);
   font-size: 0.92rem;
 }
 
@@ -82,9 +82,9 @@
 }
 .post-status { width: fit-content; font-size: .62rem; font-weight: 900; letter-spacing: .05em; }
 .post-status--draft { color: #946c2d; }
-.post-status--published { color: #39715a; }
+.post-status--published { color: var(--studio-text, #39715a); }
 .text-button,
-.secondary-button { border: 0; background: transparent; color: #728091; font-size: .72rem; }
+.secondary-button { border: 0; background: transparent; color: var(--studio-text, #728091); font-size: .72rem; }
 .text-button:hover { color: var(--studio-accent); }
 .text-button--danger { color: #a94a36; }
 .checkbox-label { display: flex !important; align-items: center; gap: .45rem !important; min-height: 2.4rem; }

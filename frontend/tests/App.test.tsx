@@ -189,6 +189,7 @@ describe('App', () => {
     expect(screen.getByRole('region', { name: '从一个完整模块开始' })).toBeInTheDocument()
 
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('test-token')
+    view.unmount()
     window.sessionStorage.setItem('genesis-studio-ai-conversation', JSON.stringify({
       isOpen: false,
       messages: [
@@ -198,7 +199,6 @@ describe('App', () => {
       ],
       activeRun: { id: 'resumable-run', assistantMessageIndex: 2 },
     }))
-    view.unmount()
     window.history.pushState({}, '', '/blog/studio')
     render(<App />)
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()

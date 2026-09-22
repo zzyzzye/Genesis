@@ -5,7 +5,7 @@
   border-right: 1px solid #dce3e9;
   background: #f0f3f6;
 }
-.markdown-editor__outline > p { margin: 1rem .45rem; color: #98a3af; font-size: .68rem; line-height: 1.6; }
+.markdown-editor__outline > p { margin: 1rem .45rem; color: var(--studio-text, #000); font-size: .68rem; line-height: 1.6; }
 .markdown-editor__outline-item {
   display: block;
   width: 100%;
@@ -14,7 +14,7 @@
   border: 0;
   border-radius: .22rem;
   background: transparent;
-  color: #526174;
+  color: var(--studio-text, #000);
   font: inherit;
   font-size: .72rem;
   text-align: left;
@@ -22,8 +22,8 @@
   white-space: nowrap;
 }
 .markdown-editor__outline-item:hover { background: #e3ebf2; color: var(--studio-ink); }
-.markdown-editor__outline-item--2 { padding-left: 1rem; color: #718096; }
-.markdown-editor__outline-item--3 { padding-left: 1.45rem; color: #8995a3; font-size: .67rem; }
+.markdown-editor__outline-item--2 { padding-left: 1rem; color: var(--studio-text, #000); }
+.markdown-editor__outline-item--3 { padding-left: 1.45rem; color: var(--studio-text, #000); font-size: .67rem; }
 @media (max-width: 680px) {
   .markdown-editor__outline { display: none; }
 }
@@ -39,13 +39,13 @@
   align-items: baseline;
   justify-content: space-between;
   padding: 0 .45rem .8rem;
-  color: #35455c;
+  color: var(--studio-text, #000);
   font-family: var(--studio-sans);
   font-size: .75rem;
   font-weight: 750;
 }
 .markdown-editor__outline-heading small {
-  color: #94a3b8;
+  color: var(--studio-text, #000);
   font-size: .66rem;
   font-weight: 600;
 }
@@ -60,7 +60,7 @@
   border: 0;
   border-left: 2px solid transparent;
   background: transparent;
-  color: #65758a;
+  color: var(--studio-text, #000);
   font-family: var(--studio-sans);
   font-size: .73rem;
   line-height: 1.45;
@@ -74,10 +74,10 @@
   color: #2f5d9f;
 }
 .markdown-editor__outline--mdx .markdown-editor__outline-item--2 { padding-left: 1rem; }
-.markdown-editor__outline--mdx .markdown-editor__outline-item--3 { padding-left: 1.55rem; color: #8190a3; font-size: .7rem; }
+.markdown-editor__outline--mdx .markdown-editor__outline-item--3 { padding-left: 1.55rem; color: var(--studio-text, #000); font-size: .7rem; }
 .markdown-editor__outline-empty {
   margin: .1rem .45rem;
-  color: #94a3b8;
+  color: var(--studio-text, #000);
   font-size: .7rem;
   line-height: 1.6;
 }

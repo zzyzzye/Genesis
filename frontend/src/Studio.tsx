@@ -75,7 +75,7 @@ import {
 const genesisCodeBlockTheme = EditorView.theme({
   '&': {
     backgroundColor: '#ffffff',
-    color: '#334155',
+    color: '#000',
   },
   '&.cm-focused': { outline: 'none' },
   '.cm-scroller': {
@@ -93,7 +93,7 @@ const genesisCodeBlockTheme = EditorView.theme({
     border: '0',
     borderRight: '1px solid #e8edf4',
     backgroundColor: '#ffffff',
-    color: '#94a3b8',
+    color: '#000',
   },
   '.cm-gutterElement': {
     padding: '0 .9rem 0 1rem',
@@ -102,14 +102,14 @@ const genesisCodeBlockTheme = EditorView.theme({
     fontVariantNumeric: 'tabular-nums',
   },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'transparent' },
-  '.cm-activeLineGutter': { color: '#94a3b8' },
+  '.cm-activeLineGutter': { color: '#000' },
   '.cm-selectionBackground': { backgroundColor: '#dbeafe !important' },
   '.cm-cursor': { borderLeftColor: '#2563eb' },
   '.cm-tooltip': {
     border: '1px solid #d8e1ee',
     borderRadius: '.4rem',
     backgroundColor: '#ffffff',
-    color: '#334155',
+    color: '#000',
     boxShadow: '0 .6rem 1.5rem rgba(15, 23, 42, .12)',
   },
 }, { dark: false })

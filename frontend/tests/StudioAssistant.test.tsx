@@ -29,6 +29,36 @@ describe('助手失败后的继续对话', () => {
     vi.clearAllMocks()
   })
 
+  it('菜单内部操作保持展开，点击外部或按 Escape 后关闭', async () => {
+    mount([{ role: 'assistant', content: '你好' }])
+    const trigger = screen.getByRole('button', { name: '选择模型' })
+    fireEvent.click(trigger)
+    const provider = screen.getByRole('button', { name: '切换到 mimo 模型' })
+    fireEvent.pointerDown(provider)
+    fireEvent.click(provider)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.pointerDown(screen.getByRole('textbox'))
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(trigger)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(trigger).toHaveFocus()
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await act(async () => { await Promise.resolve() })
+  })
+
+  it('同帧多段 token 合并后，完成事件仍保留全部文字', async () => {
+    vi.mocked(createAiChatRun).mockResolvedValue({ id: 'burst-run', status: 'pending' })
+    vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
+      callbacks.onSnapshot('', 0)
+      for (let i = 0; i < 100; i++) callbacks.onToken('字', i + 1)
+      return Promise.resolve('completed' as const)
+    })
+    mount([{ role: 'assistant', content: '你好' }])
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '开始' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
+    expect(await screen.findByText('字'.repeat(100))).toBeInTheDocument()
+  })
+
   it('恢复旧会话时清理空回复，发送有效历史并展示后续回复', async () => {
     vi.mocked(createAiChatRun).mockResolvedValue({ id: 'next-run', status: 'pending' })
     vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {

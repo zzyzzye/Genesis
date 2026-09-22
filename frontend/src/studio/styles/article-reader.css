@@ -49,7 +49,7 @@
 .article-reader__heading > p {
   max-width: 46rem;
   margin: 0;
-  color: #718096;
+  color: var(--studio-text, #000);
   font-size: .9rem;
   line-height: 1.7;
 }
@@ -58,12 +58,12 @@
   flex-wrap: wrap;
   gap: .45rem .9rem;
   margin-top: 1rem;
-  color: #8995a3;
+  color: var(--studio-text, #000);
   font-size: .68rem;
 }
 .article-reader__meta span + span::before {
   margin-right: .9rem;
-  color: #c5ccd3;
+  color: var(--studio-text, #000);
   content: '·';
 }
 .article-reader__actions {

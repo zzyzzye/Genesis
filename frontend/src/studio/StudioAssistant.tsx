@@ -1,10 +1,11 @@
 import './StudioAssistant.css'
 
-import { type FormEvent, useEffect, useRef, useState } from 'react'
+import { type FormEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { StudioIcon } from './StudioIcon'
+import { TypewriterText } from './TypewriterText'
 
 function ProviderIcon({ provider }: { provider: AiProvider }) {
   const common = { viewBox: '0 0 24 24', role: 'img' as const, focusable: 'false' as const }
@@ -105,16 +106,16 @@ function parsePendingAction(content: string): AiActionProposal | null {
   } catch { return null }
 }
 
-function MarkdownMessage({ content, onConfirm, confirming }: { content: string; onConfirm?: (action: AiActionProposal) => void; confirming?: boolean }) {
-  const action = parsePendingAction(content)
+const MarkdownMessage = memo(function MarkdownMessage({ content, index, onConfirm, confirming, streaming, onProgress }: { content: string; index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void }) {
+  const action = streaming ? null : parsePendingAction(content)
   return <>
-    <div className="studio-assistant__markdown"><Markdown remarkPlugins={[remarkGfm]}>{content || '正在生成…'}</Markdown></div>
+    <div className="studio-assistant__markdown">{streaming ? <TypewriterText content={content} onProgress={onProgress} /> : <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>}</div>
     {action && onConfirm && <div className="studio-assistant__action-card">
       <strong>待确认操作</strong><span>{action.action}</span>
-      <button type="button" disabled={confirming} onClick={() => onConfirm(action)}>{confirming ? '执行中…' : '确认执行'}</button>
+      <button type="button" disabled={confirming} onClick={() => { void onConfirm(index, action) }}>{confirming ? '执行中…' : '确认执行'}</button>
     </div>}
   </>
-}
+})
 
 function updateAssistantMessage(
   messages: AssistantMessage[],
@@ -143,13 +144,16 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
   const [models, setModels] = useState<{ id: string; name: string | null; context_window: number | null }[]>([])
   const modelsCache = useRef<Partial<Record<AiProvider, { id: string; name: string | null; context_window: number | null }[]>>>({})
   const selectedModels = useRef<Partial<Record<AiProvider, string>>>({})
+  const modelTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const shouldStickToBottomRef = useRef(true)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const isBusy = isStarting || activeRun !== null
   const selectedModel = models.find((item) => item.id === model)
   const contextWindow = selectedModel?.context_window ?? null
-  const contextCharacters = JSON.stringify({ page, editor, messages, draft }).length
+  const pageCharacters = useMemo(() => JSON.stringify({ page, editor }).length, [page, editor])
+  const contextCharacters = pageCharacters + draft.length + messages.reduce((sum, message) => sum + message.content.length, 0)
   const contextTokens = Math.ceil(contextCharacters / 4)
   const formatTokens = (value: number | null) => {
     if (value === null) return '—'
@@ -190,21 +194,63 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     return () => { cancelled = true }
   }, [isOpen, provider])
 
+  const sessionRef = useRef({ isOpen, messages, activeRun })
+  const saveTimer = useRef<number | null>(null)
   useEffect(() => {
-    window.sessionStorage.setItem(
-      assistantSessionKey,
-      JSON.stringify({ isOpen, messages, activeRun }),
-    )
+    sessionRef.current = { isOpen, messages, activeRun }
+    const save = () => {
+      saveTimer.current = null
+      try { sessionStorage.setItem(assistantSessionKey, JSON.stringify(sessionRef.current)) } catch { /* 存储不可用时仍可继续对话。 */ }
+    }
+    if (!activeRun) {
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current)
+      save()
+    } else if (saveTimer.current === null) {
+      saveTimer.current = window.setTimeout(save, 300)
+    }
   }, [activeRun, isOpen, messages])
 
   useEffect(() => {
+    const flush = () => {
+      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current)
+      saveTimer.current = null
+      try { sessionStorage.setItem(assistantSessionKey, JSON.stringify(sessionRef.current)) } catch { /* 忽略存储配额错误。 */ }
+    }
+    window.addEventListener('pagehide', flush)
+    return () => { window.removeEventListener('pagehide', flush); flush() }
+  }, [])
+
+  useEffect(() => {
+    if (!modelMenuOpen || !isOpen) return
+    const outside = (event: Event) => {
+      const target = event.target
+      if (target instanceof Node && !modelMenuRef.current?.contains(target) && !modelTriggerRef.current?.contains(target)) setModelMenuOpen(false)
+    }
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setModelMenuOpen(false)
+      modelTriggerRef.current?.focus()
+    }
+    document.addEventListener('pointerdown', outside, true)
+    document.addEventListener('focusin', outside)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', outside, true)
+      document.removeEventListener('focusin', outside)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [modelMenuOpen, isOpen])
+
+  const followOutput = useCallback(() => {
     const body = bodyRef.current
-    if (!body || !isOpen || !shouldStickToBottomRef.current) return
-    const frame = window.requestAnimationFrame(() => {
-      body.scrollTop = body.scrollHeight
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [isOpen, messages])
+    if (body && shouldStickToBottomRef.current) body.scrollTop = body.scrollHeight
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const frame = requestAnimationFrame(followOutput)
+    return () => cancelAnimationFrame(frame)
+  }, [isOpen, messages, followOutput])
 
   useEffect(() => {
     if (!activeRun || !isOpen) return
@@ -214,6 +260,14 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
 
     let cancelled = false
     const controller = new AbortController()
+    let received = sessionRef.current.messages[run.assistantMessageIndex]?.content ?? ''
+    let pendingFrame: number | null = null
+    const flush = () => {
+      if (pendingFrame !== null) cancelAnimationFrame(pendingFrame)
+      pendingFrame = null
+      setMessages((current) => updateAssistantMessage(current, run.assistantMessageIndex, () => received))
+    }
+    const queue = () => { if (pendingFrame === null) pendingFrame = requestAnimationFrame(flush) }
 
     async function consumeRun() {
       setError(null)
@@ -221,25 +275,12 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
       while (!cancelled) {
         try {
           const result = await streamAiChatRun(token!, run.id, {
-            onSnapshot: (content) => {
-              setMessages((current) => updateAssistantMessage(
-                current,
-                run.assistantMessageIndex,
-                () => content,
-              ))
-              setStreamStatus('正在生成…')
-            },
-            onToken: (content) => {
-              setMessages((current) => updateAssistantMessage(
-                current,
-                run.assistantMessageIndex,
-                (existing) => existing + content,
-              ))
-              setStreamStatus('正在生成…')
-            },
+            onSnapshot: (content) => { received = content; queue(); setStreamStatus('正在生成…') },
+            onToken: (content) => { received += content; queue() },
           }, controller.signal)
           if (cancelled) return
           if (result === 'completed') {
+            flush()
             setMessages((current) => current.filter((message) => message.content.trim().length > 0))
             setActiveRun((current) => current?.id === run.id ? null : current)
             setStreamStatus(null)
@@ -250,6 +291,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
         } catch (caught) {
           if (cancelled || (caught instanceof DOMException && caught.name === 'AbortError')) return
           if (caught instanceof AiChatRunTerminalError) {
+            flush()
             setMessages((current) => current.filter((message) => message.content.trim().length > 0))
             setError(caught.message)
             setActiveRun((current) => current?.id === run.id ? null : current)
@@ -266,6 +308,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     return () => {
       cancelled = true
       controller.abort()
+      if (pendingFrame !== null) cancelAnimationFrame(pendingFrame)
     }
   }, [activeRun, isOpen])
 
@@ -333,7 +376,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     setDraft(suggestion)
   }
 
-  async function handleConfirmAction(messageIndex: number, action: AiActionProposal) {
+  const handleConfirmAction = useCallback(async (messageIndex: number, action: AiActionProposal) => {
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!token) return
     setConfirmingAction(messageIndex)
@@ -345,7 +388,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '操作执行失败，请稍后重试。')
     } finally { setConfirmingAction(null) }
-  }
+  }, [])
 
   return (
     <div className={`studio-assistant${isOpen ? ' is-open' : ''}`}>
@@ -388,7 +431,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
               {messages.map((message, index) => (
                 <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${message.role}-${index}`}>
                   {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
-                  {message.role === 'assistant' ? <MarkdownMessage content={message.content} onConfirm={(action) => { void handleConfirmAction(index, action) }} confirming={confirmingAction === index} /> : <p>{message.content}</p>}
+                  {message.role === 'assistant' ? <MarkdownMessage content={message.content} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} /> : <p>{message.content}</p>}
                 </div>
               ))}
             </div>
@@ -429,10 +472,10 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
                   onClick={() => setExecutionMode('automatic')}
                 >自动</button>
               </div>
-              <button className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
+              <button ref={modelTriggerRef} aria-label="选择模型" className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
                 <ProviderIcon provider={provider} /> {model || '选择模型'} <StudioIcon name="chevron" />
               </button>
-              {modelMenuOpen && <div className="studio-assistant__model-menu">
+              {modelMenuOpen && <div ref={modelMenuRef} className="studio-assistant__model-menu">
                 <div className="studio-assistant__provider-tabs">
                   {(['openai', 'grok', 'gemini', 'claude', 'mimo'] as AiProvider[]).map((item) => (
                     <button

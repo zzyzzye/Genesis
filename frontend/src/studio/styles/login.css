@@ -63,7 +63,7 @@
   align-items: center;
   gap: 0.55rem;
   width: fit-content;
-  color: #6e6860;
+  color: var(--studio-text, #000);
   font-size: 0.82rem;
 }
 
@@ -90,7 +90,7 @@
 .studio-login-copy {
   max-width: 25rem;
   margin: 0;
-  color: #686259;
+  color: var(--studio-text, #000);
   font-size: 1rem;
   line-height: 1.9;
 }
@@ -98,7 +98,7 @@
 .studio-login-note,
 .studio-login-security {
   margin: 0;
-  color: #8b8479;
+  color: var(--studio-text, #000);
   font-size: 0.74rem;
   letter-spacing: 0.04em;
 }
@@ -143,7 +143,7 @@
 
 .studio-login-card-heading p {
   margin: 0 0 0.25rem;
-  color: #9a9186;
+  color: var(--studio-text, #000);
   font-size: 0.65rem;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -165,7 +165,7 @@
 .studio-login label {
   display: grid;
   gap: 0.55rem;
-  color: #504c46;
+  color: var(--studio-text, #000);
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -177,13 +177,13 @@
   border-bottom: 1px solid #cfc8be;
   outline: 0;
   background: transparent;
-  color: #1e2433;
+  color: var(--studio-text, #000);
   font-size: 1rem;
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .studio-login input::placeholder {
-  color: #aaa297;
+  color: var(--studio-text, #000);
 }
 
 .studio-login input:focus {
