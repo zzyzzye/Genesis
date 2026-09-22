@@ -1,124 +1,57 @@
 import './MediaPage.css'
-
-import { AudioLines, ChevronLeft, Film, Grid2X2, Image, Library, Maximize2, MousePointer2, Plus, Search, Upload, ZoomIn, ZoomOut } from 'lucide-react'
-import { type PointerEvent as ReactPointerEvent, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-
-type AssetKind = 'video' | 'image' | 'audio'
-type MediaAsset = { id: string; name: string; kind: AssetKind; meta: string; color: string }
-type CanvasNode = { id: string; assetId: string; x: number; y: number }
-
-const assets: MediaAsset[] = [
-  { id: 'asset-1', name: '城市夜行 01', kind: 'video', meta: '00:18 · 4K', color: 'violet' },
-  { id: 'asset-2', name: '玻璃折射', kind: 'image', meta: '3840 × 2160', color: 'cyan' },
-  { id: 'asset-3', name: '片头氛围', kind: 'audio', meta: '00:42 · WAV', color: 'lime' },
-  { id: 'asset-4', name: '工作室空镜', kind: 'video', meta: '00:27 · 4K', color: 'amber' },
-  { id: 'asset-5', name: '霓虹标题背景', kind: 'image', meta: '2560 × 1440', color: 'magenta' },
-  { id: 'asset-6', name: '按键与机械声', kind: 'audio', meta: '00:16 · WAV', color: 'blue' },
-]
-const defaultAsset = assets[0] as MediaAsset
-const kindLabels: Record<AssetKind, string> = { video: '视频', image: '图片', audio: '音频' }
-
-function AssetIcon({ kind }: { kind: AssetKind }) {
-  if (kind === 'video') return <Film aria-hidden="true" />
-  if (kind === 'image') return <Image aria-hidden="true" />
-  return <AudioLines aria-hidden="true" />
-}
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { getCurrentUser, type CurrentUser } from '../../lib/api'
+import { getStoredAuthToken } from '../../lib/auth'
+import { api, type Project } from './api'
+import { AssetLibrary } from './AssetLibrary'
+import { ProjectCanvas } from './ProjectCanvas'
 
 export function MediaPage() {
-  const [view, setView] = useState<'library' | 'canvas'>('library')
-  const [filter, setFilter] = useState<'all' | AssetKind>('all')
+  const [user, setUser] = useState<CurrentUser | null>(null)
+  const [checking, setChecking] = useState(() => Boolean(getStoredAuthToken()))
+  const { projectId } = useParams()
+  const location = useLocation()
+  useEffect(() => {
+    const token = getStoredAuthToken()
+    if (!token) return
+    let active = true
+    void getCurrentUser(token).then((result) => { if (active) setUser(result) }).catch(() => { if (active) setUser(null) }).finally(() => { if (active) setChecking(false) })
+    return () => { active = false }
+  }, [])
+  if (checking) return <main className="media-gate" role="status">正在打开创作空间…</main>
+  if (!user) return <main className="media-gate"><Link to="/">← Genesis</Link><small>YOUR CREATIVE SPACE</small><h1>从一个作品开始。</h1><p>登录后管理你的作品、私有素材与创作画布。</p><Link className="media-accent" to={`/account?returnTo=${encodeURIComponent(location.pathname)}`}>登录并继续</Link></main>
+  return projectId ? <ProjectCanvas key={`${user.id}:${projectId}`} projectId={projectId} userId={user.id} /> : <ProjectList />
+}
+
+function ProjectList() {
+  const navigate = useNavigate()
+  const [projects, setProjects] = useState<Project[]>([])
   const [query, setQuery] = useState('')
-  const [selectedAssetId, setSelectedAssetId] = useState(defaultAsset.id)
-  const [nodes, setNodes] = useState<CanvasNode[]>([
-    { id: 'node-1', assetId: 'asset-1', x: 150, y: 120 },
-    { id: 'node-2', assetId: 'asset-2', x: 540, y: 310 },
-  ])
-  const [zoom, setZoom] = useState(0.8)
-  const [pan, setPan] = useState({ x: 40, y: 36 })
-  const dragState = useRef<{ type: 'pan' | 'node'; id?: string; startX: number; startY: number; originX: number; originY: number } | null>(null)
-
-  const visibleAssets = useMemo(() => assets.filter((asset) => {
-    const matchesKind = filter === 'all' || asset.kind === filter
-    return matchesKind && asset.name.toLowerCase().includes(query.trim().toLowerCase())
-  }), [filter, query])
-
-  function addSelectedAssetToCanvas() {
-    setNodes((current) => [...current, {
-      id: `node-${Date.now()}`,
-      assetId: selectedAssetId,
-      x: 150 + (current.length % 3) * 390,
-      y: 120 + Math.floor(current.length / 3) * 280,
-    }])
-    setView('canvas')
-  }
-  function startPan(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.target !== event.currentTarget) return
-    event.currentTarget.setPointerCapture(event.pointerId)
-    dragState.current = { type: 'pan', startX: event.clientX, startY: event.clientY, originX: pan.x, originY: pan.y }
-  }
-  function startNodeDrag(event: ReactPointerEvent<HTMLElement>, node: CanvasNode) {
-    event.stopPropagation()
-    event.currentTarget.setPointerCapture(event.pointerId)
-    dragState.current = { type: 'node', id: node.id, startX: event.clientX, startY: event.clientY, originX: node.x, originY: node.y }
-  }
-  function movePointer(event: ReactPointerEvent<HTMLElement>) {
-    const drag = dragState.current
-    if (!drag) return
-    const dx = event.clientX - drag.startX
-    const dy = event.clientY - drag.startY
-    if (drag.type === 'pan') setPan({ x: drag.originX + dx, y: drag.originY + dy })
-    else setNodes((current) => current.map((node) => node.id === drag.id ? { ...node, x: drag.originX + dx / zoom, y: drag.originY + dy / zoom } : node))
-  }
-  function changeZoom(amount: number) { setZoom((current) => Math.min(1.6, Math.max(0.4, Number((current + amount).toFixed(2))))) }
-
-  return (
-    <div className="media-workspace">
-      <header className="media-workspace__topbar">
-        <Link className="media-workspace__exit" to="/" aria-label="返回 Genesis 首页"><ChevronLeft aria-hidden="true" /> G</Link>
-        <div className="media-workspace__project"><span>MEDIA / PROJECT</span><strong>未命名影像计划</strong></div>
-        <div className="media-workspace__actions"><span>已自动保存</span><button type="button"><Upload aria-hidden="true" /> 导出</button></div>
-      </header>
-      <aside className="media-workspace__sidebar" aria-label="影音创作功能">
-        <button className={view === 'library' ? 'is-active' : ''} type="button" onClick={() => setView('library')}><Library aria-hidden="true" /><span>素材</span></button>
-        <button className={view === 'canvas' ? 'is-active' : ''} type="button" onClick={() => setView('canvas')}><Grid2X2 aria-hidden="true" /><span>画布</span></button>
-        <span className="media-workspace__sidebar-line" />
-        <button disabled type="button"><Film aria-hidden="true" /><span>时间线</span></button>
-      </aside>
-      <main className="media-workspace__main">
-        {view === 'library' ? (
-          <section className="asset-library" aria-labelledby="asset-library-title">
-            <div className="asset-library__heading">
-              <div><p>MEDIA LIBRARY</p><h1 id="asset-library-title">素材库</h1><span>集中管理视频创作中的画面、声音和参考素材。</span></div>
-              <button className="media-primary-button" type="button"><Plus aria-hidden="true" /> 导入素材</button>
-            </div>
-            <div className="asset-library__toolbar">
-              <label><Search aria-hidden="true" /><span className="sr-only">搜索素材</span><input value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="搜索素材" /></label>
-              <div role="group" aria-label="素材类型">{(['all', 'video', 'image', 'audio'] as const).map((kind) => <button className={filter === kind ? 'is-active' : ''} key={kind} type="button" onClick={() => setFilter(kind)}>{kind === 'all' ? '全部' : kindLabels[kind]}</button>)}</div>
-              <span>{visibleAssets.length} ITEMS</span>
-            </div>
-            {visibleAssets.length ? <div className="asset-grid">{visibleAssets.map((asset) => (
-              <button className={`asset-card ${selectedAssetId === asset.id ? 'is-selected' : ''}`} key={asset.id} type="button" onClick={() => setSelectedAssetId(asset.id)}>
-                <span className={`asset-card__preview is-${asset.color}`}><AssetIcon kind={asset.kind} /><i>{kindLabels[asset.kind]}</i></span>
-                <span className="asset-card__meta"><strong>{asset.name}</strong><small>{asset.meta}</small></span><span className="asset-card__check" aria-hidden="true">✓</span>
-              </button>
-            ))}</div> : <div className="asset-library__empty">没有找到匹配的素材。</div>}
-            <div className="asset-library__selection"><span>已选择 1 项素材</span><button type="button" onClick={addSelectedAssetToCanvas}>添加到无限画布 <span aria-hidden="true">→</span></button></div>
-          </section>
-        ) : (
-          <section className="infinite-canvas" aria-labelledby="canvas-title">
-            <div className="infinite-canvas__bar">
-              <div><p>VISUAL CANVAS</p><h1 id="canvas-title">无限画布</h1></div>
-              <div className="infinite-canvas__tools" aria-label="画布工具"><button type="button" aria-label="选择工具"><MousePointer2 aria-hidden="true" /></button><button type="button" aria-label="缩小画布" onClick={() => changeZoom(-0.1)}><ZoomOut aria-hidden="true" /></button><output aria-label="当前缩放比例">{Math.round(zoom * 100)}%</output><button type="button" aria-label="放大画布" onClick={() => changeZoom(0.1)}><ZoomIn aria-hidden="true" /></button><button type="button" aria-label="重置画布视图" onClick={() => { setZoom(0.8); setPan({ x: 40, y: 36 }) }}><Maximize2 aria-hidden="true" /></button></div>
-              <button className="media-primary-button" type="button" onClick={() => setView('library')}><Plus aria-hidden="true" /> 添加素材</button>
-            </div>
-            <div className="infinite-canvas__viewport" onPointerDown={startPan} onPointerMove={movePointer} onPointerUp={() => { dragState.current = null }} onPointerCancel={() => { dragState.current = null }}>
-              <div className="infinite-canvas__world" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>{nodes.map((node) => { const asset = assets.find((item) => item.id === node.assetId) ?? defaultAsset; return <article className="canvas-node" key={node.id} style={{ left: node.x, top: node.y }} onPointerDown={(event) => startNodeDrag(event, node)} onPointerMove={movePointer} onPointerUp={() => { dragState.current = null }}><span className={`canvas-node__preview is-${asset.color}`}><AssetIcon kind={asset.kind} /></span><div><strong>{asset.name}</strong><small>{kindLabels[asset.kind]} · {asset.meta}</small></div></article> })}</div>
-              <div className="infinite-canvas__hint">拖动画布浏览 · 拖动卡片整理素材</div>
-            </div>
-          </section>
-        )}
-      </main>
-    </div>
-  )
+  const [name, setName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [library, setLibrary] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [refresh, setRefresh] = useState(0)
+  useEffect(() => {
+    let active = true
+    void api<Project[]>('/projects').then((result) => { if (active) setProjects(result) }).catch((reason: Error) => { if (active) setError(reason.message) }).finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [refresh])
+  async function run(action: () => Promise<void>) { setBusy(true); setError(''); try { await action() } catch (reason) { setError((reason as Error).message) } finally { setBusy(false) } }
+  const visible = projects.filter((project) => project.name.toLowerCase().includes(query.toLowerCase()))
+  return <main className="media-projects">
+    <Link className="media-back" to="/">← Genesis</Link>
+    <section className="media-project-intro"><small>MAKE SOMETHING WORTH SEEING</small><h1>你的下一部作品，<br /><em>从这里开始。</em></h1><p>收集素材，铺开想法，让画面慢慢成形。</p><div><button className="media-accent" onClick={() => setCreating(true)}>＋ 创建作品</button><button onClick={() => setLibrary(true)}>账户素材库 ↗</button></div></section>
+    <div className="media-project-heading"><h2>我的作品 <small>{projects.length}</small></h2><input aria-label="搜索作品" placeholder="搜索作品" value={query} onChange={(event) => setQuery(event.target.value)} /></div>
+    {error && <p role="alert" className="media-error">{error} <button onClick={() => setRefresh(refresh + 1)}>重试</button></p>}
+    {loading ? <p role="status">正在加载作品…</p> : visible.length === 0 ? <div className="media-project-empty"><span>＋</span><h3>{query ? '没有找到匹配的作品' : '还没有作品'}</h3><p>为一个想法取个名字，打开属于它的画布。</p><button onClick={() => setCreating(true)}>创建第一个作品</button></div> : <div className="media-project-grid">{visible.map((project, index) => <article key={project.id}>
+      <Link to={`/media/projects/${project.id}`} className="media-project-card"><div><span>{String(index + 1).padStart(2, '0')}</span><i aria-hidden="true">↗</i></div><h3>{project.name}</h3><small>更新于 {new Date(project.updated_at).toLocaleString('zh-CN')}</small></Link>
+      <div className="media-project-actions"><button disabled={busy} onClick={() => { const next = window.prompt('作品名称', project.name); if (next?.trim()) void run(async () => { await api(`/projects/${project.id}`, 'PATCH', { name: next }); setRefresh(refresh + 1) }) }}>重命名</button><button disabled={busy} onClick={() => { if (window.confirm(`删除作品“${project.name}”及其专属素材？账户库中的素材会保留。`)) void run(async () => { await api(`/projects/${project.id}`, 'DELETE'); setRefresh(refresh + 1) }) }}>删除</button></div>
+    </article>)}</div>}
+    {creating && <div className="media-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="new-project-title" className="media-new-project" onKeyDown={(event) => { if (event.key === 'Escape') setCreating(false) }}><form onSubmit={(event) => { event.preventDefault(); void run(async () => { const result = await api<Project>('/projects', 'POST', { name }); void navigate(`/media/projects/${result.id}`) }) }}><small>NEW PROJECT</small><h2 id="new-project-title">给作品一个名字</h2><label>作品名称<input autoFocus required maxLength={120} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：雨后的城市" /></label><div><button type="button" disabled={busy} onClick={() => setCreating(false)}>取消</button><button className="media-accent" disabled={busy || !name.trim()}>创建并进入画布</button></div>{error && <p role="alert">{error}</p>}</form></section></div>}
+    {library && <AssetLibrary onClose={() => setLibrary(false)} />}
+  </main>
 }

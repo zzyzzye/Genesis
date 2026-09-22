@@ -8,6 +8,7 @@ from genesis_api.blog import models as blog_models
 from genesis_api.core.config import get_settings
 from genesis_api.database.base import Base
 from genesis_api.identity import models as identity_models
+from genesis_api.media import models as media_models
 
 config = context.config
 
@@ -15,7 +16,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # 导入模型会将所有模块表注册到 Base.metadata；别名用于明确迁移依赖。
-_ = (ai_models, blog_models, identity_models)
+_ = (ai_models, blog_models, identity_models, media_models)
 target_metadata = Base.metadata
 
 

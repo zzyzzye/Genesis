@@ -17,6 +17,8 @@ COPY pyproject.toml uv.lock README.md ./
 
 FROM base AS development
 
+RUN mkdir -p /data/media && chown 10001:10001 /data/media
+
 RUN uv sync --locked --no-install-project
 
 COPY alembic.ini ./
@@ -54,6 +56,8 @@ WORKDIR /app
 COPY --from=production-builder /opt/venv /opt/venv
 COPY --from=production-builder /app/alembic.ini ./
 COPY --from=production-builder /app/alembic ./alembic
+
+RUN mkdir -p /data/media && chown app:app /data/media
 
 USER app
 

@@ -27,6 +27,7 @@ export function App() {
         <Route path="/articles/:slug" element={<PublicBlog />} />
         <Route path="/tools/*" element={<ToolsPage />} />
         <Route path="/media/*" element={<MediaPage />} />
+        <Route path="/media/projects/:projectId" element={<MediaPage />} />
         <Route path="/blog/studio/*" element={<LegacyStudioRedirect />} />
         <Route path="/studio/blog/*" element={<Studio />} />
         <Route path="/studio" element={<StudioPortal />} />

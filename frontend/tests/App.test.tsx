@@ -123,7 +123,7 @@ describe('App', () => {
 
   it.each([
     ['/tools', '把重复工作，压缩成一次点击。', '工具系统标识'],
-    ['/media', '素材库', '影音创作功能'],
+    ['/media', '从一个作品开始。', null],
   ])('为 %s 使用独立系统界面且不显示跨系统导航', (path, heading, landmark) => {
     window.history.pushState({}, '', path)
 
@@ -134,21 +134,12 @@ describe('App', () => {
     if (landmark) expect(screen.getByRole('complementary', { name: landmark })).toBeInTheDocument()
   })
 
-  it('影音工作台可以筛选素材并添加到无限画布', () => {
+  it('影音创作需要账户登录并保留返回地址', () => {
     window.history.pushState({}, '', '/media')
     render(<App />)
 
-    fireEvent.click(screen.getByRole('button', { name: '视频' }))
-    expect(screen.getByRole('button', { name: /城市夜行 01/ })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /片头氛围/ })).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: /城市夜行 01/ }))
-    fireEvent.click(screen.getByRole('button', { name: /添加到无限画布/ }))
-    expect(screen.getByRole('heading', { name: '无限画布' })).toBeInTheDocument()
-    expect(screen.getAllByText('城市夜行 01').length).toBeGreaterThan(0)
-
-    fireEvent.click(screen.getByRole('button', { name: '放大画布' }))
-    expect(screen.getByRole('status', { name: '当前缩放比例' })).toHaveTextContent('90%')
+    expect(screen.getByRole('link', { name: '登录并继续' })).toHaveAttribute('href', '/account?returnTo=%2Fmedia')
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
   })
 
   it('写作台登录后展示博客管理导航和仪表盘，并可进入文章编辑', async () => {

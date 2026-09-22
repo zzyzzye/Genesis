@@ -1,7 +1,7 @@
 import './Account.css'
 
 import { type FormEvent, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   clearStoredAuthToken,
@@ -212,6 +212,9 @@ function Profile({ user, feedback, onLogout, onSave }: {
 }
 
 export function Account() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const returnTo = searchParams.get('returnTo')
   const [token, setToken] = useState(() => getStoredAuthToken())
   const [state, setState] = useState<AccountState>(() =>
     getStoredAuthToken() === null
@@ -225,13 +228,14 @@ export function Account() {
       .then((user) => {
         if (user.role === 'owner') storeAuthToken(token, studioAuthTokenKey)
         setState({ status: 'ready', user, feedback: null })
+        if (returnTo && /^\/media(?:\/|$)/.test(returnTo)) void navigate(returnTo, { replace: true })
       })
       .catch(() => {
         clearStoredAuthToken()
         setToken(null)
         setState({ status: 'guest', mode: 'login', error: '登录状态已过期，请重新登录。' })
       })
-  }, [token])
+  }, [token, returnTo, navigate])
 
   function setLoggedInToken(accessToken: string) {
     storeAuthToken(accessToken)

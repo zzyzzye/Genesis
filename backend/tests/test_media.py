@@ -1,0 +1,192 @@
+from collections.abc import AsyncGenerator
+from pathlib import Path
+from uuid import uuid4
+
+import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+from genesis_api.api.dependencies import get_current_user
+from genesis_api.api.routes.media import router
+from genesis_api.database.base import Base
+from genesis_api.database.session import get_session
+from genesis_api.identity.models import User, UserRole
+from genesis_api.media import service
+
+
+@pytest.fixture
+async def media_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> AsyncGenerator[AsyncClient, None]:
+    monkeypatch.setattr(service, "STORAGE_ROOT", tmp_path)
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    Base.metadata.create_all(engine)
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    with Session(engine) as session:
+        user = User(handle="media-test", display_name="测试", role=UserRole.MEMBER)
+        session.add(user)
+        session.commit()
+        app.dependency_overrides[get_session] = lambda: session
+        app.dependency_overrides[get_current_user] = lambda: user
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test/api/v1/media"
+        ) as client:
+            yield client
+    engine.dispose()
+
+
+@pytest.mark.anyio
+async def test_project_asset_lifecycle(media_client: AsyncClient) -> None:
+    c = media_client
+    assert (await c.get("health")).status_code == 200
+    assert (await c.get("projects")).json() == []
+    p = (await c.post("projects", json={"name": "作品一"})).json()["id"]
+    assert (await c.patch(f"projects/{p}", json={"name": "改名"})).json()["name"] == "改名"
+    assert len((await c.get("projects?q=改名")).json()) == 1
+    uploaded = await c.post(
+        f"projects/{p}/assets", files={"file": ("test.png", b"image-bytes", "image/png")}
+    )
+    assert uploaded.status_code == 201
+    a = uploaded.json()["id"]
+    assert (await c.get("assets")).json()["total"] == 0
+    assert (await c.get(f"projects/{p}/assets?kind=image&q=test")).json()["total"] == 1
+    assert (await c.get(f"assets/{a}")).json()["in_library"] is False
+    assert (await c.get(f"assets/{a}/file")).content == b"image-bytes"
+    assert (await c.get(f"assets/{a}/file", headers={"Range": "bytes=0-4"})).content == b"image"
+    doc = {
+        "nodes": [
+            {
+                "id": str(uuid4()),
+                "type": "asset",
+                "asset_id": a,
+                "x": 0,
+                "y": 0,
+                "width": 300,
+                "height": 200,
+            }
+        ],
+        "viewport": {"x": 10, "y": 20, "zoom": 1},
+    }
+    assert (await c.put(f"projects/{p}/canvas", json={"version": 0, "document": doc})).json()[
+        "version"
+    ] == 1
+    assert (
+        await c.put(f"projects/{p}/canvas", json={"version": 0, "document": doc})
+    ).status_code == 409
+    assert (await c.get(f"projects/{p}/canvas")).json()["document"]["nodes"][0]["asset_id"] == a
+    assert (await c.delete(f"assets/{a}")).status_code == 409
+    assert (await c.post(f"assets/{a}/library")).json()["in_library"] is True
+    p2 = (await c.post("projects", json={"name": "作品二"})).json()["id"]
+    assert (
+        await c.post(f"projects/{p2}/assets/reference", json={"asset_id": a})
+    ).status_code == 200
+    assert (
+        await c.post(f"projects/{p2}/assets/reference", json={"asset_id": a})
+    ).status_code == 200
+    assert (await c.delete(f"projects/{p}/assets/{a}")).json()["document"]["nodes"] == []
+    assert (await c.delete(f"projects/{p}")).status_code == 204
+    assert (await c.get(f"assets/{a}/file")).status_code == 200
+    assert (await c.delete(f"assets/{a}")).status_code == 409
+    assert (await c.delete(f"projects/{p2}")).status_code == 204
+    assert (await c.delete(f"assets/{a}")).status_code == 204
+    assert (await c.get(f"assets/{a}")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_invalid_upload_and_canvas(
+    media_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    c = media_client
+    p = (await c.post("projects", json={"name": "校验"})).json()["id"]
+    assert (await c.post("projects", json={"name": " "})).status_code == 422
+    assert (
+        await c.post("assets", files={"file": ("bad.svg", b"<svg/>", "image/svg+xml")})
+    ).status_code == 415
+    assert (
+        await c.post("assets", files={"file": ("empty.png", b"", "image/png")})
+    ).status_code == 422
+    monkeypatch.setattr(service, "MAX_UPLOAD_BYTES", 4)
+    assert (
+        await c.post("assets", files={"file": ("large.png", b"12345", "image/png")})
+    ).status_code == 413
+    assert list(service.STORAGE_ROOT.iterdir()) == []
+    node = {
+        "id": str(uuid4()),
+        "type": "asset",
+        "asset_id": str(uuid4()),
+        "x": 0,
+        "y": 0,
+        "width": 300,
+        "height": 200,
+    }
+    assert (
+        await c.put(f"projects/{p}/canvas", json={"version": 0, "document": {"nodes": [node]}})
+    ).status_code == 422
+    node["type"] = "note"
+    assert (
+        await c.put(
+            f"projects/{p}/canvas", json={"version": 0, "document": {"nodes": [node, node]}}
+        )
+    ).status_code == 422
+    assert (await c.get(f"projects/{uuid4()}")).status_code == 404
+    assert (await c.get(f"assets/{uuid4()}/file")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_private_asset_references_and_cleanup(media_client: AsyncClient) -> None:
+    c = media_client
+    p = (await c.post("projects", json={"name": "原作"})).json()["id"]
+    target = (await c.post("projects", json={"name": "副本"})).json()["id"]
+    a = (
+        await c.post(f"projects/{p}/assets", files={"file": ("sound.wav", b"wave", "audio/wav")})
+    ).json()["id"]
+    assert (
+        await c.post(f"projects/{target}/assets/reference", json={"asset_id": a})
+    ).status_code == 404
+    assert (
+        await c.post(f"projects/{p}/copy-assets/{target}", json={"asset_ids": [a]})
+    ).status_code == 204
+    assert (
+        await c.post(f"projects/{p}/copy-assets/{target}", json={"asset_ids": [a]})
+    ).status_code == 204
+    assert (
+        await c.post(f"projects/{p}/copy-assets/{target}", json={"asset_ids": [str(uuid4())]})
+    ).status_code == 409
+    assert (await c.delete(f"projects/{p}")).status_code == 204
+    assert (await c.get(f"assets/{a}/file")).status_code == 200
+    (service.STORAGE_ROOT / a).unlink()
+    assert (await c.get(f"assets/{a}/file")).status_code == 404
+    assert (await c.delete(f"projects/{target}/assets/{a}")).status_code == 200
+    assert (await c.get(f"assets/{a}")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_cross_account_isolation(media_client: AsyncClient) -> None:
+    c = media_client
+    p = (await c.post("projects", json={"name": "私有作品"})).json()["id"]
+    a = (await c.post("assets", files={"file": ("photo.png", b"image", "image/png")})).json()["id"]
+    app = c._transport.app  # type: ignore[attr-defined]
+    session = app.dependency_overrides[get_session]()
+    other = User(handle="another", display_name="另一账户", role=UserRole.MEMBER)
+    session.add(other)
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: other
+    assert (await c.get("projects")).json() == []
+    assert (await c.get("assets")).json()["total"] == 0
+    for route in [
+        f"projects/{p}",
+        f"projects/{p}/canvas",
+        f"projects/{p}/assets",
+        f"assets/{a}",
+        f"assets/{a}/file",
+    ]:
+        assert (await c.get(route)).status_code == 404
+    assert (await c.post(f"assets/{a}/library")).status_code == 404
+    assert (await c.delete(f"projects/{p}")).status_code == 404
+    assert (await c.delete(f"assets/{a}")).status_code == 404
