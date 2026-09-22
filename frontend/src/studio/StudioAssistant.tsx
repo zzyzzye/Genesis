@@ -80,7 +80,14 @@ function readAssistantSession(): AssistantSession {
       && Number.isInteger((activeCandidate as ActiveAssistantRun).assistantMessageIndex)
       && normalizedMessages[(activeCandidate as ActiveAssistantRun).assistantMessageIndex]?.role === 'assistant'
     ) ? activeCandidate as ActiveAssistantRun : null
-    return { isOpen: value.isOpen === true, messages: normalizedMessages, activeRun }
+    const restoredMessages = activeRun
+      ? normalizedMessages
+      : normalizedMessages.filter((message) => message.content.trim().length > 0)
+    return {
+      isOpen: value.isOpen === true,
+      messages: restoredMessages.length ? restoredMessages : initialAssistantMessages(),
+      activeRun,
+    }
   } catch {
     return fallback
   }
@@ -231,6 +238,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
           }, controller.signal)
           if (cancelled) return
           if (result === 'completed') {
+            setMessages((current) => current.filter((message) => message.content.trim().length > 0))
             setActiveRun((current) => current?.id === run.id ? null : current)
             setStreamStatus(null)
             setError(null)
@@ -240,6 +248,7 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
         } catch (caught) {
           if (cancelled || (caught instanceof DOMException && caught.name === 'AbortError')) return
           if (caught instanceof AiChatRunTerminalError) {
+            setMessages((current) => current.filter((message) => message.content.trim().length > 0))
             setError(caught.message)
             setActiveRun((current) => current?.id === run.id ? null : current)
             setStreamStatus(null)
@@ -272,7 +281,14 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     const content = draft.trim()
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!content || isBusy || !token) return
-    const nextMessages: AiChatMessage[] = [...messages, { role: 'user', content }]
+    const nextMessages: AiChatMessage[] = [
+      ...messages.filter((message) => message.content.trim().length > 0),
+      { role: 'user', content },
+    ]
+    if (nextMessages.length > 40) {
+      setError('当前对话已达到 40 条消息上限，请新建对话后继续。')
+      return
+    }
     const assistantMessageIndex = nextMessages.length
     shouldStickToBottomRef.current = true
     setMessages([...nextMessages, { role: 'assistant', content: '' }])
