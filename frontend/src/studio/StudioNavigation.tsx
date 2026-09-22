@@ -20,7 +20,7 @@ export function StudioNavigation({
   return (
     <aside className="studio-section-nav" aria-label="博客管理导航">
       <header className="studio-section-nav__header">
-        <Link className="studio-section-nav__brand" to="/" aria-label="返回 Genesis 首页">
+        <Link className="studio-section-nav__brand" to="/studio" aria-label="返回系统导航">
           <span className="studio-section-nav__mark" aria-hidden="true">G<span>.</span></span>
           <span>
             <p>GENESIS</p>
