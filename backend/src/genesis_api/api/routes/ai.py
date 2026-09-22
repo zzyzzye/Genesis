@@ -225,6 +225,19 @@ async def get_chat_run(
     return snapshot
 
 
+@router.delete("/chat/runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def cancel_chat_run(
+    run_id: UUID,
+    current_user: CurrentUserDependency,
+    session: SessionDependency,
+) -> None:
+    snapshot = get_ai_chat_run_snapshot(session, run_id=run_id, user_id=current_user.id)
+    if snapshot is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI 生成任务不存在")
+    if snapshot.status in (AiChatRunStatus.PENDING, AiChatRunStatus.RUNNING):
+        await ai_chat_run_manager.cancel(run_id)
+
+
 @router.get("/chat/runs/{run_id}/stream")
 async def stream_chat_run(
     run_id: UUID,

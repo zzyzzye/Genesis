@@ -21,6 +21,7 @@ import {
   Send,
   Settings,
   Sparkles,
+  Square,
   UserRound,
   Upload,
   Video,
@@ -53,6 +54,7 @@ export type StudioIconName =
   | 'send'
   | 'settings'
   | 'spark'
+  | 'stop'
   | 'tools'
   | 'user'
   | 'upload'
@@ -81,6 +83,7 @@ const icons: Record<StudioIconName, LucideIcon> = {
   send: Send,
   settings: Settings,
   spark: Sparkles,
+  stop: Square,
   tools: Wrench,
   user: UserRound,
   upload: Upload,

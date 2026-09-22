@@ -225,6 +225,7 @@ async def test_chat_run_routes_keep_public_contract(monkeypatch: pytest.MonkeyPa
         sequence=1,
     )
     starts: list[UUID] = []
+    cancellations: list[UUID] = []
     monkeypatch.setattr(ai_route, "_prepare_request", lambda value, **_: value)
     monkeypatch.setattr(ai_route, "create_ai_chat_run", lambda *_, **__: created)
     monkeypatch.setattr(
@@ -233,6 +234,9 @@ async def test_chat_run_routes_keep_public_contract(monkeypatch: pytest.MonkeyPa
         lambda value, *_: starts.append(value),
     )
     monkeypatch.setattr(ai_route, "get_ai_chat_run_snapshot", lambda *_, **__: snapshot)
+    async def cancel(value: UUID) -> None:
+        cancellations.append(value)
+    monkeypatch.setattr(cast(Any, ai_route).ai_chat_run_manager, "cancel", cancel)
     response_marker = cast(Any, object())
     monkeypatch.setattr(ai_route, "_stream_response", lambda *_: response_marker)
 
@@ -244,6 +248,8 @@ async def test_chat_run_routes_keep_public_contract(monkeypatch: pytest.MonkeyPa
         request, user, cast(Any, object()), Settings()
     ) == created
     assert await ai_route.get_chat_run(run_id, user, cast(Any, object())) == snapshot
+    assert await ai_route.cancel_chat_run(run_id, user, cast(Any, object())) is None
+    assert cancellations == [run_id]
     assert await ai_route.stream_chat_run(
         run_id, cast(Request, object()), user, cast(Any, object())
     ) is response_marker
@@ -260,6 +266,9 @@ async def test_chat_run_routes_keep_public_contract(monkeypatch: pytest.MonkeyPa
             run_id, cast(Request, object()), user, cast(Any, object())
         )
     assert missing_stream.value.status_code == 404
+    with pytest.raises(HTTPException) as missing_cancel:
+        await ai_route.cancel_chat_run(run_id, user, cast(Any, object()))
+    assert missing_cancel.value.status_code == 404
 
 
 def test_confirm_action_rejects_missing_posts_and_bad_changes() -> None:

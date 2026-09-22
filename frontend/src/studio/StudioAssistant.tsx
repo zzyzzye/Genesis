@@ -26,6 +26,7 @@ function ProviderIcon({ provider }: { provider: AiProvider }) {
 }
 import {
   AiChatRunTerminalError,
+  cancelAiChatRun,
   confirmAiAction,
   createAiChatRun,
   getProviderModels,
@@ -175,6 +176,8 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const bodyRef = useRef<HTMLDivElement | null>(null)
   const shouldStickToBottomRef = useRef(true)
+  const streamControllerRef = useRef<AbortController | null>(null)
+  const activeReceivedRef = useRef<{ index: number; content: string } | null>(null)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const isBusy = isStarting || activeRun !== null
   const selectedModel = models.find((item) => item.id === model)
@@ -287,7 +290,9 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
 
     let cancelled = false
     const controller = new AbortController()
+    streamControllerRef.current = controller
     let received = sessionRef.current.messages[run.assistantMessageIndex]?.content ?? ''
+    activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }
     let firstTokenAt = sessionRef.current.messages[run.assistantMessageIndex]?.timing?.firstTokenAt
     let pendingFrame: number | null = null
     const flush = () => {
@@ -310,8 +315,8 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
       while (!cancelled) {
         try {
           const result = await streamAiChatRun(token!, run.id, {
-            onSnapshot: (content) => { received = content; markFirstToken(content); queue(); setStreamStatus('正在生成…') },
-            onToken: (content) => { received += content; markFirstToken(content); queue() },
+            onSnapshot: (content) => { received = content; activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }; markFirstToken(content); queue(); setStreamStatus('正在生成…') },
+            onToken: (content) => { received += content; activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }; markFirstToken(content); queue() },
           }, controller.signal)
           if (cancelled) return
           if (result === 'completed') {
@@ -348,6 +353,8 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
     return () => {
       cancelled = true
       controller.abort()
+      if (streamControllerRef.current === controller) streamControllerRef.current = null
+      if (activeReceivedRef.current?.index === run.assistantMessageIndex) activeReceivedRef.current = null
       if (pendingFrame !== null) cancelAnimationFrame(pendingFrame)
     }
   }, [activeRun, isOpen])
@@ -414,6 +421,30 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
 
   function handleSuggestion(suggestion: string) {
     setDraft(suggestion)
+  }
+
+  function stopGeneration() {
+    const run = activeRun
+    if (!run) return
+    const token = getStoredAuthToken(studioAuthTokenKey)
+    const completedAt = Date.now()
+    const latest = activeReceivedRef.current
+    streamControllerRef.current?.abort()
+    setMessages((current) => current
+      .map((message, index) => index === run.assistantMessageIndex
+        ? {
+            ...message,
+            content: latest?.index === index ? latest.content : message.content,
+            timing: message.timing ? { ...message.timing, completedAt } : undefined,
+          }
+        : message)
+      .filter((message) => message.content.trim().length > 0))
+    setActiveRun(null)
+    setStreamStatus(null)
+    setError(null)
+    if (token) void cancelAiChatRun(token, run.id).catch(() => {
+      setError('输出已在当前页面停止，但服务端取消请求失败。')
+    })
   }
 
   const handleConfirmAction = useCallback(async (messageIndex: number, action: AiActionProposal) => {
@@ -560,7 +591,9 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
                 )}
               </div>}
               {!error && (isBusy || streamStatus) && <span className="studio-assistant__composer-status">{streamStatus ?? '正在生成…'}</span>}
-              <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>
+              {activeRun
+                ? <button className="studio-assistant__stop" type="button" aria-label="停止生成" onClick={stopGeneration}><StudioIcon name="stop" /></button>
+                : <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>}
             </div>
             {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
           </form>

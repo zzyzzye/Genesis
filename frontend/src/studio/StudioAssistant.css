@@ -69,6 +69,8 @@
 .studio-assistant__composer > div > span svg { width: .7rem; }
 .studio-assistant__composer button { display: grid; width: 1.8rem; height: 1.8rem; place-items: center; border: 0; border-radius: .55rem; background: #d8e85e; color: var(--studio-text, #000); cursor: pointer; }
 .studio-assistant__composer button:disabled { background: #edf0d9; color: var(--studio-text, #000); cursor: not-allowed; }
+.studio-assistant__composer .studio-assistant__stop { background: #203743; color: #fff; }
+.studio-assistant__composer .studio-assistant__stop svg { width: .72rem; fill: currentColor; }
 .studio-assistant__composer button svg { width: .85rem; }
 .studio-assistant__composer .studio-assistant__model-menu button {
   display: block;

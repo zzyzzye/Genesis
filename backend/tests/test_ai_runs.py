@@ -338,6 +338,39 @@ async def test_shutdown_leaves_cancelled_run_recoverable() -> None:
         assert run is not None
         assert run.status is AiChatRunStatus.RUNNING
 
+
+@pytest.mark.anyio
+async def test_user_cancel_marks_run_failed_instead_of_recoverable() -> None:
+    session_factory = build_session_factory()
+    user_id = uuid4()
+    request = AiChatRequest(
+        surface="studio", messages=[AiMessage(role="user", content="停止")]
+    )
+    with session_factory() as session:
+        session.add(User(id=user_id, handle="owner", display_name="Owner", role=UserRole.OWNER))
+        session.commit()
+        created = create_ai_chat_run(
+            session, user_id=user_id, request=request, settings=Settings()
+        )
+
+    class SlowService:
+        def __init__(self, _: Settings) -> None:
+            pass
+
+        async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
+            await asyncio.sleep(10)
+            yield thread_id
+
+    manager = AiChatRunManager(session_factory, cast(type[ChatStreamer], SlowService))
+    manager.start(created.id, request, Settings())
+    await asyncio.sleep(0.01)
+    await manager.cancel(created.id)
+    with session_factory() as session:
+        run = session.get(AiChatRun, created.id)
+        assert run is not None
+        assert run.status is AiChatRunStatus.FAILED
+        assert run.error == "生成已由用户停止。"
+
 @pytest.mark.anyio
 async def test_stream_response_replays_snapshot_before_live_delta(
     monkeypatch: pytest.MonkeyPatch,

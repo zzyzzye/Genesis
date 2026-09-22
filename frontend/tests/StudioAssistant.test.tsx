@@ -2,12 +2,13 @@ import { fireEvent, render, screen, waitFor, cleanup, act } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { StudioAssistant } from '../src/studio/StudioAssistant'
-import { AiChatRunTerminalError, createAiChatRun, streamAiChatRun } from '../src/lib/api'
+import { AiChatRunTerminalError, cancelAiChatRun, createAiChatRun, streamAiChatRun } from '../src/lib/api'
 import { studioAuthTokenKey } from '../src/lib/auth'
 
 vi.mock('../src/lib/api', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/lib/api')>(),
   createAiChatRun: vi.fn(),
+  cancelAiChatRun: vi.fn().mockResolvedValue(undefined),
   streamAiChatRun: vi.fn(),
   getProviderModels: vi.fn().mockResolvedValue({ models: [] }),
 }))
@@ -57,6 +58,22 @@ describe('助手失败后的继续对话', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '开始' } })
     fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
     expect(await screen.findByText('字'.repeat(100))).toBeInTheDocument()
+  })
+
+  it('停止生成会取消服务端任务并保留已经收到的内容', async () => {
+    vi.mocked(createAiChatRun).mockResolvedValue({ id: 'stop-run', status: 'pending' })
+    vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks, signal) => new Promise((_resolve, reject) => {
+      callbacks.onToken('已经生成', 1)
+      signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+    }))
+    mount([{ role: 'assistant', content: '你好' }])
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '开始' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
+    const stop = await screen.findByRole('button', { name: '停止生成' })
+    fireEvent.click(stop)
+    expect(await screen.findByText('已经生成')).toBeInTheDocument()
+    expect(cancelAiChatRun).toHaveBeenCalledWith('test-placeholder', 'stop-run')
+    expect(screen.getByRole('button', { name: '发送消息' })).toBeInTheDocument()
   })
 
   it('恢复旧会话时清理空回复，发送有效历史并展示后续回复', async () => {

@@ -110,6 +110,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const detail = formatApiErrorDetail(error)
     throw new Error(`请求失败：HTTP ${response.status}${detail ? `（${detail}）` : ''}`)
   }
+  if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
 
@@ -346,6 +347,13 @@ export function createAiChatRun(token: string, chatRequest: AiChatRequest): Prom
 
 export function getAiChatRun(token: string, runId: string): Promise<AiChatRunSnapshot> {
   return request<AiChatRunSnapshot>(`/ai/chat/runs/${encodeURIComponent(runId)}`, {
+    headers: authHeaders(token),
+  })
+}
+
+export function cancelAiChatRun(token: string, runId: string): Promise<void> {
+  return request<void>(`/ai/chat/runs/${encodeURIComponent(runId)}`, {
+    method: 'DELETE',
     headers: authHeaders(token),
   })
 }

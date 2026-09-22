@@ -126,6 +126,27 @@ class AiChatRunManager:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+    async def cancel(self, run_id: UUID) -> None:
+        """停止用户主动取消的任务，并将其标记为终态，避免服务重启后恢复。"""
+        task = self._tasks.get(run_id)
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        await asyncio.to_thread(self._cancel_sync, run_id)
+
+    def _cancel_sync(self, run_id: UUID) -> None:
+        with self._session_factory() as session:
+            run = session.get(AiChatRun, run_id)
+            if run is None or run.status not in (
+                AiChatRunStatus.PENDING,
+                AiChatRunStatus.RUNNING,
+            ):
+                return
+            run.status = AiChatRunStatus.FAILED
+            run.error = "生成已由用户停止。"
+            run.completed_at = datetime.now(UTC)
+            session.commit()
+
     async def recover_interrupted_runs(self, settings: Settings) -> None:
         recovered = await asyncio.to_thread(self._recover_interrupted_runs_sync)
         for run_id, request in recovered:
