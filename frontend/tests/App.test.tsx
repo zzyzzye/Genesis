@@ -52,7 +52,7 @@ describe('App', () => {
     vi.restoreAllMocks()
   })
 
-  it('公开首页保持内容导航并将后台入口收进页脚', () => {
+  it('公开首页只展示内容导航，不暴露后台入口', () => {
     window.history.pushState({}, '', '/')
     render(<App />)
 
@@ -61,7 +61,24 @@ describe('App', () => {
     expect(navigation).toHaveTextContent('工具')
     expect(navigation).toHaveTextContent('影音')
     expect(navigation).not.toHaveTextContent('Studio')
-    expect(screen.getByRole('link', { name: '系统入口' })).toHaveAttribute('href', '/studio')
+    expect(screen.queryByRole('link', { name: /系统入口|Studio|工作台/ })).not.toBeInTheDocument()
+  })
+
+  it('仅在 Owner 账户页提供工作台入口并同步登录态', async () => {
+    window.localStorage.setItem('genesis-account-token', 'owner-token')
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      id: 'user-1',
+      handle: 'genesis',
+      display_name: 'Genesis',
+      bio: '',
+      avatar_url: null,
+      role: 'owner',
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    window.history.pushState({}, '', '/account')
+    render(<App />)
+
+    expect(await screen.findByRole('link', { name: /进入 Genesis 工作台/ })).toHaveAttribute('href', '/studio')
+    expect(window.localStorage.getItem('genesis-studio-token')).toBe('owner-token')
   })
 
   it('展示博客文章并可打开详情', async () => {

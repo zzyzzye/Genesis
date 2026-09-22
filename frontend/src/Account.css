@@ -116,6 +116,35 @@
   font-size: 0.8rem;
 }
 
+.account-studio-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 2rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #d6d0c1;
+  border-radius: .5rem;
+  background: #f7f1e7;
+  color: #30424a;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+.account-studio-entry:hover { border-color: #c96a42; background: #fff8ed; transform: translateY(-2px); }
+.account-studio-entry:focus-visible { outline: 3px solid rgb(201 106 66 / 28%); outline-offset: 3px; }
+.account-studio-entry > span:first-child,
+.account-studio-entry small,
+.account-studio-entry strong,
+.account-studio-entry em { display: block; }
+.account-studio-entry small { color: #b15e3c; font-size: .62rem; font-weight: 800; letter-spacing: .13em; }
+.account-studio-entry strong { margin-top: .25rem; font-family: Georgia, "Noto Serif SC", serif; font-size: 1.2rem; }
+.account-studio-entry em { margin-top: .2rem; color: #758087; font-size: .72rem; font-style: normal; }
+.account-studio-entry > span:last-child { color: #c96a42; font-size: 1.25rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .account-studio-entry { transition: none; }
+  .account-studio-entry:hover { transform: none; }
+}
+
 .account-avatar {
   display: grid;
   width: 4.4rem;

@@ -32,10 +32,7 @@ function Home() {
           </div>
         </section>
       </main>
-      <footer className="site-footer">
-        <span>Genesis · 个人内容系统</span>
-        <span className="home-footer-meta">Build slowly. Keep growing.<Link to="/studio">系统入口</Link></span>
-      </footer>
+      <footer className="site-footer"><span>Genesis · 个人内容系统</span><span>Build slowly. Keep growing.</span></footer>
     </div>
   )
 }

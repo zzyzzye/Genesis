@@ -3,7 +3,12 @@ import './Account.css'
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken } from './lib/auth'
+import {
+  clearStoredAuthToken,
+  getStoredAuthToken,
+  storeAuthToken,
+  studioAuthTokenKey,
+} from './lib/auth'
 
 import {
   getCurrentUser,
@@ -174,6 +179,16 @@ function Profile({ user, feedback, onLogout, onSave }: {
             <p>@{user.handle} · {user.role === 'owner' ? '站点作者' : '社区成员'}</p>
           </div>
         </div>
+        {user.role === 'owner' && (
+          <Link className="account-studio-entry" to="/studio">
+            <span>
+              <small>OWNER WORKSPACE</small>
+              <strong>进入 Genesis 工作台</strong>
+              <em>管理博客、工具与影音系统</em>
+            </span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        )}
         <form className="account-form" onSubmit={submit}>
           <label htmlFor="profile-display-name">
             <span>昵称</span>
@@ -207,7 +222,10 @@ export function Account() {
   useEffect(() => {
     if (token === null) return
     void getCurrentUser(token)
-      .then((user) => setState({ status: 'ready', user, feedback: null }))
+      .then((user) => {
+        if (user.role === 'owner') storeAuthToken(token, studioAuthTokenKey)
+        setState({ status: 'ready', user, feedback: null })
+      })
       .catch(() => {
         clearStoredAuthToken()
         setToken(null)
@@ -249,6 +267,7 @@ export function Account() {
         feedback={state.feedback}
         onLogout={() => {
           clearStoredAuthToken()
+          clearStoredAuthToken(studioAuthTokenKey)
           setToken(null)
           setState({ status: 'guest', mode: 'login', error: null })
         }}
