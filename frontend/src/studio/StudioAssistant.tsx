@@ -474,9 +474,10 @@ export function StudioAssistant({ page, editor }: { page: AssistantPageContext; 
                   </div>
                 )}
               </div>}
-              {(isBusy || error || streamStatus) && <span className="studio-assistant__composer-status">{error ?? streamStatus ?? '正在生成…'}</span>}
+              {!error && (isBusy || streamStatus) && <span className="studio-assistant__composer-status">{streamStatus ?? '正在生成…'}</span>}
               <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>
             </div>
+            {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
           </form>
         </section>
       )}

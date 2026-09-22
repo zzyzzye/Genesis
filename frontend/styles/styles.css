@@ -2244,6 +2244,7 @@ nav span {
 .provider-icon--gemini { color: #4f6fe8; }
 .provider-icon--claude { color: #191919; }
 .provider-icon--mimo { color: #e96500; white-space: nowrap; flex-shrink: 0; }
+.studio-assistant__request-error { margin: .5rem 0 0; color: #a33328; font-size: .75rem; line-height: 1.5; overflow-wrap: anywhere; }
 
 .studio-assistant__provider-tabs button {
   display: inline-flex;
