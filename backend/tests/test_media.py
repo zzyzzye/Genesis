@@ -179,6 +179,7 @@ async def test_remove_asset_cleans_connected_edges(media_client: AsyncClient) ->
     ).json()["id"]
     media_node = str(uuid4())
     text_node = str(uuid4())
+    group_id = str(uuid4())
     document = {
         "nodes": [
             {
@@ -191,6 +192,8 @@ async def test_remove_asset_cleans_connected_edges(media_client: AsyncClient) ->
                 "height": 200,
             },
             {"id": text_node, "type": "text", "x": 400, "y": 0, "width": 300, "height": 200},
+            {"id": group_id, "type": "group", "member_ids": [media_node, text_node],
+             "x": -20, "y": -40, "width": 750, "height": 280},
         ],
         "edges": [{"id": str(uuid4()), "source": text_node, "target": media_node}],
     }
@@ -203,6 +206,35 @@ async def test_remove_asset_cleans_connected_edges(media_client: AsyncClient) ->
     assert result.status_code == 200
     assert [node["id"] for node in result.json()["document"]["nodes"]] == [text_node]
     assert result.json()["document"]["edges"] == []
+
+
+@pytest.mark.anyio
+async def test_canvas_groups_and_background_are_validated(media_client: AsyncClient) -> None:
+    c = media_client
+    project_id = (await c.post("projects", json={"name": "画布分组"})).json()["id"]
+    nodes = [
+        {"id": str(uuid4()), "type": "note", "x": index * 300, "y": 0, "width": 200, "height": 120}
+        for index in range(2)
+    ]
+    group = {
+        "id": str(uuid4()), "type": "group", "member_ids": [node["id"] for node in nodes],
+        "x": -20, "y": -30, "width": 550, "height": 180,
+    }
+    endpoint = f"projects/{project_id}/canvas"
+    result = await c.put(endpoint, json={"version": 0, "document": {
+        "nodes": [group, *nodes], "background": "lines",
+    }})
+    assert result.status_code == 200
+    assert result.json()["document"]["background"] == "lines"
+    invalid_group = {**group, "member_ids": [nodes[0]["id"], str(uuid4())]}
+    assert (await c.put(endpoint, json={"version": 1, "document": {
+        "nodes": [invalid_group, *nodes],
+    }})).status_code == 422
+    assert (await c.put(endpoint, json={"version": 1, "document": {
+        "nodes": [group, *nodes], "edges": [{
+            "id": str(uuid4()), "source": group["id"], "target": nodes[0]["id"],
+        }],
+    }})).status_code == 422
 
 
 @pytest.mark.anyio

@@ -132,9 +132,26 @@ def save_canvas(
     for edge in data.document.edges:
         if edge.source not in node_ids or edge.target not in node_ids or edge.source == edge.target:
             raise HTTPException(422, "连线必须连接作品内两个不同节点")
+    grouped_ids: set[UUID] = set()
+    node_by_id = {node.id: node for node in data.document.nodes}
+    if any(
+        node_by_id[edge.source].type == "group" or node_by_id[edge.target].type == "group"
+        for edge in data.document.edges
+    ):
+        raise HTTPException(422, "分组边框不能作为连线端点")
     for node in data.document.nodes:
         if node.type == "asset" and node.asset_id not in ids:
             raise HTTPException(422, "画布包含未关联到作品的素材")
+        if node.type == "group":
+            if len(node.member_ids) < 2 or len(set(node.member_ids)) != len(node.member_ids):
+                raise HTTPException(422, "分组至少需要两个不同节点")
+            for member_id in node.member_ids:
+                member = node_by_id.get(member_id)
+                if member is None or member.type == "group" or member_id in grouped_ids:
+                    raise HTTPException(422, "分组成员无效或已属于其他分组")
+                grouped_ids.add(member_id)
+        elif node.member_ids:
+            raise HTTPException(422, "只有分组节点可以包含成员")
     project.canvas = data.document.model_dump(mode="json")
     project.version += 1
     project.updated_at = datetime.now(UTC)
@@ -279,6 +296,13 @@ def remove_reference(
     )
     document = CanvasDocument.model_validate(project.canvas)
     document.nodes = [node for node in document.nodes if node.asset_id != asset_id]
+    remaining = {node.id for node in document.nodes}
+    for node in document.nodes:
+        if node.type == "group":
+            node.member_ids = [member for member in node.member_ids if member in remaining]
+    document.nodes = [
+        node for node in document.nodes if node.type != "group" or len(node.member_ids) >= 2
+    ]
     remaining = {node.id for node in document.nodes}
     document.edges = [
         edge for edge in document.edges if edge.source in remaining and edge.target in remaining

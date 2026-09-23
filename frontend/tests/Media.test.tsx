@@ -6,11 +6,24 @@ import { ProjectCanvas } from '../src/pages/media/ProjectCanvas'
 import { AssetLibrary } from '../src/pages/media/AssetLibrary'
 import { emptyDocument, type Document, MediaError } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
+import { groupSelection, removeSelection, ungroupSelection } from '../src/pages/media/canvasOperations'
 
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
 
 describe('作品画布', () => {
   afterEach(() => { localStorage.clear(); vi.restoreAllMocks() })
+  it('编组、取消编组和删除成员会维护画布关系', () => {
+    const second = { ...note, id: crypto.randomUUID(), x: 320 }
+    const third = { ...note, id: crypto.randomUUID(), x: 640 }
+    const document: Document = { ...emptyDocument(), nodes: [note, second, third], edges: [{ id: crypto.randomUUID(), source: note.id, target: second.id }] }
+    const grouped = groupSelection(document, [note.id, second.id])!
+    expect(grouped.document.nodes[0]).toMatchObject({ type: 'group', member_ids: [note.id, second.id] })
+    expect(groupSelection(grouped.document, [note.id, third.id])).toBeNull()
+    expect(ungroupSelection(grouped.document, [grouped.groupId]).nodes).toEqual(document.nodes)
+    const removed = removeSelection(grouped.document, [note.id], [])
+    expect(removed.nodes.some((node) => node.type === 'group')).toBe(false)
+    expect(removed.edges).toEqual([])
+  })
   it('旧画布没有连线字段时仍可打开', async () => {
     vi.spyOn(media, 'api').mockResolvedValue({ version: 1, document: { nodes: [note], viewport: { x: 0, y: 0, zoom: 1 } } })
     const { result } = renderHook(() => useCanvas('legacy', 'user'))
@@ -21,7 +34,7 @@ describe('作品画布', () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    const document: Document = { nodes: [note], edges: [], viewport: { x: 30, y: 40, zoom: .5 } }
+    const document: Document = { nodes: [note], edges: [], background: 'dots', viewport: { x: 30, y: 40, zoom: .5 } }
     act(() => result.current.apply(document))
     act(() => result.current.undo())
     expect(result.current.document.nodes).toHaveLength(0)
@@ -37,7 +50,7 @@ describe('作品画布', () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const first = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(first.result.current.ready).toBe(true))
-    act(() => first.result.current.apply({ nodes: [note], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }))
+    act(() => first.result.current.apply({ nodes: [note], edges: [], background: 'dots', viewport: { x: 0, y: 0, zoom: 1 } }))
     request.mockRejectedValue(new Error('离线'))
     await act(async () => { await first.result.current.save().catch(() => undefined) })
     expect(first.result.current.status).toContain('保存失败')
@@ -54,7 +67,7 @@ describe('作品画布', () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    const first: Document = { nodes: [note], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }
+    const first: Document = { nodes: [note], edges: [], background: 'dots', viewport: { x: 0, y: 0, zoom: 1 } }
     const latest: Document = { ...first, nodes: [{ ...note, text: '保存期间的新内容' }] }
     let release!: (value: media.Snapshot) => void
     request.mockImplementationOnce(() => new Promise<media.Snapshot>((resolve) => { release = resolve }))
@@ -77,7 +90,7 @@ describe('作品画布', () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    act(() => result.current.apply({ nodes: [note], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }))
+    act(() => result.current.apply({ nodes: [note], edges: [], background: 'dots', viewport: { x: 0, y: 0, zoom: 1 } }))
     request.mockRejectedValue(new MediaError(409, '冲突'))
     await act(async () => { await result.current.save().catch(() => undefined) })
     expect(result.current.conflict).toBe(true)

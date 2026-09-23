@@ -119,3 +119,14 @@
 .media-canvas-upload { position:absolute; z-index:9; top:20px; right:20px; padding:12px 16px; border:1px solid #626d46; border-radius:10px; background:#252e1b; color:var(--media-accent); font-size:12px; }
 .media-canvas-toolbar button svg { display:block; }
 @media(max-width:700px) { .media-canvas .react-flow__minimap { bottom:150px!important; right:12px!important; width:132px; height:90px; }.media-node-palette { bottom:152px; }.media-canvas-upload { top:72px; right:12px; } }
+.media-node.is-group { border:1px dashed #a0a7a0; background:#dfff820b; box-shadow:none; }
+.media-node.is-group.is-selected { border-color:var(--media-accent); box-shadow:0 0 0 1px var(--media-accent); }
+.media-node.is-group .media-node-grip { display:flex; align-items:center; gap:10px; min-height:39px; padding:5px 10px; border-radius:9px 9px 0 0; background:#293022; color:#dfff82; }
+.media-node.is-group .media-node-grip span { flex:none; font-size:10px; }
+.media-node.is-group .media-node-grip input { min-width:0; min-height:28px; flex:1; padding:3px 7px; border:0; background:transparent; color:#f3f5eb; font-size:12px; }
+.media-background-setting { display:grid; gap:7px; color:var(--media-muted); font-size:12px; }
+.media-background-setting select { width:100%; }
+.media-canvas-selection-actions { position:absolute; z-index:11; bottom:89px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; max-width:calc(100vw - 24px); padding:6px; border:1px solid #555b49; border-radius:10px; background:#222821f2; box-shadow:0 8px 28px #0007; white-space:nowrap; }
+.media-canvas-selection-actions span { padding:0 8px; color:#d5dabf; font-size:11px; }
+.media-canvas-selection-actions button { min-height:31px; padding:5px 10px; font-size:11px; }
+@media(max-width:700px) { .media-canvas-selection-actions { bottom:143px; }.media-canvas-selection-actions span { display:none; } }

@@ -2,11 +2,11 @@ import { getStoredAuthToken } from '../../lib/auth'
 
 export type Asset = { id: string; name: string; kind: 'image' | 'video' | 'audio'; mime_type: string; size: number; in_library: boolean }
 export type Project = { id: string; name: string; version: number; updated_at: string }
-export type Node = { id: string; type: 'asset' | 'note' | 'text' | 'shape'; asset_id: string | null; text: string; x: number; y: number; width: number; height: number }
+export type Node = { id: string; type: 'asset' | 'note' | 'text' | 'shape' | 'group'; asset_id: string | null; member_ids?: string[]; text: string; x: number; y: number; width: number; height: number }
 export type Edge = { id: string; source: string; target: string }
-export type Document = { nodes: Node[]; edges: Edge[]; viewport: { x: number; y: number; zoom: number } }
+export type Document = { nodes: Node[]; edges: Edge[]; background: 'dots' | 'lines' | 'none'; viewport: { x: number; y: number; zoom: number } }
 export type Snapshot = { version: number; document: Document }
-export const emptyDocument = (): Document => ({ nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } })
+export const emptyDocument = (): Document => ({ nodes: [], edges: [], background: 'dots', viewport: { x: 0, y: 0, zoom: 1 } })
 export const base = `${import.meta.env.VITE_API_BASE_URL ?? '/api/v1'}/media`
 export class MediaError extends Error {
   constructor(public status: number, message: string) { super(message) }

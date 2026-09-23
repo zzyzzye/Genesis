@@ -11,8 +11,9 @@ class ProjectWrite(BaseModel):
 
 class CanvasNode(BaseModel):
     id: UUID
-    type: Literal["asset", "note", "text", "shape"]
+    type: Literal["asset", "note", "text", "shape", "group"]
     asset_id: UUID | None = None
+    member_ids: list[UUID] = Field(default_factory=list, max_length=1000)
     text: str = Field(default="", max_length=20000)
     x: float = Field(allow_inf_nan=False, ge=-1000000, le=1000000)
     y: float = Field(allow_inf_nan=False, ge=-1000000, le=1000000)
@@ -35,6 +36,7 @@ class Viewport(BaseModel):
 class CanvasDocument(BaseModel):
     nodes: list[CanvasNode] = Field(default_factory=list, max_length=1000)
     edges: list[CanvasEdge] = Field(default_factory=list, max_length=2000)
+    background: Literal["dots", "lines", "none"] = "dots"
     viewport: Viewport = Field(default_factory=Viewport)
 
 
