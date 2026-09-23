@@ -14,6 +14,7 @@ import {
 } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { ArrowLeft, ChevronDown, FileImage, Shapes, StickyNote, Type } from 'lucide-react'
 import { api, type Asset, type Node, type Project } from './api'
 import { AssetPreview } from './AssetPreview'
 import { useCanvas } from './useCanvas'
@@ -30,9 +31,12 @@ type CanvasFlowNode = FlowNode<CanvasNodeData, Node['type']>
 
 function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>) {
   const isNote = type === 'note'
+  const isText = type === 'text'
+  const isShape = type === 'shape'
+  const label = isNote ? '文字便签' : isText ? '文字节点' : isShape ? '形状节点' : data.asset?.name ?? '素材不可用'
   return <article
-    aria-label={isNote ? '文字便签' : data.asset?.name ?? '素材不可用'}
-    className={`media-node ${isNote ? 'is-note' : ''} ${selected ? 'is-selected' : ''}`}
+    aria-label={label}
+    className={`media-node ${isNote ? 'is-note' : ''} ${isText ? 'is-text' : ''} ${isShape ? 'is-shape' : ''} ${selected ? 'is-selected' : ''}`}
   >
     <NodeResizer
       color="#dfff82"
@@ -44,13 +48,13 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
       onResizeStart={data.onInteractionStart}
       onResizeEnd={data.onInteractionEnd}
     />
-    <div className="media-node-grip">{isNote ? '文字便签' : data.asset?.name ?? '素材不可用'}</div>
-    {isNote
+    <div className="media-node-grip">{label}</div>
+    {isNote || isText || isShape
       ? <textarea
           className="nodrag nowheel nopan"
-          aria-label="便签内容"
+          aria-label={isNote ? '便签内容' : isText ? '文字内容' : '形状文字'}
           value={data.source.text}
-          placeholder="写下镜头、情绪或灵感…"
+          placeholder={isNote ? '写下镜头、情绪或灵感…' : isText ? '点击这里输入文字…' : '输入形状标签…'}
           maxLength={20000}
           onFocus={data.onInteractionStart}
           onBlur={data.onInteractionEnd}
@@ -60,7 +64,7 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
   </article>
 }
 
-const nodeTypes = { asset: CanvasNodeView, note: CanvasNodeView }
+const nodeTypes = { asset: CanvasNodeView, note: CanvasNodeView, text: CanvasNodeView, shape: CanvasNodeView }
 
 function documentNode(flowNode: CanvasFlowNode): Node {
   return {
@@ -80,6 +84,7 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
   const [assets, setAssets] = useState<Record<string, Asset>>({})
   const [selected, setSelected] = useState<string[]>([])
   const [menu, setMenu] = useState(false)
+  const [nodeMenu, setNodeMenu] = useState(false)
   const [tool, setTool] = useState<'select' | 'pan'>('select')
   const [error, setError] = useState('')
   const [flow, setFlow] = useState<ReactFlowInstance<CanvasFlowNode> | null>(null)
@@ -114,7 +119,7 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
     height: node.height,
     selected: selected.includes(node.id),
     dragHandle: '.media-node-grip',
-    ariaLabel: node.type === 'note' ? '文字便签' : assets[node.asset_id ?? '']?.name ?? '素材不可用',
+    ariaLabel: node.type === 'note' ? '文字便签' : node.type === 'text' ? '文字节点' : node.type === 'shape' ? '形状节点' : assets[node.asset_id ?? '']?.name ?? '素材不可用',
     data: {
       source: node,
       asset: assets[node.asset_id ?? ''],
@@ -166,7 +171,7 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
         if (event.shiftKey) canvas.redo(); else canvas.undo()
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); canvas.redo() }
-      if (event.key === 'Escape') setMenu(false)
+      if (event.key === 'Escape') { setMenu(false); setNodeMenu(false) }
     }
     window.addEventListener('keydown', keydown)
     return () => window.removeEventListener('keydown', keydown)
@@ -195,22 +200,34 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
     try { await fn() } catch (reason) { setError((reason as Error).message) }
   }
 
-  function center() {
+  function center(width: number, height: number) {
     const current = canvas.current.current
-    let position = flow?.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }) ?? {
+    const point = flow?.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }) ?? {
       x: (window.innerWidth / 2 - current.viewport.x) / current.viewport.zoom,
       y: (window.innerHeight / 2 - current.viewport.y) / current.viewport.zoom,
     }
-    position = { x: position.x - 140, y: position.y - 110 }
-    for (let attempts = 0; attempts < 20 && current.nodes.some((node) => Math.abs(node.x - position.x) < 30 && Math.abs(node.y - position.y) < 30); attempts++) position = { x: position.x + 40, y: position.y + 40 }
-    return position
+    const origin = { x: point.x - width / 2, y: point.y - height / 2 }
+    const overlaps = (x: number, y: number) => current.nodes.some((node) =>
+      x < node.x + node.width + 24 && x + width + 24 > node.x &&
+      y < node.y + node.height + 24 && y + height + 24 > node.y)
+    for (let ring = 0; ring < 30; ring++) {
+      const slots: [number, number][] = ring === 0 ? [[0, 0]] : [[ring, 0], [-ring, 0], [0, ring], [0, -ring], [ring, ring], [-ring, ring], [ring, -ring], [-ring, -ring]]
+      for (const [col, row] of slots) {
+        const x = origin.x + col * 380
+        const y = origin.y + row * 280
+        if (!overlaps(x, y)) return { x, y }
+      }
+    }
+    return origin
   }
 
-  function addNote() {
+  function addNode(type: 'note' | 'text' | 'shape') {
     const current = canvas.current.current
-    const node: Node = { id: crypto.randomUUID(), type: 'note', asset_id: null, text: '', ...center(), width: 280, height: 220 }
+    const size = type === 'note' ? { width: 280, height: 220 } : type === 'text' ? { width: 320, height: 150 } : { width: 240, height: 150 }
+    const node: Node = { id: crypto.randomUUID(), type, asset_id: null, text: '', ...center(size.width, size.height), ...size }
     canvas.apply({ ...current, nodes: [...current.nodes, node] })
     setSelected([node.id])
+    setNodeMenu(false)
   }
 
   function updateViewport(viewport: Viewport) {
@@ -271,7 +288,7 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
 
   const viewport = canvas.document.viewport
   return <main className="media-editor">
-    <div className="media-project-menu"><button aria-expanded={menu} onClick={() => setMenu(!menu)}>{project?.name ?? '作品'} <span>⌄</span></button>{menu && <div className="media-menu-content"><p role="status">{canvas.status}</p><button onClick={() => void action(async () => { await canvas.save(); await canvas.save(); void navigate(`/media/projects/${projectId}`) })}>← 返回作品页</button><button onClick={() => void action(async () => { await canvas.save(); await canvas.save(); void navigate(`/media/projects/${projectId}/assets`) })}>作品素材库</button><button onClick={() => { const name = window.prompt('作品名称', project?.name); if (name?.trim()) void action(async () => { setProject(await api<Project>(`/projects/${projectId}`, 'PATCH', { name })) }) }}>重命名作品</button><button onClick={() => void action(canvas.save)}>立即保存 / 重试</button></div>}</div>
+    <div className="media-project-menu"><div className="media-project-controls"><button className="media-project-back" aria-label="返回作品页" title="返回作品页" onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}`) })}><ArrowLeft size={17} /></button><button className="media-project-trigger" aria-expanded={menu} aria-label="作品菜单" onClick={() => { setMenu(!menu); setNodeMenu(false) }}><span className="media-project-name">{project?.name ?? '作品'}</span><ChevronDown size={15} /></button></div>{menu && <div className="media-menu-content"><p role="status">{canvas.status}</p><button onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}/assets`) })}>作品素材库</button><button onClick={() => { const name = window.prompt('作品名称', project?.name); if (name?.trim()) void action(async () => { setProject(await api<Project>(`/projects/${projectId}`, 'PATCH', { name })) }) }}>重命名作品</button><button onClick={() => void action(canvas.save)}>立即保存 / 重试</button></div>}</div>
     {(error || canvas.status.startsWith('保存失败') || canvas.conflict || !canvas.ready) && <div className="media-editor-notice" role="status">{error || canvas.status}<button onClick={() => void action(canvas.ready ? canvas.save : () => canvas.load(true))}>重试</button>{canvas.conflict && <><button onClick={() => { if (window.confirm('放弃本地修改并加载服务器版本？')) void action(() => canvas.load()) }}>重新加载</button><button onClick={() => void action(fork)}>保留为新作品</button></>}<button onClick={() => void navigate(`/media/projects/${projectId}`)}>作品页</button></div>}
     <div ref={canvasElement} className="media-canvas" aria-label="作品无限画布">
       {canvas.ready && <ReactFlow<CanvasFlowNode>
@@ -300,8 +317,9 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
         onMoveEnd={(_, next) => { viewportActive.current = false; updateViewport(next) }}
         proOptions={{ hideAttribution: true }}
       ><Background color="#44404e" gap={24} size={1} /></ReactFlow>}
-      {canvas.ready && canvas.document.nodes.length === 0 && <div className="media-canvas-empty"><small>A SPACE FOR YOUR IDEAS</small><h1>把第一个想法放上来。</h1><p>从这部作品的素材开始，或先记下一张便签。</p><button className="media-accent" onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>打开作品素材库</button></div>}
+      {canvas.ready && canvas.document.nodes.length === 0 && <div className="media-canvas-empty"><small>A SPACE FOR YOUR IDEAS</small><h1>把第一个想法放上来。</h1><p>添加便签、文字、形状，或从作品素材库放入媒体。</p><div className="media-canvas-empty-actions"><button className="media-accent" onClick={() => setNodeMenu(true)}>＋ 添加节点</button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>打开作品素材库</button></div></div>}
     </div>
-    <div className="media-canvas-toolbar" role="toolbar" aria-label="创作工具"><button disabled={!canvas.ready} onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>素材库</button><button disabled={!canvas.ready} onClick={addNote}>便签 ＋</button><button aria-pressed={tool === 'pan'} onClick={() => setTool(tool === 'pan' ? 'select' : 'pan')}>{tool === 'pan' ? '平移' : '选择'}</button><button aria-label="撤销" onClick={canvas.undo}>↶</button><button aria-label="重做" onClick={canvas.redo}>↷</button><button disabled={!selected.length} onClick={removeSelected}>移除</button><button aria-label="缩小画布" onClick={() => zoom(1 / 1.2)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" onClick={() => zoom(1.2)}>＋</button><button onClick={fit}>适应全部</button></div>
+    {nodeMenu && <div className="media-node-palette" role="dialog" aria-label="添加节点"><div className="media-node-palette-heading"><strong>添加到画布</strong><button aria-label="关闭节点菜单" onClick={() => setNodeMenu(false)}>×</button></div><button onClick={() => addNode('note')}><StickyNote size={18} /><span><strong>文字便签</strong><small>记录镜头和灵感</small></span></button><button onClick={() => addNode('text')}><Type size={18} /><span><strong>文字节点</strong><small>直接在画布上排版文字</small></span></button><button onClick={() => addNode('shape')}><Shapes size={18} /><span><strong>形状节点</strong><small>制作视觉块和标签</small></span></button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><FileImage size={18} /><span><strong>媒体素材</strong><small>从作品素材库选择</small></span></button></div>}
+    <div className="media-canvas-toolbar" role="toolbar" aria-label="创作工具"><button className="media-add-node-button" aria-expanded={nodeMenu} disabled={!canvas.ready} onClick={() => { setNodeMenu(!nodeMenu); setMenu(false) }}>＋ 添加节点</button><button disabled={!canvas.ready} onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>素材库</button><button aria-pressed={tool === 'pan'} onClick={() => setTool(tool === 'pan' ? 'select' : 'pan')}>{tool === 'pan' ? '平移' : '选择'}</button><button aria-label="撤销" onClick={canvas.undo}>↶</button><button aria-label="重做" onClick={canvas.redo}>↷</button><button disabled={!selected.length} onClick={removeSelected}>移除</button><button aria-label="缩小画布" onClick={() => zoom(1 / 1.2)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" onClick={() => zoom(1.2)}>＋</button><button onClick={fit}>适应全部</button></div>
   </main>
 }

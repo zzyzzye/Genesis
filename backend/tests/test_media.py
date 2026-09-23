@@ -134,6 +134,15 @@ async def test_invalid_upload_and_canvas(
             f"projects/{p}/canvas", json={"version": 0, "document": {"nodes": [node, node]}}
         )
     ).status_code == 422
+    nodes = [
+        {**node, "id": str(uuid4()), "type": kind, "asset_id": None, "text": kind}
+        for kind in ("text", "shape")
+    ]
+    saved = await c.put(
+        f"projects/{p}/canvas", json={"version": 0, "document": {"nodes": nodes}}
+    )
+    assert saved.status_code == 200
+    assert [item["type"] for item in saved.json()["document"]["nodes"]] == ["text", "shape"]
     assert (await c.get(f"projects/{uuid4()}")).status_code == 404
     assert (await c.get(f"assets/{uuid4()}/file")).status_code == 404
 

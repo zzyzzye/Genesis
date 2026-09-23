@@ -2,7 +2,7 @@ import { getStoredAuthToken } from '../../lib/auth'
 
 export type Asset = { id: string; name: string; kind: 'image' | 'video' | 'audio'; mime_type: string; size: number; in_library: boolean }
 export type Project = { id: string; name: string; version: number; updated_at: string }
-export type Node = { id: string; type: 'asset' | 'note'; asset_id: string | null; text: string; x: number; y: number; width: number; height: number }
+export type Node = { id: string; type: 'asset' | 'note' | 'text' | 'shape'; asset_id: string | null; text: string; x: number; y: number; width: number; height: number }
 export type Document = { nodes: Node[]; viewport: { x: number; y: number; zoom: number } }
 export type Snapshot = { version: number; document: Document }
 export const emptyDocument = (): Document => ({ nodes: [], viewport: { x: 0, y: 0, zoom: 1 } })

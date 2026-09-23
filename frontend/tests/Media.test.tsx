@@ -83,17 +83,25 @@ describe('作品画布', () => {
     expect(result.current.conflict).toBe(false)
     expect(result.current.document.nodes).toHaveLength(0)
   })
-  it('全屏画布支持便签缩放，并从作品素材入口打开独立页面', async () => {
+  it('全屏画布支持便签、文字、形状和缩放，并从素材入口打开独立页面', async () => {
     vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
     render(<MemoryRouter initialEntries={['/media/projects/project/canvas']}><Routes>
       <Route path="/media/projects/:projectId/canvas" element={<ProjectCanvas projectId="project" userId="user" />} />
       <Route path="/media/projects/:projectId/assets" element={<p>独立的作品素材库页面</p>} />
     </Routes></MemoryRouter>)
-    await waitFor(() => expect(screen.getByRole('button', { name: '便签 ＋' })).toBeEnabled())
+    await waitFor(() => expect(screen.getAllByRole('button', { name: '＋ 添加节点' })[0]).toBeEnabled())
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '便签 ＋' }))
+    fireEvent.click(screen.getAllByRole('button', { name: '＋ 添加节点' })[0]!)
+    fireEvent.click(screen.getByRole('button', { name: /文字便签.*记录镜头和灵感/ }))
     fireEvent.change(screen.getByRole('textbox', { name: '便签内容' }), { target: { value: '开场镜头' } })
     expect(screen.getByRole('textbox', { name: '便签内容' })).toHaveValue('开场镜头')
+    fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
+    fireEvent.click(screen.getByRole('button', { name: /文字节点.*直接在画布上排版文字/ }))
+    fireEvent.change(screen.getByRole('textbox', { name: '文字内容' }), { target: { value: '标题' } })
+    expect(screen.getByRole('textbox', { name: '文字内容' })).toHaveValue('标题')
+    fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
+    fireEvent.click(screen.getByRole('button', { name: /形状节点.*制作视觉块和标签/ }))
+    expect(screen.getByRole('textbox', { name: '形状文字' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '放大画布' }))
     expect(screen.getByRole('status', { name: '当前缩放比例' })).toHaveTextContent('120%')
     fireEvent.click(screen.getByRole('button', { name: '素材库' }))
