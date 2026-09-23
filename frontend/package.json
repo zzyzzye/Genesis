@@ -15,6 +15,7 @@
   "dependencies": {
     "@codemirror/view": "^6.43.11",
     "@mdxeditor/editor": "^4.2.3",
+    "@xyflow/react": "^12.11.6",
     "lucide-react": "^1.41.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

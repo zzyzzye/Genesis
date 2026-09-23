@@ -1,5 +1,5 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useCanvas } from '../src/pages/media/useCanvas'
 import { ProjectCanvas } from '../src/pages/media/ProjectCanvas'
@@ -83,9 +83,12 @@ describe('作品画布', () => {
     expect(result.current.conflict).toBe(false)
     expect(result.current.document.nodes).toHaveLength(0)
   })
-  it('全屏画布添加便签、缩放和抽屉交互', async () => {
+  it('全屏画布支持便签缩放，并从作品素材入口打开独立页面', async () => {
     vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
-    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    render(<MemoryRouter initialEntries={['/media/projects/project/canvas']}><Routes>
+      <Route path="/media/projects/:projectId/canvas" element={<ProjectCanvas projectId="project" userId="user" />} />
+      <Route path="/media/projects/:projectId/assets" element={<p>独立的作品素材库页面</p>} />
+    </Routes></MemoryRouter>)
     await waitFor(() => expect(screen.getByRole('button', { name: '便签 ＋' })).toBeEnabled())
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '便签 ＋' }))
@@ -93,11 +96,8 @@ describe('作品画布', () => {
     expect(screen.getByRole('textbox', { name: '便签内容' })).toHaveValue('开场镜头')
     fireEvent.click(screen.getByRole('button', { name: '放大画布' }))
     expect(screen.getByRole('status', { name: '当前缩放比例' })).toHaveTextContent('120%')
-    fireEvent.click(screen.getByRole('button', { name: '素材' }))
-    expect(await screen.findByRole('dialog', { name: '素材库' })).toBeInTheDocument()
-    expect(await screen.findByText('素材库还是空的')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '关闭素材库' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '素材库' }))
+    expect(await screen.findByText('独立的作品素材库页面')).toBeInTheDocument()
   })
   it('上传失败显示原因并可在原作品内重试', async () => {
     vi.spyOn(media, 'api').mockResolvedValue({ items: [], total: 0 })

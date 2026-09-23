@@ -123,7 +123,6 @@ describe('App', () => {
 
   it.each([
     ['/tools', '把重复工作，压缩成一次点击。', '工具系统标识'],
-    ['/media', '从一个作品开始。', null],
   ])('为 %s 使用独立系统界面且不显示跨系统导航', (path, heading, landmark) => {
     window.history.pushState({}, '', path)
 
@@ -134,12 +133,34 @@ describe('App', () => {
     if (landmark) expect(screen.getByRole('complementary', { name: landmark })).toBeInTheDocument()
   })
 
-  it('影音创作需要账户登录并保留返回地址', () => {
+  it('影音创作在开发环境自动登录后进入作品列表', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.endsWith('/auth/dev-login')) {
+        return Promise.resolve(new Response(JSON.stringify({ access_token: 'dev-token', token_type: 'bearer' }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      if (url.endsWith('/auth/me')) {
+        return Promise.resolve(new Response(JSON.stringify({ id: 'user-1', handle: 'genesis', display_name: 'Genesis', bio: '', avatar_url: null, role: 'owner' }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      if (url.endsWith('/media/projects')) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      if (url.includes('/media/assets')) {
+        return Promise.resolve(new Response(JSON.stringify({ items: [], total: 0 }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
+      return Promise.resolve(new Response(null, { status: 404 }))
+    })
     window.history.pushState({}, '', '/media')
     render(<App />)
 
-    expect(screen.getByRole('link', { name: '登录并继续' })).toHaveAttribute('href', '/account?returnTo=%2Fmedia')
-    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '还没有作品' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: '主导航' })).not.toBeInTheDocument()
+    expect(window.localStorage.getItem('genesis-account-token')).toBe('dev-token')
+    expect(screen.queryByRole('link', { name: '登录并继续' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '账户素材库 ↗' }))
+    expect(await screen.findByRole('heading', { name: '账户素材库' })).toBeInTheDocument()
+    expect(await screen.findByText('素材库还是空的')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: '素材库' })).not.toBeInTheDocument()
   })
 
   it('写作台登录后展示博客管理导航和仪表盘，并可进入文章编辑', async () => {
