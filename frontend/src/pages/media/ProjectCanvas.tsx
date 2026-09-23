@@ -2,20 +2,27 @@ import '@xyflow/react/dist/style.css'
 
 import {
   Background,
+  Handle,
+  MiniMap,
   NodeResizer,
+  Position,
   ReactFlow,
   SelectionMode,
+  applyEdgeChanges,
   applyNodeChanges,
+  type Connection,
+  type Edge as FlowEdge,
+  type EdgeChange,
   type Node as FlowNode,
   type NodeChange,
   type NodeProps,
   type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChevronDown, FileImage, Shapes, StickyNote, Type } from 'lucide-react'
-import { api, type Asset, type Node, type Project } from './api'
+import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, FileImage, Map as MapIcon, Shapes, StickyNote, Type } from 'lucide-react'
+import { api, type Asset, type Edge, type Node, type Project, upload } from './api'
 import { AssetPreview } from './AssetPreview'
 import { useCanvas } from './useCanvas'
 
@@ -48,6 +55,7 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
       onResizeStart={data.onInteractionStart}
       onResizeEnd={data.onInteractionEnd}
     />
+    <Handle type="target" position={Position.Left} aria-label="输入连接点" />
     <div className="media-node-grip">{label}</div>
     {isNote || isText || isShape
       ? <textarea
@@ -61,6 +69,7 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
           onChange={(event) => data.onTextChange(id, event.target.value)}
         />
       : data.asset && <div className="nodrag nowheel nopan media-node-preview"><AssetPreview asset={data.asset} controls /></div>}
+    <Handle type="source" position={Position.Right} aria-label="输出连接点" />
   </article>
 }
 
@@ -83,8 +92,13 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
   const [project, setProject] = useState<Project | null>(null)
   const [assets, setAssets] = useState<Record<string, Asset>>({})
   const [selected, setSelected] = useState<string[]>([])
+  const [selectedEdges, setSelectedEdges] = useState<string[]>([])
+  const [clipboardProjectId, setClipboardProjectId] = useState<string | null>(null)
   const [menu, setMenu] = useState(false)
   const [nodeMenu, setNodeMenu] = useState(false)
+  const [showMiniMap, setShowMiniMap] = useState(false)
+  const [draggingFile, setDraggingFile] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [tool, setTool] = useState<'select' | 'pan'>('select')
   const [error, setError] = useState('')
   const [flow, setFlow] = useState<ReactFlowInstance<CanvasFlowNode> | null>(null)
@@ -92,6 +106,8 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
   const interactionActive = useRef(false)
   const viewportActive = useRef(false)
   const importedFromLibrary = useRef<string | null>(null)
+  const clipboard = useRef<{ projectId: string; nodes: Node[]; edges: Edge[] } | null>(null)
+  const pasteCount = useRef(0)
 
   const beginInteraction = useCallback(() => {
     if (interactionActive.current) return
@@ -129,6 +145,13 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
     },
   })), [assets, beginInteraction, canvas.document.nodes, endInteraction, selected, updateText])
 
+  const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
+    ...edge,
+    type: 'smoothstep',
+    selected: selectedEdges.includes(edge.id),
+    style: { stroke: selectedEdges.includes(edge.id) ? '#dfff82' : '#9993a9', strokeWidth: 2 },
+  })), [canvas.document.edges, selectedEdges])
+
   const fetchAssets = useCallback(async () => {
     const all: Asset[] = []
     let page = 1
@@ -162,20 +185,62 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
     void navigate(`/media/projects/${projectId}/canvas`, { replace: true })
   }, [assets, canvas, location.search, navigate, projectId])
 
+  function copySelection() {
+    const current = canvas.current.current
+    const ids = new Set(selected)
+    if (!ids.size) return
+    clipboard.current = {
+      projectId,
+      nodes: current.nodes.filter((node) => ids.has(node.id)),
+      edges: current.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)),
+    }
+    pasteCount.current = 0
+    setClipboardProjectId(projectId)
+  }
+
+  function pasteSelection() {
+    const copied = clipboard.current
+    if (!copied?.nodes.length || copied.projectId !== projectId) return
+    pasteCount.current += 1
+    const offset = 48 * pasteCount.current
+    const idMap = new Map(copied.nodes.map((node) => [node.id, crypto.randomUUID()]))
+    const nodes = copied.nodes.map((node) => ({ ...node, id: idMap.get(node.id)!, x: node.x + offset, y: node.y + offset }))
+    const edges = copied.edges.map((edge) => ({ id: crypto.randomUUID(), source: idMap.get(edge.source)!, target: idMap.get(edge.target)! }))
+    const current = canvas.current.current
+    canvas.apply({ ...current, nodes: [...current.nodes, ...nodes], edges: [...current.edges, ...edges] })
+    setSelected(nodes.map((node) => node.id))
+    setSelectedEdges([])
+  }
+
+  function removeSelected() {
+    if (!selected.length && !selectedEdges.length) return
+    canvas.checkpoint()
+    const current = canvas.current.current
+    const nodes = current.nodes.filter((node) => !selected.includes(node.id))
+    const ids = new Set(nodes.map((node) => node.id))
+    canvas.apply({ ...current, nodes, edges: current.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target) && !selectedEdges.includes(edge.id)) }, false)
+    setSelected([])
+    setSelectedEdges([])
+  }
+
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       const element = event.target as HTMLElement
+      if (event.key === 'Escape') { setMenu(false); setNodeMenu(false); setSelected([]); setSelectedEdges([]) }
       if (element.closest('input,textarea,select,button,a,video,audio,[role="dialog"]')) return
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelection() }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') { event.preventDefault(); pasteSelection() }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') { event.preventDefault(); setSelected(canvas.current.current.nodes.map((node) => node.id)) }
+      if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); removeSelected() }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
         event.preventDefault()
         if (event.shiftKey) canvas.redo(); else canvas.undo()
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); canvas.redo() }
-      if (event.key === 'Escape') { setMenu(false); setNodeMenu(false) }
     }
     window.addEventListener('keydown', keydown)
     return () => window.removeEventListener('keydown', keydown)
-  }, [canvas])
+  })
 
   const onNodesChange = useCallback((changes: NodeChange<CanvasFlowNode>[]) => {
     const next = applyNodeChanges(changes, flowNodes)
@@ -184,16 +249,25 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
     if (!contentChanged) return
     if (!interactionActive.current) canvas.checkpoint()
     const current = canvas.current.current
-    canvas.apply({ ...current, nodes: next.map(documentNode) }, false)
+    const nodes = next.map(documentNode)
+    const ids = new Set(nodes.map((node) => node.id))
+    canvas.apply({ ...current, nodes, edges: current.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target)) }, false)
   }, [canvas, flowNodes])
 
-  const removeSelected = useCallback(() => {
-    if (!selected.length) return
-    canvas.checkpoint()
+  const onEdgesChange = useCallback((changes: EdgeChange<FlowEdge>[]) => {
+    const next = applyEdgeChanges(changes, flowEdges)
+    if (changes.some((change) => change.type === 'select' || change.type === 'remove')) setSelectedEdges(next.filter((edge) => edge.selected).map((edge) => edge.id))
+    if (!changes.some((change) => change.type === 'remove')) return
     const current = canvas.current.current
-    canvas.apply({ ...current, nodes: current.nodes.filter((node) => !selected.includes(node.id)) }, false)
-    setSelected([])
-  }, [canvas, selected])
+    canvas.apply({ ...current, edges: next.map(({ id, source, target }) => ({ id, source, target })) })
+  }, [canvas, flowEdges])
+
+  const onConnect = useCallback(({ source, target }: Connection) => {
+    if (!source || !target || source === target) return
+    const current = canvas.current.current
+    if (current.edges.some((edge) => edge.source === source && edge.target === target)) return
+    canvas.apply({ ...current, edges: [...current.edges, { id: crypto.randomUUID(), source, target }] })
+  }, [canvas])
 
   async function action(fn: () => Promise<void>) {
     setError('')
@@ -228,6 +302,27 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
     canvas.apply({ ...current, nodes: [...current.nodes, node] })
     setSelected([node.id])
     setNodeMenu(false)
+  }
+
+  async function importFiles(event: DragEvent) {
+    event.preventDefault()
+    setDraggingFile(false)
+    const files = [...event.dataTransfer.files]
+    if (!files.length) return
+    setError('')
+    const point = flow?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) ?? center(320, 260)
+    try {
+      for (const [index, file] of files.entries()) {
+        setUploadProgress(0)
+        const asset = await upload(`/projects/${projectId}/assets`, file, setUploadProgress)
+        setAssets((previous) => ({ ...previous, [asset.id]: asset }))
+        const node: Node = { id: crypto.randomUUID(), type: 'asset', asset_id: asset.id, text: '', x: point.x + index * 36, y: point.y + index * 36, width: 320, height: 260 }
+        const current = canvas.current.current
+        canvas.apply({ ...current, nodes: [...current.nodes, node] })
+        setSelected([node.id])
+      }
+    } catch (reason) { setError(`素材导入失败：${(reason as Error).message}`) }
+    finally { setUploadProgress(null) }
   }
 
   function updateViewport(viewport: Viewport) {
@@ -290,15 +385,15 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
   return <main className="media-editor">
     <div className="media-project-menu"><div className="media-project-controls"><button className="media-project-back" aria-label="返回作品页" title="返回作品页" onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}`) })}><ArrowLeft size={17} /></button><button className="media-project-trigger" aria-expanded={menu} aria-label="作品菜单" onClick={() => { setMenu(!menu); setNodeMenu(false) }}><span className="media-project-name">{project?.name ?? '作品'}</span><ChevronDown size={15} /></button></div>{menu && <div className="media-menu-content"><p role="status">{canvas.status}</p><button onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}/assets`) })}>作品素材库</button><button onClick={() => { const name = window.prompt('作品名称', project?.name); if (name?.trim()) void action(async () => { setProject(await api<Project>(`/projects/${projectId}`, 'PATCH', { name })) }) }}>重命名作品</button><button onClick={() => void action(canvas.save)}>立即保存 / 重试</button></div>}</div>
     {(error || canvas.status.startsWith('保存失败') || canvas.conflict || !canvas.ready) && <div className="media-editor-notice" role="status">{error || canvas.status}<button onClick={() => void action(canvas.ready ? canvas.save : () => canvas.load(true))}>重试</button>{canvas.conflict && <><button onClick={() => { if (window.confirm('放弃本地修改并加载服务器版本？')) void action(() => canvas.load()) }}>重新加载</button><button onClick={() => void action(fork)}>保留为新作品</button></>}<button onClick={() => void navigate(`/media/projects/${projectId}`)}>作品页</button></div>}
-    <div ref={canvasElement} className="media-canvas" aria-label="作品无限画布">
+    <div ref={canvasElement} className={`media-canvas ${draggingFile ? 'is-file-over' : ''}`} aria-label="作品无限画布" onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setDraggingFile(true) } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as globalThis.Node | null)) setDraggingFile(false) }} onDrop={(event) => void importFiles(event)}>
       {canvas.ready && <ReactFlow<CanvasFlowNode>
         nodes={flowNodes}
-        edges={[]}
+        edges={flowEdges}
         nodeTypes={nodeTypes}
         viewport={viewport}
         minZoom={.1}
         maxZoom={4}
-        nodesConnectable={false}
+        nodesConnectable
         selectionOnDrag={tool === 'select'}
         selectionMode={SelectionMode.Partial}
         panOnDrag={tool === 'pan' ? [0, 1, 2] : [1, 2]}
@@ -307,19 +402,23 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
         zoomOnScroll={false}
         zoomActivationKeyCode={['Meta', 'Control']}
         multiSelectionKeyCode={['Meta', 'Control', 'Shift']}
-        deleteKeyCode={['Backspace', 'Delete']}
+        deleteKeyCode={null}
         onInit={setFlow}
         onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
         onNodeDragStart={beginInteraction}
         onNodeDragStop={endInteraction}
         onMoveStart={() => { if (!viewportActive.current) { viewportActive.current = true; canvas.checkpoint() } }}
         onMove={(_, next) => updateViewport(next)}
         onMoveEnd={(_, next) => { viewportActive.current = false; updateViewport(next) }}
         proOptions={{ hideAttribution: true }}
-      ><Background color="#44404e" gap={24} size={1} /></ReactFlow>}
+      ><Background color="#44404e" gap={24} size={1} />{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#101116cc" nodeColor={(node) => node.type === 'shape' ? '#dfff82' : node.type === 'note' ? '#e4d9b2' : '#aaa4bd'} />}</ReactFlow>}
+      {draggingFile && <div className="media-canvas-drop" aria-hidden="true">松开鼠标，将素材放入画布</div>}
+      {uploadProgress !== null && <div className="media-canvas-upload" role="status">正在导入素材 · {uploadProgress}%</div>}
       {canvas.ready && canvas.document.nodes.length === 0 && <div className="media-canvas-empty"><small>A SPACE FOR YOUR IDEAS</small><h1>把第一个想法放上来。</h1><p>添加便签、文字、形状，或从作品素材库放入媒体。</p><div className="media-canvas-empty-actions"><button className="media-accent" onClick={() => setNodeMenu(true)}>＋ 添加节点</button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>打开作品素材库</button></div></div>}
     </div>
     {nodeMenu && <div className="media-node-palette" role="dialog" aria-label="添加节点"><div className="media-node-palette-heading"><strong>添加到画布</strong><button aria-label="关闭节点菜单" onClick={() => setNodeMenu(false)}>×</button></div><button onClick={() => addNode('note')}><StickyNote size={18} /><span><strong>文字便签</strong><small>记录镜头和灵感</small></span></button><button onClick={() => addNode('text')}><Type size={18} /><span><strong>文字节点</strong><small>直接在画布上排版文字</small></span></button><button onClick={() => addNode('shape')}><Shapes size={18} /><span><strong>形状节点</strong><small>制作视觉块和标签</small></span></button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><FileImage size={18} /><span><strong>媒体素材</strong><small>从作品素材库选择</small></span></button></div>}
-    <div className="media-canvas-toolbar" role="toolbar" aria-label="创作工具"><button className="media-add-node-button" aria-expanded={nodeMenu} disabled={!canvas.ready} onClick={() => { setNodeMenu(!nodeMenu); setMenu(false) }}>＋ 添加节点</button><button disabled={!canvas.ready} onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>素材库</button><button aria-pressed={tool === 'pan'} onClick={() => setTool(tool === 'pan' ? 'select' : 'pan')}>{tool === 'pan' ? '平移' : '选择'}</button><button aria-label="撤销" onClick={canvas.undo}>↶</button><button aria-label="重做" onClick={canvas.redo}>↷</button><button disabled={!selected.length} onClick={removeSelected}>移除</button><button aria-label="缩小画布" onClick={() => zoom(1 / 1.2)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" onClick={() => zoom(1.2)}>＋</button><button onClick={fit}>适应全部</button></div>
+    <div className="media-canvas-toolbar" role="toolbar" aria-label="创作工具"><button className="media-add-node-button" aria-expanded={nodeMenu} disabled={!canvas.ready} onClick={() => { setNodeMenu(!nodeMenu); setMenu(false) }}>＋ 添加节点</button><button disabled={!canvas.ready} onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>素材库</button><button aria-pressed={tool === 'pan'} onClick={() => setTool(tool === 'pan' ? 'select' : 'pan')}>{tool === 'pan' ? '平移' : '选择'}</button><button aria-label="复制节点" title="复制节点 ⌘/Ctrl+C" disabled={!selected.length} onClick={copySelection}><Copy size={16} /></button><button aria-label="粘贴节点" title="粘贴节点 ⌘/Ctrl+V" disabled={clipboardProjectId !== projectId} onClick={pasteSelection}><ClipboardPaste size={16} /></button><button aria-label="撤销" onClick={canvas.undo}>↶</button><button aria-label="重做" onClick={canvas.redo}>↷</button><button disabled={!selected.length && !selectedEdges.length} onClick={removeSelected}>移除</button><button aria-label="切换小地图" aria-pressed={showMiniMap} title="小地图" onClick={() => setShowMiniMap(!showMiniMap)}><MapIcon size={16} /></button><button aria-label="缩小画布" onClick={() => zoom(1 / 1.2)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" onClick={() => zoom(1.2)}>＋</button><button onClick={fit}>适应全部</button></div>
   </main>
 }

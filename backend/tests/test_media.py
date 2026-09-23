@@ -143,8 +143,66 @@ async def test_invalid_upload_and_canvas(
     )
     assert saved.status_code == 200
     assert [item["type"] for item in saved.json()["document"]["nodes"]] == ["text", "shape"]
+    edge = {"id": str(uuid4()), "source": nodes[0]["id"], "target": nodes[1]["id"]}
+    assert (
+        await c.put(
+            f"projects/{p}/canvas",
+            json={"version": 1, "document": {"nodes": nodes, "edges": [edge]}},
+        )
+    ).status_code == 200
+    assert (
+        await c.put(
+            f"projects/{p}/canvas",
+            json={"version": 2, "document": {"nodes": nodes, "edges": [edge, edge]}},
+        )
+    ).status_code == 422
+    for invalid in ({**edge, "target": str(uuid4())}, {**edge, "target": edge["source"]}):
+        assert (
+            await c.put(
+                f"projects/{p}/canvas",
+                json={"version": 2, "document": {"nodes": nodes, "edges": [invalid]}},
+            )
+        ).status_code == 422
     assert (await c.get(f"projects/{uuid4()}")).status_code == 404
     assert (await c.get(f"assets/{uuid4()}/file")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_remove_asset_cleans_connected_edges(media_client: AsyncClient) -> None:
+    c = media_client
+    project_id = (await c.post("projects", json={"name": "连线清理"})).json()["id"]
+    asset_id = (
+        await c.post(
+            f"projects/{project_id}/assets",
+            files={"file": ("frame.png", b"image-bytes", "image/png")},
+        )
+    ).json()["id"]
+    media_node = str(uuid4())
+    text_node = str(uuid4())
+    document = {
+        "nodes": [
+            {
+                "id": media_node,
+                "type": "asset",
+                "asset_id": asset_id,
+                "x": 0,
+                "y": 0,
+                "width": 300,
+                "height": 200,
+            },
+            {"id": text_node, "type": "text", "x": 400, "y": 0, "width": 300, "height": 200},
+        ],
+        "edges": [{"id": str(uuid4()), "source": text_node, "target": media_node}],
+    }
+    assert (
+        await c.put(
+            f"projects/{project_id}/canvas", json={"version": 0, "document": document}
+        )
+    ).status_code == 200
+    result = await c.delete(f"projects/{project_id}/assets/{asset_id}")
+    assert result.status_code == 200
+    assert [node["id"] for node in result.json()["document"]["nodes"]] == [text_node]
+    assert result.json()["document"]["edges"] == []
 
 
 @pytest.mark.anyio

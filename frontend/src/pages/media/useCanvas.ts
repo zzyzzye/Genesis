@@ -23,15 +23,16 @@ export function useCanvas(projectId: string, userId: string) {
   }, [key])
   const load = useCallback(async (restoreDraft = false) => {
     const snapshot = await api<Snapshot>(`/projects/${projectId}/canvas`)
-    version.current = snapshot.version; saved.current = JSON.stringify(snapshot.document)
-    let next = snapshot.document
+    const serverDocument = { ...snapshot.document, edges: snapshot.document.edges ?? [] }
+    version.current = snapshot.version; saved.current = JSON.stringify(serverDocument)
+    let next = serverDocument
     blocked.current = false; setConflict(false)
     if (restoreDraft) {
       try {
         const raw = localStorage.getItem(key)
         const draft = raw ? JSON.parse(raw) as Snapshot : null
         if (draft && Array.isArray(draft.document?.nodes) && draft.document.viewport) {
-          next = draft.document
+          next = { ...draft.document, edges: draft.document.edges ?? [] }
           if (draft.version !== snapshot.version && JSON.stringify(next) !== saved.current) { blocked.current = true; setConflict(true) }
         }
       } catch { /* 损坏的本地草稿不会阻止打开服务器版本。 */ }

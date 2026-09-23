@@ -126,6 +126,12 @@ def save_canvas(
     node_ids = [node.id for node in data.document.nodes]
     if len(set(node_ids)) != len(node_ids):
         raise HTTPException(422, "节点标识不能重复")
+    edge_ids = [edge.id for edge in data.document.edges]
+    if len(set(edge_ids)) != len(edge_ids):
+        raise HTTPException(422, "连线标识不能重复")
+    for edge in data.document.edges:
+        if edge.source not in node_ids or edge.target not in node_ids or edge.source == edge.target:
+            raise HTTPException(422, "连线必须连接作品内两个不同节点")
     for node in data.document.nodes:
         if node.type == "asset" and node.asset_id not in ids:
             raise HTTPException(422, "画布包含未关联到作品的素材")
@@ -273,6 +279,10 @@ def remove_reference(
     )
     document = CanvasDocument.model_validate(project.canvas)
     document.nodes = [node for node in document.nodes if node.asset_id != asset_id]
+    remaining = {node.id for node in document.nodes}
+    document.edges = [
+        edge for edge in document.edges if edge.source in remaining and edge.target in remaining
+    ]
     project.canvas = document.model_dump(mode="json")
     project.version += 1
     project.updated_at = datetime.now(UTC)

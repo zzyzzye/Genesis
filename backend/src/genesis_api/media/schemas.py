@@ -20,6 +20,12 @@ class CanvasNode(BaseModel):
     height: float = Field(ge=80, le=4000)
 
 
+class CanvasEdge(BaseModel):
+    id: UUID
+    source: UUID
+    target: UUID
+
+
 class Viewport(BaseModel):
     x: float = Field(default=0, allow_inf_nan=False, ge=-10000000, le=10000000)
     y: float = Field(default=0, allow_inf_nan=False, ge=-10000000, le=10000000)
@@ -28,6 +34,7 @@ class Viewport(BaseModel):
 
 class CanvasDocument(BaseModel):
     nodes: list[CanvasNode] = Field(default_factory=list, max_length=1000)
+    edges: list[CanvasEdge] = Field(default_factory=list, max_length=2000)
     viewport: Viewport = Field(default_factory=Viewport)
 
 

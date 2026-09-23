@@ -11,11 +11,17 @@ const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const
 
 describe('作品画布', () => {
   afterEach(() => { localStorage.clear(); vi.restoreAllMocks() })
+  it('旧画布没有连线字段时仍可打开', async () => {
+    vi.spyOn(media, 'api').mockResolvedValue({ version: 1, document: { nodes: [note], viewport: { x: 0, y: 0, zoom: 1 } } })
+    const { result } = renderHook(() => useCanvas('legacy', 'user'))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(result.current.document.edges).toEqual([])
+  })
   it('保存布局与视口，并支持撤销重做', async () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    const document: Document = { nodes: [note], viewport: { x: 30, y: 40, zoom: .5 } }
+    const document: Document = { nodes: [note], edges: [], viewport: { x: 30, y: 40, zoom: .5 } }
     act(() => result.current.apply(document))
     act(() => result.current.undo())
     expect(result.current.document.nodes).toHaveLength(0)
@@ -31,7 +37,7 @@ describe('作品画布', () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const first = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(first.result.current.ready).toBe(true))
-    act(() => first.result.current.apply({ nodes: [note], viewport: { x: 0, y: 0, zoom: 1 } }))
+    act(() => first.result.current.apply({ nodes: [note], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }))
     request.mockRejectedValue(new Error('离线'))
     await act(async () => { await first.result.current.save().catch(() => undefined) })
     expect(first.result.current.status).toContain('保存失败')
@@ -48,7 +54,7 @@ describe('作品画布', () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    const first: Document = { nodes: [note], viewport: { x: 0, y: 0, zoom: 1 } }
+    const first: Document = { nodes: [note], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }
     const latest: Document = { ...first, nodes: [{ ...note, text: '保存期间的新内容' }] }
     let release!: (value: media.Snapshot) => void
     request.mockImplementationOnce(() => new Promise<media.Snapshot>((resolve) => { release = resolve }))
@@ -71,7 +77,7 @@ describe('作品画布', () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    act(() => result.current.apply({ nodes: [note], viewport: { x: 0, y: 0, zoom: 1 } }))
+    act(() => result.current.apply({ nodes: [note], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }))
     request.mockRejectedValue(new MediaError(409, '冲突'))
     await act(async () => { await result.current.save().catch(() => undefined) })
     expect(result.current.conflict).toBe(true)
@@ -102,6 +108,11 @@ describe('作品画布', () => {
     fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
     fireEvent.click(screen.getByRole('button', { name: /形状节点.*制作视觉块和标签/ }))
     expect(screen.getByRole('textbox', { name: '形状文字' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '复制节点' }))
+    fireEvent.click(screen.getByRole('button', { name: '粘贴节点' }))
+    expect(screen.getAllByRole('textbox', { name: '形状文字' })).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: '切换小地图' }))
+    expect(screen.getByRole('button', { name: '切换小地图' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: '放大画布' }))
     expect(screen.getByRole('status', { name: '当前缩放比例' })).toHaveTextContent('120%')
     fireEvent.click(screen.getByRole('button', { name: '素材库' }))
