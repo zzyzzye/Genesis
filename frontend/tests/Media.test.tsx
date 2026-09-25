@@ -6,7 +6,7 @@ import { ProjectCanvas } from '../src/pages/media/ProjectCanvas'
 import { AssetLibrary } from '../src/pages/media/AssetLibrary'
 import { emptyDocument, type Document, MediaError } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
-import { groupSelection, removeSelection, ungroupSelection } from '../src/pages/media/canvasOperations'
+import { groupSelection, removeSelection, resizedVideoDimensions, ungroupSelection } from '../src/pages/media/canvasOperations'
 
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
 
@@ -23,6 +23,10 @@ describe('作品画布', () => {
     const removed = removeSelection(grouped.document, [note.id], [])
     expect(removed.nodes.some((node) => node.type === 'group')).toBe(false)
     expect(removed.edges).toEqual([])
+  })
+  it('视频节点缩放按画布比例计算并始终保持有效尺寸', () => {
+    expect(resizedVideoDimensions(820, 670, 80, 55, .8)).toEqual({ width: 920, height: 738.75 })
+    expect(resizedVideoDimensions(820, 670, -2000, -2000, .8)).toEqual({ width: 420, height: 470 })
   })
   it('旧画布没有连线字段时仍可打开', async () => {
     vi.spyOn(media, 'api').mockResolvedValue({ version: 1, document: { nodes: [note], viewport: { x: 0, y: 0, zoom: 1 } } })
@@ -164,6 +168,20 @@ describe('作品画布', () => {
       const document = (body as { document: Document }).document
       return document.nodes.length === 2 && document.edges.length === 1 && document.edges[0]?.source === document.nodes[0]?.id && document.edges[0]?.target === document.nodes[1]?.id
     })).toBe(true))
+  })
+  it('视频节点可直接上传预览素材，失败后重试原文件', async () => {
+    vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
+    const assetId = crypto.randomUUID()
+    const uploader = vi.spyOn(media, 'upload').mockRejectedValueOnce(new Error('连接中断')).mockResolvedValue({ id: assetId, name: 'frame.png', kind: 'image', mime_type: 'image/png', size: 4, in_library: false })
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: '＋ 添加视频节点' }))
+    const file = new File(['data'], 'frame.png', { type: 'image/png' })
+    fireEvent.change(screen.getByLabelText('导入视频节点预览素材'), { target: { files: [file] } })
+    expect(await screen.findByRole('button', { name: '重试上传' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重试上传' }))
+    await waitFor(() => expect(uploader).toHaveBeenCalledTimes(2))
+    expect(uploader).toHaveBeenLastCalledWith('/projects/project/assets', file, expect.any(Function))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '视频节点预览素材' })).toHaveValue(assetId))
   })
   it('上传失败显示原因并可在原作品内重试', async () => {
     vi.spyOn(media, 'api').mockResolvedValue({ items: [], total: 0 })

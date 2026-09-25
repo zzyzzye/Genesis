@@ -1,5 +1,13 @@
 import type { Document, Node } from './api'
 
+export function resizedVideoDimensions(width: number, height: number, deltaX: number, deltaY: number, zoom: number) {
+  const scale = Math.max(.02, zoom)
+  return {
+    width: Math.max(420, Math.min(4000, width + deltaX / scale)),
+    height: Math.max(470, Math.min(4000, height + deltaY / scale)),
+  }
+}
+
 export function groupSelection(document: Document, selected: string[]): { document: Document; groupId: string } | null {
   const selectedIds = new Set(selected)
   const groupedIds = new Set(document.nodes.flatMap((node) => node.type === 'group' ? node.member_ids ?? [] : []))
