@@ -2,7 +2,7 @@ import { getStoredAuthToken } from '../../lib/auth'
 
 export type Asset = { id: string; name: string; kind: 'image' | 'video' | 'audio'; mime_type: string; size: number; in_library: boolean }
 export type Project = { id: string; name: string; version: number; updated_at: string }
-export type Node = { id: string; type: 'asset' | 'note' | 'text' | 'shape' | 'group'; asset_id: string | null; member_ids?: string[]; text: string; x: number; y: number; width: number; height: number }
+export type Node = { id: string; type: 'asset' | 'note' | 'text' | 'shape' | 'group' | 'video'; asset_id: string | null; member_ids?: string[]; name?: string; duration_seconds?: number; text: string; x: number; y: number; width: number; height: number }
 export type Edge = { id: string; source: string; target: string }
 export type VideoFrame = { width: number; height: number }
 export const defaultVideoFrame = (): VideoFrame => ({ width: 1920, height: 1080 })

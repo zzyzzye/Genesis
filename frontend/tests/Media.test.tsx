@@ -141,6 +141,30 @@ describe('作品画布', () => {
     fireEvent.click(screen.getByRole('button', { name: '素材库' }))
     expect(await screen.findByText('独立的作品素材库页面')).toBeInTheDocument()
   })
+  it('视频节点保存名称、镜头描述和时长，保留画布连接入口', async () => {
+    const request = vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: '＋ 添加视频节点' }))
+    expect(screen.getByLabelText('连接上一个视频节点')).toBeInTheDocument()
+    expect(screen.getByLabelText('连接下一个视频节点')).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: '视频节点名称' }), { target: { value: '开场镜头' } })
+    fireEvent.change(screen.getByRole('textbox', { name: '镜头描述' }), { target: { value: '雨夜街道，缓慢推进' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '镜头时长' }), { target: { value: '10' } })
+    fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
+    await waitFor(() => {
+      const saved = request.mock.calls.find(([path, method]) => path === '/projects/project/canvas' && method === 'PUT')
+      expect(saved?.[2]).toMatchObject({ document: { nodes: [{ type: 'video', name: '开场镜头', text: '雨夜街道，缓慢推进', duration_seconds: 10 }] } })
+    })
+    fireEvent.click(screen.getByLabelText('连接下一个视频节点'))
+    expect(screen.getAllByRole('textbox', { name: '视频节点名称' })).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
+    await waitFor(() => expect(request.mock.calls.some(([path, method, body]) => {
+      if (path !== '/projects/project/canvas' || method !== 'PUT') return false
+      const document = (body as { document: Document }).document
+      return document.nodes.length === 2 && document.edges.length === 1 && document.edges[0]?.source === document.nodes[0]?.id && document.edges[0]?.target === document.nodes[1]?.id
+    })).toBe(true))
+  })
   it('上传失败显示原因并可在原作品内重试', async () => {
     vi.spyOn(media, 'api').mockResolvedValue({ items: [], total: 0 })
     const uploader = vi.spyOn(media, 'upload').mockRejectedValueOnce(new Error('上传连接中断')).mockResolvedValue({ id: 'asset', name: 'test.png', kind: 'image', mime_type: 'image/png', size: 4, in_library: false })

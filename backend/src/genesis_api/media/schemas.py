@@ -11,9 +11,11 @@ class ProjectWrite(BaseModel):
 
 class CanvasNode(BaseModel):
     id: UUID
-    type: Literal["asset", "note", "text", "shape", "group"]
+    type: Literal["asset", "note", "text", "shape", "group", "video"]
     asset_id: UUID | None = None
     member_ids: list[UUID] = Field(default_factory=list, max_length=1000)
+    name: str = Field(default="", max_length=120)
+    duration_seconds: int = Field(default=5, ge=1, le=600)
     text: str = Field(default="", max_length=20000)
     x: float = Field(allow_inf_nan=False, ge=-1000000, le=1000000)
     y: float = Field(allow_inf_nan=False, ge=-1000000, le=1000000)

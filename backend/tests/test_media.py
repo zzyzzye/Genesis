@@ -168,6 +168,58 @@ async def test_invalid_upload_and_canvas(
 
 
 @pytest.mark.anyio
+async def test_video_node_metadata_and_asset_reference(media_client: AsyncClient) -> None:
+    c = media_client
+    project_id = (await c.post("projects", json={"name": "视频画布"})).json()["id"]
+    other_id = (await c.post("projects", json={"name": "其他作品"})).json()["id"]
+    asset_id = (
+        await c.post(
+            f"projects/{other_id}/assets",
+            files={"file": ("clip.mp4", b"video-bytes", "video/mp4")},
+        )
+    ).json()["id"]
+    node = {
+        "id": str(uuid4()),
+        "type": "video",
+        "name": "开场镜头",
+        "duration_seconds": 10,
+        "text": "雨夜街道",
+        "asset_id": None,
+        "x": 0,
+        "y": 0,
+        "width": 820,
+        "height": 670,
+    }
+    endpoint = f"projects/{project_id}/canvas"
+    saved = await c.put(endpoint, json={"version": 0, "document": {"nodes": [node]}})
+    assert saved.status_code == 200
+    assert saved.json()["document"]["nodes"][0]["duration_seconds"] == 10
+    assert (
+        await c.put(
+            endpoint,
+            json={"version": 1, "document": {"nodes": [{**node, "asset_id": asset_id}]}},
+        )
+    ).status_code == 422
+    assert (
+        await c.put(
+            endpoint,
+            json={"version": 1, "document": {"nodes": [{**node, "duration_seconds": 0}]}},
+        )
+    ).status_code == 422
+    assert (await c.post(f"assets/{asset_id}/library")).status_code == 200
+    assert (
+        await c.post(
+            f"projects/{project_id}/assets/reference", json={"asset_id": asset_id}
+        )
+    ).status_code == 200
+    preview = await c.put(
+        endpoint, json={"version": 1, "document": {"nodes": [{**node, "asset_id": asset_id}]}}
+    )
+    assert preview.status_code == 200
+    assert preview.json()["document"]["nodes"][0]["asset_id"] == asset_id
+
+
+@pytest.mark.anyio
 async def test_remove_asset_cleans_connected_edges(media_client: AsyncClient) -> None:
     c = media_client
     project_id = (await c.post("projects", json={"name": "连线清理"})).json()["id"]
