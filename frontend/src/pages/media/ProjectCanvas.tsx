@@ -32,6 +32,7 @@ import { groupSelection, removeSelection, ungroupSelection } from './canvasOpera
 type CanvasNodeData = {
   source: Node
   asset?: Asset
+  zoom: number
   onTextChange: (id: string, text: string) => void
   onInteractionStart: () => void
   onInteractionEnd: () => void
@@ -50,8 +51,10 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
     className={`media-node ${isNote ? 'is-note' : ''} ${isText ? 'is-text' : ''} ${isShape ? 'is-shape' : ''} ${isGroup ? 'is-group' : ''} ${selected ? 'is-selected' : ''}`}
   >
     <NodeResizer
-      color="#dfff82"
-      isVisible={selected}
+      color="#afc0c7"
+      isVisible={selected && data.zoom >= .35}
+      lineStyle={{ borderWidth: 1 }}
+      handleStyle={{ width: 6, height: 6, borderRadius: 1, background: '#2b353a', border: '1px solid #afc0c7' }}
       minWidth={100}
       minHeight={80}
       maxWidth={4000}
@@ -154,17 +157,18 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
     data: {
       source: node,
       asset: assets[node.asset_id ?? ''],
+      zoom: canvas.document.viewport.zoom,
       onTextChange: updateText,
       onInteractionStart: beginInteraction,
       onInteractionEnd: endInteraction,
     },
-  })), [assets, beginInteraction, canvas.document.nodes, endInteraction, selected, updateText])
+  })), [assets, beginInteraction, canvas.document.nodes, canvas.document.viewport.zoom, endInteraction, selected, updateText])
 
   const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
     ...edge,
     type: 'smoothstep',
     selected: selectedEdges.includes(edge.id),
-    style: { stroke: selectedEdges.includes(edge.id) ? '#dfff82' : '#9993a9', strokeWidth: 2 },
+    style: { stroke: selectedEdges.includes(edge.id) ? '#b7c8ce' : '#73828a', strokeWidth: selectedEdges.includes(edge.id) ? 2 : 1.5 },
   })), [canvas.document.edges, selectedEdges])
 
   const fetchAssets = useCallback(async () => {
@@ -490,10 +494,10 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
         onMove={(_, next) => updateViewport(next)}
         onMoveEnd={(_, next) => { viewportActive.current = false; updateViewport(next) }}
         proOptions={{ hideAttribution: true }}
-      ><ViewportPortal><div className="media-video-frame" aria-hidden="true" style={{ width: canvas.document.frame.width, height: canvas.document.frame.height }}><span>视频画幅 · {canvas.document.frame.width} × {canvas.document.frame.height}</span></div></ViewportPortal>{canvas.document.background !== 'none' && <Background variant={canvas.document.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots} color="#44404e" gap={24} size={1} />}{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#101116cc" nodeColor={(node) => node.type === 'shape' ? '#dfff82' : node.type === 'note' ? '#e4d9b2' : '#aaa4bd'} />}</ReactFlow>}
+      ><ViewportPortal><div className="media-video-frame" aria-hidden="true" style={{ width: canvas.document.frame.width, height: canvas.document.frame.height }}><span>视频画幅 · {canvas.document.frame.width} × {canvas.document.frame.height}</span></div></ViewportPortal>{canvas.document.background !== 'none' && <Background variant={canvas.document.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots} color="#3a444b" gap={24} size={1} />}{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#101116cc" nodeColor={(node) => node.type === 'shape' ? '#8298a3' : node.type === 'note' ? '#758992' : '#687981'} />}</ReactFlow>}
       {draggingFile && <div className="media-canvas-drop" aria-hidden="true">松开鼠标，将素材放入画布</div>}
       {uploadProgress !== null && <div className="media-canvas-upload" role="status">正在导入素材 · {uploadProgress}%</div>}
-      {canvas.ready && canvas.document.nodes.length === 0 && <div className="media-canvas-empty"><small>视频创作空间</small><h1>定好画幅，开始构图。</h1><p>选择横屏或竖屏尺寸，再把素材和想法放进来。</p><div className="media-canvas-empty-actions"><button className="media-accent" onClick={() => setNodeMenu(true)}>＋ 添加节点</button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>打开作品素材库</button></div></div>}
+      {canvas.ready && canvas.document.nodes.length === 0 && !frameMenu && !nodeMenu && <div className="media-canvas-empty"><small>视频创作空间</small><h1>定好画幅，开始构图。</h1><p>选择横屏或竖屏尺寸，再把素材和想法放进来。</p><div className="media-canvas-empty-actions"><button className="media-accent" onClick={() => setNodeMenu(true)}>＋ 添加节点</button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>打开作品素材库</button></div></div>}
     </div>
     {nodeMenu && <div className="media-node-palette" role="dialog" aria-label="添加节点"><div className="media-node-palette-heading"><strong>添加到画布</strong><button aria-label="关闭节点菜单" onClick={() => setNodeMenu(false)}>×</button></div><button onClick={() => addNode('note')}><StickyNote size={18} /><span><strong>文字便签</strong><small>记录镜头和灵感</small></span></button><button onClick={() => addNode('text')}><Type size={18} /><span><strong>文字节点</strong><small>直接在画布上排版文字</small></span></button><button onClick={() => addNode('shape')}><Shapes size={18} /><span><strong>形状节点</strong><small>制作视觉块和标签</small></span></button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><FileImage size={18} /><span><strong>媒体素材</strong><small>从作品素材库选择</small></span></button></div>}
     {(selected.filter((id) => canvas.document.nodes.some((node) => node.id === id && node.type !== 'group')).length >= 2 || selected.some((id) => canvas.document.nodes.some((node) => node.id === id && node.type === 'group'))) && <div className="media-canvas-selection-actions"><span>已选 {selected.length} 个节点</span><button onClick={groupSelected} disabled={selected.filter((id) => canvas.document.nodes.some((node) => node.id === id && node.type !== 'group')).length < 2}>编组</button><button onClick={ungroupSelected} disabled={!selected.some((id) => canvas.document.nodes.some((node) => node.id === id && node.type === 'group'))}>取消编组</button></div>}
