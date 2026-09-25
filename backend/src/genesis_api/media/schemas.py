@@ -30,13 +30,19 @@ class CanvasEdge(BaseModel):
 class Viewport(BaseModel):
     x: float = Field(default=0, allow_inf_nan=False, ge=-10000000, le=10000000)
     y: float = Field(default=0, allow_inf_nan=False, ge=-10000000, le=10000000)
-    zoom: float = Field(default=1, ge=0.1, le=4)
+    zoom: float = Field(default=1, ge=0.02, le=4)
+
+
+class VideoFrame(BaseModel):
+    width: int = Field(default=1920, ge=256, le=8192)
+    height: int = Field(default=1080, ge=256, le=8192)
 
 
 class CanvasDocument(BaseModel):
     nodes: list[CanvasNode] = Field(default_factory=list, max_length=1000)
     edges: list[CanvasEdge] = Field(default_factory=list, max_length=2000)
     background: Literal["dots", "lines", "none"] = "dots"
+    frame: VideoFrame = Field(default_factory=VideoFrame)
     viewport: Viewport = Field(default_factory=Viewport)
 
 

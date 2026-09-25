@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type Document, emptyDocument, MediaError, type Snapshot } from './api'
+import { api, type Document, defaultVideoFrame, emptyDocument, MediaError, type Snapshot } from './api'
 
 export function useCanvas(projectId: string, userId: string) {
   const [document, setDocument] = useState<Document>(emptyDocument)
@@ -23,7 +23,7 @@ export function useCanvas(projectId: string, userId: string) {
   }, [key])
   const load = useCallback(async (restoreDraft = false) => {
     const snapshot = await api<Snapshot>(`/projects/${projectId}/canvas`)
-    const serverDocument = { ...snapshot.document, edges: snapshot.document.edges ?? [], background: snapshot.document.background ?? 'dots' }
+    const serverDocument = { ...snapshot.document, edges: snapshot.document.edges ?? [], background: snapshot.document.background ?? 'dots', frame: snapshot.document.frame ?? defaultVideoFrame() }
     version.current = snapshot.version; saved.current = JSON.stringify(serverDocument)
     let next = serverDocument
     blocked.current = false; setConflict(false)
@@ -32,7 +32,7 @@ export function useCanvas(projectId: string, userId: string) {
         const raw = localStorage.getItem(key)
         const draft = raw ? JSON.parse(raw) as Snapshot : null
         if (draft && Array.isArray(draft.document?.nodes) && draft.document.viewport) {
-          next = { ...draft.document, edges: draft.document.edges ?? [], background: draft.document.background ?? 'dots' }
+          next = { ...draft.document, edges: draft.document.edges ?? [], background: draft.document.background ?? 'dots', frame: draft.document.frame ?? defaultVideoFrame() }
           if (draft.version !== snapshot.version && JSON.stringify(next) !== saved.current) { blocked.current = true; setConflict(true) }
         }
       } catch { /* 损坏的本地草稿不会阻止打开服务器版本。 */ }

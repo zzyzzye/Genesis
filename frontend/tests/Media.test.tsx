@@ -29,12 +29,13 @@ describe('作品画布', () => {
     const { result } = renderHook(() => useCanvas('legacy', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
     expect(result.current.document.edges).toEqual([])
+    expect(result.current.document.frame).toEqual({ width: 1920, height: 1080 })
   })
   it('保存布局与视口，并支持撤销重做', async () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    const document: Document = { nodes: [note], edges: [], background: 'dots', viewport: { x: 30, y: 40, zoom: .5 } }
+    const document: Document = { ...emptyDocument(), nodes: [note], viewport: { x: 30, y: 40, zoom: .5 } }
     act(() => result.current.apply(document))
     act(() => result.current.undo())
     expect(result.current.document.nodes).toHaveLength(0)
@@ -50,7 +51,7 @@ describe('作品画布', () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const first = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(first.result.current.ready).toBe(true))
-    act(() => first.result.current.apply({ nodes: [note], edges: [], background: 'dots', viewport: { x: 0, y: 0, zoom: 1 } }))
+    act(() => first.result.current.apply({ ...emptyDocument(), nodes: [note] }))
     request.mockRejectedValue(new Error('离线'))
     await act(async () => { await first.result.current.save().catch(() => undefined) })
     expect(first.result.current.status).toContain('保存失败')
@@ -67,7 +68,7 @@ describe('作品画布', () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    const first: Document = { nodes: [note], edges: [], background: 'dots', viewport: { x: 0, y: 0, zoom: 1 } }
+    const first: Document = { ...emptyDocument(), nodes: [note] }
     const latest: Document = { ...first, nodes: [{ ...note, text: '保存期间的新内容' }] }
     let release!: (value: media.Snapshot) => void
     request.mockImplementationOnce(() => new Promise<media.Snapshot>((resolve) => { release = resolve }))
@@ -90,7 +91,7 @@ describe('作品画布', () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    act(() => result.current.apply({ nodes: [note], edges: [], background: 'dots', viewport: { x: 0, y: 0, zoom: 1 } }))
+    act(() => result.current.apply({ ...emptyDocument(), nodes: [note] }))
     request.mockRejectedValue(new MediaError(409, '冲突'))
     await act(async () => { await result.current.save().catch(() => undefined) })
     expect(result.current.conflict).toBe(true)
@@ -128,6 +129,15 @@ describe('作品画布', () => {
     expect(screen.getByRole('button', { name: '切换小地图' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: '放大画布' }))
     expect(screen.getByRole('status', { name: '当前缩放比例' })).toHaveTextContent('120%')
+    fireEvent.click(screen.getByRole('button', { name: '视频画幅设置' }))
+    fireEvent.click(screen.getByRole('button', { name: '竖屏 9:16' }))
+    expect(screen.getByRole('button', { name: '视频画幅设置' })).toHaveTextContent('1080 × 1920')
+    fireEvent.change(screen.getByRole('spinbutton', { name: '画幅宽度' }), { target: { value: '2048' } })
+    fireEvent.change(screen.getByRole('spinbutton', { name: '画幅高度' }), { target: { value: '858' } })
+    fireEvent.click(screen.getByRole('button', { name: '应用尺寸' }))
+    expect(screen.getByRole('button', { name: '视频画幅设置' })).toHaveTextContent('2048 × 858')
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    expect(screen.getByRole('button', { name: '视频画幅设置' })).toHaveTextContent('1080 × 1920')
     fireEvent.click(screen.getByRole('button', { name: '素材库' }))
     expect(await screen.findByText('独立的作品素材库页面')).toBeInTheDocument()
   })

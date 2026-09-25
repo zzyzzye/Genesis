@@ -222,10 +222,14 @@ async def test_canvas_groups_and_background_are_validated(media_client: AsyncCli
     }
     endpoint = f"projects/{project_id}/canvas"
     result = await c.put(endpoint, json={"version": 0, "document": {
-        "nodes": [group, *nodes], "background": "lines",
+        "nodes": [group, *nodes], "background": "lines", "frame": {"width": 1080, "height": 1920},
     }})
     assert result.status_code == 200
     assert result.json()["document"]["background"] == "lines"
+    assert result.json()["document"]["frame"] == {"width": 1080, "height": 1920}
+    assert (await c.put(endpoint, json={"version": 1, "document": {
+        "nodes": [group, *nodes], "frame": {"width": 200, "height": 1920},
+    }})).status_code == 422
     invalid_group = {**group, "member_ids": [nodes[0]["id"], str(uuid4())]}
     assert (await c.put(endpoint, json={"version": 1, "document": {
         "nodes": [invalid_group, *nodes],
