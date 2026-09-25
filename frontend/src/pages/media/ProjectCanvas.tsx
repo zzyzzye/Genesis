@@ -89,9 +89,13 @@ function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
       <Handle type="source" position={Position.Right} aria-label="连接下一个视频节点" title="点击新建下一段，或拖动连接已有节点" onClick={(event) => { event.stopPropagation(); data.onAddConnected(id, 'right') }} />
     </div>
     <section className="media-video-composer nodrag nowheel nopan" aria-label="镜头草稿">
-      <div className="media-video-composer-top"><label>预览素材<select aria-label="视频节点预览素材" value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{data.previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label><button onClick={() => fileInput.current?.click()}>导入素材</button><button onClick={data.onOpenAssets}>作品素材库 ↗</button></div>
+      <div className="media-video-composer-top">
+        <button type="button" onClick={data.onOpenAssets}>参考素材</button>
+        <button type="button" onClick={() => fileInput.current?.click()}>导入素材</button>
+        <label className="media-video-asset-picker"><span>预览</span><select aria-label="视频节点预览素材" value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{data.previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
+      </div>
       <input ref={fileInput} className="media-video-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska" aria-label="导入视频节点预览素材" onChange={(event) => { const file = event.target.files?.[0]; if (file) void data.onUploadPreview(id, file); event.target.value = '' }} />
-      <textarea aria-label="镜头描述" value={node.text} placeholder="描述画面、动作与镜头运动…" maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
+      <textarea aria-label="镜头描述" value={node.text} placeholder="描述你想要生成的画面内容，@ 引用素材" maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
       <div className="media-video-composer-footer"><span>{data.frame.width} × {data.frame.height}</span><label>时长 <select aria-label="镜头时长" value={node.duration_seconds ?? 5} onChange={(event) => data.onPatch(id, { duration_seconds: Number(event.target.value) })}>{[5, 10, 15, 30, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} 秒</option>)}</select></label><small>画布草稿</small></div>
     </section>
   </article>
