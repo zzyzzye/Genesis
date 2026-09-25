@@ -6,7 +6,7 @@ import { ProjectCanvas } from '../src/pages/media/ProjectCanvas'
 import { AssetLibrary } from '../src/pages/media/AssetLibrary'
 import { emptyDocument, type Document, MediaError } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
-import { groupSelection, removeSelection, resizedVideoDimensions, ungroupSelection } from '../src/pages/media/canvasOperations'
+import { groupSelection, removeSelection, resizedNodeDimensions, ungroupSelection } from '../src/pages/media/canvasOperations'
 
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
 
@@ -25,8 +25,9 @@ describe('作品画布', () => {
     expect(removed.edges).toEqual([])
   })
   it('视频节点缩放按画布比例计算并始终保持有效尺寸', () => {
-    expect(resizedVideoDimensions(820, 670, 80, 55, .8)).toEqual({ width: 920, height: 738.75 })
-    expect(resizedVideoDimensions(820, 670, -2000, -2000, .8)).toEqual({ width: 420, height: 470 })
+    expect(resizedNodeDimensions(820, 670, 80, 55, .8, 420, 470)).toEqual({ width: 920, height: 738.75 })
+    expect(resizedNodeDimensions(820, 670, -2000, -2000, .8, 420, 470)).toEqual({ width: 420, height: 470 })
+    expect(resizedNodeDimensions(240, 150, -2000, -2000, 2, 100, 80)).toEqual({ width: 100, height: 80 })
   })
   it('旧画布没有连线字段时仍可打开', async () => {
     vi.spyOn(media, 'api').mockResolvedValue({ version: 1, document: { nodes: [note], viewport: { x: 0, y: 0, zoom: 1 } } })

@@ -5,7 +5,6 @@ import {
   BackgroundVariant,
   Handle,
   MiniMap,
-  NodeResizer,
   Position,
   ReactFlow,
   SelectionMode,
@@ -26,7 +25,7 @@ import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, FileImage, Film, Map as M
 import { api, type Asset, type Document, type Edge, type Node, type Project, type VideoFrame, upload } from './api'
 import { AssetPreview } from './AssetPreview'
 import { useCanvas } from './useCanvas'
-import { groupSelection, removeSelection, resizedVideoDimensions, ungroupSelection } from './canvasOperations'
+import { groupSelection, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
 
 type CanvasNodeData = {
   source: Node
@@ -45,37 +44,41 @@ type CanvasNodeData = {
 
 type CanvasFlowNode = FlowNode<CanvasNodeData, Node['type']>
 
+function CanvasResizeCorner({ id, data, minWidth, minHeight, label }: { id: string; data: CanvasNodeData; minWidth: number; minHeight: number; label: string }) {
+  const resize = useRef<{ x: number; y: number; width: number; height: number; zoom: number } | null>(null)
+  return <button
+    className="media-canvas-resize nodrag"
+    type="button"
+    aria-label={label}
+    title="拖动调整节点大小"
+    onPointerDown={(event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      resize.current = { x: event.clientX, y: event.clientY, width: data.source.width, height: data.source.height, zoom: data.zoom }
+      event.currentTarget.setPointerCapture(event.pointerId)
+      data.onInteractionStart()
+    }}
+    onPointerMove={(event) => {
+      if (!resize.current) return
+      const start = resize.current
+      data.onPatch(id, resizedNodeDimensions(start.width, start.height, event.clientX - start.x, event.clientY - start.y, start.zoom, minWidth, minHeight), false)
+    }}
+    onPointerUp={(event) => {
+      if (!resize.current) return
+      resize.current = null
+      event.currentTarget.releasePointerCapture(event.pointerId)
+      data.onInteractionEnd()
+    }}
+    onPointerCancel={() => { resize.current = null; data.onInteractionEnd() }}
+  />
+}
+
 function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
   const node = data.source
   const preview = data.asset && data.asset.kind !== 'audio' ? data.asset : null
   const fileInput = useRef<HTMLInputElement>(null)
-  const resize = useRef<{ x: number; y: number; width: number; height: number; zoom: number } | null>(null)
   return <article className={`media-video-card ${selected ? 'is-selected' : ''}`} aria-label={node.name || '视频节点'}>
-    <button
-      className="media-video-resize nodrag"
-      type="button"
-      aria-label="调整视频节点大小"
-      title="拖动调整视频节点大小"
-      onPointerDown={(event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        resize.current = { x: event.clientX, y: event.clientY, width: node.width, height: node.height, zoom: data.zoom }
-        event.currentTarget.setPointerCapture(event.pointerId)
-        data.onInteractionStart()
-      }}
-      onPointerMove={(event) => {
-        if (!resize.current) return
-        const start = resize.current
-        data.onPatch(id, resizedVideoDimensions(start.width, start.height, event.clientX - start.x, event.clientY - start.y, start.zoom), false)
-      }}
-      onPointerUp={(event) => {
-        if (!resize.current) return
-        resize.current = null
-        event.currentTarget.releasePointerCapture(event.pointerId)
-        data.onInteractionEnd()
-      }}
-      onPointerCancel={() => { resize.current = null; data.onInteractionEnd() }}
-    />
+    <CanvasResizeCorner id={id} data={data} minWidth={420} minHeight={470} label="调整视频节点大小" />
     <div className="media-node-grip media-video-grip"><Play size={17} fill="currentColor" aria-hidden="true" /><input className="nodrag" aria-label="视频节点名称" value={node.name ?? ''} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onPatch(id, { name: event.target.value }, false)} /></div>
     <div className="media-video-preview-shell">
       <Handle type="target" position={Position.Left} aria-label="连接上一个视频节点" title="点击新建上一段，或拖动连接已有节点" onClick={(event) => { event.stopPropagation(); data.onAddConnected(id, 'left') }} />
@@ -103,18 +106,7 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
     aria-label={label}
     className={`media-node ${isNote ? 'is-note' : ''} ${isText ? 'is-text' : ''} ${isShape ? 'is-shape' : ''} ${isGroup ? 'is-group' : ''} ${selected ? 'is-selected' : ''}`}
   >
-    <NodeResizer
-      color="#afc0c7"
-      isVisible={selected && data.zoom >= .35}
-      lineStyle={{ borderWidth: 1 }}
-      handleStyle={{ width: 6, height: 6, borderRadius: 1, background: '#2b353a', border: '1px solid #afc0c7' }}
-      minWidth={100}
-      minHeight={80}
-      maxWidth={4000}
-      maxHeight={4000}
-      onResizeStart={data.onInteractionStart}
-      onResizeEnd={data.onInteractionEnd}
-    />
+    <CanvasResizeCorner id={id} data={data} minWidth={100} minHeight={80} label="调整节点大小" />
     {!isGroup && <Handle type="target" position={Position.Left} aria-label="输入连接点" />}
     <div className="media-node-grip">{isGroup ? <><span>分组 · {data.source.member_ids?.length ?? 0} 个节点</span><input className="nodrag" aria-label="分组名称" value={data.source.text} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} /></> : label}</div>
     {isNote || isText || isShape

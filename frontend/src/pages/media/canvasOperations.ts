@@ -1,10 +1,10 @@
 import type { Document, Node } from './api'
 
-export function resizedVideoDimensions(width: number, height: number, deltaX: number, deltaY: number, zoom: number) {
+export function resizedNodeDimensions(width: number, height: number, deltaX: number, deltaY: number, zoom: number, minWidth: number, minHeight: number) {
   const scale = Math.max(.02, zoom)
   return {
-    width: Math.max(420, Math.min(4000, width + deltaX / scale)),
-    height: Math.max(470, Math.min(4000, height + deltaY / scale)),
+    width: Math.max(minWidth, Math.min(4000, width + deltaX / scale)),
+    height: Math.max(minHeight, Math.min(4000, height + deltaY / scale)),
   }
 }
 
