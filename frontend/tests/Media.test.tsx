@@ -36,6 +36,22 @@ describe('作品画布', () => {
     expect(result.current.document.edges).toEqual([])
     expect(result.current.document.frame).toEqual({ width: 1920, height: 1080 })
   })
+  it('空旧形状可原位改成视频节点，保留节点标识与连接', async () => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const shape = { ...note, type: 'shape' as const, text: '' }
+    const other = { ...note, id: crypto.randomUUID(), x: 400 }
+    const edge = { id: crypto.randomUUID(), source: shape.id, target: other.id }
+    const document: Document = { ...emptyDocument(), nodes: [shape, other], edges: [edge] }
+    vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    await waitFor(() => expect(screen.getByRole('button', { name: '改为视频节点' })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '改为视频节点' }))
+    expect(screen.getByRole('textbox', { name: '镜头描述' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '改为视频节点' })).not.toBeInTheDocument()
+    const saved = JSON.parse(localStorage.getItem('genesis-media-draft:user:project')!) as { document: Document }
+    expect(saved.document.nodes.find((node) => node.id === shape.id)).toMatchObject({ type: 'video', x: shape.x, y: shape.y, width: 820, height: 670 })
+    expect(saved.document.edges).toEqual([edge])
+  })
   it('保存布局与视口，并支持撤销重做', async () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
@@ -126,7 +142,9 @@ describe('作品画布', () => {
     expect(screen.getByRole('textbox', { name: '文字内容' })).toHaveValue('标题')
     fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
     fireEvent.click(screen.getByRole('button', { name: /形状节点.*制作视觉块和标签/ }))
+    fireEvent.click(screen.getByRole('button', { name: '保留形状并编辑文字' }))
     expect(screen.getByRole('textbox', { name: '形状文字' })).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: '形状文字' }), { target: { value: '视觉标签' } })
     fireEvent.click(screen.getByRole('button', { name: '复制节点' }))
     fireEvent.click(screen.getByRole('button', { name: '粘贴节点' }))
     expect(screen.getAllByRole('textbox', { name: '形状文字' })).toHaveLength(2)

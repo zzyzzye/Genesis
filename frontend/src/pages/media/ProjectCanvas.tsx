@@ -38,6 +38,7 @@ type CanvasNodeData = {
   onOpenAssets: () => void
   onUploadPreview: (id: string, file: File) => Promise<void>
   onAddConnected: (id: string, side: 'left' | 'right') => void
+  onConvertToVideo: (id: string) => void
   onInteractionStart: () => void
   onInteractionEnd: () => void
 }
@@ -97,6 +98,7 @@ function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
 }
 
 function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>) {
+  const [editingEmptyShape, setEditingEmptyShape] = useState(false)
   const isNote = type === 'note'
   const isText = type === 'text'
   const isShape = type === 'shape'
@@ -109,7 +111,9 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
     <CanvasResizeCorner id={id} data={data} minWidth={100} minHeight={80} label="调整节点大小" />
     {!isGroup && <Handle type="target" position={Position.Left} aria-label="输入连接点" />}
     <div className="media-node-grip">{isGroup ? <><span>分组 · {data.source.member_ids?.length ?? 0} 个节点</span><input className="nodrag" aria-label="分组名称" value={data.source.text} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} /></> : label}</div>
-    {isNote || isText || isShape
+    {isShape && !data.source.text.trim() && !editingEmptyShape
+      ? <div className="media-shape-convert nodrag nowheel nopan"><span>这是旧的形状节点</span><button onClick={() => data.onConvertToVideo(id)}>改为视频节点</button><button className="media-shape-edit" onClick={() => setEditingEmptyShape(true)}>保留形状并编辑文字</button></div>
+      : isNote || isText || isShape
       ? <textarea
           className="nodrag nowheel nopan"
           aria-label={isNote ? '便签内容' : isText ? '文字内容' : '形状文字'}
@@ -253,6 +257,17 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
     setSelectedEdges([])
   }, [canvas, fittedViewport])
 
+  const convertToVideo = useCallback((id: string) => {
+    const current = canvas.current.current
+    const original = current.nodes.find((node) => node.id === id && node.type === 'shape' && !node.text.trim())
+    if (!original) return
+    const converted: Node = { ...original, type: 'video', name: `视频节点 ${current.nodes.filter((node) => node.type === 'video').length + 1}`, duration_seconds: 5, width: 820, height: 670 }
+    const next = { ...current, nodes: current.nodes.map((node) => node.id === id ? converted : node) }
+    canvas.apply({ ...next, viewport: fittedViewport({ ...next, nodes: [converted] }) ?? current.viewport })
+    setSelected([id])
+    setSelectedEdges([])
+  }, [canvas, fittedViewport])
+
   const flowNodes = useMemo<CanvasFlowNode[]>(() => canvas.document.nodes.map((node) => ({
     id: node.id,
     type: node.type,
@@ -278,10 +293,11 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
       onOpenAssets: openAssets,
       onUploadPreview: uploadPreview,
       onAddConnected: addConnected,
+      onConvertToVideo: convertToVideo,
       onInteractionStart: beginInteraction,
       onInteractionEnd: endInteraction,
     },
-  })), [addConnected, assets, beginInteraction, canvas.document.frame, canvas.document.nodes, canvas.document.viewport.zoom, endInteraction, openAssets, patchNode, previewAssets, selected, updateText, uploadPreview])
+  })), [addConnected, assets, beginInteraction, canvas.document.frame, canvas.document.nodes, canvas.document.viewport.zoom, convertToVideo, endInteraction, openAssets, patchNode, previewAssets, selected, updateText, uploadPreview])
 
   const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
     ...edge,
