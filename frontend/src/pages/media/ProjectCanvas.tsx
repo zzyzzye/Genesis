@@ -78,25 +78,33 @@ function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
   const node = data.source
   const preview = data.asset && data.asset.kind !== 'audio' ? data.asset : null
   const fileInput = useRef<HTMLInputElement>(null)
+  const appendPromptToken = (token: string) => data.onTextChange(id, `${node.text}${node.text ? ' ' : ''}${token}`)
+  const aspectRatio = data.frame.width >= data.frame.height ? '16:9' : '9:16'
+  const videoQuality = Math.min(data.frame.width, data.frame.height)
   return <article className={`media-video-card ${selected ? 'is-selected' : ''}`} aria-label={node.name || '视频节点'}>
     <CanvasResizeCorner id={id} data={data} minWidth={420} minHeight={470} label="调整视频节点大小" />
     <div className="media-node-grip media-video-grip"><Play size={17} fill="currentColor" aria-hidden="true" /><input className="nodrag" aria-label="视频节点名称" value={node.name ?? ''} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onPatch(id, { name: event.target.value }, false)} /></div>
     <div className="media-video-preview-shell">
       <Handle type="target" position={Position.Left} aria-label="连接上一个视频节点" title="点击新建上一段，或拖动连接已有节点" onClick={(event) => { event.stopPropagation(); data.onAddConnected(id, 'left') }} />
       <div className="media-video-screen nodrag nowheel nopan" style={{ aspectRatio: `${data.frame.width} / ${data.frame.height}` }}>
-        {preview ? <AssetPreview asset={preview} controls /> : <div className="media-video-placeholder"><Play size={54} fill="currentColor" strokeWidth={0} aria-hidden="true" /><button type="button" onClick={() => fileInput.current?.click()}>导入预览素材</button></div>}
+        {preview ? <AssetPreview asset={preview} controls /> : <div className="media-video-placeholder"><Play size={54} fill="currentColor" strokeWidth={0} aria-hidden="true" /><span>从素材开始这一段</span><div><button type="button" onClick={() => fileInput.current?.click()}>导入预览素材</button><button type="button" onClick={data.onOpenAssets}>选择作品素材</button></div></div>}
       </div>
       <Handle type="source" position={Position.Right} aria-label="连接下一个视频节点" title="点击新建下一段，或拖动连接已有节点" onClick={(event) => { event.stopPropagation(); data.onAddConnected(id, 'right') }} />
     </div>
     <section className="media-video-composer nodrag nowheel nopan" aria-label="镜头草稿">
       <div className="media-video-composer-top">
-        <button type="button" onClick={data.onOpenAssets}>参考素材</button>
-        <button type="button" onClick={() => fileInput.current?.click()}>导入素材</button>
-        <label className="media-video-asset-picker"><span>预览</span><select aria-label="视频节点预览素材" value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{data.previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
+        <button type="button" onClick={data.onOpenAssets}>＋ 参考</button>
+        <button type="button" onClick={() => appendPromptToken('【标记】')}>标记</button>
+        <button type="button" onClick={() => appendPromptToken('【特效】')}>特效</button>
+        <button type="button" onClick={() => appendPromptToken('【角色】')}>角色库</button>
+        <button type="button" onClick={() => appendPromptToken('【运镜】')}>运镜</button>
       </div>
       <input ref={fileInput} className="media-video-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska" aria-label="导入视频节点预览素材" onChange={(event) => { const file = event.target.files?.[0]; if (file) void data.onUploadPreview(id, file); event.target.value = '' }} />
       <textarea aria-label="镜头描述" value={node.text} placeholder="描述你想要生成的画面内容，@ 引用素材" maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
-      <div className="media-video-composer-footer"><span>{data.frame.width} × {data.frame.height}</span><label>时长 <select aria-label="镜头时长" value={node.duration_seconds ?? 5} onChange={(event) => data.onPatch(id, { duration_seconds: Number(event.target.value) })}>{[5, 10, 15, 30, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} 秒</option>)}</select></label><small>画布草稿</small></div>
+      <div className="media-video-composer-footer">
+        <label className="media-video-asset-picker"><span>预览</span><select aria-label="视频节点预览素材" value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{data.previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
+        <span className="media-video-spec">{aspectRatio} · {videoQuality}P ·</span><label><select aria-label="镜头时长" value={node.duration_seconds ?? 5} onChange={(event) => data.onPatch(id, { duration_seconds: Number(event.target.value) })}>{[5, 10, 15, 30, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} 秒</option>)}</select></label><small>草稿</small>
+      </div>
     </section>
   </article>
 }
