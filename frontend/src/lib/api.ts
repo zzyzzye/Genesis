@@ -245,7 +245,7 @@ export function getSystemHealth(system: 'tools' | 'media', signal?: AbortSignal)
 }
 
 
-export type AiSurface = 'blog' | 'studio' | 'tools'
+export type AiSurface = 'blog' | 'studio' | 'tools' | 'media'
 
 export type AiExecutionMode = 'automatic' | 'approval_required'
 
@@ -283,6 +283,8 @@ export interface AiChatContext {
   content_markdown?: string
   editor_status?: 'draft' | 'published'
   selected_text?: string
+  selected_node?: Record<string, unknown>
+  page?: Record<string, unknown>
 }
 
 export interface AiChatRequest {

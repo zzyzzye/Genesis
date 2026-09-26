@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from genesis_api.ai.models import AiChatRunStatus
 
-AiSurface = Literal["blog", "studio", "tools"]
+AiSurface = Literal["blog", "studio", "tools", "media"]
 AiProvider = Literal["openai", "grok", "gemini", "claude", "mimo"]
 AiExecutionMode = Literal["automatic", "approval_required"]
 MessageRole = Literal["user", "assistant"]
@@ -29,6 +29,7 @@ class AiContext(BaseModel):
     content_markdown: str | None = None
     editor_status: str | None = None
     selected_text: str | None = None
+    selected_node: dict[str, object] | None = None
     page: dict[str, object] | None = None
     article_summary: dict[str, object] | None = None
     articles: list[dict[str, object]] | None = None

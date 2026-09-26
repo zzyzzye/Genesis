@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from genesis_api.blog.agent.capability import BlogAgentCapability
 from genesis_api.core.config import Settings
 from genesis_api.identity.models import User
+from genesis_api.media.agent import MediaAgentCapability
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class AgentCapabilityRegistry:
 
     def __init__(self) -> None:
         self._blog = BlogAgentCapability()
+        self._media = MediaAgentCapability()
 
     def resolve(self, module: str, settings: Settings) -> ResolvedAgentCapability:
         if module == self._blog.module:
@@ -31,6 +33,13 @@ class AgentCapabilityRegistry:
                 name=self._blog.name,
                 prompt=self._blog.system_prompt(),
                 tools=self._blog.build_tools(settings),
+            )
+        if module == self._media.module:
+            return ResolvedAgentCapability(
+                module=self._media.module,
+                name=self._media.name,
+                prompt=self._media.system_prompt(),
+                tools=self._media.build_tools(settings),
             )
         raise ValueError(f"模块 {module} 尚未提供 Agent 能力")
 

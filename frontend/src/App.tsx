@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { AnimatePresence, motion, MotionConfig, useReducedMotion } from 'motion/react'
 
 import { Account } from './Account'
 import { Studio } from './Studio'
@@ -7,6 +8,7 @@ import { Home } from './pages/home/Home'
 import { PublicBlog } from './pages/blog/BlogPage'
 import { MediaPage } from './pages/media/MediaPage'
 import { ToolsPage } from './pages/tools/ToolsPage'
+import { pageTransition } from './lib/motion'
 
 function LegacyStudioRedirect() {
   const location = useLocation()
@@ -18,10 +20,29 @@ function LegacyStudioRedirect() {
   return <Navigate replace to={`${pathname}${location.search}${location.hash}`} />
 }
 
-export function App() {
-  return (
-    <BrowserRouter>
-      <Routes>
+function getRouteMotionKey(pathname: string) {
+  if (pathname.startsWith('/media')) return 'media'
+  if (pathname.startsWith('/studio') || pathname.startsWith('/blog/studio')) return 'studio'
+  if (pathname.startsWith('/blog') || pathname.startsWith('/articles')) return 'blog'
+  if (pathname.startsWith('/tools')) return 'tools'
+  if (pathname.startsWith('/account')) return 'account'
+  return 'home'
+}
+
+function AnimatedRoutes() {
+  const location = useLocation()
+  const reducedMotion = useReducedMotion()
+
+  return <AnimatePresence initial={false} mode="wait">
+    <motion.div
+      key={getRouteMotionKey(location.pathname)}
+      className="app-route-transition"
+      initial={reducedMotion ? false : 'initial'}
+      animate="enter"
+      exit={reducedMotion ? undefined : 'exit'}
+      variants={pageTransition}
+    >
+      <Routes location={location}>
         <Route path="/" element={<Home />} />
         <Route path="/blog/*" element={<PublicBlog />} />
         <Route path="/articles/:slug" element={<PublicBlog />} />
@@ -34,6 +55,16 @@ export function App() {
         <Route path="/studio" element={<StudioPortal />} />
         <Route path="/account" element={<Account />} />
       </Routes>
-    </BrowserRouter>
+    </motion.div>
+  </AnimatePresence>
+}
+
+export function App() {
+  return (
+    <MotionConfig reducedMotion="user">
+      <BrowserRouter>
+        <AnimatedRoutes />
+      </BrowserRouter>
+    </MotionConfig>
   )
 }

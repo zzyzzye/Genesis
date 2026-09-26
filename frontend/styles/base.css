@@ -14,6 +14,16 @@ html {
   scroll-behavior: smooth;
 }
 
+.app-route-transition {
+  min-height: 100dvh;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 body {
   margin: 0;
   min-width: 320px;

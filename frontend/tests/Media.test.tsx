@@ -3,9 +3,11 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useCanvas } from '../src/pages/media/useCanvas'
 import { ProjectCanvas } from '../src/pages/media/ProjectCanvas'
+import { MediaAssistant } from '../src/pages/media/MediaAssistant'
 import { AssetLibrary } from '../src/pages/media/AssetLibrary'
 import { emptyDocument, type Document, MediaError } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
+import * as ai from '../src/lib/api'
 import { groupSelection, removeSelection, resizedNodeDimensions, ungroupSelection } from '../src/pages/media/canvasOperations'
 
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
@@ -152,17 +154,26 @@ describe('作品画布', () => {
     expect(screen.getByRole('button', { name: '切换小地图' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: '放大画布' }))
     expect(screen.getByRole('status', { name: '当前缩放比例' })).toHaveTextContent('120%')
-    fireEvent.click(screen.getByRole('button', { name: '视频画幅设置' }))
-    fireEvent.click(screen.getByRole('button', { name: '竖屏 9:16' }))
-    expect(screen.getByRole('button', { name: '视频画幅设置' })).toHaveTextContent('1080 × 1920')
-    fireEvent.change(screen.getByRole('spinbutton', { name: '画幅宽度' }), { target: { value: '2048' } })
-    fireEvent.change(screen.getByRole('spinbutton', { name: '画幅高度' }), { target: { value: '858' } })
-    fireEvent.click(screen.getByRole('button', { name: '应用尺寸' }))
-    expect(screen.getByRole('button', { name: '视频画幅设置' })).toHaveTextContent('2048 × 858')
-    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
-    expect(screen.getByRole('button', { name: '视频画幅设置' })).toHaveTextContent('1080 × 1920')
+    expect(screen.queryByRole('button', { name: '视频画幅设置' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '素材库' }))
     expect(await screen.findByText('独立的作品素材库页面')).toBeInTheDocument()
+  })
+  it('添加节点浮层可关闭、点击外部关闭，并为节点提供专用拖拽标题栏', async () => {
+    vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    const trigger = await screen.findByRole('button', { name: '＋ 添加节点' })
+    fireEvent.click(trigger)
+    expect(screen.getByRole('dialog', { name: '添加节点' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '关闭节点菜单' }))
+    expect(screen.queryByRole('dialog', { name: '添加节点' })).not.toBeInTheDocument()
+    fireEvent.click(trigger)
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole('dialog', { name: '添加节点' })).not.toBeInTheDocument()
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: '便签' }))
+    expect(document.querySelector('.react-flow__node .media-node-drag-handle')).toBeInTheDocument()
+    expect(document.querySelector('.react-flow__node .media-node-drag-mark')).toBeInTheDocument()
+    expect(document.querySelector('.media-selection-particles')).not.toBeInTheDocument()
   })
   it('视频节点保存名称、镜头描述和时长，保留画布连接入口', async () => {
     const request = vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
@@ -224,5 +235,39 @@ describe('作品画布', () => {
     fireEvent.change(screen.getByRole('combobox', { name: '素材类型' }), { target: { value: 'video' } })
     await screen.findByText('没有匹配的素材')
     expect(request).toHaveBeenCalledWith('/assets?q=%E9%9B%A8&page=1&kind=video')
+  })
+  it('助手会把当前选中节点作为可移除的讨论上下文', () => {
+    render(<MediaAssistant token={null} page="canvas" projectId="project" selectedNode={{ id: 'node-1', type: 'note', name: '', text: '雨夜开场', assetId: null }} />)
+    fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
+    expect(screen.getByText('正在讨论 · 雨夜开场')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '移除当前讨论节点' }))
+    expect(screen.queryByText('正在讨论 · 雨夜开场')).not.toBeInTheDocument()
+  })
+  it('助手模型菜单使用供应商标签与统一模型项，并支持点击外部关闭', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      provider: 'openai',
+      models: [{ id: 'gpt-6-sol', name: 'gpt-6-sol', created: null, context_window: 1050000 }],
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    render(<MediaAssistant token="test-token" page="canvas" projectId="project" selectedNode={null} />)
+    fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
+    const trigger = screen.getByRole('button', { name: '选择模型' })
+    await waitFor(() => expect(trigger).toHaveTextContent('OpenAI'))
+    fireEvent.click(trigger)
+    expect(await screen.findByRole('button', { name: '切换到 OpenAI 模型' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /gpt-6-sol\s*1.05M/ })).toBeInTheDocument()
+    fireEvent.pointerDown(screen.getByRole('textbox', { name: '向镜头搭档提问' }))
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  })
+  it('Enter 发送并将用户和助手消息作为 Markdown 展示', async () => {
+    vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })
+    const chat = vi.spyOn(ai, 'streamAiChat').mockImplementation((_token, _request, onChunk) => { onChunk('**助手标记**'); return Promise.resolve() })
+    render(<MediaAssistant token="test-token" page="canvas" projectId="project" selectedNode={null} />)
+    fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
+    const input = screen.getByRole('textbox', { name: '向镜头搭档提问' })
+    fireEvent.change(input, { target: { value: '**用户标记**' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await waitFor(() => expect(chat).toHaveBeenCalledTimes(1))
+    expect(await screen.findByText('用户标记', { selector: 'strong' })).toBeInTheDocument()
+    expect(screen.getByText('助手标记', { selector: 'strong' })).toBeInTheDocument()
   })
 })

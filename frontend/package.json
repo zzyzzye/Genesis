@@ -17,6 +17,7 @@
     "@mdxeditor/editor": "^4.2.3",
     "@xyflow/react": "^12.11.6",
     "lucide-react": "^1.41.0",
+    "motion": "^13.4.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",

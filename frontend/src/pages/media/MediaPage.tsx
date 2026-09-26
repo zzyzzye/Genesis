@@ -6,11 +6,13 @@ import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken } from '../../
 import { api, type Project } from './api'
 import { ProjectCanvas } from './ProjectCanvas'
 import { AccountAssetsPage, ProjectAssetsPage, ProjectOverviewPage } from './ProjectWorkspace'
+import { MediaAssistant, type MediaAssistantNode } from './MediaAssistant'
 
 export function MediaPage() {
   const [user, setUser] = useState<CurrentUser | null>(null)
   const [checking, setChecking] = useState(() => Boolean(getStoredAuthToken()) || import.meta.env.DEV)
   const [authError, setAuthError] = useState('')
+  const [agentNode, setAgentNode] = useState<MediaAssistantNode | null>(null)
   const { projectId } = useParams()
   const location = useLocation()
   useEffect(() => {
@@ -52,10 +54,15 @@ export function MediaPage() {
   }, [])
   if (checking) return <main className="media-gate" role="status">正在打开创作空间…</main>
   if (!user) return <main className="media-gate"><Link to="/">← Genesis</Link><small>YOUR CREATIVE SPACE</small><h1>从一个作品开始。</h1><p>登录后管理你的作品、私有素材与创作画布。</p>{authError && <p role="alert">{authError}</p>}<Link className="media-accent" to={`/account?returnTo=${encodeURIComponent(location.pathname)}`}>登录并继续</Link></main>
-  if (!projectId) return location.pathname.endsWith('/assets') ? <AccountAssetsPage /> : <ProjectList />
-  if (location.pathname.endsWith('/canvas')) return <ProjectCanvas key={`${user.id}:${projectId}`} projectId={projectId} userId={user.id} />
-  if (location.pathname.endsWith('/assets')) return <ProjectAssetsPage projectId={projectId} />
-  return <ProjectOverviewPage projectId={projectId} />
+  const page = location.pathname.endsWith('/canvas') ? 'canvas' : location.pathname.endsWith('/assets') ? 'assets' : projectId ? 'project' : 'projects'
+  const content = !projectId
+    ? (page === 'assets' ? <AccountAssetsPage /> : <ProjectList />)
+    : page === 'canvas'
+      ? <ProjectCanvas key={`${user.id}:${projectId}`} projectId={projectId} userId={user.id} onAgentNodeChange={setAgentNode} />
+      : page === 'assets'
+        ? <ProjectAssetsPage projectId={projectId} />
+        : <ProjectOverviewPage projectId={projectId} />
+  return <>{content}<MediaAssistant token={getStoredAuthToken()} page={page} projectId={projectId} selectedNode={page === 'canvas' ? agentNode : null} /></>
 }
 
 function ProjectList() {

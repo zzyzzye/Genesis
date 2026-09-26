@@ -12,6 +12,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.contracts import AgentActionConfirmation
 from genesis_api.ai.models import AiChatRunStatus
 from genesis_api.ai.schemas import (
@@ -102,6 +103,18 @@ def test_prepare_request_embeds_authenticated_actor_and_studio_context(
             session=pytest.MonkeyPatch(),  # type: ignore[arg-type]
         )
     assert exc_info.value.status_code == 403
+
+
+def test_media_surface_uses_the_read_only_media_capability() -> None:
+    request = AiChatRequest(
+        surface="media", messages=[AiMessage(role="user", content="拆分镜头")]
+    )
+    capability = agent_capabilities.resolve("media", Settings())
+
+    assert request.surface == "media"
+    assert capability.name == "genesis-media-agent"
+    assert capability.tools == []
+    assert "不要声称" in capability.prompt
 
 
 def test_confirm_agent_action_validates_signed_proposals() -> None:

@@ -21,9 +21,10 @@ import {
 } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, ImagePlus, Map as MapIcon, Music2, Play, Shapes, StickyNote, Type, Upload } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, GripVertical, ImagePlus, Map as MapIcon, Music2, Play, Shapes, StickyNote, Type, Upload } from 'lucide-react'
 import { api, type Asset, type Document, type Edge, type Node, type Project, type VideoFrame, upload } from './api'
 import { AssetPreview } from './AssetPreview'
+import type { MediaAssistantNode } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
 import { groupSelection, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
 
@@ -83,7 +84,7 @@ function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
   const videoQuality = Math.min(data.frame.width, data.frame.height)
   return <article className={`media-video-card ${selected ? 'is-selected' : ''}`} aria-label={node.name || '视频节点'}>
     <CanvasResizeCorner id={id} data={data} minWidth={420} minHeight={470} label="调整视频节点大小" />
-    <div className="media-node-grip media-video-grip"><Play size={17} fill="currentColor" aria-hidden="true" /><input className="nodrag" aria-label="视频节点名称" value={node.name ?? ''} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onPatch(id, { name: event.target.value }, false)} /></div>
+    <div className="media-node-grip media-node-drag-handle media-video-grip" title="拖动移动节点"><Play size={17} fill="currentColor" aria-hidden="true" /><input className="nodrag" aria-label="视频节点名称" value={node.name ?? ''} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onPatch(id, { name: event.target.value }, false)} /><GripVertical className="media-node-drag-mark" size={16} aria-hidden="true" /></div>
     <div className="media-video-preview-shell">
       <Handle type="target" position={Position.Left} aria-label="连接上一个视频节点" title="点击新建上一段，或拖动连接已有节点" onClick={(event) => { event.stopPropagation(); data.onAddConnected(id, 'left') }} />
       <div className="media-video-screen nodrag nowheel nopan" style={{ aspectRatio: `${data.frame.width} / ${data.frame.height}` }}>
@@ -122,7 +123,7 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
   >
     <CanvasResizeCorner id={id} data={data} minWidth={100} minHeight={80} label="调整节点大小" />
     {!isGroup && <Handle type="target" position={Position.Left} aria-label="输入连接点" />}
-    <div className="media-node-grip">{isGroup ? <><span>分组 · {data.source.member_ids?.length ?? 0} 个节点</span><input className="nodrag" aria-label="分组名称" value={data.source.text} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} /></> : label}</div>
+    <div className="media-node-grip media-node-drag-handle" title="拖动移动节点">{isGroup ? <><span>分组 · {data.source.member_ids?.length ?? 0} 个节点</span><input className="nodrag" aria-label="分组名称" value={data.source.text} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} /></> : <span>{label}</span>}<GripVertical className="media-node-drag-mark" size={16} aria-hidden="true" /></div>
     {isShape && !data.source.text.trim() && !editingEmptyShape
       ? <div className="media-shape-convert nodrag nowheel nopan"><span>这是旧的形状节点</span><button onClick={() => data.onConvertToVideo(id)}>改为视频节点</button><button className="media-shape-edit" onClick={() => setEditingEmptyShape(true)}>保留形状并编辑文字</button></div>
       : isNote || isText || isShape
@@ -142,13 +143,6 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
 }
 
 const nodeTypes = { asset: CanvasNodeView, note: CanvasNodeView, text: CanvasNodeView, shape: CanvasNodeView, group: CanvasNodeView, video: VideoNodeView }
-const framePresets = [
-  { label: '横屏 16:9', width: 1920, height: 1080 },
-  { label: '竖屏 9:16', width: 1080, height: 1920 },
-  { label: '方形 1:1', width: 1080, height: 1080 },
-  { label: '社媒 4:5', width: 1080, height: 1350 },
-] as const
-
 function documentNode(flowNode: CanvasFlowNode): Node {
   return {
     ...flowNode.data.source,
@@ -159,7 +153,7 @@ function documentNode(flowNode: CanvasFlowNode): Node {
   }
 }
 
-export function ProjectCanvas({ projectId, userId }: { projectId: string; userId: string }) {
+export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projectId: string; userId: string; onAgentNodeChange?: (node: MediaAssistantNode | null) => void }) {
   const navigate = useNavigate()
   const location = useLocation()
   const canvas = useCanvas(projectId, userId)
@@ -171,9 +165,6 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
   const [menu, setMenu] = useState(false)
   const [nodeMenu, setNodeMenu] = useState(false)
   const [showMiniMap, setShowMiniMap] = useState(false)
-  const [frameMenu, setFrameMenu] = useState(false)
-  const [frameWidth, setFrameWidth] = useState('1920')
-  const [frameHeight, setFrameHeight] = useState('1080')
   const [draggingFile, setDraggingFile] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [previewRetry, setPreviewRetry] = useState<{ id: string; file: File } | null>(null)
@@ -181,11 +172,33 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
   const [error, setError] = useState('')
   const [flow, setFlow] = useState<ReactFlowInstance<CanvasFlowNode> | null>(null)
   const canvasElement = useRef<HTMLDivElement>(null)
+  const nodeMenuElement = useRef<HTMLDivElement>(null)
+  const nodeMenuTrigger = useRef<HTMLButtonElement>(null)
   const interactionActive = useRef(false)
   const viewportActive = useRef(false)
   const importedFromLibrary = useRef<string | null>(null)
   const clipboard = useRef<{ projectId: string; nodes: Node[]; edges: Edge[] } | null>(null)
   const pasteCount = useRef(0)
+
+  useEffect(() => {
+    if (!nodeMenu) return
+    const dismiss = (event: PointerEvent) => {
+      const target = event.target as globalThis.Node
+      if (nodeMenuElement.current?.contains(target) || nodeMenuTrigger.current?.contains(target)) return
+      setNodeMenu(false)
+    }
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setNodeMenu(false)
+      nodeMenuTrigger.current?.focus()
+    }
+    document.addEventListener('pointerdown', dismiss)
+    document.addEventListener('keydown', dismissOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', dismiss)
+      document.removeEventListener('keydown', dismissOnEscape)
+    }
+  }, [nodeMenu])
 
   const beginInteraction = useCallback(() => {
     if (interactionActive.current) return
@@ -231,6 +244,19 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
   }, [patchNode, projectId])
 
   const previewAssets = useMemo(() => Object.values(assets).filter((asset) => asset.kind !== 'audio'), [assets])
+
+  useEffect(() => {
+    const selectedNode = selected.length === 1 ? canvas.document.nodes.find((node) => node.id === selected[0]) : undefined
+    onAgentNodeChange?.(selectedNode ? {
+      id: selectedNode.id,
+      type: selectedNode.type,
+      name: selectedNode.name ?? '',
+      text: selectedNode.text,
+      assetId: selectedNode.asset_id,
+    } : null)
+  }, [canvas.document.nodes, onAgentNodeChange, selected])
+
+  useEffect(() => () => onAgentNodeChange?.(null), [onAgentNodeChange])
 
   const fittedViewport = useCallback((document: Document) => {
     const nodes = document.nodes
@@ -292,7 +318,7 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
     ] : undefined,
     selected: selected.includes(node.id),
     zIndex: node.type === 'group' ? -1 : 1,
-    dragHandle: '.media-node-grip',
+    dragHandle: '.media-node-drag-handle',
     ariaLabel: node.type === 'video' ? node.name || '视频节点' : node.type === 'note' ? '文字便签' : node.type === 'text' ? '文字节点' : node.type === 'shape' ? '形状节点' : node.type === 'group' ? node.text || '分组' : assets[node.asset_id ?? '']?.name ?? '素材不可用',
     data: {
       source: node,
@@ -407,7 +433,7 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       const element = event.target as HTMLElement
-      if (event.key === 'Escape') { setMenu(false); setNodeMenu(false); setFrameMenu(false); setSelected([]); setSelectedEdges([]) }
+      if (event.key === 'Escape') { setMenu(false); setNodeMenu(false); setSelected([]); setSelectedEdges([]) }
       if (element.closest('input,textarea,select,button,a,video,audio,[role="dialog"]')) return
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelection() }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') { event.preventDefault(); pasteSelection() }
@@ -550,18 +576,6 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
     if (viewport) canvas.apply({ ...current, viewport })
   }
 
-  function applyFrame(frame: VideoFrame) {
-    if (!Number.isInteger(frame.width) || !Number.isInteger(frame.height) || frame.width < 256 || frame.height < 256 || frame.width > 8192 || frame.height > 8192) {
-      setError('画幅宽高必须是 256–8192 之间的整数像素。')
-      return
-    }
-    const next = { ...canvas.current.current, frame }
-    canvas.apply(next)
-    setFrameWidth(String(frame.width))
-    setFrameHeight(String(frame.height))
-    setError('')
-  }
-
   useEffect(() => {
     let width = window.innerWidth
     let timer: number | undefined
@@ -586,7 +600,6 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
   const viewport = canvas.document.viewport
   return <main className="media-editor">
     <div className="media-project-menu"><div className="media-project-controls"><button className="media-project-back" aria-label="返回作品页" title="返回作品页" onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}`) })}><ArrowLeft size={17} /></button><button className="media-project-trigger" aria-expanded={menu} aria-label="作品菜单" onClick={() => { setMenu(!menu); setNodeMenu(false) }}><span className="media-project-name">{project?.name ?? '作品'}</span><ChevronDown size={15} /></button></div>{menu && <div className="media-menu-content"><p role="status">{canvas.status}</p><label className="media-background-setting">画布背景<select aria-label="画布背景" value={canvas.document.background} onChange={(event) => canvas.apply({ ...canvas.current.current, background: event.target.value as Document['background'] })}><option value="dots">点阵</option><option value="lines">网格</option><option value="none">纯色</option></select></label><button onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}/assets`) })}>作品素材库</button><button onClick={() => { const name = window.prompt('作品名称', project?.name); if (name?.trim()) void action(async () => { setProject(await api<Project>(`/projects/${projectId}`, 'PATCH', { name })) }) }}>重命名作品</button><button onClick={() => void action(canvas.save)}>立即保存 / 重试</button></div>}</div>
-    <div className="media-frame-control"><button className="media-frame-trigger" aria-expanded={frameMenu} aria-label="视频画幅设置" disabled={!canvas.ready} onClick={() => { if (!frameMenu) { setFrameWidth(String(canvas.document.frame.width)); setFrameHeight(String(canvas.document.frame.height)) }; setFrameMenu(!frameMenu); setMenu(false); setNodeMenu(false) }}>视频规格 <strong>{canvas.document.frame.width} × {canvas.document.frame.height}</strong><ChevronDown size={14} /></button>{frameMenu && <section className="media-frame-panel" role="dialog" aria-label="视频画幅设置"><div className="media-frame-panel-heading"><strong>视频规格</strong><button aria-label="关闭画幅设置" onClick={() => setFrameMenu(false)}>×</button></div><p>设定视频节点的预览比例与标注尺寸，不影响素材文件。</p><div className="media-frame-presets">{framePresets.map((preset) => <button key={preset.label} aria-pressed={canvas.document.frame.width === preset.width && canvas.document.frame.height === preset.height} onClick={() => applyFrame(preset)}>{preset.label}</button>)}</div><form onSubmit={(event) => { event.preventDefault(); applyFrame({ width: Number(frameWidth), height: Number(frameHeight) }) }}><div className="media-frame-dimensions"><label>宽度 · px<input aria-label="画幅宽度" type="number" min="256" max="8192" step="1" value={frameWidth} onChange={(event) => setFrameWidth(event.target.value)} /></label><span>×</span><label>高度 · px<input aria-label="画幅高度" type="number" min="256" max="8192" step="1" value={frameHeight} onChange={(event) => setFrameHeight(event.target.value)} /></label></div><button className="media-accent" type="submit">应用尺寸</button></form><button className="media-frame-fit" onClick={fit}>适应全部节点</button></section>}</div>
     {(error || canvas.status.startsWith('保存失败') || canvas.conflict || !canvas.ready) && <div className="media-editor-notice" role="status">{error || canvas.status}{previewRetry && error.startsWith('预览素材导入失败') ? <button onClick={() => void uploadPreview(previewRetry.id, previewRetry.file)}>重试上传</button> : <button onClick={() => void action(canvas.ready ? canvas.save : () => canvas.load(true))}>重试</button>}{canvas.conflict && <><button onClick={() => { if (window.confirm('放弃本地修改并加载服务器版本？')) void action(() => canvas.load()) }}>重新加载</button><button onClick={() => void action(fork)}>保留为新作品</button></>}<button onClick={() => void navigate(`/media/projects/${projectId}`)}>作品页</button></div>}
     <div ref={canvasElement} className={`media-canvas ${draggingFile ? 'is-file-over' : ''}`} aria-label="作品无限画布" onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setDraggingFile(true) } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as globalThis.Node | null)) setDraggingFile(false) }} onDrop={(event) => void importFiles(event)}>
       {canvas.ready && <ReactFlow<CanvasFlowNode>
@@ -619,20 +632,22 @@ export function ProjectCanvas({ projectId, userId }: { projectId: string; userId
       >{canvas.document.background !== 'none' && <Background variant={canvas.document.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots} color="#3a444b" gap={24} size={1} />}{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#101116cc" nodeColor={(node) => node.type === 'video' ? '#7b8a92' : node.type === 'shape' ? '#8298a3' : node.type === 'note' ? '#758992' : '#687981'} />}</ReactFlow>}
       {draggingFile && <div className="media-canvas-drop" aria-hidden="true">松开鼠标，将素材放入画布</div>}
       {uploadProgress !== null && <div className="media-canvas-upload" role="status">正在导入素材 · {uploadProgress}%</div>}
-      {canvas.ready && canvas.document.nodes.length === 0 && !frameMenu && !nodeMenu && <div className="media-canvas-empty"><small>视频创作空间</small><h1>从第一个镜头开始。</h1><p>创建视频节点，添加素材、描述画面，再连接下一段。</p><div className="media-canvas-empty-actions"><button className="media-accent" onClick={() => addNode('video')}>＋ 添加视频节点</button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>打开作品素材库</button></div></div>}
+      {canvas.ready && canvas.document.nodes.length === 0 && !nodeMenu && <div className="media-canvas-empty"><small>视频创作空间</small><h1>从第一个镜头开始。</h1><p>创建视频节点，添加素材、描述画面，再连接下一段。</p><div className="media-canvas-empty-actions"><button className="media-accent" onClick={() => addNode('video')}>＋ 添加视频节点</button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>打开作品素材库</button></div></div>}
     </div>
-    {nodeMenu && <div className="media-node-palette" role="dialog" aria-label="添加节点">
-      <div className="media-node-palette-heading"><strong>添加节点</strong><button aria-label="关闭节点菜单" onClick={() => setNodeMenu(false)}>×</button></div>
-      <button onClick={() => addNode('text')}><Type /><span>文本</span></button>
-      <button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><ImagePlus /><span>图片</span></button>
-      <button onClick={() => addNode('video')}><Film /><span>视频</span></button>
-      <button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><Music2 /><span>音频</span></button>
-      <button onClick={() => addNode('note')}><StickyNote /><span>便签</span></button>
-      <button onClick={() => addNode('shape')}><Shapes /><span>形状</span></button>
+    {nodeMenu && <div ref={nodeMenuElement} id="media-node-palette" className="media-node-palette" role="dialog" aria-label="添加节点">
+      <div className="media-node-palette-heading"><strong>添加节点</strong><button type="button" aria-label="关闭节点菜单" onClick={() => setNodeMenu(false)}>×</button></div>
+      <div className="media-node-palette-grid">
+        <button type="button" onClick={() => addNode('text')}><Type /><span>文本</span></button>
+        <button type="button" onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><ImagePlus /><span>图片</span></button>
+        <button type="button" onClick={() => addNode('video')}><Film /><span>视频</span></button>
+        <button type="button" onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><Music2 /><span>音频</span></button>
+        <button type="button" onClick={() => addNode('note')}><StickyNote /><span>便签</span></button>
+        <button type="button" onClick={() => addNode('shape')}><Shapes /><span>形状</span></button>
+      </div>
       <div className="media-node-palette-separator">添加资源</div>
-      <button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><Upload /><span>上传或从素材库选择</span></button>
+      <button className="media-node-palette-resource" type="button" onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><Upload /><span>上传或从素材库选择</span></button>
     </div>}
     {(selected.filter((id) => canvas.document.nodes.some((node) => node.id === id && node.type !== 'group')).length >= 2 || selected.some((id) => canvas.document.nodes.some((node) => node.id === id && node.type === 'group'))) && <div className="media-canvas-selection-actions"><span>已选 {selected.length} 个节点</span><button onClick={groupSelected} disabled={selected.filter((id) => canvas.document.nodes.some((node) => node.id === id && node.type !== 'group')).length < 2}>编组</button><button onClick={ungroupSelected} disabled={!selected.some((id) => canvas.document.nodes.some((node) => node.id === id && node.type === 'group'))}>取消编组</button></div>}
-    <div className="media-canvas-toolbar" role="toolbar" aria-label="创作工具"><button className="media-add-node-button" aria-expanded={nodeMenu} disabled={!canvas.ready} onClick={() => { setNodeMenu(!nodeMenu); setMenu(false) }}>＋ 添加节点</button><button disabled={!canvas.ready} onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>素材库</button><button aria-pressed={tool === 'pan'} onClick={() => setTool(tool === 'pan' ? 'select' : 'pan')}>{tool === 'pan' ? '平移' : '选择'}</button><button aria-label="复制节点" title="复制节点 ⌘/Ctrl+C" disabled={!selected.length} onClick={copySelection}><Copy size={16} /></button><button aria-label="粘贴节点" title="粘贴节点 ⌘/Ctrl+V" disabled={clipboardProjectId !== projectId} onClick={pasteSelection}><ClipboardPaste size={16} /></button><button aria-label="撤销" onClick={canvas.undo}>↶</button><button aria-label="重做" onClick={canvas.redo}>↷</button><button disabled={!selected.length && !selectedEdges.length} onClick={removeSelected}>移除</button><button aria-label="切换小地图" aria-pressed={showMiniMap} title="小地图" onClick={() => setShowMiniMap(!showMiniMap)}><MapIcon size={16} /></button><button aria-label="缩小画布" onClick={() => zoom(1 / 1.2)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" onClick={() => zoom(1.2)}>＋</button><button onClick={fit}>适应全部</button></div>
+    <div className="media-canvas-toolbar" role="toolbar" aria-label="创作工具"><button ref={nodeMenuTrigger} className="media-add-node-button" aria-controls="media-node-palette" aria-expanded={nodeMenu} disabled={!canvas.ready} onClick={() => { setNodeMenu(!nodeMenu); setMenu(false) }}>＋ 添加节点</button><button disabled={!canvas.ready} onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>素材库</button><button aria-pressed={tool === 'pan'} onClick={() => setTool(tool === 'pan' ? 'select' : 'pan')}>{tool === 'pan' ? '平移' : '选择'}</button><button aria-label="复制节点" title="复制节点 ⌘/Ctrl+C" disabled={!selected.length} onClick={copySelection}><Copy size={16} /></button><button aria-label="粘贴节点" title="粘贴节点 ⌘/Ctrl+V" disabled={clipboardProjectId !== projectId} onClick={pasteSelection}><ClipboardPaste size={16} /></button><button aria-label="撤销" onClick={canvas.undo}>↶</button><button aria-label="重做" onClick={canvas.redo}>↷</button><button disabled={!selected.length && !selectedEdges.length} onClick={removeSelected}>移除</button><button aria-label="切换小地图" aria-pressed={showMiniMap} title="小地图" onClick={() => setShowMiniMap(!showMiniMap)}><MapIcon size={16} /></button><button aria-label="缩小画布" onClick={() => zoom(1 / 1.2)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" onClick={() => zoom(1.2)}>＋</button><button onClick={fit}>适应全部</button></div>
   </main>
 }
