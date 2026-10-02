@@ -33,6 +33,11 @@ export function MediaAssistant({ token, page, projectId, selectedNode }: {
   selectedNode: MediaAssistantNode | null
 }) {
   const [open, setOpen] = useState(false)
+  useEffect(() => {
+    const openAssistant = () => setOpen(true)
+    window.addEventListener('genesis:open-media-assistant', openAssistant)
+    return () => window.removeEventListener('genesis:open-media-assistant', openAssistant)
+  }, [])
   const [messages, setMessages] = useState<AiChatMessage[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)

@@ -236,6 +236,17 @@ describe('作品画布', () => {
     await screen.findByText('没有匹配的素材')
     expect(request).toHaveBeenCalledWith('/assets?q=%E9%9B%A8&page=1&kind=video')
   })
+  it('独立素材页切换分类与范围时保留搜索条件', async () => {
+    const request = vi.spyOn(media, 'api').mockResolvedValue({ items: [], total: 0 })
+    render(<AssetLibrary projectId="project" presentation="page" onClose={() => undefined} />)
+    fireEvent.change(screen.getByRole('textbox', { name: '搜索素材' }), { target: { value: '雨' } })
+    fireEvent.click(screen.getByRole('button', { name: /^视频$/ }))
+    await waitFor(() => expect(request).toHaveBeenCalledWith('/projects/project/assets?q=%E9%9B%A8&page=1&kind=video'))
+    fireEvent.click(screen.getByRole('button', { name: /^账户素材$/ }))
+    await waitFor(() => expect(request).toHaveBeenCalledWith('/assets?q=%E9%9B%A8&page=1&kind=video'))
+    expect(screen.getByRole('button', { name: /^视频$/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '＋ 导入账户素材' })).toBeInTheDocument()
+  })
   it('助手会把当前选中节点作为可移除的讨论上下文', () => {
     render(<MediaAssistant token={null} page="canvas" projectId="project" selectedNode={{ id: 'node-1', type: 'note', name: '', text: '雨夜开场', assetId: null }} />)
     fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))

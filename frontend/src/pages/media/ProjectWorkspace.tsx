@@ -2,6 +2,29 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, type Project } from './api'
 import { AssetLibrary } from './AssetLibrary'
+import { ArrowLeft, FolderOpen, House, Layers3, Menu, X } from 'lucide-react'
+import type { ReactNode } from 'react'
+import './MediaHome.css'
+import './MediaAssets.css'
+
+function AssetsLayout({ children, projectId }: { children: ReactNode; projectId?: string }) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', close)
+    return () => document.removeEventListener('keydown', close)
+  }, [open])
+  return <div className="media-home media-assets-shell">
+    <aside className={`media-home-sidebar${open ? ' is-open' : ''}`} aria-label="影音导航">
+      <Link className="media-home-brand" to="/"><Layers3 />Genesis<span className="media-home-brand-label">STUDIO</span></Link>
+      <nav aria-label="创作空间"><Link to="/media"><House />首页</Link><Link to="/media?view=projects"><FolderOpen />项目</Link><Link to="/media/assets" aria-current={!projectId ? 'page' : undefined}><Layers3 />账户素材库</Link>{projectId && <Link to={`/media/projects/${projectId}/assets`} aria-current="page"><FolderOpen />作品素材库</Link>}</nav>
+      <div className="media-home-sidebar-bottom"><Link to="/media"><ArrowLeft />返回影音</Link></div>
+    </aside>
+    {open && <button className="media-home-nav-scrim" aria-label="收起导航" onClick={() => setOpen(false)} />}
+    <main className="media-project-workspace media-assets-workspace"><button className="media-assets-nav-toggle" aria-label={open ? '收起导航' : '展开导航'} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X /> : <Menu />}</button>{children}</main>
+  </div>
+}
 
 export function ProjectOverviewPage({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null>(null)
@@ -48,12 +71,12 @@ export function ProjectOverviewPage({ projectId }: { projectId: string }) {
 
 export function AccountAssetsPage() {
   const navigate = useNavigate()
-  return <main className="media-project-workspace media-assets-workspace">
+  return <AssetsLayout>
     <header className="media-assets-page-heading">
-      <div><Link className="media-back" to="/media">← 返回影音</Link><small>ACCOUNT MATERIALS</small><h1>账户素材库</h1><p>这里的素材可以在不同作品中重复使用。</p></div>
+      <div><h1>账户素材库</h1><p>可在不同作品中重复使用的素材</p></div>
     </header>
     <AssetLibrary presentation="page" onClose={() => { void navigate('/media') }} />
-  </main>
+  </AssetsLayout>
 }
 
 export function ProjectAssetsPage({ projectId }: { projectId: string }) {
@@ -71,9 +94,9 @@ export function ProjectAssetsPage({ projectId }: { projectId: string }) {
     return () => { active = false }
   }, [projectId])
 
-  return <main className="media-project-workspace media-assets-workspace">
+  return <AssetsLayout projectId={projectId}>
     <header className="media-assets-page-heading">
-      <div><Link className="media-back" to={`/media/projects/${projectId}`}>← 返回作品</Link><small>PROJECT MATERIALS</small><h1>作品素材库</h1><p><strong>{project?.name ?? (error ? '无法打开作品素材库' : '正在加载作品…')}</strong><br />上传的文件归当前作品所有。账户素材会以引用方式加入，不会重复上传。</p></div>
+      <div><Link className="media-back" to={`/media/projects/${projectId}`}>← 返回作品</Link><h1>作品素材库</h1><p>{project?.name ?? (error ? '无法打开作品素材库' : '正在加载作品…')}</p></div>
       <Link className="media-accent" to={`/media/projects/${projectId}/canvas`}>进入画布 <span aria-hidden="true">↗</span></Link>
     </header>
     {error ? <p role="alert" className="media-error">{error}</p> : project ? <AssetLibrary
@@ -85,5 +108,5 @@ export function ProjectAssetsPage({ projectId }: { projectId: string }) {
         await navigate(`/media/projects/${projectId}/canvas?addAsset=${encodeURIComponent(asset.id)}`)
       }}
     /> : <p role="status">正在加载作品素材…</p>}
-  </main>
+  </AssetsLayout>
 }

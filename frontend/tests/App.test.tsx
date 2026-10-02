@@ -153,11 +153,11 @@ describe('App', () => {
     window.history.pushState({}, '', '/media')
     render(<App />)
 
-    expect(await screen.findByRole('heading', { name: '还没有作品' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '还没有项目，先开启一个新故事' })).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: '主导航' })).not.toBeInTheDocument()
     expect(window.localStorage.getItem('genesis-account-token')).toBe('dev-token')
     expect(screen.queryByRole('link', { name: '登录并继续' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '账户素材库 ↗' }))
+    fireEvent.click(screen.getByRole('link', { name: '账户素材库' }))
     expect(await screen.findByRole('heading', { name: '账户素材库' })).toBeInTheDocument()
     expect(await screen.findByText('素材库还是空的')).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: '素材库' })).not.toBeInTheDocument()
