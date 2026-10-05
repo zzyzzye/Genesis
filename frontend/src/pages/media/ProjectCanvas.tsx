@@ -4,6 +4,7 @@ import './CanvasNodes.css'
 import {
   Background,
   BackgroundVariant,
+  ConnectionLineType,
   Handle,
   MiniMap,
   Position,
@@ -11,7 +12,6 @@ import {
   SelectionMode,
   applyEdgeChanges,
   applyNodeChanges,
-  useUpdateNodeInternals,
   type Connection,
   type Edge as FlowEdge,
   type EdgeChange,
@@ -96,17 +96,6 @@ function CanvasResizeCorner({ id, data, minWidth, minHeight, label }: { id: stri
 
 function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
   const node = data.source
-  const previewShell = useRef<HTMLDivElement>(null)
-  const updateNodeInternals = useUpdateNodeInternals()
-  useEffect(() => {
-    const shell = previewShell.current
-    if (!shell) return
-    // 参数和参考列表会改变预览高度，但节点外框不变；重新测量实际连接点。
-    const observer = new ResizeObserver(() => updateNodeInternals(id))
-    observer.observe(shell)
-    updateNodeInternals(id)
-    return () => observer.disconnect()
-  }, [id, updateNodeInternals])
   const preview = data.asset && data.asset.kind !== 'audio' ? data.asset : null
   const fileInput = useRef<HTMLInputElement>(null)
   const appendPromptToken = (token: string) => data.onTextChange(id, `${node.text}${node.text ? ' ' : ''}${token}`)
@@ -116,14 +105,16 @@ function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
   const settings = node.generation ?? defaultGenerationSettings()
   const patchSettings = (patch: Partial<typeof settings>) => data.onPatch(id, { generation: { ...settings, ...patch } })
   return <article className={`media-video-card ${selected ? 'is-selected' : ''}`} aria-label={node.name || '视频节点'}>
+    <Handle type="target" position={Position.Left} aria-label="视频节点输入连接点" />
+    <Handle type="source" position={Position.Right} aria-label="视频节点输出连接点" />
     <CanvasResizeCorner id={id} data={data} minWidth={420} minHeight={470} label="调整视频节点大小" />
     <div className="media-node-grip media-node-drag-handle media-video-grip" title="拖动移动节点"><Play size={17} fill="currentColor" aria-hidden="true" /><input className="nodrag" aria-label="视频节点名称" value={node.name ?? ''} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onPatch(id, { name: event.target.value }, false)} /><GripVertical className="media-node-drag-mark" size={16} aria-hidden="true" /></div>
-    <div ref={previewShell} className="media-video-preview-shell">
-      <Handle type="target" position={Position.Left} aria-label="连接上一个视频节点" title="点击新建上一段，或拖动连接已有节点" onClick={(event) => { event.stopPropagation(); data.onAddConnected(id, 'left') }} />
+    <div className="media-video-preview-shell">
+      <button type="button" className="media-video-add-segment nodrag nopan is-previous" aria-label="新增上一段视频" title="新增上一段视频" onClick={() => data.onAddConnected(id, 'left')}>+</button>
       <div className="media-video-screen nodrag nowheel nopan" style={{ aspectRatio: `${data.frame.width} / ${data.frame.height}` }}>
         {preview ? <AssetPreview asset={preview} controls /> : node.asset_id && data.assetsLoading ? <div role="status">正在加载预览素材…</div> : <div className="media-video-placeholder"><Play size={54} fill="currentColor" strokeWidth={0} aria-hidden="true" /><span>从素材开始这一段</span><div><button type="button" onClick={() => fileInput.current?.click()}>导入预览素材</button><button type="button" onClick={() => data.onOpenNodeAssets(id, 'video')}>选择作品素材</button></div></div>}
       </div>
-      <Handle type="source" position={Position.Right} aria-label="连接下一个视频节点" title="点击新建下一段，或拖动连接已有节点" onClick={(event) => { event.stopPropagation(); data.onAddConnected(id, 'right') }} />
+      <button type="button" className="media-video-add-segment nodrag nopan is-next" aria-label="新增下一段视频" title="新增下一段视频" onClick={() => data.onAddConnected(id, 'right')}>+</button>
     </div>
     <section className="media-video-composer nodrag nowheel nopan" aria-label="镜头草稿">
       <div className="media-video-composer-top">
@@ -433,8 +424,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     position: { x: node.x, y: node.y },
     width: node.width,
     height: node.height,
-    // 视频连接点随预览区变化，不能用固定坐标覆盖 DOM 测量结果。
-    handles: node.type !== 'video' && node.type !== 'group' ? [
+    handles: node.type !== 'group' ? [
       { type: 'target', position: Position.Left, x: -4, y: node.height / 2 - 4, width: 8, height: 8 },
       { type: 'source', position: Position.Right, x: node.width - 4, y: node.height / 2 - 4, width: 8, height: 8 },
     ] : undefined,
@@ -467,7 +457,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
 
   const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
     ...edge,
-    type: 'smoothstep',
+    type: 'default',
     selected: selectedEdges.includes(edge.id),
     style: { stroke: selectedEdges.includes(edge.id) ? '#b7c8ce' : '#73828a', strokeWidth: selectedEdges.includes(edge.id) ? 2 : 1.5 },
   })), [canvas.document.edges, selectedEdges])
@@ -808,6 +798,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       {canvas.ready && <ReactFlow<CanvasFlowNode>
         nodes={flowNodes}
         edges={flowEdges}
+        connectionLineType={ConnectionLineType.Bezier}
         nodeTypes={nodeTypes}
         viewport={viewport}
         minZoom={.02}
