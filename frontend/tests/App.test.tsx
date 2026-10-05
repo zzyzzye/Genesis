@@ -172,7 +172,7 @@ describe('App', () => {
       updated_at: '2026-09-05T00:00:00Z',
     }))
 
-    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
       if (url.endsWith('/auth/login')) {
         return Promise.resolve(new Response(JSON.stringify({ access_token: 'test-token', token_type: 'bearer' }), {
@@ -191,6 +191,10 @@ describe('App', () => {
         }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
       }
       if (url.endsWith('/admin/blog/tags')) {
+        if (init?.method === 'POST') {
+          const data = JSON.parse(typeof init.body === 'string' ? init.body : '{}') as { name: string; slug: string }
+          return Promise.resolve(new Response(JSON.stringify({ id: 'tag-created', ...data }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
+        }
         return Promise.resolve(new Response(JSON.stringify([{ id: 'tag-1', name: '工程', slug: 'engineering' }]), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -255,8 +259,12 @@ describe('App', () => {
     expect(screen.getByRole('textbox', { name: '文章标题' })).toHaveValue('从一个完整模块开始')
     fireEvent.click(screen.getByRole('button', { name: '打开文章设置' }))
     expect(screen.getByRole('dialog', { name: '文章设置' })).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: '文章分类' })).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: '选择已有标签' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '搜索或新建分类' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: '搜索或新建标签' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('搜索或新建标签'), { target: { value: 'AI / 中文' } })
+    fireEvent.keyDown(screen.getByLabelText('搜索或新建标签'), { key: 'Enter' })
+    expect(await screen.findByRole('button', { name: '移除标签 AI / 中文' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByLabelText('搜索或新建标签')).toHaveValue(''))
     fireEvent.click(screen.getByRole('button', { name: '关闭文章设置' }))
     expect(screen.queryByRole('dialog', { name: '文章设置' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '预览' }))

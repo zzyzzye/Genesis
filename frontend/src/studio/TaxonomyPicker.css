@@ -1,0 +1,21 @@
+.taxonomy-picker { display:grid; gap:9px; min-width:0; }
+.taxonomy-picker__heading { display:flex; align-items:center; justify-content:space-between; }
+.taxonomy-picker__heading h3 { margin:0; font-size:13px; font-weight:600; }
+.taxonomy-picker__heading>span { color:#777; font-size:11px; }
+.taxonomy-picker button { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:30px; max-width:100%; padding:5px 10px; border:0; outline:0; box-shadow:none; border-radius:6px; background:#f0f1f2; color:#444; font:inherit; font-size:12px; cursor:pointer; overflow-wrap:anywhere; }
+.taxonomy-picker button:hover:not(:disabled),.taxonomy-picker button:focus-visible { background:#e5e7e9; }
+.taxonomy-picker button:disabled { cursor:not-allowed; opacity:.45; }
+.taxonomy-picker button[aria-pressed=true],.taxonomy-picker__selected button { background:#e8ecef; color:#172236; }
+.taxonomy-picker svg { width:13px; height:13px; flex-shrink:0; }
+.taxonomy-picker__selected { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:30px; }
+.taxonomy-picker__selected>span { color:#888; font-size:12px; }
+.taxonomy-picker__input { display:flex; align-items:center; gap:8px; min-width:0; padding:9px 11px; border-radius:6px; background:#f0f1f2; color:#888; }
+.taxonomy-picker__input input { flex:1; min-width:0; width:100%; padding:0; border:0; outline:0; box-shadow:none; background:transparent; color:#222; font:inherit; font-size:12px; }
+.taxonomy-picker__input input:focus { border:0; outline:0; box-shadow:none; background:transparent; }
+.taxonomy-picker__input button { min-height:20px; padding:0; }
+.taxonomy-picker__choices { display:flex; flex-wrap:wrap; gap:6px; max-height:140px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#bbb transparent; }
+.taxonomy-picker__choices>span { color:#888; font-size:12px; }
+.taxonomy-picker .taxonomy-picker__new { background:transparent; color:#172236; }
+.taxonomy-picker__feedback { min-height:18px; font-size:11px; line-height:1.6; }
+.taxonomy-picker__feedback p { margin:0; }
+.taxonomy-picker__feedback [role=alert] { color:#a13a2c; }

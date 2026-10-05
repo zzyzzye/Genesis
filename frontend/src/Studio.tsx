@@ -54,6 +54,9 @@ import type { StudioSection } from './studio/StudioNavigationModel'
 import { BlogAssistant } from './features/blog/agent/BlogAssistant'
 import { StudioOverview } from './studio/StudioOverview'
 import { TaxonomyWorkspace } from './studio/TaxonomyWorkspace'
+import { TaxonomyPicker } from './studio/TaxonomyPicker'
+import { createTaxonomy, type ArticleTaxonomyActions, type TaxonomyKind } from './studio/taxonomy'
+import { useModalDialog } from './studio/useModalDialog'
 
 import {
   createAdminBlogPost,
@@ -425,6 +428,8 @@ function PostSettingsModal({
   onDelete,
   onSave,
   tags,
+  onCreateTaxonomy,
+  onSelectTaxonomy,
 }: {
   categories: BlogCategory[]
   editor: EditorState
@@ -435,19 +440,11 @@ function PostSettingsModal({
   onDelete: () => void
   onSave: (status: BlogPostStatus) => void
   tags: BlogTag[]
-}) {
-  const [tagToAdd, setTagToAdd] = useState('')
-  const selectedTags = tags.filter((tag) => editor.selectedTagSlugs.includes(tag.slug))
-  const availableTags = tags.filter((tag) => !editor.selectedTagSlugs.includes(tag.slug))
-
-  function addTag() {
-    if (!tagToAdd || editor.selectedTagSlugs.includes(tagToAdd)) return
-    onChange({ ...editor, selectedTagSlugs: [...editor.selectedTagSlugs, tagToAdd] })
-    setTagToAdd('')
-  }
+} & ArticleTaxonomyActions) {
+  const dialogRef = useModalDialog()
 
   return (
-    <div className="markdown-settings-modal" role="dialog" aria-modal="true" aria-labelledby="markdown-settings-title">
+    <dialog ref={dialogRef} className="markdown-settings-modal" aria-labelledby="markdown-settings-title" onCancel={(event) => { event.preventDefault(); if (!isSaving) onClose() }} onClick={(event) => { if (!isSaving && event.target === event.currentTarget) onClose() }}>
       <section className="markdown-settings-modal__surface">
         <header className="markdown-settings-modal__header">
           <div>
@@ -457,40 +454,23 @@ function PostSettingsModal({
           <button className="markdown-settings-modal__close" type="button" aria-label="关闭文章设置" onClick={onClose}><StudioIcon name="close" /></button>
         </header>
         <div className="markdown-settings-modal__body">
+          <div className="settings-taxonomy-grid">
+            <TaxonomyPicker kind="categories" items={categories} selected={editor.categoryId ? [editor.categoryId] : []} onSelect={(item) => onSelectTaxonomy('categories', item)} onCreate={(name) => onCreateTaxonomy('categories', name)} disabled={isSaving} />
+            <TaxonomyPicker kind="tags" items={tags} selected={tags.filter((tag) => editor.selectedTagSlugs.includes(tag.slug)).map((tag) => tag.id)} onSelect={(item) => onSelectTaxonomy('tags', item)} onCreate={(name) => onCreateTaxonomy('tags', name)} disabled={isSaving} />
+          </div>
           <div className="settings-fields-grid">
-            <label className="settings-field" htmlFor="settings-category">
-              分类
-              <select id="settings-category" aria-label="文章分类" value={editor.categoryId ?? ''} onChange={(event) => onChange({ ...editor, categoryId: event.currentTarget.value || null })}>
-                <option value="">暂不分类</option>
-                {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-              </select>
-            </label>
             <label className="settings-field" htmlFor="settings-slug">
               URL Slug
               <input id="settings-slug" onChange={(event) => onChange({ ...editor, slug: event.currentTarget.value })} pattern="[a-z0-9]+(-[a-z0-9]+)*" required value={editor.slug} />
             </label>
+            <label className="settings-field" htmlFor="settings-cover">
+              <span className="settings-field__heading"><span>封面链接</span><span className="settings-field__hint">可选</span></span>
+              <input id="settings-cover" onChange={(event) => onChange({ ...editor, coverImageUrl: event.currentTarget.value })} type="url" value={editor.coverImageUrl} />
+            </label>
           </div>
-          <section className="settings-tags" aria-labelledby="settings-tags-title">
-            <div className="settings-field__heading"><label htmlFor="settings-tag-picker" id="settings-tags-title">标签</label><span>{selectedTags.length}</span></div>
-            <div className="taxonomy-chips" aria-label="已选标签">
-              {selectedTags.length === 0 && <span className="taxonomy-empty">暂未选择标签</span>}
-              {selectedTags.map((tag) => <span className="taxonomy-chip" key={tag.id}>{tag.name}<button type="button" aria-label={`移除标签 ${tag.name}`} onClick={() => onChange({ ...editor, selectedTagSlugs: editor.selectedTagSlugs.filter((slug) => slug !== tag.slug) })}><StudioIcon name="close" /></button></span>)}
-            </div>
-            <div className="settings-tag-picker">
-              <select id="settings-tag-picker" aria-label="选择已有标签" value={tagToAdd} onChange={(event) => setTagToAdd(event.currentTarget.value)}>
-                <option value="">选择标签</option>
-                {availableTags.map((tag) => <option key={tag.id} value={tag.slug}>{tag.name}</option>)}
-              </select>
-              <button type="button" disabled={!tagToAdd} onClick={addTag}>添加</button>
-            </div>
-          </section>
           <label className="settings-field" htmlFor="settings-excerpt">
             摘要
             <textarea id="settings-excerpt" onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} required rows={3} value={editor.excerpt} />
-          </label>
-          <label className="settings-field" htmlFor="settings-cover">
-            封面链接 <span className="settings-field__hint">可选</span>
-            <input id="settings-cover" onChange={(event) => onChange({ ...editor, coverImageUrl: event.currentTarget.value })} type="url" value={editor.coverImageUrl} />
           </label>
           {feedback && <p className="studio-form-error" role="alert">{feedback}</p>}
         </div>
@@ -502,7 +482,7 @@ function PostSettingsModal({
           </div>
         </footer>
       </section>
-    </div>
+    </dialog>
   )
 }
 
@@ -517,6 +497,8 @@ function MarkdownEditor({
   onPreview,
   onSave,
   tags,
+  onCreateTaxonomy,
+  onSelectTaxonomy,
 }: {
   categories: BlogCategory[]
   editor: EditorState
@@ -528,7 +510,7 @@ function MarkdownEditor({
   onPreview: () => void
   onSave: (status: BlogPostStatus) => void
   tags: BlogTag[]
-}) {
+} & ArticleTaxonomyActions) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const editorWorkspaceRef = useRef<HTMLDivElement>(null)
   const outlineItems = getMarkdownOutline(editor.contentMarkdown)
@@ -609,7 +591,7 @@ function MarkdownEditor({
           ) : <p className="markdown-editor__outline-empty" id="markdown-editor-outline">添加一级至三级标题后，会在这里显示目录。</p>)}
         </aside>
       </div>
-      {isSettingsOpen && <PostSettingsModal categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onSave={onSave} tags={tags} />}
+      {isSettingsOpen && <PostSettingsModal categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} />}
     </section>
   )
 }
@@ -722,6 +704,8 @@ function PostsWorkspace({
   onBack,
   onSave,
   tags,
+  onCreateTaxonomy,
+  onSelectTaxonomy,
 }: {
   categories: BlogCategory[]
   editor: EditorState
@@ -739,13 +723,13 @@ function PostsWorkspace({
   onBack: () => void
   onSave: (status: BlogPostStatus) => void
   tags: BlogTag[]
-}) {
+} & ArticleTaxonomyActions) {
   if (view === 'list') {
     return <PostsIndex onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} />
   }
 
   if (isEditorOpen) {
-    return <MarkdownEditor categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} />
+    return <MarkdownEditor categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} />
   }
 
   return <ArticleReader editor={editor} onBack={onBack} onEdit={onEdit} />
@@ -896,6 +880,25 @@ function Dashboard({
     }
   }
 
+  function selectArticleTaxonomy(kind: TaxonomyKind, item: BlogTag | null) {
+    setEditor((current) => {
+      if (kind === 'categories') return { ...current, categoryId: item?.id ?? null }
+      if (!item) return current
+      const selected = current.selectedTagSlugs.includes(item.slug)
+      if (!selected && current.selectedTagSlugs.length >= 10) return current
+      return { ...current, selectedTagSlugs: selected ? current.selectedTagSlugs.filter((slug) => slug !== item.slug) : [...current.selectedTagSlugs, item.slug] }
+    })
+  }
+
+  async function createArticleTaxonomy(kind: TaxonomyKind, name: string): Promise<BlogTag> {
+    const targetId = editor.id
+    const items = kind === 'tags' ? tagOptions : categoryOptions
+    const saved = items.find((item) => item.name === name.trim()) ?? await createTaxonomy(token, kind, name)
+    taxonomyChanged(kind, saved, null)
+    setEditor((current) => current.id !== targetId ? current : kind === 'categories' ? { ...current, categoryId: saved.id } : { ...current, selectedTagSlugs: current.selectedTagSlugs.includes(saved.slug) ? current.selectedTagSlugs : [...current.selectedTagSlugs, saved.slug].slice(0, 10) })
+    return saved
+  }
+
   return (
     <div className="studio-app-shell">
       <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={onLogout} user={user} />
@@ -920,6 +923,8 @@ function Dashboard({
           )}
           {activeSection === 'posts' && (
             <PostsWorkspace
+              onCreateTaxonomy={createArticleTaxonomy}
+              onSelectTaxonomy={selectArticleTaxonomy}
               categories={categoryOptions}
               editor={activeEditor}
               feedback={feedback}

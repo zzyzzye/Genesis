@@ -136,7 +136,7 @@
 }
 .settings-fields-grid {
   display: grid;
-  grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: .7rem;
 }
 .settings-field,
@@ -241,3 +241,20 @@
     padding: .7rem .8rem;
   }
 }
+
+/* 设置保持单层表面，选择名称即可使用，不再嵌套标签卡片。 */
+.markdown-settings-modal { width:100%; height:100%; max-width:none; max-height:none; margin:0; border:0; outline:0; background:transparent; }
+.markdown-settings-modal::backdrop { background:rgb(25 30 35 / 25%); }
+.markdown-settings-modal__surface { border:0; background:#fff; }
+.markdown-settings-modal__body { overflow-y:auto; gap:20px; background:#fff; }
+.markdown-settings-modal__body .taxonomy-picker__input input { padding:0; border:0; outline:0; box-shadow:none; background:transparent; font-size:12px; }
+.markdown-settings-modal__body .taxonomy-picker__input input:focus { border:0; outline:0; box-shadow:none; background:transparent; }
+.markdown-settings-modal__body .settings-field input,
+.markdown-settings-modal__body .settings-field textarea { border:0; outline:0; box-shadow:none; background:#f0f1f2; }
+.markdown-settings-modal__body .settings-field input:focus,
+.markdown-settings-modal__body .settings-field textarea:focus { border:0; outline:0; box-shadow:none; background:#f0f1f2; }
+.markdown-settings-modal button { border:0; outline:0; box-shadow:none; }
+.markdown-settings-modal button:focus-visible { outline:0; box-shadow:none; }
+.settings-taxonomy-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; }
+.settings-fields-grid { grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; gap:16px; }
+@media(max-width:600px) { .settings-taxonomy-grid,.settings-fields-grid { grid-template-columns:minmax(0,1fr); gap:16px; } }
