@@ -2,11 +2,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TaxonomyWorkspace } from '../src/studio/TaxonomyWorkspace'
-import { createAdminBlogCategory, deleteAdminBlogTaxonomy, updateAdminBlogTaxonomy } from '../src/lib/api'
+import { createAdminBlogCategory, createAdminBlogTag, deleteAdminBlogTaxonomy, updateAdminBlogTaxonomy } from '../src/lib/api'
 
 vi.mock('../src/lib/api', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/lib/api')>(),
   createAdminBlogCategory: vi.fn(),
+  createAdminBlogTag: vi.fn(),
   updateAdminBlogTaxonomy: vi.fn(),
   deleteAdminBlogTaxonomy: vi.fn(),
 }))
@@ -20,6 +21,24 @@ function mount(usage: Record<string, number> = {}, route = '/studio/blog/categor
 
 describe('分类管理交互', () => {
   afterEach(() => { cleanup(); vi.resetAllMocks() })
+
+  it('标签只填名称即可创建，支持中文、大小写和符号；改名保持关联标识', async () => {
+    const onChanged = vi.fn()
+    render(<MemoryRouter><TaxonomyWorkspace kind="tags" items={[item]} usage={{ [item.id]: 1 }} token="test-placeholder" onChanged={onChanged} /></MemoryRouter>)
+    expect(screen.queryByLabelText('标识（Slug）')).not.toBeInTheDocument()
+    const name = 'Agent / 中文 + 🚀'
+    vi.mocked(createAdminBlogTag).mockImplementation((_, data) => Promise.resolve({ id: 'tag-new', ...data }))
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: name } })
+    fireEvent.click(screen.getByRole('button', { name: '创建标签' }))
+    await waitFor(() => expect(onChanged).toHaveBeenCalled())
+    expect(vi.mocked(createAdminBlogTag).mock.calls[0]?.[1].name).toBe(name)
+    expect(vi.mocked(createAdminBlogTag).mock.calls[0]?.[1].slug).toMatch(/^tag-[a-f0-9-]+$/)
+    fireEvent.click(screen.getByRole('button', { name: '编辑标签：工程实践' }))
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: name } })
+    vi.mocked(updateAdminBlogTaxonomy).mockResolvedValue({ ...item, name })
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+    await waitFor(() => expect(updateAdminBlogTaxonomy).toHaveBeenCalledWith('test-placeholder', 'tags', item.id, { name, slug: item.slug }))
+  })
 
   it('失败保留输入，重试成功回传数据，处理中阻止重复提交', async () => {
     const onChanged = mount()
