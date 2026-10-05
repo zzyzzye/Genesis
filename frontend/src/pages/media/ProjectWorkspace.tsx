@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, type Project } from './api'
 import { AssetLibrary } from './AssetLibrary'
 import { ArrowLeft, ArrowUpRight, Clapperboard, FolderOpen, House, Layers3, Menu, X } from 'lucide-react'
@@ -82,6 +82,7 @@ export function AccountAssetsPage() {
 
 export function ProjectAssetsPage({ projectId }: { projectId: string }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [project, setProject] = useState<Project | null>(null)
   const [error, setError] = useState('')
 
@@ -95,6 +96,11 @@ export function ProjectAssetsPage({ projectId }: { projectId: string }) {
     return () => { active = false }
   }, [projectId])
 
+  const params = new URLSearchParams(location.search)
+  const targetNode = params.get('targetNode')
+  const requestedKind = params.get('targetKind')
+  const targetKind: 'image' | 'audio' | 'video' | null = requestedKind === 'image' || requestedKind === 'audio' || requestedKind === 'video' ? requestedKind : null
+  const targetQuery = targetNode && targetKind ? `&targetNode=${encodeURIComponent(targetNode)}&targetKind=${targetKind}` : ''
   return <AssetsLayout projectId={projectId}>
     <header className="media-assets-page-heading">
       <div><Link className="media-back" to={`/media/projects/${projectId}`}>← 返回作品</Link><h1>作品素材库</h1><p>{project?.name ?? (error ? '无法打开作品素材库' : '正在加载作品…')}</p></div>
@@ -103,10 +109,12 @@ export function ProjectAssetsPage({ projectId }: { projectId: string }) {
     {error ? <p role="alert" className="media-error">{error}</p> : project ? <AssetLibrary
       projectId={projectId}
       presentation="page"
-      onClose={() => { void navigate(`/media/projects/${projectId}`) }}
+      initialKind={targetKind === 'video' ? '' : targetKind ?? ''}
+      targetKind={targetNode ? targetKind ?? undefined : undefined}
+      onClose={() => { void navigate(targetNode ? `/media/projects/${projectId}/canvas` : `/media/projects/${projectId}`) }}
       onAdd={async (asset) => {
         await api(`/projects/${projectId}/assets/reference`, 'POST', { asset_id: asset.id })
-        await navigate(`/media/projects/${projectId}/canvas?addAsset=${encodeURIComponent(asset.id)}`)
+        await navigate(`/media/projects/${projectId}/canvas?addAsset=${encodeURIComponent(asset.id)}${targetQuery}`)
       }}
     /> : <p role="status">正在加载作品素材…</p>}
   </AssetsLayout>

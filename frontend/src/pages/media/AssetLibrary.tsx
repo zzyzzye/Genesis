@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { api, type Asset, upload } from './api'
 import { AssetPreview } from './AssetPreview'
 
-export function AssetLibrary({ projectId, onClose, onAdd, onRemoved, beforeRemove, presentation = 'drawer' }: { projectId?: string; onClose: () => void; onAdd?: (asset: Asset) => Promise<void>; onRemoved?: () => Promise<void>; beforeRemove?: () => Promise<void>; presentation?: 'drawer' | 'page' }) {
+export function AssetLibrary({ projectId, onClose, onAdd, onRemoved, beforeRemove, presentation = 'drawer', initialKind = '', targetKind }: { projectId?: string; onClose: () => void; onAdd?: (asset: Asset) => Promise<void>; onRemoved?: () => Promise<void>; beforeRemove?: () => Promise<void>; presentation?: 'drawer' | 'page'; initialKind?: '' | Asset['kind']; targetKind?: Asset['kind'] }) {
   const [scope, setScope] = useState(projectId ? 'project' : 'account')
   const [query, setQuery] = useState('')
-  const [kind, setKind] = useState<'' | Asset['kind']>('')
+  const [kind, setKind] = useState(initialKind)
   const [page, setPage] = useState(1)
   const [refresh, setRefresh] = useState(0)
   const [items, setItems] = useState<Asset[]>([])
@@ -54,7 +54,7 @@ export function AssetLibrary({ projectId, onClose, onAdd, onRemoved, beforeRemov
     {loading ? <p role="status">加载素材…</p> : items.length === 0 ? <div className="media-library-empty">{query || kind ? '没有匹配的素材' : '素材库还是空的'}<p>导入图片、视频或音频开始创作。</p></div> : <div className="media-library-grid">{items.map((asset) => <article key={asset.id}>
       <AssetPreview asset={asset} controls />
       <strong title={asset.name}>{asset.name}</strong><small>{(asset.size / 1024 / 1024).toFixed(1)} MiB · {asset.kind}</small>
-      <div className="media-asset-actions">{onAdd && <button disabled={busy} onClick={() => void run(() => onAdd(asset))}>放入画布</button>}{!asset.in_library && <button disabled={busy} onClick={() => void run(() => api(`/assets/${asset.id}/library`, 'POST'))}>加入账户库</button>}
+      <div className="media-asset-actions">{onAdd && <button disabled={busy || (targetKind === 'video' ? asset.kind === 'audio' : Boolean(targetKind && asset.kind !== targetKind))} onClick={() => void run(() => onAdd(asset))}>{targetKind ? '用于当前节点' : '放入画布'}</button>}{!asset.in_library && <button disabled={busy} onClick={() => void run(() => api(`/assets/${asset.id}/library`, 'POST'))}>加入账户库</button>}
         <button disabled={busy} onClick={() => { if (window.confirm(scope === 'project' ? '移除该作品素材及其画布节点？账户素材会保留。' : '删除此账户素材？正在被作品引用的素材无法删除。')) void run(async () => { if (scope === 'project') await beforeRemove?.(); await api(`${path}/${asset.id}`, 'DELETE'); if (scope === 'project') await onRemoved?.() }) }}>{scope === 'project' ? '移出作品' : '删除'}</button></div>
     </article>)}</div>}
     <div className="media-pagination"><button disabled={page === 1 || busy} onClick={() => setPage(page - 1)}>上一页</button><span>{page} / {Math.max(1, Math.ceil(total / 24))}</span><button disabled={page * 24 >= total || busy} onClick={() => setPage(page + 1)}>下一页</button></div>

@@ -136,13 +136,18 @@ async def test_invalid_upload_and_canvas(
     ).status_code == 422
     nodes = [
         {**node, "id": str(uuid4()), "type": kind, "asset_id": None, "text": kind}
-        for kind in ("text", "shape")
+        for kind in ("text", "shape", "image", "audio")
     ]
     saved = await c.put(
         f"projects/{p}/canvas", json={"version": 0, "document": {"nodes": nodes}}
     )
     assert saved.status_code == 200
-    assert [item["type"] for item in saved.json()["document"]["nodes"]] == ["text", "shape"]
+    assert [item["type"] for item in saved.json()["document"]["nodes"]] == [
+        "text",
+        "shape",
+        "image",
+        "audio",
+    ]
     edge = {"id": str(uuid4()), "source": nodes[0]["id"], "target": nodes[1]["id"]}
     assert (
         await c.put(
@@ -183,6 +188,13 @@ async def test_video_node_metadata_and_asset_reference(media_client: AsyncClient
         "type": "video",
         "name": "开场镜头",
         "duration_seconds": 10,
+        "generation": {
+            "mode": "reference",
+            "ratio": "9:16",
+            "resolution": "1080P",
+            "count": 2,
+            "sound": False,
+        },
         "text": "雨夜街道",
         "asset_id": None,
         "x": 0,
@@ -194,6 +206,22 @@ async def test_video_node_metadata_and_asset_reference(media_client: AsyncClient
     saved = await c.put(endpoint, json={"version": 0, "document": {"nodes": [node]}})
     assert saved.status_code == 200
     assert saved.json()["document"]["nodes"][0]["duration_seconds"] == 10
+    reopened = (await c.get(endpoint)).json()["document"]["nodes"][0]
+    assert reopened["generation"] == {
+        "model": "",
+        "mode": "reference",
+        "ratio": "9:16",
+        "resolution": "1080P",
+        "count": 2,
+        "sound": False,
+    }
+    for invalid in (2.5, True, "10"):
+        assert (
+            await c.put(
+                endpoint,
+                json={"version": 1, "document": {"nodes": [{**node, "duration_seconds": invalid}]}},
+            )
+        ).status_code == 422
     assert (
         await c.put(
             endpoint,
@@ -345,3 +373,44 @@ async def test_cross_account_isolation(media_client: AsyncClient) -> None:
     assert (await c.post(f"assets/{a}/library")).status_code == 404
     assert (await c.delete(f"projects/{p}")).status_code == 404
     assert (await c.delete(f"assets/{a}")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_media_nodes_only_accept_matching_project_assets(media_client: AsyncClient) -> None:
+    c = media_client
+    project = (await c.post("projects", json={"name": "节点素材验收"})).json()["id"]
+    other = (await c.post("projects", json={"name": "其他作品"})).json()["id"]
+    asset = (
+        await c.post(
+            f"projects/{project}/assets",
+            files={"file": ("reference.png", b"image-bytes", "image/png")},
+        )
+    ).json()["id"]
+    node = {
+        "id": str(uuid4()),
+        "type": "image",
+        "asset_id": asset,
+        "x": 0,
+        "y": 0,
+        "width": 360,
+        "height": 280,
+    }
+    # 素材不能因节点类型不同而绕过作品关联检查。
+    for kind in ("image", "audio"):
+        response = await c.put(
+            f"projects/{other}/canvas",
+            json={"version": 0, "document": {"nodes": [{**node, "type": kind}]}},
+        )
+        assert response.status_code == 422
+    wrong_kind = await c.put(
+        f"projects/{project}/canvas",
+        json={"version": 0, "document": {"nodes": [{**node, "type": "audio"}]}},
+    )
+    assert wrong_kind.status_code == 422
+    saved = await c.put(
+        f"projects/{project}/canvas", json={"version": 0, "document": {"nodes": [node]}}
+    )
+    assert saved.status_code == 200
+    assert (await c.get(f"projects/{project}/canvas")).json()["document"]["nodes"][0][
+        "asset_id"
+    ] == asset

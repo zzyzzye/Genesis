@@ -105,7 +105,7 @@ def test_prepare_request_embeds_authenticated_actor_and_studio_context(
     assert exc_info.value.status_code == 403
 
 
-def test_media_surface_uses_the_read_only_media_capability() -> None:
+def test_media_surface_proposes_confirmed_canvas_plans() -> None:
     request = AiChatRequest(
         surface="media", messages=[AiMessage(role="user", content="拆分镜头")]
     )
@@ -114,7 +114,8 @@ def test_media_surface_uses_the_read_only_media_capability() -> None:
     assert request.surface == "media"
     assert capability.name == "genesis-media-agent"
     assert capability.tools == []
-    assert "不要声称" in capability.prompt
+    assert "canvas-plan" in capability.prompt
+    assert "应用到画布" in capability.prompt
 
 
 def test_confirm_agent_action_validates_signed_proposals() -> None:

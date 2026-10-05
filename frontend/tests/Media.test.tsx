@@ -3,17 +3,50 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useCanvas } from '../src/pages/media/useCanvas'
 import { ProjectCanvas } from '../src/pages/media/ProjectCanvas'
-import { MediaAssistant } from '../src/pages/media/MediaAssistant'
+import { MediaAssistant, type MediaCanvasPlan } from '../src/pages/media/MediaAssistant'
 import { AssetLibrary } from '../src/pages/media/AssetLibrary'
 import { emptyDocument, type Document, MediaError } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
 import * as ai from '../src/lib/api'
 import { groupSelection, removeSelection, resizedNodeDimensions, ungroupSelection } from '../src/pages/media/canvasOperations'
+import { incomingReferences } from '../src/pages/media/canvasReferences'
 
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
 
 describe('作品画布', () => {
   afterEach(() => { localStorage.clear(); vi.restoreAllMocks() })
+  it('参考只取直接连入节点，保持连线顺序并过滤重复、自连和失效连线', () => {
+    const image = { ...note, id: crypto.randomUUID(), type: 'image' as const, asset_id: 'image' }
+    const video = { ...note, id: crypto.randomUUID(), type: 'video' as const }
+    const document: Document = { ...emptyDocument(), nodes: [note, image, video], edges: [
+      { id: '1', source: image.id, target: video.id }, { id: '2', source: note.id, target: video.id },
+      { id: '3', source: image.id, target: video.id }, { id: '4', source: video.id, target: video.id },
+      { id: '5', source: 'missing', target: video.id }, { id: '6', source: video.id, target: note.id },
+    ] }
+    const asset: media.Asset = { id: 'image', name: '人物参考.png', kind: 'image', mime_type: 'image/png', size: 4, in_library: false }
+    expect(incomingReferences(document, video.id, { image: asset }).map((item) => [item.node.id, item.asset?.id])).toEqual([[image.id, 'image'], [note.id, undefined]])
+  })
+  it('连入文字可以引用；错误时长保留原值，整数编辑可保存并撤销', async () => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const video = { ...note, id: crypto.randomUUID(), type: 'video' as const, text: '', duration_seconds: 8, width: 820, height: 670 }
+    const document: Document = { ...emptyDocument(), nodes: [note, video], edges: [{ id: crypto.randomUUID(), source: note.id, target: video.id }] }
+    vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: '引用文字' }))
+    expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveValue('镜头一')
+    fireEvent.click(screen.getByRole('button', { name: '断开参考：节点' }))
+    expect(screen.queryByRole('button', { name: '引用文字' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('combobox', { name: '添加参考节点' }), { target: { value: note.id } })
+    expect(screen.getByRole('button', { name: '引用文字' })).toBeInTheDocument()
+    const duration = screen.getByRole('spinbutton', { name: '镜头时长' })
+    fireEvent.change(duration, { target: { value: '2.5' } }); fireEvent.blur(duration)
+    expect(duration).toHaveValue(8)
+    expect(screen.getByText('请输入 1–600 的整数秒，已保留原时长。')).toBeInTheDocument()
+    fireEvent.focus(duration); fireEvent.change(duration, { target: { value: '12' } }); fireEvent.blur(duration)
+    expect(screen.getByRole('spinbutton', { name: '镜头时长' })).toHaveValue(12)
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    expect(screen.getByRole('spinbutton', { name: '镜头时长' })).toHaveValue(8)
+  })
   it('编组、取消编组和删除成员会维护画布关系', () => {
     const second = { ...note, id: crypto.randomUUID(), x: 320 }
     const third = { ...note, id: crypto.randomUUID(), x: 640 }
@@ -150,6 +183,13 @@ describe('作品画布', () => {
     fireEvent.click(screen.getByRole('button', { name: '复制节点' }))
     fireEvent.click(screen.getByRole('button', { name: '粘贴节点' }))
     expect(screen.getAllByRole('textbox', { name: '形状文字' })).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
+    fireEvent.click(screen.getByRole('button', { name: '图片' }))
+    expect(screen.getByRole('button', { name: '导入图片' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '选择作品素材' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
+    fireEvent.click(screen.getByRole('button', { name: '音频' }))
+    expect(screen.getByRole('button', { name: '导入音频' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '切换小地图' }))
     expect(screen.getByRole('button', { name: '切换小地图' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: '放大画布' }))
@@ -175,6 +215,17 @@ describe('作品画布', () => {
     expect(document.querySelector('.react-flow__node .media-node-drag-mark')).toBeInTheDocument()
     expect(document.querySelector('.media-selection-particles')).not.toBeInTheDocument()
   })
+  it('助手确认后可将受限方案写入画布', async () => {
+    vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
+    let applyPlan: ((plan: MediaCanvasPlan) => void) | null = null
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" onAgentCanvasApplyChange={(apply) => { applyPlan = apply }} /></MemoryRouter>)
+    await waitFor(() => expect(applyPlan).not.toBeNull())
+    act(() => applyPlan?.({ title: '雨夜开场', operations: [{ action: 'add_video', name: '开场空镜', text: '雨夜街道，缓慢推进', duration_seconds: 4 }, { action: 'add_image', name: '霓虹路牌', text: '待选择路牌图片' }, { action: 'add_audio', name: '雨夜环境音', text: '待选择雨声' }, { action: 'add_note', text: '环境音：雨声与远处车流' }] }))
+    expect(screen.getByRole('textbox', { name: '视频节点名称' })).toHaveValue('开场空镜')
+    expect(screen.getByRole('textbox', { name: '图片节点名称' })).toHaveValue('霓虹路牌')
+    expect(screen.getByRole('textbox', { name: '音频节点名称' })).toHaveValue('雨夜环境音')
+    expect(screen.getByRole('textbox', { name: '便签内容' })).toHaveValue('环境音：雨声与远处车流')
+  })
   it('视频节点保存名称、镜头描述和时长，保留画布连接入口', async () => {
     const request = vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
     render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
@@ -183,14 +234,19 @@ describe('作品画布', () => {
     expect(screen.getByLabelText('连接下一个视频节点')).toBeInTheDocument()
     fireEvent.change(screen.getByRole('textbox', { name: '视频节点名称' }), { target: { value: '开场镜头' } })
     fireEvent.change(screen.getByRole('textbox', { name: '镜头描述' }), { target: { value: '雨夜街道，缓慢推进' } })
-    fireEvent.click(screen.getByRole('button', { name: '特效' }))
-    expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveValue('雨夜街道，缓慢推进 【特效】')
-    fireEvent.change(screen.getByRole('combobox', { name: '镜头时长' }), { target: { value: '10' } })
+    fireEvent.click(screen.getByRole('button', { name: '运镜' }))
+    fireEvent.click(screen.getByRole('button', { name: '缓慢推近' }))
+    expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveValue('雨夜街道，缓慢推进 运镜：缓慢推近。')
+    fireEvent.change(screen.getByRole('spinbutton', { name: '镜头时长' }), { target: { value: '10' } })
+    fireEvent.blur(screen.getByRole('spinbutton', { name: '镜头时长' }))
+    fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
+    fireEvent.change(screen.getByRole('combobox', { name: '画面比例' }), { target: { value: '9:16' } })
+    fireEvent.change(screen.getByRole('combobox', { name: '生成声音' }), { target: { value: 'off' } })
     fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
     fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
     await waitFor(() => {
       const saved = request.mock.calls.find(([path, method]) => path === '/projects/project/canvas' && method === 'PUT')
-      expect(saved?.[2]).toMatchObject({ document: { nodes: [{ type: 'video', name: '开场镜头', text: '雨夜街道，缓慢推进 【特效】', duration_seconds: 10 }] } })
+      expect(saved?.[2]).toMatchObject({ document: { nodes: [{ type: 'video', name: '开场镜头', text: '雨夜街道，缓慢推进 运镜：缓慢推近。', duration_seconds: 10, generation: { ratio: '9:16', sound: false } }] } })
     })
     fireEvent.click(screen.getByLabelText('连接下一个视频节点'))
     expect(screen.getAllByRole('textbox', { name: '视频节点名称' })).toHaveLength(2)
@@ -280,5 +336,25 @@ describe('作品画布', () => {
     await waitFor(() => expect(chat).toHaveBeenCalledTimes(1))
     expect(await screen.findByText('用户标记', { selector: 'strong' })).toBeInTheDocument()
     expect(screen.getByText('助手标记', { selector: 'strong' })).toBeInTheDocument()
+  })
+  it('助手方案需由用户点击后才应用到画布', async () => {
+    vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })
+    const applyPlan = vi.fn<(plan: MediaCanvasPlan) => void>()
+    vi.spyOn(ai, 'streamAiChat').mockImplementation((_token, _request, onChunk) => {
+      onChunk('我整理了两个镜头。\n```canvas-plan\n{"title":"雨夜开场","operations":[{"action":"add_video","name":"开场空镜","text":"雨夜街道","duration_seconds":4},{"action":"add_note","text":"雨声先入"}]}\n```')
+      return Promise.resolve()
+    })
+    render(<MediaAssistant token="test-token" page="canvas" projectId="project" selectedNode={null} onApplyCanvasPlan={applyPlan} />)
+    fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
+    const input = screen.getByRole('textbox', { name: '向镜头搭档提问' })
+    fireEvent.change(input, { target: { value: '帮我添加雨夜开场分镜' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    const apply = await screen.findByRole('button', { name: '应用到画布' })
+    expect(applyPlan).not.toHaveBeenCalled()
+    fireEvent.click(apply)
+    const applied = applyPlan.mock.calls[0]?.[0]
+    expect(applied).toMatchObject({ title: '雨夜开场' })
+    expect(applied?.operations.map((operation) => operation.action)).toEqual(['add_video', 'add_note'])
+    expect(screen.getByRole('button', { name: '已应用' })).toBeDisabled()
   })
 })

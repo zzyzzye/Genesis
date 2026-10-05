@@ -142,8 +142,12 @@ def save_canvas(
     for node in data.document.nodes:
         if node.type == "asset" and node.asset_id not in ids:
             raise HTTPException(422, "画布包含未关联到作品的素材")
-        if node.type == "video" and node.asset_id is not None and node.asset_id not in ids:
-            raise HTTPException(422, "视频节点包含未关联到作品的素材")
+        if node.type in ("video", "image", "audio") and node.asset_id is not None:
+            if node.asset_id not in ids:
+                raise HTTPException(422, "节点包含未关联到作品的素材")
+            asset = session.get(MediaAsset, node.asset_id)
+            if asset is None or (node.type in ("image", "audio") and asset.kind != node.type):
+                raise HTTPException(422, "素材类型与节点不匹配")
         if node.type == "group":
             if len(node.member_ids) < 2 or len(set(node.member_ids)) != len(node.member_ids):
                 raise HTTPException(422, "分组至少需要两个不同节点")

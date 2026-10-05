@@ -1,5 +1,5 @@
 import './CanvasAssistant.css'
-import { ChevronDown, Clapperboard, Plus, Send, WandSparkles, X } from 'lucide-react'
+import { Check, ChevronDown, Clapperboard, Plus, Send, WandSparkles, X } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -8,12 +8,20 @@ import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider, t
 
 type MediaAssistantPage = 'projects' | 'project' | 'canvas' | 'assets'
 export type MediaAssistantNode = { id: string; type: string; name: string; text: string; assetId: string | null }
+type MediaCanvasOperation =
+  | { action: 'add_video'; name: string; text: string; duration_seconds: number; connect_from_id?: string }
+  | { action: 'add_image'; name: string; text: string }
+  | { action: 'add_audio'; name: string; text: string }
+  | { action: 'add_note'; text: string }
+  | { action: 'update_node'; node_id: string; name?: string; text?: string; duration_seconds?: number }
+export type MediaCanvasPlan = { title: string; operations: MediaCanvasOperation[] }
+
 const providers: AiProvider[] = ['openai', 'grok', 'gemini', 'claude', 'mimo']
 const providerLabels: Record<AiProvider, string> = { openai: 'OpenAI', grok: 'Grok', gemini: 'Gemini', claude: 'Claude', mimo: 'MiMo' }
 const promptsByPage: Record<MediaAssistantPage, string[]> = {
   projects: ['把一句想法拆成短片方案', '给我一个可拍的 6 镜头结构'],
   project: ['为这部作品规划镜头节奏', '列出还需要补齐的素材'],
-  canvas: ['把当前想法拆成分镜', '检查镜头节奏与转场'],
+  canvas: ['把当前想法拆成分镜并添加到画布', '检查镜头节奏与转场'],
   assets: ['给素材库一套命名与分组规则', '根据现有素材列拍摄补充清单'],
 }
 const pageLabels: Record<MediaAssistantPage, string> = { projects: '作品列表', project: '作品概览', canvas: '创作画布', assets: '素材库' }
@@ -25,11 +33,47 @@ function formatContextWindow(value: number | null) {
   if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(2))}M`
   return `${Math.round(value / 1000)}K`
 }
-export function MediaAssistant({ token, page, projectId, selectedNode }: {
+function canvasPlanFromMessage(content: string): MediaCanvasPlan | null {
+  const match = content.match(/```canvas-plan\s*\n?([\s\S]*?)```/i)
+  if (!match) return null
+  try {
+    const candidate = JSON.parse(match[1] ?? '') as { title?: unknown; operations?: unknown }
+    if (!Array.isArray(candidate.operations) || candidate.operations.length === 0 || candidate.operations.length > 8) return null
+    const operations: MediaCanvasOperation[] = []
+    for (const item of candidate.operations) {
+      if (!item || typeof item !== 'object') return null
+      const operation = item as Record<string, unknown>
+      const action = operation.action
+      if (action === 'add_video' && typeof operation.name === 'string' && typeof operation.text === 'string') {
+        operations.push({ action, name: operation.name.slice(0, 120), text: operation.text.slice(0, 2000), duration_seconds: Math.max(1, Math.min(60, Math.round(Number(operation.duration_seconds)) || 5)), ...(typeof operation.connect_from_id === 'string' ? { connect_from_id: operation.connect_from_id } : {}) })
+      } else if ((action === 'add_image' || action === 'add_audio') && typeof operation.name === 'string' && typeof operation.text === 'string') {
+        operations.push({ action, name: operation.name.slice(0, 120), text: operation.text.slice(0, 2000) })
+      } else if (action === 'add_note' && typeof operation.text === 'string') {
+        operations.push({ action, text: operation.text.slice(0, 2000) })
+      } else if (action === 'update_node' && typeof operation.node_id === 'string') {
+        const patch = { action, node_id: operation.node_id, ...(typeof operation.name === 'string' ? { name: operation.name.slice(0, 120) } : {}), ...(typeof operation.text === 'string' ? { text: operation.text.slice(0, 2000) } : {}), ...(typeof operation.duration_seconds === 'number' && Number.isFinite(operation.duration_seconds) ? { duration_seconds: Math.max(1, Math.min(60, Math.round(operation.duration_seconds))) } : {}) } as MediaCanvasOperation
+        if (!('name' in patch) && !('text' in patch) && !('duration_seconds' in patch)) return null
+        operations.push(patch)
+      } else return null
+    }
+    return { title: typeof candidate.title === 'string' ? candidate.title.slice(0, 80) : '镜头搭档方案', operations }
+  } catch { return null }
+}
+function planSummary(plan: MediaCanvasPlan) {
+  const videos = plan.operations.filter((item) => item.action === 'add_video').length
+  const images = plan.operations.filter((item) => item.action === 'add_image').length
+  const audios = plan.operations.filter((item) => item.action === 'add_audio').length
+  const notes = plan.operations.filter((item) => item.action === 'add_note').length
+  const updates = plan.operations.filter((item) => item.action === 'update_node').length
+  return [videos && `新增 ${videos} 个镜头`, images && `新增 ${images} 张图片`, audios && `新增 ${audios} 段音频`, notes && `新增 ${notes} 条便签`, updates && `更新 ${updates} 个节点`].filter(Boolean).join(' · ')
+}
+
+export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCanvasPlan }: {
   token: string | null
   page: MediaAssistantPage
   projectId?: string
   selectedNode: MediaAssistantNode | null
+  onApplyCanvasPlan?: (plan: MediaCanvasPlan) => void
 }) {
   const [open, setOpen] = useState(false)
   useEffect(() => {
@@ -46,6 +90,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode }: {
   const [models, setModels] = useState<AvailableModel[]>([])
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [dismissedNodeId, setDismissedNodeId] = useState<string | null>(null)
+  const [appliedPlans, setAppliedPlans] = useState<Set<number>>(() => new Set())
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const modelTriggerRef = useRef<HTMLButtonElement>(null)
   const modelMenuRef = useRef<HTMLDivElement>(null)
@@ -128,7 +173,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode }: {
 
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void send(input) }
   function selectModel(next: string) { selectedModels.current[provider] = next; setModel(next); setModelMenuOpen(false) }
-  function startNewConversation() { if (!busy) { setMessages([]); setInput(''); setError('') } }
+  function startNewConversation() { if (!busy) { setMessages([]); setInput(''); setError(''); setAppliedPlans(new Set()) } }
 
   return <aside className={`media-agent media-agent--styled${page === 'canvas' ? ' media-agent--canvas' : ''}`} aria-label="影音创作助手">
     {open && <section className={`media-agent__panel${messages.length === 0 ? ' is-empty' : ''}`} role="dialog" aria-label="镜头搭档">
@@ -140,7 +185,12 @@ export function MediaAssistant({ token, page, projectId, selectedNode }: {
         {discussionNode && <div className="media-agent__node-context"><div><span>正在讨论 · {nodeLabel(discussionNode)}</span>{page === 'canvas' && <small>{discussionNode.text.trim() || '还没有镜头描述，可以一起补充。'}</small>}</div><button type="button" aria-label="移除当前讨论节点" onClick={() => setDismissedNodeId(discussionNode.id)}><X aria-hidden="true" /></button></div>}
         <div className="media-agent__messages" aria-live="polite">
           {messages.length === 0 && <div className="media-agent__canvas-empty"><span>镜头与叙事</span><h2>{discussionNode ? '接着这个镜头，往下想。' : page === 'assets' ? '整理素材，再开始拍。' : '下一段，怎么拍？'}</h2><p>{discussionNode ? '细化画面、调整节奏，或继续编排下一个镜头。' : page === 'canvas' ? '写下故事想法，或选中画布上的镜头一起讨论。' : page === 'assets' ? '讨论素材命名、分组与需要补充的画面。' : '写下故事想法，一起规划镜头与素材。'}</p></div>}
-          {messages.map((message, index) => <div className={`media-agent__message media-agent__message--${message.role}`} key={`${message.role}-${index}`}>{message.role === 'assistant' && <span className="media-agent__message-mark"><Clapperboard aria-hidden="true" /></span>}<div className="media-agent__response"><Markdown remarkPlugins={[remarkGfm]}>{message.role === 'assistant' ? message.content || '正在整理镜头…' : message.content}</Markdown></div></div>)}
+          {messages.map((message, index) => {
+            const plan = message.role === 'assistant' ? canvasPlanFromMessage(message.content) : null
+            const visibleContent = message.role === 'assistant' ? message.content.replace(/```canvas-plan\s*\n?[\s\S]*?```/ig, '').trim() : message.content
+            const applied = appliedPlans.has(index)
+            return <div className={`media-agent__message media-agent__message--${message.role}`} key={`${message.role}-${index}`}>{message.role === 'assistant' && <span className="media-agent__message-mark"><Clapperboard aria-hidden="true" /></span>}<div className="media-agent__response"><Markdown remarkPlugins={[remarkGfm]}>{visibleContent || '正在整理镜头…'}</Markdown>{plan && page === 'canvas' && onApplyCanvasPlan && <div className="media-agent__plan"><span><WandSparkles aria-hidden="true" />{planSummary(plan)}</span><button type="button" disabled={applied || busy} onClick={() => { onApplyCanvasPlan(plan); setAppliedPlans((current) => new Set(current).add(index)) }}>{applied ? <><Check aria-hidden="true" />已应用</> : '应用到画布'}</button></div>}</div></div>
+          })}
         </div>
         {messages.length === 0 && <div className="media-agent__prompts" aria-label="快捷提问">{prompts.map((prompt, index) => <button type="button" key={prompt} onClick={() => void send(prompt)} disabled={busy}><span className="media-agent__prompt-icon">{index === 0 ? <Clapperboard /> : <WandSparkles />}</span><span className="media-agent__prompt-copy"><strong>{page === 'assets' ? (index === 0 ? '整理素材' : '补充画面') : page === 'project' ? (index === 0 ? '规划节奏' : '补齐素材') : index === 0 ? '拆成分镜' : '检查节奏'}</strong><small>{page === 'assets' ? (index === 0 ? '命名与分组' : '列出拍摄清单') : page === 'project' ? (index === 0 ? '安排镜头与叙事' : '列出素材清单') : index === 0 ? '整理镜头与画面' : '梳理转场与衔接'}</small></span><span>↗</span></button>)}</div>}
       </div>

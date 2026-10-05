@@ -99,7 +99,7 @@ export function MediaHome() {
   </div>
 }
 
-function ProjectDialog({ action, onClose, onSaved }: { action: ProjectAction; onClose: () => void; onSaved: (project?: Project) => void }) {
+export function ProjectDialog({ action, onClose, onSaved }: { action: ProjectAction; onClose: () => void; onSaved: (project?: Project) => void }) {
   const [name, setName] = useState(action.project?.name ?? action.title ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')

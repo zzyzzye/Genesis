@@ -1,18 +1,20 @@
 import './MediaPage.css'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { developmentLogin, getCurrentUser, type CurrentUser } from '../../lib/api'
 import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken } from '../../lib/auth'
 import { MediaHome } from './MediaHome'
 import { ProjectCanvas } from './ProjectCanvas'
 import { AccountAssetsPage, ProjectAssetsPage, ProjectOverviewPage } from './ProjectWorkspace'
-import { MediaAssistant, type MediaAssistantNode } from './MediaAssistant'
+import { MediaAssistant, type MediaAssistantNode, type MediaCanvasPlan } from './MediaAssistant'
 
 export function MediaPage() {
   const [user, setUser] = useState<CurrentUser | null>(null)
   const [checking, setChecking] = useState(() => Boolean(getStoredAuthToken()) || import.meta.env.DEV)
   const [authError, setAuthError] = useState('')
   const [agentNode, setAgentNode] = useState<MediaAssistantNode | null>(null)
+  const [agentCanvasApply, setAgentCanvasApply] = useState<((plan: MediaCanvasPlan) => void) | null>(null)
+  const handleAgentCanvasApplyChange = useCallback((apply: ((plan: MediaCanvasPlan) => void) | null) => setAgentCanvasApply(() => apply), [])
   const { projectId } = useParams()
   const location = useLocation()
   useEffect(() => {
@@ -58,9 +60,9 @@ export function MediaPage() {
   const content = !projectId
     ? (page === 'assets' ? <AccountAssetsPage /> : <MediaHome />)
     : page === 'canvas'
-      ? <ProjectCanvas key={`${user.id}:${projectId}`} projectId={projectId} userId={user.id} onAgentNodeChange={setAgentNode} />
+      ? <ProjectCanvas key={`${user.id}:${projectId}`} projectId={projectId} userId={user.id} onAgentNodeChange={setAgentNode} onAgentCanvasApplyChange={handleAgentCanvasApplyChange} />
       : page === 'assets'
         ? <ProjectAssetsPage projectId={projectId} />
         : <ProjectOverviewPage projectId={projectId} />
-  return <>{content}<MediaAssistant token={getStoredAuthToken()} page={page} projectId={projectId} selectedNode={page === 'canvas' ? agentNode : null} /></>
+  return <>{content}<MediaAssistant token={getStoredAuthToken()} page={page} projectId={projectId} selectedNode={page === 'canvas' ? agentNode : null} onApplyCanvasPlan={page === 'canvas' ? agentCanvasApply ?? undefined : undefined} /></>
 }

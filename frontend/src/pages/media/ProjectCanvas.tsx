@@ -1,4 +1,5 @@
 import '@xyflow/react/dist/style.css'
+import './CanvasNodes.css'
 
 import {
   Background,
@@ -22,22 +23,30 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, GripVertical, ImagePlus, Map as MapIcon, Music2, Play, Shapes, StickyNote, Type, Upload } from 'lucide-react'
-import { api, type Asset, type Document, type Edge, type Node, type Project, type VideoFrame, upload } from './api'
+import { api, defaultGenerationSettings, type Asset, type Document, type Edge, type Node, type Project, type VideoFrame, upload } from './api'
+import { incomingReferences } from './canvasReferences'
 import { AssetPreview } from './AssetPreview'
-import type { MediaAssistantNode } from './MediaAssistant'
+import { ProjectDialog } from './MediaHome'
+import type { MediaAssistantNode, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
 import { groupSelection, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
 
 type CanvasNodeData = {
   source: Node
   asset?: Asset
+  assetsLoading: boolean
   previewAssets: Asset[]
+  references: ReturnType<typeof incomingReferences>
+  referenceCandidates: Node[]
+  onReferenceChange: (id: string, sourceId: string, connected: boolean) => void
   frame: VideoFrame
   zoom: number
   onTextChange: (id: string, text: string) => void
   onPatch: (id: string, patch: Partial<Node>, record?: boolean) => void
   onOpenAssets: () => void
+  onOpenNodeAssets: (id: string, kind: 'image' | 'audio' | 'video') => void
   onUploadPreview: (id: string, file: File) => Promise<void>
+  onUploadNodeAsset: (id: string, kind: 'image' | 'audio', file: File) => Promise<void>
   onAddConnected: (id: string, side: 'left' | 'right') => void
   onConvertToVideo: (id: string) => void
   onInteractionStart: () => void
@@ -53,6 +62,15 @@ function CanvasResizeCorner({ id, data, minWidth, minHeight, label }: { id: stri
     type="button"
     aria-label={label}
     title="拖动调整节点大小"
+    onKeyDown={(event) => {
+      const delta = event.shiftKey ? 50 : 10
+      const changes: Record<string, [number, number]> = { ArrowRight: [delta, 0], ArrowLeft: [-delta, 0], ArrowDown: [0, delta], ArrowUp: [0, -delta] }
+      const change = changes[event.key]
+      if (!change) return
+      event.preventDefault()
+      event.stopPropagation()
+      data.onPatch(id, resizedNodeDimensions(data.source.width, data.source.height, change[0], change[1], 1, minWidth, minHeight))
+    }}
     onPointerDown={(event) => {
       event.preventDefault()
       event.stopPropagation()
@@ -80,33 +98,76 @@ function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
   const preview = data.asset && data.asset.kind !== 'audio' ? data.asset : null
   const fileInput = useRef<HTMLInputElement>(null)
   const appendPromptToken = (token: string) => data.onTextChange(id, `${node.text}${node.text ? ' ' : ''}${token}`)
-  const aspectRatio = data.frame.width >= data.frame.height ? '16:9' : '9:16'
-  const videoQuality = Math.min(data.frame.width, data.frame.height)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [cameraOpen, setCameraOpen] = useState(false)
+  const [durationError, setDurationError] = useState('')
+  const settings = node.generation ?? defaultGenerationSettings()
+  const patchSettings = (patch: Partial<typeof settings>) => data.onPatch(id, { generation: { ...settings, ...patch } })
   return <article className={`media-video-card ${selected ? 'is-selected' : ''}`} aria-label={node.name || '视频节点'}>
     <CanvasResizeCorner id={id} data={data} minWidth={420} minHeight={470} label="调整视频节点大小" />
     <div className="media-node-grip media-node-drag-handle media-video-grip" title="拖动移动节点"><Play size={17} fill="currentColor" aria-hidden="true" /><input className="nodrag" aria-label="视频节点名称" value={node.name ?? ''} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onPatch(id, { name: event.target.value }, false)} /><GripVertical className="media-node-drag-mark" size={16} aria-hidden="true" /></div>
     <div className="media-video-preview-shell">
       <Handle type="target" position={Position.Left} aria-label="连接上一个视频节点" title="点击新建上一段，或拖动连接已有节点" onClick={(event) => { event.stopPropagation(); data.onAddConnected(id, 'left') }} />
       <div className="media-video-screen nodrag nowheel nopan" style={{ aspectRatio: `${data.frame.width} / ${data.frame.height}` }}>
-        {preview ? <AssetPreview asset={preview} controls /> : <div className="media-video-placeholder"><Play size={54} fill="currentColor" strokeWidth={0} aria-hidden="true" /><span>从素材开始这一段</span><div><button type="button" onClick={() => fileInput.current?.click()}>导入预览素材</button><button type="button" onClick={data.onOpenAssets}>选择作品素材</button></div></div>}
+        {preview ? <AssetPreview asset={preview} controls /> : node.asset_id && data.assetsLoading ? <div role="status">正在加载预览素材…</div> : <div className="media-video-placeholder"><Play size={54} fill="currentColor" strokeWidth={0} aria-hidden="true" /><span>从素材开始这一段</span><div><button type="button" onClick={() => fileInput.current?.click()}>导入预览素材</button><button type="button" onClick={() => data.onOpenNodeAssets(id, 'video')}>选择作品素材</button></div></div>}
       </div>
       <Handle type="source" position={Position.Right} aria-label="连接下一个视频节点" title="点击新建下一段，或拖动连接已有节点" onClick={(event) => { event.stopPropagation(); data.onAddConnected(id, 'right') }} />
     </div>
     <section className="media-video-composer nodrag nowheel nopan" aria-label="镜头草稿">
       <div className="media-video-composer-top">
-        <button type="button" onClick={data.onOpenAssets}>＋ 参考</button>
-        <button type="button" onClick={() => appendPromptToken('【标记】')}>标记</button>
-        <button type="button" onClick={() => appendPromptToken('【特效】')}>特效</button>
-        <button type="button" onClick={() => appendPromptToken('【角色】')}>角色库</button>
-        <button type="button" onClick={() => appendPromptToken('【运镜】')}>运镜</button>
+        <label className="media-node-reference-picker"><span>镜头参考</span><select aria-label="添加参考节点" value="" onChange={(event) => { if (event.target.value) data.onReferenceChange(id, event.target.value, true) }}><option value="">连接参考…</option>{data.referenceCandidates.map((source) => <option key={source.id} value={source.id}>{source.name || source.text.slice(0, 30) || '未命名节点'}</option>)}</select></label>
+        <button type="button" aria-expanded={cameraOpen} onClick={() => setCameraOpen(!cameraOpen)}>运镜</button>
+        <button type="button" aria-expanded={settingsOpen} onClick={() => setSettingsOpen(!settingsOpen)}>生成参数</button>
       </div>
+      {cameraOpen && <div className="media-node-camera-options" aria-label="选择运镜">{['固定镜头', '缓慢推近', '拉远镜头', '跟随拍摄', '镜头上摇', '镜头下摇', '环绕拍摄', '手持拍摄'].map((camera) => <button key={camera} type="button" onClick={() => { appendPromptToken(`运镜：${camera}。`); setCameraOpen(false) }}>{camera}</button>)}</div>}
+      {data.references.length > 0 && <div className="media-node-references" aria-label="连入参考">{data.references.map(({ node: source, asset }) => <div key={source.id}><span title={asset?.name || source.name || source.text}>{asset ? `${asset.kind === 'image' ? '图片' : asset.kind === 'audio' ? '音频' : '视频'} · ${asset.name}` : source.name || source.text.slice(0, 40) || '空节点'}</span>{source.text && <button type="button" onClick={() => appendPromptToken(source.text)}>引用文字</button>}<small>{source.asset_id && !asset ? (data.assetsLoading ? '加载中' : '素材不可用') : !asset && !source.text ? '请先补充内容' : '已连接'}</small><button type="button" aria-label={`断开参考：${asset?.name || source.name || '节点'}`} onClick={() => data.onReferenceChange(id, source.id, false)}>断开</button></div>)}</div>}
       <input ref={fileInput} className="media-video-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska" aria-label="导入视频节点预览素材" onChange={(event) => { const file = event.target.files?.[0]; if (file) void data.onUploadPreview(id, file); event.target.value = '' }} />
-      <textarea aria-label="镜头描述" value={node.text} placeholder="描述你想要生成的画面内容，@ 引用素材" maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
+      <textarea aria-label="镜头描述" value={node.text} placeholder="描述画面、人物动作与声音，可引用连入节点的文字" maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
       <div className="media-video-composer-footer">
         <label className="media-video-asset-picker"><span>预览</span><select aria-label="视频节点预览素材" value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{data.previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
-        <span className="media-video-spec">{aspectRatio} · {videoQuality}P ·</span><label><select aria-label="镜头时长" value={node.duration_seconds ?? 5} onChange={(event) => data.onPatch(id, { duration_seconds: Number(event.target.value) })}>{[5, 10, 15, 30, 60].map((seconds) => <option key={seconds} value={seconds}>{seconds} 秒</option>)}</select></label><small>草稿</small>
+        <span className="media-video-spec">{settings.ratio} · {settings.resolution}</span><label><input key={node.duration_seconds} type="number" aria-label="镜头时长" aria-invalid={Boolean(durationError)} aria-describedby={durationError ? `duration-error-${id}` : undefined} min={1} max={600} step={1} defaultValue={node.duration_seconds ?? 5} onFocus={data.onInteractionStart} onBlur={(event) => {
+          const seconds = Number(event.target.value)
+          if (!Number.isInteger(seconds) || seconds < 1 || seconds > 600) {
+            setDurationError('请输入 1–600 的整数秒，已保留原时长。')
+            event.target.value = String(node.duration_seconds ?? 5)
+          } else {
+            setDurationError('')
+            if (seconds !== node.duration_seconds) data.onPatch(id, { duration_seconds: seconds }, false)
+          }
+          data.onInteractionEnd()
+        }} />秒</label><small>草稿</small>
       </div>
+      <p className="media-node-field-error" id={`duration-error-${id}`} aria-live="polite">{durationError}</p>
+      {settingsOpen && <div className="media-node-generation-settings" aria-label="生成参数">
+        <label>参考模式<select aria-label="参考模式" value={settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}><option value="text">文生视频</option><option value="reference">素材参考</option><option value="first_last">首尾帧</option></select></label>
+        <label>画面比例<select aria-label="画面比例" value={settings.ratio} onChange={(event) => patchSettings({ ratio: event.target.value as typeof settings.ratio })}>{['16:9', '9:16', '1:1', '4:3', '3:4'].map((ratio) => <option key={ratio}>{ratio}</option>)}</select></label>
+        <label>清晰度<select aria-label="生成清晰度" value={settings.resolution} onChange={(event) => patchSettings({ resolution: event.target.value as typeof settings.resolution })}>{['480P', '720P', '1080P'].map((quality) => <option key={quality}>{quality}</option>)}</select></label>
+        <label>数量<select aria-label="生成数量" value={settings.count} onChange={(event) => patchSettings({ count: Number(event.target.value) as typeof settings.count })}>{[1, 2, 4].map((count) => <option key={count} value={count}>{count} 个</option>)}</select></label>
+        <label>生成声音<select aria-label="生成声音" value={settings.sound ? 'on' : 'off'} onChange={(event) => patchSettings({ sound: event.target.value === 'on' })}><option value="on">开启</option><option value="off">关闭</option></select></label>
+        <p>参数随镜头保存；生成服务接入后才能提交任务。</p>
+      </div>}
     </section>
+  </article>
+}
+
+function MediaAssetNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
+  const node = data.source
+  const kind = node.type === 'image' ? 'image' : 'audio'
+  const isImage = kind === 'image'
+  const asset = data.asset?.kind === kind ? data.asset : undefined
+  const fileInput = useRef<HTMLInputElement>(null)
+  const label = isImage ? '图片节点' : '音频节点'
+  const Icon = isImage ? ImagePlus : Music2
+  return <article className={`media-node media-node--media ${selected ? 'is-selected' : ''}`} aria-label={node.name || label}>
+    <CanvasResizeCorner id={id} data={data} minWidth={240} minHeight={180} label={`调整${label}大小`} />
+    <Handle type="target" position={Position.Left} aria-label="输入连接点" />
+    <div className="media-node-grip media-node-drag-handle" title="拖动移动节点"><Icon size={16} aria-hidden="true" /><input className="nodrag" aria-label={`${label}名称`} value={node.name ?? ''} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onPatch(id, { name: event.target.value }, false)} /><GripVertical className="media-node-drag-mark" size={16} aria-hidden="true" /></div>
+    <input ref={fileInput} className="media-video-file-input" type="file" accept={isImage ? 'image/jpeg,image/png,image/webp,image/gif,image/avif' : 'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/webm,audio/aac'} aria-label={`导入${label}素材`} onChange={(event) => { const file = event.target.files?.[0]; if (file) void data.onUploadNodeAsset(id, kind, file); event.target.value = '' }} />
+    {node.asset_id && data.assetsLoading ? <div className="media-node-media-empty" role="status">正在加载素材…</div> : asset
+      ? <div className="nodrag nowheel nopan media-node-preview"><AssetPreview asset={asset} controls /></div>
+      : <div className="nodrag nowheel nopan media-node-media-empty"><Icon size={28} aria-hidden="true" /><strong>{node.text.trim() || `尚未选择${isImage ? '图片' : '音频'}素材`}</strong><span>{isImage ? '导入一张图片，或从作品素材库选择。' : '导入一段音频，或从作品素材库选择。'}</span><div><button type="button" onClick={() => fileInput.current?.click()}>导入{isImage ? '图片' : '音频'}</button><button type="button" onClick={() => data.onOpenNodeAssets(id, kind)}>选择作品素材</button></div></div>}
+    {asset && <div className="media-node-media-actions nodrag nowheel nopan"><button type="button" onClick={() => fileInput.current?.click()}>导入替换</button><button type="button" onClick={() => data.onOpenNodeAssets(id, kind)}>选择作品素材</button><button type="button" onClick={() => data.onPatch(id, { asset_id: null })}>清空节点素材</button></div>}
+    <Handle type="source" position={Position.Right} aria-label="输出连接点" />
   </article>
 }
 
@@ -142,7 +203,7 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
   </article>
 }
 
-const nodeTypes = { asset: CanvasNodeView, note: CanvasNodeView, text: CanvasNodeView, shape: CanvasNodeView, group: CanvasNodeView, video: VideoNodeView }
+const nodeTypes = { asset: CanvasNodeView, note: CanvasNodeView, text: CanvasNodeView, shape: CanvasNodeView, group: CanvasNodeView, video: VideoNodeView, image: MediaAssetNodeView, audio: MediaAssetNodeView }
 function documentNode(flowNode: CanvasFlowNode): Node {
   return {
     ...flowNode.data.source,
@@ -153,12 +214,14 @@ function documentNode(flowNode: CanvasFlowNode): Node {
   }
 }
 
-export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projectId: string; userId: string; onAgentNodeChange?: (node: MediaAssistantNode | null) => void }) {
+export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCanvasApplyChange }: { projectId: string; userId: string; onAgentNodeChange?: (node: MediaAssistantNode | null) => void; onAgentCanvasApplyChange?: (apply: ((plan: MediaCanvasPlan) => void) | null) => void }) {
   const navigate = useNavigate()
   const location = useLocation()
   const canvas = useCanvas(projectId, userId)
   const [project, setProject] = useState<Project | null>(null)
   const [assets, setAssets] = useState<Record<string, Asset>>({})
+  const [assetsLoading, setAssetsLoading] = useState(true)
+  const [renameOpen, setRenameOpen] = useState(false)
   const [selected, setSelected] = useState<string[]>([])
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
   const [clipboardProjectId, setClipboardProjectId] = useState<string | null>(null)
@@ -167,9 +230,12 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
   const [showMiniMap, setShowMiniMap] = useState(false)
   const [draggingFile, setDraggingFile] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
-  const [previewRetry, setPreviewRetry] = useState<{ id: string; file: File } | null>(null)
+  const [previewRetry, setPreviewRetry] = useState<{ id: string; file: File; kind?: 'image' | 'audio' } | null>(null)
+  const uploadActive = useRef(false)
   const [tool, setTool] = useState<'select' | 'pan'>('select')
   const [error, setError] = useState('')
+  const [reloadOpen, setReloadOpen] = useState(false)
+  const reloadDialog = useRef<HTMLDialogElement>(null)
   const [flow, setFlow] = useState<ReactFlowInstance<CanvasFlowNode> | null>(null)
   const canvasElement = useRef<HTMLDivElement>(null)
   const nodeMenuElement = useRef<HTMLDivElement>(null)
@@ -179,6 +245,12 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
   const importedFromLibrary = useRef<string | null>(null)
   const clipboard = useRef<{ projectId: string; nodes: Node[]; edges: Edge[] } | null>(null)
   const pasteCount = useRef(0)
+  const agentPlanApplyRef = useRef<(plan: MediaCanvasPlan) => void>(() => undefined)
+
+  useEffect(() => {
+    if (reloadOpen) reloadDialog.current?.showModal()
+    else if (reloadDialog.current?.open) reloadDialog.current.close()
+  }, [reloadOpen])
 
   useEffect(() => {
     if (!nodeMenu) return
@@ -223,11 +295,22 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
     canvas.apply({ ...current, nodes: current.nodes.map((node) => node.id === id ? { ...node, ...patch } : node) }, record)
   }, [canvas])
 
+  const changeReference = useCallback((id: string, sourceId: string, connected: boolean) => {
+    const current = canvas.current.current
+    if (id === sourceId || !current.nodes.some((node) => node.id === sourceId && node.type !== 'group')) return
+    const existing = current.edges.some((edge) => edge.source === sourceId && edge.target === id)
+    if (existing === connected) return
+    const edges = connected ? [...current.edges, { id: crypto.randomUUID(), source: sourceId, target: id }] : current.edges.filter((edge) => edge.source !== sourceId || edge.target !== id)
+    canvas.apply({ ...current, edges })
+  }, [canvas])
+
   const openAssets = useCallback(() => {
     void canvas.save().then(() => navigate(`/media/projects/${projectId}/assets`)).catch((reason: Error) => setError(reason.message))
   }, [canvas, navigate, projectId])
 
   const uploadPreview = useCallback(async (id: string, file: File) => {
+    if (uploadActive.current) return
+    uploadActive.current = true
     setError('')
     setPreviewRetry(null)
     setUploadProgress(0)
@@ -239,6 +322,32 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
       setPreviewRetry({ id, file })
       setError(`预览素材导入失败：${(reason as Error).message}`)
     } finally {
+      uploadActive.current = false
+      setUploadProgress(null)
+    }
+  }, [patchNode, projectId])
+
+  const openNodeAssets = useCallback((id: string, kind: 'image' | 'audio' | 'video') => {
+    void canvas.save().then(() => navigate(`/media/projects/${projectId}/assets?targetNode=${encodeURIComponent(id)}&targetKind=${kind}`)).catch((reason: Error) => setError(reason.message))
+  }, [canvas, navigate, projectId])
+
+  const uploadNodeAsset = useCallback(async (id: string, kind: 'image' | 'audio', file: File) => {
+    if (uploadActive.current) return
+    if (!file.type.startsWith(`${kind}/`)) { setError(`请选择${kind === 'image' ? '图片' : '音频'}文件。`); return }
+    uploadActive.current = true
+    setError('')
+    setPreviewRetry(null)
+    setUploadProgress(0)
+    try {
+      const asset = await upload(`/projects/${projectId}/assets`, file, setUploadProgress)
+      if (asset.kind !== kind) { setError(`请选择${kind === 'image' ? '图片' : '音频'}文件。`); return }
+      setAssets((previous) => ({ ...previous, [asset.id]: asset }))
+      patchNode(id, { asset_id: asset.id })
+    } catch (reason) {
+      setPreviewRetry({ id, kind, file })
+      setError(`${kind === 'image' ? '图片' : '音频'}素材导入失败：${(reason as Error).message}`)
+    } finally {
+      uploadActive.current = false
       setUploadProgress(null)
     }
   }, [patchNode, projectId])
@@ -261,7 +370,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
   const fittedViewport = useCallback((document: Document) => {
     const nodes = document.nodes
     const rect = canvasElement.current?.getBoundingClientRect()
-    if (!rect) return null
+    if (!rect?.width || !rect.height) return null
     if (!nodes.length) return { x: 0, y: 0, zoom: 1 }
     const left = Math.min(...nodes.map((node) => node.x))
     const top = Math.min(...nodes.map((node) => node.y))
@@ -269,7 +378,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
     const bottom = Math.max(...nodes.map((node) => node.y + node.height))
     const paddingX = Math.min(100, Math.max(32, rect.width * .1))
     const paddingY = Math.min(180, Math.max(100, rect.height * .16))
-    const zoom = Math.max(.02, Math.min(2, (rect.width - paddingX * 2) / (right - left), (rect.height - paddingY * 2) / (bottom - top)))
+    const zoom = Math.max(.02, Math.min(1, (rect.width - paddingX * 2) / (right - left), (rect.height - paddingY * 2) / (bottom - top)))
     return {
       zoom,
       x: (rect.width - (right - left) * zoom) / 2 - left * zoom,
@@ -315,27 +424,36 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
     handles: node.type === 'video' ? [
       { type: 'target', position: Position.Left, x: -29, y: node.height / 2 - 92, width: 32, height: 32 },
       { type: 'source', position: Position.Right, x: node.width - 3, y: node.height / 2 - 92, width: 32, height: 32 },
+    ] : node.type !== 'group' ? [
+      { type: 'target', position: Position.Left, x: -4, y: node.height / 2 - 4, width: 8, height: 8 },
+      { type: 'source', position: Position.Right, x: node.width - 4, y: node.height / 2 - 4, width: 8, height: 8 },
     ] : undefined,
     selected: selected.includes(node.id),
     zIndex: node.type === 'group' ? -1 : 1,
     dragHandle: '.media-node-drag-handle',
-    ariaLabel: node.type === 'video' ? node.name || '视频节点' : node.type === 'note' ? '文字便签' : node.type === 'text' ? '文字节点' : node.type === 'shape' ? '形状节点' : node.type === 'group' ? node.text || '分组' : assets[node.asset_id ?? '']?.name ?? '素材不可用',
+    ariaLabel: node.type === 'video' ? node.name || '视频节点' : node.type === 'image' ? node.name || '图片节点' : node.type === 'audio' ? node.name || '音频节点' : node.type === 'note' ? '文字便签' : node.type === 'text' ? '文字节点' : node.type === 'shape' ? '形状节点' : node.type === 'group' ? node.text || '分组' : assets[node.asset_id ?? '']?.name ?? '素材不可用',
     data: {
       source: node,
       asset: assets[node.asset_id ?? ''],
+      assetsLoading,
       previewAssets,
+      references: incomingReferences(canvas.document, node.id, assets),
+      referenceCandidates: canvas.document.nodes.filter((source) => source.id !== node.id && source.type !== 'group' && !canvas.document.edges.some((edge) => edge.source === source.id && edge.target === node.id)),
+      onReferenceChange: changeReference,
       frame: canvas.document.frame,
       zoom: canvas.document.viewport.zoom,
       onTextChange: updateText,
       onPatch: patchNode,
       onOpenAssets: openAssets,
+      onOpenNodeAssets: openNodeAssets,
       onUploadPreview: uploadPreview,
+      onUploadNodeAsset: uploadNodeAsset,
       onAddConnected: addConnected,
       onConvertToVideo: convertToVideo,
       onInteractionStart: beginInteraction,
       onInteractionEnd: endInteraction,
     },
-  })), [addConnected, assets, beginInteraction, canvas.document.frame, canvas.document.nodes, canvas.document.viewport.zoom, convertToVideo, endInteraction, openAssets, patchNode, previewAssets, selected, updateText, uploadPreview])
+  })), [addConnected, assets, assetsLoading, beginInteraction, canvas.document, changeReference, convertToVideo, endInteraction, openAssets, openNodeAssets, patchNode, previewAssets, selected, updateText, uploadNodeAsset, uploadPreview])
 
   const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
     ...edge,
@@ -360,12 +478,26 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
     void api<Project>(`/projects/${projectId}`)
       .then(async (result) => { setProject(result); await fetchAssets() })
       .catch((reason: Error) => setError(reason.message))
+      .finally(() => setAssetsLoading(false))
   }, [fetchAssets, projectId])
 
   useEffect(() => {
     const assetId = new URLSearchParams(location.search).get('addAsset')
     const asset = assetId ? assets[assetId] : undefined
     if (!canvas.ready || !asset || importedFromLibrary.current === asset.id) return
+    const params = new URLSearchParams(location.search)
+    const targetNodeId = params.get('targetNode')
+    const targetKind = params.get('targetKind')
+    if (targetNodeId && (targetKind === 'image' || targetKind === 'audio' || targetKind === 'video')) {
+      const target = canvas.current.current.nodes.find((node) => node.id === targetNodeId && node.type === targetKind)
+      if (!target || (targetKind === 'video' ? asset.kind === 'audio' : asset.kind !== targetKind)) { queueMicrotask(() => setError('该素材不适用于目标节点，请重新选择。')); return }
+      importedFromLibrary.current = asset.id
+      const current = canvas.current.current
+      canvas.apply({ ...current, nodes: current.nodes.map((node) => node.id === target.id ? { ...node, asset_id: asset.id } : node) })
+      queueMicrotask(() => setSelected([target.id]))
+      void navigate(`/media/projects/${projectId}/canvas`, { replace: true })
+      return
+    }
     importedFromLibrary.current = asset.id
     const current = canvas.current.current
     let x = (window.innerWidth / 2 - current.viewport.x) / current.viewport.zoom - 160
@@ -373,7 +505,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
     for (let attempts = 0; attempts < 20 && current.nodes.some((node) => Math.abs(node.x - x) < 30 && Math.abs(node.y - y) < 30); attempts++) { x += 40; y += 40 }
     const node: Node = { id: crypto.randomUUID(), type: 'asset', asset_id: asset.id, text: '', x, y, width: 320, height: 260 }
     canvas.apply({ ...current, nodes: [...current.nodes, node] })
-    setSelected([node.id])
+    queueMicrotask(() => setSelected([node.id]))
     void navigate(`/media/projects/${projectId}/canvas`, { replace: true })
   }, [assets, canvas, location.search, navigate, projectId])
 
@@ -516,13 +648,70 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
     return origin
   }
 
-  function addNode(type: 'video' | 'note' | 'text' | 'shape') {
+  function applyAgentPlan(plan: MediaCanvasPlan) {
     const current = canvas.current.current
-    const size = type === 'video' ? { width: 820, height: 670 } : type === 'note' ? { width: 280, height: 220 } : type === 'text' ? { width: 320, height: 150 } : { width: 240, height: 150 }
-    const name = type === 'video' ? `视频节点 ${current.nodes.filter((item) => item.type === 'video').length + 1}` : ''
+    const nodes = [...current.nodes]
+    const edges = [...current.edges]
+    const affectedIds: string[] = []
+    let previousVideo = selected.length === 1 ? nodes.find((node) => node.id === selected[0] && node.type === 'video') : undefined
+    const place = (width: number, height: number, after?: Node) => {
+      const x = after ? after.x + after.width + 120 : center(width, height).x
+      let y = after ? after.y : center(width, height).y
+      const overlaps = () => nodes.some((node) => x < node.x + node.width + 24 && x + width + 24 > node.x && y < node.y + node.height + 24 && y + height + 24 > node.y)
+      while (overlaps()) y += height + 80
+      return { x, y }
+    }
+    for (const operation of plan.operations) {
+      if (operation.action === 'update_node') {
+        const index = nodes.findIndex((node) => node.id === operation.node_id)
+        if (index < 0) continue
+        const target = nodes[index]
+        if (!target) continue
+        nodes[index] = { ...target, ...(operation.name !== undefined ? { name: operation.name } : {}), ...(operation.text !== undefined ? { text: operation.text } : {}), ...(operation.duration_seconds !== undefined ? { duration_seconds: operation.duration_seconds } : {}) }
+        affectedIds.push(operation.node_id)
+        continue
+      }
+      if (operation.action === 'add_note') {
+        const node: Node = { id: crypto.randomUUID(), type: 'note', asset_id: null, name: '', duration_seconds: 5, text: operation.text, ...place(280, 220, previousVideo), width: 280, height: 220 }
+        nodes.push(node); affectedIds.push(node.id)
+        continue
+      }
+      if (operation.action === 'add_image' || operation.action === 'add_audio') {
+        const type = operation.action === 'add_image' ? 'image' : 'audio'
+        const size = type === 'image' ? { width: 360, height: 280 } : { width: 360, height: 230 }
+        const node: Node = { id: crypto.randomUUID(), type, asset_id: null, name: operation.name, duration_seconds: 5, text: operation.text, ...place(size.width, size.height, previousVideo), ...size }
+        nodes.push(node); affectedIds.push(node.id)
+        continue
+      }
+      const requestedSource = operation.connect_from_id ? nodes.find((node) => node.id === operation.connect_from_id && node.type === 'video') : previousVideo
+      const node: Node = { id: crypto.randomUUID(), type: 'video', asset_id: null, name: operation.name, duration_seconds: operation.duration_seconds, text: operation.text, ...place(820, 670, requestedSource), width: 820, height: 670 }
+      nodes.push(node); affectedIds.push(node.id)
+      if (requestedSource) edges.push({ id: crypto.randomUUID(), source: requestedSource.id, target: node.id })
+      previousVideo = node
+    }
+    if (!affectedIds.length) return
+    canvas.apply({ ...current, nodes, edges })
+    setSelected(affectedIds)
+    setSelectedEdges([])
+    setError('')
+  }
+
+  useEffect(() => { agentPlanApplyRef.current = applyAgentPlan })
+  useEffect(() => {
+    if (!canvas.ready) { onAgentCanvasApplyChange?.(null); return }
+    const apply = (plan: MediaCanvasPlan) => agentPlanApplyRef.current(plan)
+    onAgentCanvasApplyChange?.(apply)
+    return () => onAgentCanvasApplyChange?.(null)
+  }, [canvas.ready, onAgentCanvasApplyChange])
+
+  function addNode(type: 'video' | 'image' | 'audio' | 'note' | 'text' | 'shape') {
+    const current = canvas.current.current
+    const size = type === 'video' ? { width: 820, height: 670 } : type === 'image' ? { width: 360, height: 280 } : type === 'audio' ? { width: 360, height: 230 } : type === 'note' ? { width: 280, height: 220 } : type === 'text' ? { width: 320, height: 150 } : { width: 240, height: 150 }
+    const label = type === 'video' ? '视频节点' : type === 'image' ? '图片节点' : type === 'audio' ? '音频节点' : ''
+    const name = label ? `${label} ${current.nodes.filter((item) => item.type === type).length + 1}` : ''
     const node: Node = { id: crypto.randomUUID(), type, asset_id: null, name, duration_seconds: 5, text: '', ...center(size.width, size.height), ...size }
     const next = { ...current, nodes: [...current.nodes, node] }
-    canvas.apply(type === 'video' ? { ...next, viewport: fittedViewport({ ...next, nodes: [node] }) ?? current.viewport } : next)
+    canvas.apply({ ...next, viewport: fittedViewport({ ...next, nodes: [node] }) ?? current.viewport })
     setSelected([node.id])
     setNodeMenu(false)
   }
@@ -599,8 +788,12 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
 
   const viewport = canvas.document.viewport
   return <main className="media-editor">
-    <div className="media-project-menu"><div className="media-project-controls"><button className="media-project-back" aria-label="返回作品页" title="返回作品页" onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}`) })}><ArrowLeft size={17} /></button><button className="media-project-trigger" aria-expanded={menu} aria-label="作品菜单" onClick={() => { setMenu(!menu); setNodeMenu(false) }}><span className="media-project-name">{project?.name ?? '作品'}</span><ChevronDown size={15} /></button></div>{menu && <div className="media-menu-content"><p role="status">{canvas.status}</p><label className="media-background-setting">画布背景<select aria-label="画布背景" value={canvas.document.background} onChange={(event) => canvas.apply({ ...canvas.current.current, background: event.target.value as Document['background'] })}><option value="dots">点阵</option><option value="lines">网格</option><option value="none">纯色</option></select></label><button onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}/assets`) })}>作品素材库</button><button onClick={() => { const name = window.prompt('作品名称', project?.name); if (name?.trim()) void action(async () => { setProject(await api<Project>(`/projects/${projectId}`, 'PATCH', { name })) }) }}>重命名作品</button><button onClick={() => void action(canvas.save)}>立即保存 / 重试</button></div>}</div>
-    {(error || canvas.status.startsWith('保存失败') || canvas.conflict || !canvas.ready) && <div className="media-editor-notice" role="status">{error || canvas.status}{previewRetry && error.startsWith('预览素材导入失败') ? <button onClick={() => void uploadPreview(previewRetry.id, previewRetry.file)}>重试上传</button> : <button onClick={() => void action(canvas.ready ? canvas.save : () => canvas.load(true))}>重试</button>}{canvas.conflict && <><button onClick={() => { if (window.confirm('放弃本地修改并加载服务器版本？')) void action(() => canvas.load()) }}>重新加载</button><button onClick={() => void action(fork)}>保留为新作品</button></>}<button onClick={() => void navigate(`/media/projects/${projectId}`)}>作品页</button></div>}
+    <div className="media-project-menu"><div className="media-project-controls"><button className="media-project-back" aria-label="返回作品页" title="返回作品页" onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}`) })}><ArrowLeft size={17} /></button><button className="media-project-trigger" aria-expanded={menu} aria-label="作品菜单" onClick={() => { setMenu(!menu); setNodeMenu(false) }}><span className="media-project-name">{project?.name ?? '作品'}</span><ChevronDown size={15} /></button></div>{menu && <div className="media-menu-content"><p role="status">{canvas.status}</p><label className="media-background-setting">画布背景<select aria-label="画布背景" value={canvas.document.background} onChange={(event) => canvas.apply({ ...canvas.current.current, background: event.target.value as Document['background'] })}><option value="dots">点阵</option><option value="lines">网格</option><option value="none">纯色</option></select></label><button onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}/assets`) })}>作品素材库</button><button disabled={!project} onClick={() => setRenameOpen(true)}>重命名作品</button><button onClick={() => void action(canvas.save)}>立即保存 / 重试</button></div>}</div>
+    {(error || canvas.status.startsWith('保存失败') || canvas.conflict || !canvas.ready) && <div className="media-editor-notice" role="status">{error || canvas.status}{previewRetry ? <button onClick={() => void (previewRetry.kind ? uploadNodeAsset(previewRetry.id, previewRetry.kind, previewRetry.file) : uploadPreview(previewRetry.id, previewRetry.file))}>重试上传</button> : <button onClick={() => void action(canvas.ready ? canvas.save : () => canvas.load(true))}>重试</button>}{canvas.conflict && <><button onClick={() => setReloadOpen(true)}>重新加载</button><button onClick={() => void action(fork)}>保留为新作品</button></>}<button onClick={() => void navigate(`/media/projects/${projectId}`)}>作品页</button></div>}
+    {renameOpen && project && <ProjectDialog action={{ kind: 'rename', project }} onClose={() => setRenameOpen(false)} onSaved={(updated) => { if (updated) setProject(updated); setRenameOpen(false) }} />}
+    <dialog ref={reloadDialog} className="media-home-dialog" aria-labelledby="canvas-reload-title" aria-describedby="canvas-reload-description" onCancel={() => setReloadOpen(false)} onClose={() => setReloadOpen(false)}>
+      <h2 id="canvas-reload-title">加载服务器版本？</h2><p id="canvas-reload-description">当前本地修改会被替换。需要保留时，请取消并选择“保留为新作品”。</p><footer><button autoFocus type="button" onClick={() => setReloadOpen(false)}>取消</button><button type="button" onClick={() => { setReloadOpen(false); void action(() => canvas.load()) }}>放弃本地修改并加载</button></footer>
+    </dialog>
     <div ref={canvasElement} className={`media-canvas ${draggingFile ? 'is-file-over' : ''}`} aria-label="作品无限画布" onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setDraggingFile(true) } }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as globalThis.Node | null)) setDraggingFile(false) }} onDrop={(event) => void importFiles(event)}>
       {canvas.ready && <ReactFlow<CanvasFlowNode>
         nodes={flowNodes}
@@ -629,7 +822,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
         onMove={(_, next) => updateViewport(next)}
         onMoveEnd={(_, next) => { viewportActive.current = false; updateViewport(next) }}
         proOptions={{ hideAttribution: true }}
-      >{canvas.document.background !== 'none' && <Background variant={canvas.document.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots} color="#3a444b" gap={24} size={1} />}{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#101116cc" nodeColor={(node) => node.type === 'video' ? '#7b8a92' : node.type === 'shape' ? '#8298a3' : node.type === 'note' ? '#758992' : '#687981'} />}</ReactFlow>}
+      >{canvas.document.background !== 'none' && <Background variant={canvas.document.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots} color="#3a444b" gap={24} size={1} />}{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#101116cc" nodeColor={(node) => node.type === 'video' ? '#7b8a92' : node.type === 'image' ? '#8d9da0' : node.type === 'audio' ? '#768d92' : node.type === 'shape' ? '#8298a3' : node.type === 'note' ? '#758992' : '#687981'} />}</ReactFlow>}
       {draggingFile && <div className="media-canvas-drop" aria-hidden="true">松开鼠标，将素材放入画布</div>}
       {uploadProgress !== null && <div className="media-canvas-upload" role="status">正在导入素材 · {uploadProgress}%</div>}
       {canvas.ready && canvas.document.nodes.length === 0 && !nodeMenu && <div className="media-canvas-empty"><small>视频创作空间</small><h1>从第一个镜头开始。</h1><p>创建视频节点，添加素材、描述画面，再连接下一段。</p><div className="media-canvas-empty-actions"><button className="media-accent" onClick={() => addNode('video')}>＋ 添加视频节点</button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>打开作品素材库</button></div></div>}
@@ -638,9 +831,9 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange }: { projec
       <div className="media-node-palette-heading"><strong>添加节点</strong><button type="button" aria-label="关闭节点菜单" onClick={() => setNodeMenu(false)}>×</button></div>
       <div className="media-node-palette-grid">
         <button type="button" onClick={() => addNode('text')}><Type /><span>文本</span></button>
-        <button type="button" onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><ImagePlus /><span>图片</span></button>
+        <button type="button" onClick={() => addNode('image')}><ImagePlus /><span>图片</span></button>
         <button type="button" onClick={() => addNode('video')}><Film /><span>视频</span></button>
-        <button type="button" onClick={() => void navigate(`/media/projects/${projectId}/assets`)}><Music2 /><span>音频</span></button>
+        <button type="button" onClick={() => addNode('audio')}><Music2 /><span>音频</span></button>
         <button type="button" onClick={() => addNode('note')}><StickyNote /><span>便签</span></button>
         <button type="button" onClick={() => addNode('shape')}><Shapes /><span>形状</span></button>
       </div>

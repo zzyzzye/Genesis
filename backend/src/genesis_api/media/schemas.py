@@ -9,13 +9,23 @@ class ProjectWrite(BaseModel):
     name: str = Field(min_length=1, max_length=120)
 
 
+class GenerationSettings(BaseModel):
+    model: str = Field(default="", max_length=200)
+    mode: Literal["text", "reference", "first_last"] = "text"
+    ratio: Literal["16:9", "9:16", "1:1", "4:3", "3:4"] = "16:9"
+    resolution: Literal["480P", "720P", "1080P"] = "720P"
+    count: Literal[1, 2, 4] = 1
+    sound: bool = True
+
+
 class CanvasNode(BaseModel):
     id: UUID
-    type: Literal["asset", "note", "text", "shape", "group", "video"]
+    type: Literal["asset", "note", "text", "shape", "group", "video", "image", "audio"]
     asset_id: UUID | None = None
     member_ids: list[UUID] = Field(default_factory=list, max_length=1000)
     name: str = Field(default="", max_length=120)
-    duration_seconds: int = Field(default=5, ge=1, le=600)
+    duration_seconds: int = Field(default=5, strict=True, ge=1, le=600)
+    generation: GenerationSettings = Field(default_factory=GenerationSettings)
     text: str = Field(default="", max_length=20000)
     x: float = Field(allow_inf_nan=False, ge=-1000000, le=1000000)
     y: float = Field(allow_inf_nan=False, ge=-1000000, le=1000000)
