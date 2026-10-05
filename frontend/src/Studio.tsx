@@ -53,6 +53,7 @@ import { StudioNavigation } from './studio/StudioNavigation'
 import type { StudioSection } from './studio/StudioNavigationModel'
 import { BlogAssistant } from './features/blog/agent/BlogAssistant'
 import { StudioOverview } from './studio/StudioOverview'
+import { TaxonomyWorkspace } from './studio/TaxonomyWorkspace'
 
 import {
   createAdminBlogPost,
@@ -616,6 +617,8 @@ function MarkdownEditor({
 const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: 'BLOG CONTROL CENTER', title: '仪表盘', description: '掌握内容状态并快速进入今天的工作。' },
   posts: { eyebrow: 'CONTENT / ARTICLES', title: '文章管理', description: '编辑、整理并发布长期内容。' },
+  categories: { eyebrow: 'CONTENT / CATEGORIES', title: '分类管理', description: '整理文章主题，维护可复用的分类。' },
+  tags: { eyebrow: 'CONTENT / TAGS', title: '标签管理', description: '管理文章关键词，方便内容关联与检索。' },
   pages: { eyebrow: 'CONTENT / PAGES', title: '页面管理', description: '规划站点里的固定页面和专题入口。' },
   comments: { eyebrow: 'CONTENT / COMMENTS', title: '评论管理', description: '查看读者反馈与讨论。' },
   attachments: { eyebrow: 'CONTENT / ASSETS', title: '附件管理', description: '统一整理图片、文件与媒体素材。' },
@@ -763,7 +766,7 @@ function SectionPlaceholder({ section }: { section: Exclude<StudioSection, 'over
   )
 }
 
-const studioSectionIds: StudioSection[] = ['overview', 'posts', 'pages', 'comments', 'attachments', 'links', 'themes', 'menus', 'users', 'settings']
+const studioSectionIds: StudioSection[] = ['overview', 'posts', 'categories', 'tags', 'pages', 'comments', 'attachments', 'links', 'themes', 'menus', 'users', 'settings']
 
 function getStudioRoute(pathname: string): {
   activeSection: StudioSection
@@ -803,8 +806,8 @@ function Dashboard({
   const { activeSection, postId, postView, isEditorOpen } = getStudioRoute(location.pathname)
   const [editor, setEditor] = useState<EditorState>(() => createEmptyEditor())
   const [managedPosts, setManagedPosts] = useState(posts)
-  const [tagOptions] = useState(tags)
-  const [categoryOptions] = useState(categories)
+  const [tagOptions, setTagOptions] = useState(tags)
+  const [categoryOptions, setCategoryOptions] = useState(categories)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const studioBasePath = '/studio/blog'
@@ -877,6 +880,22 @@ function Dashboard({
 
   const meta = sectionMeta[activeSection]
 
+  function taxonomyChanged(kind: 'categories' | 'tags', saved: BlogTag | null, previous: BlogTag | null) {
+    const update = (items: BlogTag[]) => saved ? [...items.filter((item) => item.id !== saved.id), saved] : items.filter((item) => item.id !== previous?.id)
+    if (kind === 'categories') {
+      setCategoryOptions(update)
+      if (previous && saved) setManagedPosts((current) => current.map((post) => post.category?.id === previous.id ? { ...post, category: saved } : post))
+      if (previous && !saved) setEditor((current) => ({ ...current, categoryId: current.categoryId === previous.id ? null : current.categoryId }))
+    } else {
+      setTagOptions(update)
+      if (previous && saved) {
+        setManagedPosts((current) => current.map((post) => ({ ...post, tags: post.tags.map((tag) => tag.id === previous.id ? saved : tag) })))
+        setEditor((current) => ({ ...current, selectedTagSlugs: current.selectedTagSlugs.map((slug) => slug === previous.slug ? saved.slug : slug) }))
+      }
+      if (previous && !saved) setEditor((current) => ({ ...current, selectedTagSlugs: current.selectedTagSlugs.filter((slug) => slug !== previous.slug) }))
+    }
+  }
+
   return (
     <div className="studio-app-shell">
       <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={onLogout} user={user} />
@@ -919,7 +938,15 @@ function Dashboard({
               view={postView}
             />
           )}
-          {activeSection !== 'overview' && activeSection !== 'posts' && <SectionPlaceholder section={activeSection} />}
+          {(activeSection === 'categories' || activeSection === 'tags') && <TaxonomyWorkspace
+            key={activeSection}
+            kind={activeSection}
+            token={token}
+            items={activeSection === 'categories' ? categoryOptions : tagOptions}
+            usage={Object.fromEntries((activeSection === 'categories' ? categoryOptions : tagOptions).map((item) => [item.id, managedPosts.filter((post) => activeSection === 'categories' ? post.category?.id === item.id : post.tags.some((tag) => tag.id === item.id)).length]))}
+            onChanged={(saved, previous) => taxonomyChanged(activeSection, saved, previous)}
+          />}
+          {activeSection !== 'overview' && activeSection !== 'posts' && activeSection !== 'categories' && activeSection !== 'tags' && <SectionPlaceholder section={activeSection} />}
         </main>
       </div>
       {activeSection === 'posts' && <BlogAssistant

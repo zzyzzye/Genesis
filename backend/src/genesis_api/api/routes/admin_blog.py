@@ -1,7 +1,9 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from genesis_api.api.dependencies import OwnerDependency, SessionDependency
 from genesis_api.blog.models import BlogCategory, BlogPost, BlogTag
@@ -22,6 +24,32 @@ from genesis_api.blog.service import (
 )
 
 router = APIRouter(prefix="/admin/blog", tags=["博客管理"])
+
+
+def save_taxonomy(session: Session, item: BlogTag | BlogCategory, name: str, slug: str) -> None:
+    item.name = name.strip()
+    item.slug = slug
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="名称或标识已存在，请使用其他名称或标识"
+        ) from None
+    session.refresh(item)
+
+
+def delete_taxonomy(session: Session, item: BlogTag | BlogCategory) -> Response:
+    # 使用中的分类、标签不能删除，避免悄悄改变已有文章。
+    session.expire(item, ["posts"])
+    if item.posts:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="仍有文章使用此项，请先在文章设置中移除关联后再删除",
+        )
+    session.delete(item)
+    session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def post_not_found() -> HTTPException:
@@ -80,6 +108,46 @@ def create_admin_category(
         ) from None
     session.refresh(category)
     return BlogCategoryRead.model_validate(category)
+
+
+@router.put("/tags/{item_id}", response_model=BlogTagRead)
+def update_admin_tag(
+    item_id: UUID, data: BlogTagWrite, session: SessionDependency, _: OwnerDependency
+) -> BlogTagRead:
+    item = session.get(BlogTag, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="标签不存在")
+    save_taxonomy(session, item, data.name, data.slug)
+    return BlogTagRead.model_validate(item)
+
+
+@router.delete("/tags/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_admin_tag(item_id: UUID, session: SessionDependency, _: OwnerDependency) -> Response:
+    item = session.scalar(select(BlogTag).where(BlogTag.id == item_id).with_for_update())
+    if item is None:
+        raise HTTPException(status_code=404, detail="标签不存在")
+    return delete_taxonomy(session, item)
+
+
+@router.put("/categories/{item_id}", response_model=BlogCategoryRead)
+def update_admin_category(
+    item_id: UUID, data: BlogCategoryWrite, session: SessionDependency, _: OwnerDependency
+) -> BlogCategoryRead:
+    item = session.get(BlogCategory, item_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="分类不存在")
+    save_taxonomy(session, item, data.name, data.slug)
+    return BlogCategoryRead.model_validate(item)
+
+
+@router.delete("/categories/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_admin_category(
+    item_id: UUID, session: SessionDependency, _: OwnerDependency
+) -> Response:
+    item = session.scalar(select(BlogCategory).where(BlogCategory.id == item_id).with_for_update())
+    if item is None:
+        raise HTTPException(status_code=404, detail="分类不存在")
+    return delete_taxonomy(session, item)
 
 
 @router.get("/posts", response_model=list[BlogPostAdminRead])

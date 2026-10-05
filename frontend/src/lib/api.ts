@@ -204,6 +204,16 @@ export function createAdminBlogCategory(token: string, data: BlogCategoryWrite):
   })
 }
 
+export function updateAdminBlogTaxonomy(token: string, kind: 'categories' | 'tags', id: string, data: BlogTagWrite): Promise<BlogTag> {
+  return request<BlogTag>(`/admin/blog/${kind}/${encodeURIComponent(id)}`, {
+    method: 'PUT', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+  })
+}
+
+export function deleteAdminBlogTaxonomy(token: string, kind: 'categories' | 'tags', id: string): Promise<void> {
+  return request<void>(`/admin/blog/${kind}/${encodeURIComponent(id)}`, { method: 'DELETE', headers: authHeaders(token) })
+}
+
 export function createAdminBlogPost(token: string, data: BlogPostWrite): Promise<BlogPostAdmin> {
   return request<BlogPostAdmin>('/admin/blog/posts', {
     method: 'POST',

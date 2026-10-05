@@ -364,6 +364,78 @@ async def test_member_cannot_access_blog_management(
 
     assert login_response.status_code == 200
     assert response.status_code == 403
+    for kind in ("tags", "categories"):
+        path = f"/api/v1/admin/blog/{kind}/00000000-0000-0000-0000-000000000000"
+        headers = {"Authorization": f"Bearer {token}"}
+        assert (
+            await client.put(path, headers=headers, json={"name": "无权修改", "slug": "denied"})
+        ).status_code == 403
+        assert (await client.delete(path, headers=headers)).status_code == 403
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kind", ["tags", "categories"])
+async def test_owner_taxonomy_crud_preserves_articles(
+    client: AsyncClient, database_session: Session, kind: str
+) -> None:
+    add_blog_content(database_session)
+    token = await authenticate_owner(client, database_session)
+    headers = {"Authorization": f"Bearer {token}"}
+    base = f"/api/v1/admin/blog/{kind}"
+    created = await client.post(
+        base, headers=headers, json={"name": "  分类验收  ", "slug": "qa-taxonomy"}
+    )
+    assert created.status_code == 201
+    assert created.json()["name"] == "分类验收"
+    item_id = created.json()["id"]
+    path = f"{base}/{item_id}"
+    updated = await client.put(
+        path, headers=headers, json={"name": "修改后的名称", "slug": "qa-renamed"}
+    )
+    assert updated.status_code == 200
+    assert updated.json()["id"] == item_id
+    assert (await client.put(path, json={"name": "越权", "slug": "no-access"})).status_code == 401
+    assert (await client.delete(path)).status_code == 401
+    assert (
+        await client.put(path, headers=headers, json={"name": "   ", "slug": "blank"})
+    ).status_code == 422
+    duplicate = await client.post(
+        base, headers=headers, json={"name": "重复项", "slug": "duplicate-other"}
+    )
+    assert duplicate.status_code == 201
+    assert (
+        await client.put(path, headers=headers, json={"name": "重复项", "slug": "duplicate-other"})
+    ).status_code == 409
+    post_data = {
+        "title": "关联验收",
+        "slug": "qa-reference",
+        "excerpt": "测试引用关系",
+        "content_markdown": "测试正文",
+        "category_id": item_id if kind == "categories" else None,
+        "tags": [{"name": "修改后的名称", "slug": "qa-renamed"}] if kind == "tags" else [],
+    }
+    post = await client.post("/api/v1/admin/blog/posts", headers=headers, json=post_data)
+    assert post.status_code == 201
+    assert (
+        await client.put(
+            path, headers=headers, json={"name": "关联后改名", "slug": "linked-renamed"}
+        )
+    ).status_code == 200
+    assert (await client.delete(path, headers=headers)).status_code == 409
+    post_path = f"/api/v1/admin/blog/posts/{post.json()['id']}"
+    linked_post = await client.get(post_path, headers=headers)
+    assert linked_post.status_code == 200
+    linked_item = (
+        linked_post.json()["category"] if kind == "categories" else linked_post.json()["tags"][0]
+    )
+    assert linked_item["id"] == item_id
+    assert linked_item["slug"] == "linked-renamed"
+    assert (await client.delete(post_path, headers=headers)).status_code == 204
+    assert (await client.delete(path, headers=headers)).status_code == 204
+    assert (await client.delete(path, headers=headers)).status_code == 404
+    assert (
+        await client.put(path, headers=headers, json={"name": "已删除", "slug": "deleted"})
+    ).status_code == 404
 
 
 def test_production_settings_require_a_non_default_jwt_secret() -> None:

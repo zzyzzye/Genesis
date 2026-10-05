@@ -1,6 +1,6 @@
 import type { StudioIconName } from './StudioIcon'
 
-export type StudioSection = 'overview' | 'posts' | 'pages' | 'comments' | 'attachments' | 'links' | 'themes' | 'menus' | 'users' | 'settings'
+export type StudioSection = 'overview' | 'posts' | 'categories' | 'tags' | 'pages' | 'comments' | 'attachments' | 'links' | 'themes' | 'menus' | 'users' | 'settings'
 
 export type NavigationItem = { id: StudioSection; label: string; icon: StudioIconName; description: string }
 export type NavigationGroup = { id: 'content' | 'appearance' | 'system'; label: string; icon: StudioIconName; items: NavigationItem[] }
@@ -12,6 +12,8 @@ export const navigationGroups: NavigationGroup[] = [
     icon: 'articles',
     items: [
       { id: 'posts', label: '文章', icon: 'articles', description: '编辑、整理与发布文章' },
+      { id: 'categories', label: '分类', icon: 'folder', description: '整理文章分类' },
+      { id: 'tags', label: '标签', icon: 'tag', description: '管理文章关键词' },
       { id: 'pages', label: '页面', icon: 'pages', description: '管理站点固定页面' },
       { id: 'comments', label: '评论', icon: 'comments', description: '查看读者反馈与讨论' },
       { id: 'attachments', label: '附件', icon: 'attachment', description: '整理图片与媒体素材' },

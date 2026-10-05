@@ -9,6 +9,8 @@ import {
   Eye,
   File,
   FileText,
+  Folder,
+  Tag,
   Gauge,
   Link2,
   List,
@@ -35,6 +37,8 @@ export type StudioIconName =
   | 'arrow-right'
   | 'arrow-up-right'
   | 'articles'
+  | 'folder'
+  | 'tag'
   | 'attachment'
   | 'assistant'
   | 'bell'
@@ -64,6 +68,8 @@ const icons: Record<StudioIconName, LucideIcon> = {
   'arrow-right': ArrowRight,
   'arrow-up-right': ArrowUpRight,
   articles: FileText,
+  folder: Folder,
+  tag: Tag,
   attachment: Paperclip,
   assistant: Bot,
   bell: Bell,

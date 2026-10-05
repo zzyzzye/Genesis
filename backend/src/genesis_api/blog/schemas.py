@@ -27,6 +27,11 @@ class BlogCategoryWrite(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=80)
 
+    @field_validator("name", mode="before")
+    @classmethod
+    def trim_name(cls, value: str) -> str:
+        return value.strip() if isinstance(value, str) else value
+
 
 class BlogTagRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -64,6 +69,11 @@ class BlogPostListResponse(BaseModel):
 class BlogTagWrite(BaseModel):
     name: str = Field(min_length=1, max_length=50)
     slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=80)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def trim_name(cls, value: str) -> str:
+        return value.strip() if isinstance(value, str) else value
 
 
 class BlogPostWrite(BaseModel):
