@@ -29,9 +29,18 @@
 .media-agent--styled .media-agent__model-trigger i { color:#777; }
 .media-agent--styled .media-agent__send,.media-agent--styled .media-agent__plan button { background:var(--agent-accent); color:#202820; }
 .media-agent--styled .media-agent__send:disabled { background:transparent; color:#777; }
-.media-agent--styled .media-agent__model-menu { background:#191a1c; }
-.media-agent--styled .media-agent__provider-tabs { background:transparent; padding:0; }
-.media-agent--styled .media-agent__provider-tabs button,.media-agent--styled .media-agent__model-option,.media-agent--styled .media-agent__model-menu>p { color:var(--agent-text); }
+.media-agent--styled .media-agent__model-menu { width:min(304px,100%); padding:8px; border-radius:9px; background:#171819; color-scheme:dark; box-shadow:0 8px 24px #0008; }
+.media-agent--styled .media-agent__provider-tabs { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:2px; overflow:visible; background:transparent; padding:0 0 7px; }
+.media-agent--styled .media-agent__provider-tabs button { min-width:0; min-height:26px; padding:4px 2px; color:var(--agent-muted); font-size:10px; font-weight:500; }
+.media-agent--styled .media-agent__model-list { gap:1px; max-height:min(164px,26dvh); margin-top:0; overflow-x:hidden; overflow-y:auto; scrollbar-gutter:stable; scrollbar-width:thin; scrollbar-color:#4b4c4e #171819; }
+.media-agent--styled .media-agent__model-list::-webkit-scrollbar { width:5px; }
+.media-agent--styled .media-agent__model-list::-webkit-scrollbar-track { background:#171819; }
+.media-agent--styled .media-agent__model-list::-webkit-scrollbar-thumb { background:#4b4c4e; border-radius:5px; }
+.media-agent--styled .media-agent__model-list::-webkit-scrollbar-thumb:hover { background:#696a6c; }
+.media-agent--styled .media-agent__model-option { min-height:30px; gap:8px; padding:5px 7px; border-radius:5px; color:#c7c7c7; font-size:11px; }
+.media-agent--styled .media-agent__model-check { display:grid; place-items:center; flex:none; width:12px; color:var(--agent-accent); }
+.media-agent--styled .media-agent__model-name { flex:1; font-weight:450; }
+.media-agent--styled .media-agent__model-menu>p { color:var(--agent-muted); }
 .media-agent--styled .media-agent__context-chip { color:var(--agent-muted); }
 .media-agent--styled .media-agent__plan { border:0; padding-top:12px; }
 .media-agent--styled .media-agent__plan>span { color:var(--agent-accent); }
