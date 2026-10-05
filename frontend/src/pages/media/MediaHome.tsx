@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowUpRight, AudioLines, BookOpen, Check, ChevronRight, Clapperboard, Film, FolderOpen, House, Image, Layers3, LayoutGrid, Menu, MoreHorizontal, Pencil, Plus, Search, Sparkles, StickyNote, Trash2, UserRound, WandSparkles, X } from 'lucide-react'
 import { api, type Project } from './api'
+import { PanelsTopLeft, LibraryBig } from 'lucide-react'
 
 type ProjectAction = { kind: 'create' | 'rename' | 'delete'; project?: Project; canvas?: boolean; title?: string }
 
@@ -60,8 +61,8 @@ export function MediaHome() {
       <nav aria-label="创作空间">
         <button onClick={() => { setMobileNav(false); window.dispatchEvent(new Event('genesis:open-media-assistant')) }}><Sparkles />镜头搭档<span className="media-home-tag">AI</span></button>
         <button aria-current={!allProjects ? 'page' : undefined} onClick={() => changeView(false)}><House />首页</button>
-        <button aria-current={allProjects ? 'page' : undefined} onClick={() => changeView(true)}><FolderOpen />项目</button>
-        <Link to="/media/assets"><Layers3 />素材库</Link>
+        <button aria-current={allProjects ? 'page' : undefined} onClick={() => changeView(true)}><PanelsTopLeft />项目</button>
+        <Link to="/media/assets"><LibraryBig />素材库</Link>
         <Link to="/tools"><LayoutGrid />工具集<ChevronRight className="media-home-nav-arrow" /></Link>
         <span className="media-home-nav-label">探索</span>
         <Link to="/blog"><BookOpen />创作阅读</Link>

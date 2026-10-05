@@ -1,5 +1,6 @@
-import { ChevronDown, Clapperboard, Plus, Send, Sparkles, X } from 'lucide-react'
-import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import './CanvasAssistant.css'
+import { ChevronDown, Clapperboard, Plus, Send, WandSparkles, X } from 'lucide-react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -7,7 +8,6 @@ import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider, t
 
 type MediaAssistantPage = 'projects' | 'project' | 'canvas' | 'assets'
 export type MediaAssistantNode = { id: string; type: string; name: string; text: string; assetId: string | null }
-
 const providers: AiProvider[] = ['openai', 'grok', 'gemini', 'claude', 'mimo']
 const providerLabels: Record<AiProvider, string> = { openai: 'OpenAI', grok: 'Grok', gemini: 'Gemini', claude: 'Claude', mimo: 'MiMo' }
 const promptsByPage: Record<MediaAssistantPage, string[]> = {
@@ -17,7 +17,7 @@ const promptsByPage: Record<MediaAssistantPage, string[]> = {
   assets: ['给素材库一套命名与分组规则', '根据现有素材列拍摄补充清单'],
 }
 const pageLabels: Record<MediaAssistantPage, string> = { projects: '作品列表', project: '作品概览', canvas: '创作画布', assets: '素材库' }
-const nodeTypeLabels: Record<string, string> = { video: '视频节点', note: '便签', text: '文本', shape: '形状', asset: '素材', group: '分组' }
+const nodeTypeLabels: Record<string, string> = { video: '视频节点', image: '图片节点', audio: '音频节点', note: '便签', text: '文本', shape: '形状', asset: '素材', group: '分组' }
 
 function nodeLabel(node: MediaAssistantNode) { return node.name.trim() || node.text.trim().slice(0, 24) || nodeTypeLabels[node.type] || '节点' }
 function formatContextWindow(value: number | null) {
@@ -25,7 +25,6 @@ function formatContextWindow(value: number | null) {
   if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(2))}M`
   return `${Math.round(value / 1000)}K`
 }
-
 export function MediaAssistant({ token, page, projectId, selectedNode }: {
   token: string | null
   page: MediaAssistantPage
@@ -54,7 +53,6 @@ export function MediaAssistant({ token, page, projectId, selectedNode }: {
   const selectedModels = useRef<Partial<Record<AiProvider, string>>>({})
   const prompts = promptsByPage[page]
   const discussionNode = selectedNode?.id === dismissedNodeId ? null : selectedNode
-  const intro = useMemo(() => `我在${pageLabels[page]}。把一句想法、一个镜头或一批素材交给我，我会把它整理成下一步能做的事。`, [page])
 
   useEffect(() => {
     if (!open) return
@@ -132,23 +130,22 @@ export function MediaAssistant({ token, page, projectId, selectedNode }: {
   function selectModel(next: string) { selectedModels.current[provider] = next; setModel(next); setModelMenuOpen(false) }
   function startNewConversation() { if (!busy) { setMessages([]); setInput(''); setError('') } }
 
-  return <aside className={`media-agent${page === 'canvas' ? ' media-agent--canvas' : ''}`} aria-label="影音创作助手">
-    {open && <section className="media-agent__panel" role="dialog" aria-label="镜头搭档">
+  return <aside className={`media-agent media-agent--styled${page === 'canvas' ? ' media-agent--canvas' : ''}`} aria-label="影音创作助手">
+    {open && <section className={`media-agent__panel${messages.length === 0 ? ' is-empty' : ''}`} role="dialog" aria-label="镜头搭档">
       <header className="media-agent__header">
-        <div className="media-agent__identity"><span className="media-agent__avatar"><Clapperboard aria-hidden="true" /></span><div><strong>镜头搭档</strong><span><i />在线 · 影音创作</span></div></div>
+        <div className="media-agent__identity"><span className="media-agent__avatar"><Clapperboard aria-hidden="true" /></span><div><strong>镜头搭档</strong><span>{pageLabels[page]}</span></div></div>
         <div className="media-agent__header-actions"><button type="button" aria-label="新建对话" disabled={busy} onClick={startNewConversation}><Plus aria-hidden="true" /></button><button type="button" className="media-agent__close" aria-label="关闭镜头搭档" onClick={() => setOpen(false)}><X aria-hidden="true" /></button></div>
       </header>
       <div className="media-agent__body">
-        <div className="media-agent__context"><Sparkles aria-hidden="true" /><span>{pageLabels[page]} · 只给建议，不会改动画布</span></div>
-        {discussionNode && <div className="media-agent__node-context"><span>正在讨论 · {nodeLabel(discussionNode)}</span><button type="button" aria-label="移除当前讨论节点" onClick={() => setDismissedNodeId(discussionNode.id)}><X aria-hidden="true" /></button></div>}
+        {discussionNode && <div className="media-agent__node-context"><div><span>正在讨论 · {nodeLabel(discussionNode)}</span>{page === 'canvas' && <small>{discussionNode.text.trim() || '还没有镜头描述，可以一起补充。'}</small>}</div><button type="button" aria-label="移除当前讨论节点" onClick={() => setDismissedNodeId(discussionNode.id)}><X aria-hidden="true" /></button></div>}
         <div className="media-agent__messages" aria-live="polite">
-          {messages.length === 0 && <div className="media-agent__message media-agent__message--assistant"><span className="media-agent__message-mark"><Clapperboard aria-hidden="true" /></span><p>{intro}</p></div>}
+          {messages.length === 0 && <div className="media-agent__canvas-empty"><span>镜头与叙事</span><h2>{discussionNode ? '接着这个镜头，往下想。' : page === 'assets' ? '整理素材，再开始拍。' : '下一段，怎么拍？'}</h2><p>{discussionNode ? '细化画面、调整节奏，或继续编排下一个镜头。' : page === 'canvas' ? '写下故事想法，或选中画布上的镜头一起讨论。' : page === 'assets' ? '讨论素材命名、分组与需要补充的画面。' : '写下故事想法，一起规划镜头与素材。'}</p></div>}
           {messages.map((message, index) => <div className={`media-agent__message media-agent__message--${message.role}`} key={`${message.role}-${index}`}>{message.role === 'assistant' && <span className="media-agent__message-mark"><Clapperboard aria-hidden="true" /></span>}<div className="media-agent__response"><Markdown remarkPlugins={[remarkGfm]}>{message.role === 'assistant' ? message.content || '正在整理镜头…' : message.content}</Markdown></div></div>)}
         </div>
-        {messages.length === 0 && <div className="media-agent__prompts" aria-label="快捷提问"><span>你可以这样开始</span>{prompts.map((prompt) => <button type="button" key={prompt} onClick={() => void send(prompt)} disabled={busy}>{prompt}<span>↗</span></button>)}</div>}
+        {messages.length === 0 && <div className="media-agent__prompts" aria-label="快捷提问">{prompts.map((prompt, index) => <button type="button" key={prompt} onClick={() => void send(prompt)} disabled={busy}><span className="media-agent__prompt-icon">{index === 0 ? <Clapperboard /> : <WandSparkles />}</span><span className="media-agent__prompt-copy"><strong>{page === 'assets' ? (index === 0 ? '整理素材' : '补充画面') : page === 'project' ? (index === 0 ? '规划节奏' : '补齐素材') : index === 0 ? '拆成分镜' : '检查节奏'}</strong><small>{page === 'assets' ? (index === 0 ? '命名与分组' : '列出拍摄清单') : page === 'project' ? (index === 0 ? '安排镜头与叙事' : '列出素材清单') : index === 0 ? '整理镜头与画面' : '梳理转场与衔接'}</small></span><span>↗</span></button>)}</div>}
       </div>
       <form className="media-agent__form" noValidate onSubmit={submit}>
-        <textarea className="resize-none" ref={inputRef} aria-label="向镜头搭档提问" aria-keyshortcuts="Enter" rows={2} value={input} onChange={(event) => setInput(event.currentTarget.value)} onKeyDown={(event) => { if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return; event.preventDefault(); event.currentTarget.form?.requestSubmit() }} disabled={busy} placeholder="告诉我你想拍成什么…（支持 Markdown，Enter 发送）" />
+        <textarea className="resize-none" ref={inputRef} aria-label="向镜头搭档提问" aria-keyshortcuts="Enter" rows={2} value={input} onChange={(event) => setInput(event.currentTarget.value)} onKeyDown={(event) => { if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return; event.preventDefault(); event.currentTarget.form?.requestSubmit() }} disabled={busy} placeholder="描述画面，或说说你想调整的地方…" />
         <div className="media-agent__composer-tools"><button ref={modelTriggerRef} className="media-agent__model-trigger" type="button" aria-label="选择模型" aria-expanded={modelMenuOpen} onClick={() => setModelMenuOpen((value) => !value)}><span>{providerLabels[provider]}</span><i aria-hidden="true">·</i><strong>{model || '选择模型'}</strong><ChevronDown aria-hidden="true" /></button>
           {modelMenuOpen && <div ref={modelMenuRef} className="media-agent__model-menu" aria-label="模型列表"><div className="media-agent__provider-tabs" role="group" aria-label="选择供应商">{providers.map((item) => <button className={provider === item ? 'is-active' : ''} type="button" key={item} aria-pressed={provider === item} aria-label={`切换到 ${providerLabels[item]} 模型`} onClick={() => { setProvider(item); setModelMenuOpen(true) }}>{providerLabels[item]}</button>)}</div>{models.length ? <div className="media-agent__model-list" aria-label={`${providerLabels[provider]} 模型列表`}>{models.map((item) => <button className={`media-agent__model-option${model === item.id ? ' is-selected' : ''}`} type="button" key={item.id} aria-pressed={model === item.id} onClick={() => selectModel(item.id)}><span className="media-agent__model-name">{item.name || item.id}</span>{formatContextWindow(item.context_window) && <span className="media-agent__context-chip">{formatContextWindow(item.context_window)}</span>}</button>)}</div> : <p>当前服务商没有可用模型。</p>}</div>}
           <button className="media-agent__send" type="submit" aria-label="发送给镜头搭档" disabled={busy || !input.trim()}><Send aria-hidden="true" /></button>

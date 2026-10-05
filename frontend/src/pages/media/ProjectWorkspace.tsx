@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, type Project } from './api'
 import { AssetLibrary } from './AssetLibrary'
-import { ArrowLeft, FolderOpen, House, Layers3, Menu, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Clapperboard, FolderOpen, House, Layers3, Menu, X } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { PanelsTopLeft, LibraryBig, Images, LayoutDashboard, Workflow } from 'lucide-react'
 import './MediaHome.css'
 import './MediaAssets.css'
 
-function AssetsLayout({ children, projectId }: { children: ReactNode; projectId?: string }) {
+function AssetsLayout({ children, projectId, overview = false }: { children: ReactNode; projectId?: string; overview?: boolean }) {
   const [open, setOpen] = useState(false)
   useEffect(() => {
     if (!open) return
@@ -15,10 +16,10 @@ function AssetsLayout({ children, projectId }: { children: ReactNode; projectId?
     document.addEventListener('keydown', close)
     return () => document.removeEventListener('keydown', close)
   }, [open])
-  return <div className="media-home media-assets-shell">
-    <aside className={`media-home-sidebar${open ? ' is-open' : ''}`} aria-label="影音导航">
+  return <div className={`media-home media-assets-shell${overview ? ' media-overview-shell' : ''}`}>
+    <aside className={`media-home-sidebar${open ? ' is-open' : ''}`} aria-label="影音导航" onClick={(event) => { if ((event.target as Element).closest('a')) setOpen(false) }}>
       <Link className="media-home-brand" to="/"><Layers3 />Genesis<span className="media-home-brand-label">STUDIO</span></Link>
-      <nav aria-label="创作空间"><Link to="/media"><House />首页</Link><Link to="/media?view=projects"><FolderOpen />项目</Link><Link to="/media/assets" aria-current={!projectId ? 'page' : undefined}><Layers3 />账户素材库</Link>{projectId && <Link to={`/media/projects/${projectId}/assets`} aria-current="page"><FolderOpen />作品素材库</Link>}</nav>
+      <nav aria-label="创作空间"><Link to="/media"><House />首页</Link><Link to="/media?view=projects"><PanelsTopLeft />项目</Link><Link to="/media/assets" aria-current={!projectId ? 'page' : undefined}><LibraryBig />账户素材库</Link>{projectId && <><span className="media-home-nav-label">当前作品</span><Link to={`/media/projects/${projectId}`} aria-current={overview ? 'page' : undefined}><LayoutDashboard />作品概览</Link><Link to={`/media/projects/${projectId}/assets`} aria-current={!overview ? 'page' : undefined}><Images />作品素材库</Link><Link to={`/media/projects/${projectId}/canvas`}><Workflow />创作画布</Link></>}</nav>
       <div className="media-home-sidebar-bottom"><Link to="/media"><ArrowLeft />返回影音</Link></div>
     </aside>
     {open && <button className="media-home-nav-scrim" aria-label="收起导航" onClick={() => setOpen(false)} />}
@@ -49,24 +50,24 @@ export function ProjectOverviewPage({ projectId }: { projectId: string }) {
     return () => { active = false }
   }, [projectId, retry])
 
-  if (error) return <main className="media-projects"><Link className="media-back" to="/media">← 我的作品</Link><p className="media-error" role="alert">{error} <button onClick={() => setRetry((value) => value + 1)}>重试</button></p></main>
-  if (!project) return <main className="media-gate" role="status">正在打开作品…</main>
+  if (error) return <AssetsLayout projectId={projectId} overview><p className="media-error" role="alert">{error} <button onClick={() => setRetry((value) => value + 1)}>重试</button></p></AssetsLayout>
+  if (!project) return <AssetsLayout projectId={projectId} overview><p role="status">正在打开作品…</p></AssetsLayout>
 
-  return <main className="media-project-workspace">
-    <Link className="media-back" to="/media">← 我的作品</Link>
-    <header className="media-workspace-heading">
-      <div><small>YOUR PROJECT</small><h1>{project.name}</h1><p>先整理这部作品的素材，再进入画布安排镜头和想法。</p></div>
-      <Link className="media-accent" to={`/media/projects/${projectId}/canvas`}>进入画布 <span aria-hidden="true">↗</span></Link>
+  return <AssetsLayout projectId={projectId} overview>
+    <Link className="media-back" to="/media?view=projects">← 全部项目</Link>
+    <header className="media-overview-heading">
+      <div><span>作品概览</span><h1>{project.name}</h1><p>更新于 <time dateTime={project.updated_at}>{new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(project.updated_at))}</time></p></div>
+      <Link className="media-accent" to={`/media/projects/${projectId}/canvas`}>进入画布<ArrowUpRight /></Link>
     </header>
-    <section className="media-workspace-sections" aria-label="作品空间">
-      <Link className="media-workspace-card is-active" to={`/media/projects/${projectId}/assets`}>
-        <small>01 / MATERIALS</small><h2>作品素材库</h2><p>本作品专属素材与账户素材引用都在这里。</p><span>{assetCount === null ? '载入中…' : `${assetCount} 项素材`} · →</span>
+    <section className="media-overview-destinations" aria-label="作品空间">
+      <Link className="media-overview-destination" to={`/media/projects/${projectId}/assets`}>
+        <FolderOpen /><div><h2>作品素材库</h2><p>管理这个作品的图片、视频和音频</p><span>{assetCount === null ? '载入中…' : `${assetCount} 项素材`}</span></div><ArrowUpRight />
       </Link>
-      <Link className="media-workspace-card" to={`/media/projects/${projectId}/canvas`}>
-        <small>02 / CANVAS</small><h2>无限画布</h2><p>把图片、视频、声音与文字便签排进创作空间。</p><span>打开画布 · →</span>
+      <Link className="media-overview-destination" to={`/media/projects/${projectId}/canvas`}>
+        <Clapperboard /><div><h2>创作画布</h2><p>编排镜头、连接素材与记录想法</p><span>继续创作</span></div><ArrowUpRight />
       </Link>
     </section>
-  </main>
+  </AssetsLayout>
 }
 
 export function AccountAssetsPage() {
