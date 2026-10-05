@@ -425,8 +425,8 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     width: node.width,
     height: node.height,
     handles: node.type !== 'group' ? [
-      { type: 'target', position: Position.Left, x: -4, y: node.height / 2 - 4, width: 8, height: 8 },
-      { type: 'source', position: Position.Right, x: node.width - 4, y: node.height / 2 - 4, width: 8, height: 8 },
+      { type: 'target', position: Position.Left, x: 0, y: node.height / 2 - 4, width: 8, height: 8 },
+      { type: 'source', position: Position.Right, x: node.width - 8, y: node.height / 2 - 4, width: 8, height: 8 },
     ] : undefined,
     selected: selected.includes(node.id),
     zIndex: node.type === 'group' ? -1 : 1,
