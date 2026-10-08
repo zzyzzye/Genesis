@@ -1,0 +1,35 @@
+/* 写作区沿用工作台令牌，以文字状态和留白区分层级。 */
+.studio-app-shell { --studio-editor-muted: #73797f; --studio-editor-hover: #e7eaec; }
+.markdown-editor__header { border: 0; }
+.markdown-editor__title-row { flex-wrap: wrap; row-gap: 6px; }
+.markdown-editor__title { line-height: 1.4; }
+.markdown-editor__title:disabled { opacity: 1; }
+.markdown-editor__save-state { color: var(--studio-editor-muted); font-size: 12px; font-weight: 400; letter-spacing: 0; }
+.markdown-editor__actions button { min-width: 64px; border: 0; outline: 0; box-shadow: none; cursor: pointer; }
+.markdown-editor__actions .secondary-button { background: var(--studio-soft); }
+.markdown-editor__actions .secondary-button:hover:not(:disabled),
+.markdown-editor__actions .secondary-button:focus-visible { background: var(--studio-editor-hover); color: var(--studio-ink); }
+.markdown-editor__actions .primary-button { background: var(--studio-ink); color: var(--studio-paper); }
+.markdown-editor__actions .primary-button:hover:not(:disabled),
+.markdown-editor__actions .primary-button:focus-visible { background: var(--studio-ink); opacity: .8; transform: none; }
+.markdown-editor__actions .primary-button:focus-visible,
+.markdown-editor__actions .secondary-button:focus-visible { border: 0; outline: 0; box-shadow: none; }
+.markdown-editor__actions button:disabled { cursor: default; opacity: .5; }
+.markdown-editor__feedback { border: 0; background: var(--studio-soft); color: var(--studio-ink); }
+.markdown-editor__recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 24px; background: var(--studio-soft); font-size: 13px; }
+.markdown-editor__recovery > span { flex: 1 1 220px; }
+.markdown-editor__recovery button { padding: 6px 10px; border: 0; border-radius: 6px; outline: 0; box-shadow: none; background: var(--studio-editor-hover); color: var(--studio-ink); font: inherit; cursor: pointer; }
+.markdown-editor__recovery button:hover, .markdown-editor__recovery button:focus-visible { background: var(--studio-paper); }
+.markdown-editor__writing-meta { display: flex; flex-wrap: wrap; flex: 0 0 auto; justify-content: space-between; gap: 8px; padding: 10px 24px; background: var(--studio-paper); color: var(--studio-editor-muted); font-size: 12px; }
+.studio-workspace .markdown-editor__outline--mdx { border: 0; outline: 0; box-shadow: none; background: var(--studio-soft); }
+.markdown-editor__outline-heading, .markdown-editor__outline-item { border: 0; outline: 0; box-shadow: none; }
+.markdown-editor__outline-heading:focus-visible, .markdown-editor__outline-item:focus-visible { background: var(--studio-editor-hover); }
+.markdown-editor .mdxeditor-toolbar { border: 0; box-shadow: none; }
+.blog-version-comparison details { margin-top: 16px; }
+.blog-version-comparison summary { cursor: pointer; font-weight: 600; }
+.blog-version-comparison pre { max-height: 160px; overflow: auto; padding: 12px; border: 0; border-radius: 6px; background: var(--studio-soft); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+@media (max-width: 680px) {
+  .markdown-editor__header { padding: 16px; }
+  .markdown-editor__recovery, .markdown-editor__writing-meta { padding: 10px 16px; }
+  .markdown-editor__writing-meta > span:last-child { display: none; }
+}

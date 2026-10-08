@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion, MotionConfig, useReducedMotion } from 'motion/react'
 
 import { Account } from './Account'
@@ -29,7 +30,7 @@ function getRouteMotionKey(pathname: string) {
   return 'home'
 }
 
-function AnimatedRoutes() {
+export function AppRoutes() {
   const location = useLocation()
   const reducedMotion = useReducedMotion()
 
@@ -59,12 +60,12 @@ function AnimatedRoutes() {
   </AnimatePresence>
 }
 
-export function App() {
+export function App({ router: providedRouter }: { router?: ReturnType<typeof createBrowserRouter> }) {
+  const [router] = useState(() => providedRouter ?? createBrowserRouter([{ path: '*', element: <AppRoutes /> }]))
+  useEffect(() => () => { if (!providedRouter) router.dispose() }, [providedRouter, router])
   return (
     <MotionConfig reducedMotion="user">
-      <BrowserRouter>
-        <AnimatedRoutes />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </MotionConfig>
   )
 }

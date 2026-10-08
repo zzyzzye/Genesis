@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -64,7 +64,9 @@ def list_admin_posts(session: Session) -> list[BlogPost]:
     return list(session.scalars(statement))
 
 
-def get_blog_post_by_id(session: Session, post_id: UUID) -> BlogPost | None:
+def get_blog_post_by_id(
+    session: Session, post_id: UUID, *, for_update: bool = False
+) -> BlogPost | None:
     statement = (
         select(BlogPost)
         .where(BlogPost.id == post_id)
@@ -74,6 +76,8 @@ def get_blog_post_by_id(session: Session, post_id: UUID) -> BlogPost | None:
             selectinload(BlogPost.tags),
         )
     )
+    if for_update:
+        statement = statement.with_for_update()
     return session.scalar(statement)
 
 
@@ -95,6 +99,15 @@ def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> No
         post.published_at = data.published_at or post.published_at or datetime.now(UTC)
     else:
         post.published_at = None
+
+    # 显式保留微秒，避免数据库秒级时间戳漏掉同一秒内的编辑冲突。
+    updated_at = datetime.now(UTC)
+    if post.updated_at is not None:
+        previous = post.updated_at
+        if previous.tzinfo is None:
+            previous = previous.replace(tzinfo=UTC)
+        updated_at = max(updated_at, previous + timedelta(microseconds=1))
+    post.updated_at = updated_at
 
 
 def resolve_tags(session: Session, tag_inputs: list[BlogTagWrite]) -> list[BlogTag]:

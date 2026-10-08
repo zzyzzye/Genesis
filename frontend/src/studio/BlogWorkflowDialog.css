@@ -1,0 +1,28 @@
+.blog-workflow-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  box-sizing: border-box;
+  overflow: auto;
+  margin: auto;
+  padding: 24px;
+  border: 0;
+  border-radius: 12px;
+  outline: 0;
+  background: var(--studio-paper);
+  color: var(--studio-ink);
+  font: 14px/1.65 var(--studio-ui);
+}
+.blog-workflow-dialog::backdrop { background: rgb(25 30 35 / 25%); }
+.blog-workflow-dialog h2 { margin: 0 0 10px; font-size: 20px; font-weight: 600; }
+.blog-workflow-dialog p { margin: 0 0 20px; overflow-wrap: anywhere; }
+.blog-workflow-dialog dl { margin: 0; }
+.blog-workflow-dialog dl > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; margin: 10px 0; }
+.blog-workflow-dialog dt { color: var(--studio-editor-muted); }
+.blog-workflow-dialog dd { margin: 0; overflow-wrap: anywhere; }
+.blog-workflow-dialog footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+.blog-workflow-dialog button { min-height: 36px; padding: 6px 14px; border: 0; border-radius: 6px; outline: 0; box-shadow: none; background: var(--studio-soft); color: inherit; font: inherit; cursor: pointer; }
+.blog-workflow-dialog button:hover:not(:disabled), .blog-workflow-dialog button:focus-visible { background: var(--studio-editor-hover); }
+.blog-workflow-dialog button.blog-workflow-dialog__confirm { background: var(--studio-ink); color: var(--studio-paper); }
+.blog-workflow-dialog button.blog-workflow-dialog__confirm:hover:not(:disabled), .blog-workflow-dialog button.blog-workflow-dialog__confirm:focus-visible { opacity: .8; }
+.blog-workflow-dialog button:disabled { cursor: wait; opacity: .5; }
+.blog-workflow-dialog__error { margin-top: 16px !important; color: var(--studio-accent); }

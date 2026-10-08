@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from genesis_api.api.routes.blog import router
+from genesis_api.blog.agent.actions import confirm_blog_action
 from genesis_api.blog.models import BlogPost, BlogPostStatus, BlogTag
 from genesis_api.core.config import Settings
 from genesis_api.database import seed
@@ -456,3 +457,100 @@ def test_production_settings_require_a_non_default_jwt_secret() -> None:
         )
     with pytest.raises(ValidationError):
         Settings(agent_max_concurrent_runs=0)
+
+
+@pytest.mark.anyio
+async def test_incomplete_draft_can_be_saved_but_not_published(
+    client: AsyncClient, database_session: Session
+) -> None:
+    add_blog_content(database_session)
+    token = await authenticate_owner(client, database_session)
+    headers = {"Authorization": f"Bearer {token}"}
+    data = {"slug": "empty-writing-draft", "title": "", "excerpt": "", "content_markdown": ""}
+    created = await client.post("/api/v1/admin/blog/posts", headers=headers, json=data)
+    assert created.status_code == 201
+    path = f"/api/v1/admin/blog/posts/{created.json()['id']}"
+    for field in ("title", "excerpt", "content_markdown"):
+        publish = {
+            **data,
+            "title": "标题",
+            "excerpt": "摘要",
+            "content_markdown": "正文",
+            "status": "published",
+            field: "  ",
+        }
+        assert (await client.put(path, headers=headers, json=publish)).status_code == 422
+    assert (await client.get("/api/v1/blog/posts/empty-writing-draft")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_stale_editor_cannot_overwrite_a_newer_article(
+    client: AsyncClient, database_session: Session
+) -> None:
+    add_blog_content(database_session)
+    token = await authenticate_owner(client, database_session)
+    headers = {"Authorization": f"Bearer {token}"}
+    data = {
+        "slug": "versioned-writing",
+        "title": "初稿",
+        "excerpt": "摘要",
+        "content_markdown": "正文",
+    }
+    created = await client.post("/api/v1/admin/blog/posts", headers=headers, json=data)
+    assert created.status_code == 201
+    path = f"/api/v1/admin/blog/posts/{created.json()['id']}"
+    updated = await client.put(
+        path,
+        headers=headers,
+        json={**data, "title": "最新版本", "expected_updated_at": created.json()["updated_at"]},
+    )
+    assert updated.status_code == 200
+    stale = await client.put(
+        path,
+        headers=headers,
+        json={
+            **data,
+            "title": "过期修改",
+            "status": "published",
+            "expected_updated_at": created.json()["updated_at"],
+        },
+    )
+    assert stale.status_code == 409
+    latest = await client.get(path, headers=headers)
+    assert latest.json()["title"] == "最新版本"
+    assert latest.json()["status"] == "draft"
+    assert (await client.get("/api/v1/blog/posts/versioned-writing")).status_code == 404
+
+
+def test_agent_publication_checks_content_and_sets_publish_time(database_session: Session) -> None:
+    add_blog_content(database_session)
+    owner = database_session.scalar(select(User).where(User.handle == "genesis"))
+    assert owner is not None
+    post = BlogPost(
+        author=owner,
+        slug="agent-incomplete",
+        title="",
+        excerpt="",
+        content_markdown="",
+        status=BlogPostStatus.DRAFT,
+    )
+    database_session.add(post)
+    database_session.commit()
+    with pytest.raises(ValidationError):
+        confirm_blog_action(
+            "publish_post", {"post_id": str(post.id)}, current_user=owner, session=database_session
+        )
+    assert post.status is BlogPostStatus.DRAFT
+    assert post.published_at is None
+    post.title, post.excerpt, post.content_markdown = "标题", "摘要", "正文"
+    database_session.commit()
+    previous_version = post.updated_at
+    result = confirm_blog_action(
+        "publish_post", {"post_id": str(post.id)}, current_user=owner, session=database_session
+    )
+    assert result == {"action": "publish_post", "post_id": str(post.id), "status": "published"}
+    published_post = database_session.get(BlogPost, post.id)
+    assert published_post is not None
+    assert published_post.status is BlogPostStatus.PUBLISHED
+    assert published_post.published_at is not None
+    assert published_post.updated_at != previous_version

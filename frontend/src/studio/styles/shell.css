@@ -166,11 +166,10 @@
     overflow-y: auto;
     box-sizing: border-box;
     padding: .35rem;
-    border: 1px solid #e1e8f0;
+    border: 0;
     border-radius: .55rem;
-    background: rgb(255 255 255 / 94%);
-    box-shadow: 0 .8rem 1.8rem rgb(30 41 59 / 8%);
-    backdrop-filter: blur(10px);
+    background: var(--studio-soft);
+    box-shadow: none;
   }
 
   .studio-workspace > .studio-content--editor .genesis-mdx-content {

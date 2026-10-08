@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useBlocker, useLocation, useNavigate } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import { EditorView } from '@codemirror/view'
 import remarkGfm from 'remark-gfm'
@@ -35,6 +35,7 @@ import {
   toolbarPlugin,
   UndoRedo,
   type Translation,
+  type MDXEditorMethods,
 } from '@mdxeditor/editor'
 import '@mdxeditor/editor/style.css'
 import './studio/styles/shell.css'
@@ -45,6 +46,7 @@ import './studio/styles/editor-content.css'
 import './studio/styles/editor-outline.css'
 import './studio/styles/article-settings.css'
 import './studio/styles/article-reader.css'
+import './studio/styles/writing.css'
 
 
 import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey } from './lib/auth'
@@ -57,12 +59,16 @@ import { TaxonomyWorkspace } from './studio/TaxonomyWorkspace'
 import { TaxonomyPicker } from './studio/TaxonomyPicker'
 import { createTaxonomy, type ArticleTaxonomyActions, type TaxonomyKind } from './studio/taxonomy'
 import { useModalDialog } from './studio/useModalDialog'
+import { BlogWorkflowDialog } from './studio/BlogWorkflowDialog'
+import { articleStats, clearBlogDraft, createEmptyEditor, readBlogDraft, toEditor, toPayload, writeBlogDraft, type BlogDraft, type EditorState } from './studio/blogEditor'
 
 import {
+  ApiError,
   createAdminBlogPost,
   deleteAdminBlogPost,
   getAdminBlogCategories,
   getAdminBlogPosts,
+  getAdminBlogPost,
   getAdminBlogTags,
   getCurrentUser,
   developmentLogin,
@@ -271,78 +277,11 @@ const mdxEditorChineseTranslation: Translation = (key, defaultValue, interpolati
   return template.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(interpolations?.[name] ?? ''))
 }
 
-interface EditorState {
-  id: string | null
-  slug: string
-  title: string
-  excerpt: string
-  contentMarkdown: string
-  coverImageUrl: string
-  status: BlogPostStatus
-  isFeatured: boolean
-  readTimeMinutes: number
-  categoryId: string | null
-  selectedTagSlugs: string[]
-}
-
 type StudioState =
   | { status: 'login'; error: string | null }
   | { status: 'loading' }
   | { status: 'ready'; user: CurrentUser; posts: BlogPostAdmin[]; tags: BlogTag[]; categories: BlogCategory[] }
   | { status: 'error' }
-
-function createEmptyEditor(): EditorState {
-  return {
-    id: null,
-    slug: '',
-    title: '',
-    excerpt: '',
-    contentMarkdown: '# 新文章\n\n从这里开始写。',
-    coverImageUrl: '',
-    status: 'draft',
-    isFeatured: false,
-    readTimeMinutes: 3,
-    categoryId: null,
-    selectedTagSlugs: [],
-  }
-}
-
-function toEditor(post: BlogPostAdmin): EditorState {
-  return {
-    id: post.id,
-    slug: post.slug,
-    title: post.title,
-    excerpt: post.excerpt,
-    contentMarkdown: post.content_markdown,
-    coverImageUrl: post.cover_image_url ?? '',
-    status: post.status,
-    isFeatured: post.is_featured,
-    readTimeMinutes: post.read_time_minutes,
-    categoryId: post.category?.id ?? null,
-    selectedTagSlugs: post.tags.map((tag) => tag.slug),
-  }
-}
-
-function toPayload(editor: EditorState, tagOptions: BlogTag[]): BlogPostWrite {
-  const tagsBySlug = new Map(tagOptions.map((tag) => [tag.slug, tag]))
-  const tags = editor.selectedTagSlugs.map((slug) => {
-    const tag = tagsBySlug.get(slug)
-    if (!tag) throw new Error(`标签“${slug}”不存在，请先创建后再选择。`)
-    return { name: tag.name, slug: tag.slug }
-  })
-  return {
-    slug: editor.slug.trim(),
-    title: editor.title.trim(),
-    excerpt: editor.excerpt.trim(),
-    content_markdown: editor.contentMarkdown.trim(),
-    cover_image_url: editor.coverImageUrl.trim() || null,
-    category_id: editor.categoryId,
-    status: editor.status,
-    is_featured: editor.isFeatured,
-    read_time_minutes: editor.readTimeMinutes,
-    tags,
-  }
-}
 
 function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: string) => void; error: string | null }) {
   const [handle, setHandle] = useState('genesis')
@@ -381,7 +320,7 @@ function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: str
               <h2>进入写作台</h2>
             </div>
           </div>
-          <form onSubmit={submit}>
+          <form noValidate onSubmit={submit}>
             <label htmlFor="studio-handle">
               <span>账号</span>
               <input
@@ -451,7 +390,7 @@ function PostSettingsModal({
             <p className="eyebrow">ARTICLE SETTINGS</p>
             <h2 id="markdown-settings-title">文章设置</h2>
           </div>
-          <button className="markdown-settings-modal__close" type="button" aria-label="关闭文章设置" onClick={onClose}><StudioIcon name="close" /></button>
+          <button className="markdown-settings-modal__close" disabled={isSaving} type="button" aria-label="关闭文章设置" onClick={onClose}><StudioIcon name="close" /></button>
         </header>
         <div className="markdown-settings-modal__body">
           <div className="settings-taxonomy-grid">
@@ -460,7 +399,7 @@ function PostSettingsModal({
           </div>
           <div className="settings-fields-grid">
             <label className="settings-field" htmlFor="settings-slug">
-              URL Slug
+              文章地址
               <input id="settings-slug" onChange={(event) => onChange({ ...editor, slug: event.currentTarget.value })} pattern="[a-z0-9]+(-[a-z0-9]+)*" required value={editor.slug} />
             </label>
             <label className="settings-field" htmlFor="settings-cover">
@@ -469,16 +408,16 @@ function PostSettingsModal({
             </label>
           </div>
           <label className="settings-field" htmlFor="settings-excerpt">
-            摘要
-            <textarea id="settings-excerpt" onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} required rows={3} value={editor.excerpt} />
+            <span className="settings-field__heading"><span>摘要</span><span className="settings-field__hint">留空时从正文生成</span></span>
+            <textarea id="settings-excerpt" style={{ resize: 'none' }} onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} maxLength={500} rows={3} value={editor.excerpt} />
           </label>
           {feedback && <p className="studio-form-error" role="alert">{feedback}</p>}
         </div>
         <footer className="markdown-settings-modal__footer">
-          <button className="text-button text-button--danger" disabled={!editor.id || isSaving} type="button" onClick={onDelete}>删除文章</button>
+          <button className="text-button text-button--danger" disabled={!editor.id || isSaving} type="button" onClick={() => { onClose(); onDelete() }}>删除文章</button>
           <div>
-            <button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存草稿</button>
-            <button className="primary-button" disabled={isSaving} type="button" onClick={() => onSave('published')}>{isSaving ? '正在保存…' : '保存并发布'}</button>
+            {editor.status === 'draft' && <button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存草稿</button>}
+            <button className="primary-button" disabled={isSaving} type="button" onClick={() => { onClose(); onSave('published') }}>{editor.status === 'published' ? '检查并更新发布' : '检查并发布'}</button>
           </div>
         </footer>
       </section>
@@ -499,6 +438,12 @@ function MarkdownEditor({
   tags,
   onCreateTaxonomy,
   onSelectTaxonomy,
+  saveState,
+  recovery,
+  onRestoreDraft,
+  onDiscardDraft,
+  onCompareVersion,
+  hasVersionConflict,
 }: {
   categories: BlogCategory[]
   editor: EditorState
@@ -510,11 +455,23 @@ function MarkdownEditor({
   onPreview: () => void
   onSave: (status: BlogPostStatus) => void
   tags: BlogTag[]
+  saveState: string
+  recovery: BlogDraft | null
+  onRestoreDraft: () => void
+  onDiscardDraft: () => void
+  onCompareVersion: () => void
+  hasVersionConflict: boolean
 } & ArticleTaxonomyActions) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const editorWorkspaceRef = useRef<HTMLDivElement>(null)
+  const markdownRef = useRef<MDXEditorMethods>(null)
   const outlineItems = getMarkdownOutline(editor.contentMarkdown)
   const [isOutlineExpanded, setIsOutlineExpanded] = useState(true)
+  const stats = articleStats(editor.contentMarkdown)
+
+  useEffect(() => {
+    if (markdownRef.current?.getMarkdown() !== editor.contentMarkdown) markdownRef.current?.setMarkdown(editor.contentMarkdown)
+  }, [editor.contentMarkdown])
 
   return (
     <section className="markdown-editor" aria-labelledby="markdown-editor-title">
@@ -522,26 +479,36 @@ function MarkdownEditor({
         <div className="markdown-editor__identity">
           <button className="text-button" type="button" onClick={onBack}>← 返回文章列表</button>
           <div className="markdown-editor__title-row">
-            <span className="markdown-editor__eyebrow">MDX MARKDOWN WORKSPACE</span>
+            <span className="markdown-editor__eyebrow">文章写作</span>
             <span className={`post-status post-status--${editor.status}`}>{editor.status === 'published' ? '已发布' : '草稿'}</span>
+            <span className="markdown-editor__save-state" role="status">{saveState}</span>
           </div>
-          <input aria-label="文章标题" className="markdown-editor__title" id="markdown-editor-title" onChange={(event) => onChange({ ...editor, title: event.currentTarget.value })} placeholder="输入文章标题" value={editor.title} />
+          <input aria-label="文章标题" className="markdown-editor__title" id="markdown-editor-title" disabled={isSaving || recovery !== null} maxLength={200} onChange={(event) => onChange({ ...editor, title: event.currentTarget.value })} placeholder="输入文章标题" value={editor.title} />
         </div>
         <div className="markdown-editor__actions">
-          <button className="secondary-button" type="button" onClick={onPreview}><StudioIcon name="eye" /> 预览</button>
-          <button className="secondary-button" type="button" aria-label="打开文章设置" onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" /> 设置</button>
-          <button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存</button>
-          <button className="primary-button" disabled={isSaving} type="button" onClick={() => onSave('published')}>{isSaving ? '发布中…' : '发布'}</button>
+          <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" onClick={onPreview}><StudioIcon name="eye" /> 预览</button>
+          <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" aria-label="打开文章设置" onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" /> 设置</button>
+          {editor.status === 'draft' && <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('draft')}>保存草稿</button>}
+          <button className="primary-button" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('published')}>{editor.status === 'published' ? '更新发布' : '发布'}</button>
         </div>
       </header>
       {feedback && <p className="markdown-editor__feedback" role="status">{feedback}</p>}
+      {hasVersionConflict && <div className="markdown-editor__recovery"><span>站点上的文章已经更新，请先核对两个版本。</span><button type="button" disabled={isSaving} onClick={onCompareVersion}>核对站点版本</button></div>}
+      {recovery && <div className="markdown-editor__recovery" role="status">
+        <span>发现本标签页未保存的内容{recovery.editor.updatedAt !== editor.updatedAt ? '，站点版本可能已更新，请核对后保存' : ''}。</span>
+        <button type="button" onClick={onRestoreDraft}>恢复内容</button>
+        <button type="button" onClick={onDiscardDraft}>丢弃本地内容</button>
+      </div>}
       <div className="markdown-editor__workspace markdown-editor__workspace--mdx" ref={editorWorkspaceRef}>
         <section className="markdown-editor__source markdown-editor__source--mdx" aria-label="Markdown 编辑区">
           <MDXEditor
+            ref={markdownRef}
             key={editor.id ?? 'new'}
             className="genesis-mdx-editor"
             contentEditableClassName="genesis-mdx-content"
             markdown={editor.contentMarkdown}
+            placeholder="写下你的想法，或打开博客助手一起构思。"
+            readOnly={isSaving || recovery !== null}
             onChange={(contentMarkdown) => onChange({ ...editor, contentMarkdown })}
             translation={mdxEditorChineseTranslation}
             plugins={[
@@ -591,6 +558,7 @@ function MarkdownEditor({
           ) : <p className="markdown-editor__outline-empty" id="markdown-editor-outline">添加一级至三级标题后，会在这里显示目录。</p>)}
         </aside>
       </div>
+      <footer className="markdown-editor__writing-meta"><span>{stats.count.toLocaleString('zh-CN')} 字 · 预计阅读 {stats.minutes} 分钟</span><span>未保存内容仅保留在本标签页</span></footer>
       {isSettingsOpen && <PostSettingsModal categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} />}
     </section>
   )
@@ -706,6 +674,12 @@ function PostsWorkspace({
   tags,
   onCreateTaxonomy,
   onSelectTaxonomy,
+  saveState,
+  recovery,
+  onRestoreDraft,
+  onDiscardDraft,
+  onCompareVersion,
+  hasVersionConflict,
 }: {
   categories: BlogCategory[]
   editor: EditorState
@@ -723,13 +697,19 @@ function PostsWorkspace({
   onBack: () => void
   onSave: (status: BlogPostStatus) => void
   tags: BlogTag[]
+  saveState: string
+  recovery: BlogDraft | null
+  onRestoreDraft: () => void
+  onDiscardDraft: () => void
+  onCompareVersion: () => void
+  hasVersionConflict: boolean
 } & ArticleTaxonomyActions) {
   if (view === 'list') {
     return <PostsIndex onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} />
   }
 
   if (isEditorOpen) {
-    return <MarkdownEditor categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} />
+    return <MarkdownEditor categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} saveState={saveState} recovery={recovery} onRestoreDraft={onRestoreDraft} onDiscardDraft={onDiscardDraft} onCompareVersion={onCompareVersion} hasVersionConflict={hasVersionConflict} />
   }
 
   return <ArticleReader editor={editor} onBack={onBack} onEdit={onEdit} />
@@ -764,8 +744,8 @@ function getStudioRoute(pathname: string): {
     ? sectionSegment as StudioSection
     : 'overview'
   const postId = activeSection === 'posts' && postSegment && postSegment !== 'new' ? postSegment : null
-  const isEditorOpen = activeSection === 'posts' && (postSegment === 'new' || actionSegment === 'edit')
-  const postView = activeSection === 'posts' && (postId !== null || isEditorOpen) ? 'preview' : 'list'
+  const isEditorOpen = activeSection === 'posts' && actionSegment === 'edit'
+  const postView = activeSection === 'posts' && (postId !== null || postSegment === 'new') ? 'preview' : 'list'
   return { activeSection, postId, postView, isEditorOpen }
 }
 
@@ -794,10 +774,66 @@ function Dashboard({
   const [categoryOptions, setCategoryOptions] = useState(categories)
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const [baseline, setBaseline] = useState(editor)
+  const [recovery, setRecovery] = useState<BlogDraft | null>(null)
+  const [localDraftSaved, setLocalDraftSaved] = useState(true)
+  const [publication, setPublication] = useState<EditorState | null>(null)
+  const [deleteRequested, setDeleteRequested] = useState(false)
+  const [logoutRequested, setLogoutRequested] = useState(false)
+  const [hasVersionConflict, setHasVersionConflict] = useState(false)
+  const [comparison, setComparison] = useState<BlogPostAdmin | null>(null)
+  const mutationLock = useRef(false)
+  const bypassNavigation = useRef(false)
+  const loadedResource = useRef<string | null>(null)
   const studioBasePath = '/studio/blog'
 
   const selectedPost = postId === null ? null : managedPosts.find((post) => post.id === postId) ?? null
   const activeEditor = selectedPost && editor.id !== postId ? toEditor(selectedPost) : editor
+  const resource = postView === 'preview' ? postId ?? 'new' : null
+  const hasUnsavedChanges = resource !== null && JSON.stringify(activeEditor) !== JSON.stringify(baseline)
+  const blocker = useBlocker(({ nextLocation }) => {
+    if (bypassNavigation.current) return false
+    if (mutationLock.current) return true
+    if (!hasUnsavedChanges) return false
+    const target = getStudioRoute(nextLocation.pathname)
+    return target.activeSection !== 'posts' || target.postView !== 'preview' || target.postId !== postId
+  })
+
+  useLayoutEffect(() => {
+    bypassNavigation.current = false
+    if (resource === null) { loadedResource.current = null; return }
+    if (loadedResource.current === resource) return
+    loadedResource.current = resource
+    const initial = selectedPost ? toEditor(selectedPost) : createEmptyEditor()
+    setEditor(initial)
+    setBaseline(initial)
+    const draft = readBlogDraft(user.id, postId)
+    setRecovery(draft && JSON.stringify(draft.editor) !== JSON.stringify(initial) ? draft : null)
+    setFeedback(null)
+    setLocalDraftSaved(true)
+    setHasVersionConflict(false)
+    setComparison(null)
+  }, [resource, postId, selectedPost, user.id])
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [hasUnsavedChanges])
+
+  useEffect(() => {
+    document.title = activeSection === 'posts' && resource !== null
+      ? `${activeEditor.title || '新文章'} · ${isEditorOpen ? '写作' : '预览'} · Genesis`
+      : `${sectionMeta[activeSection].title} · Genesis`
+  }, [activeSection, activeEditor.title, isEditorOpen, resource])
+
+  function changeEditor(next: EditorState) {
+    if (mutationLock.current || recovery) return
+    setEditor(next)
+    setLocalDraftSaved(writeBlogDraft(user.id, next))
+    setFeedback(null)
+  }
 
   useLayoutEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0
@@ -811,54 +847,108 @@ function Dashboard({
   }
 
   function createPost() {
-    setEditor(createEmptyEditor())
-    setFeedback(null)
     void navigate(`${studioBasePath}/posts/new/edit`)
   }
 
   function openPost(post: BlogPostAdmin) {
-    setEditor(toEditor(post))
-    setFeedback(null)
     void navigate(`${studioBasePath}/posts/${encodeURIComponent(post.id)}/edit`)
   }
 
-  async function savePost(status: BlogPostStatus) {
+  async function savePost(status: BlogPostStatus, source = activeEditor): Promise<boolean> {
+    if (mutationLock.current) return false
     let payload: BlogPostWrite
     try {
-      payload = toPayload({ ...activeEditor, status }, tagOptions)
+      payload = toPayload(source, tagOptions, status)
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : '文章信息不完整。')
-      return
+      return false
     }
 
+    mutationLock.current = true
     setIsSaving(true)
     setFeedback(null)
     try {
-      const savedPost = activeEditor.id === null
+      const savedPost = source.id === null
         ? await createAdminBlogPost(token, payload)
-        : await updateAdminBlogPost(token, activeEditor.id, payload)
+        : await updateAdminBlogPost(token, source.id, payload)
       setManagedPosts((currentPosts) => [savedPost, ...currentPosts.filter((post) => post.id !== savedPost.id)])
       setEditor(toEditor(savedPost))
-      setFeedback('已保存。')
+      setBaseline(toEditor(savedPost))
+      clearBlogDraft(user.id, source.id)
+      setHasVersionConflict(false)
+      loadedResource.current = savedPost.id
+      bypassNavigation.current = true
+      setFeedback(status === 'published' ? '已发布到站点。' : '草稿已保存到站点。')
       void navigate(`${studioBasePath}/posts/${encodeURIComponent(savedPost.id)}/edit`)
-    } catch {
-      setFeedback('保存失败，请检查必填项、Slug 和网络连接。')
+      return true
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '保存失败，输入已保留，请检查网络后重试。')
+      if (error instanceof ApiError && error.status === 409 && source.id) {
+        setHasVersionConflict(true)
+        setPublication(null)
+      }
+      return false
     } finally {
+      mutationLock.current = false
       setIsSaving(false)
     }
   }
 
+  function requestSave(status: BlogPostStatus) {
+    if (mutationLock.current || recovery) return
+    if (status === 'draft') { void savePost(status); return }
+    try {
+      toPayload(activeEditor, tagOptions, 'published')
+      setFeedback(null)
+      setPublication({ ...activeEditor })
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '请先补充文章内容。')
+      document.getElementById('markdown-editor-title')?.focus()
+    }
+  }
+
+  async function compareVersion() {
+    if (!activeEditor.id || mutationLock.current) return
+    mutationLock.current = true
+    setIsSaving(true)
+    try { setComparison(await getAdminBlogPost(token, activeEditor.id)) }
+    catch (error) { setFeedback(error instanceof Error ? error.message : '获取站点版本失败，请稍后重试。') }
+    finally { mutationLock.current = false; setIsSaving(false) }
+  }
+
+  function reconcileVersion(keepLocal: boolean) {
+    if (!comparison) return
+    const latest = toEditor(comparison)
+    const next = keepLocal ? { ...activeEditor, updatedAt: latest.updatedAt, status: latest.status } : latest
+    setManagedPosts((current) => current.map((post) => post.id === comparison.id ? comparison : post))
+    setBaseline(latest)
+    setEditor(next)
+    setLocalDraftSaved(keepLocal ? writeBlogDraft(user.id, next) : true)
+    if (!keepLocal) clearBlogDraft(user.id, comparison.id)
+    setHasVersionConflict(false)
+    setComparison(null)
+    setFeedback(keepLocal ? '已核对版本，当前修改尚未保存。' : '已采用站点版本。')
+  }
+
   async function deletePost() {
-    if (activeEditor.id === null) return
-    if (!window.confirm(`确定删除「${activeEditor.title}」吗？此操作不可恢复。`)) return
+    if (activeEditor.id === null || mutationLock.current) return
+    mutationLock.current = true
+    setIsSaving(true)
+    setFeedback(null)
     try {
       await deleteAdminBlogPost(token, activeEditor.id)
       setManagedPosts((currentPosts) => currentPosts.filter((post) => post.id !== activeEditor.id))
       setEditor(createEmptyEditor())
+      clearBlogDraft(user.id, activeEditor.id)
+      setDeleteRequested(false)
       setFeedback('文章已删除。')
+      bypassNavigation.current = true
       void navigate(`${studioBasePath}/posts`)
-    } catch {
-      setFeedback('删除失败，请稍后重试。')
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : '删除失败，请稍后重试。')
+    } finally {
+      mutationLock.current = false
+      setIsSaving(false)
     }
   }
 
@@ -881,13 +971,11 @@ function Dashboard({
   }
 
   function selectArticleTaxonomy(kind: TaxonomyKind, item: BlogTag | null) {
-    setEditor((current) => {
-      if (kind === 'categories') return { ...current, categoryId: item?.id ?? null }
-      if (!item) return current
-      const selected = current.selectedTagSlugs.includes(item.slug)
-      if (!selected && current.selectedTagSlugs.length >= 10) return current
-      return { ...current, selectedTagSlugs: selected ? current.selectedTagSlugs.filter((slug) => slug !== item.slug) : [...current.selectedTagSlugs, item.slug] }
-    })
+    if (kind === 'categories') { changeEditor({ ...activeEditor, categoryId: item?.id ?? null }); return }
+    if (!item) return
+    const selected = activeEditor.selectedTagSlugs.includes(item.slug)
+    if (!selected && activeEditor.selectedTagSlugs.length >= 10) return
+    changeEditor({ ...activeEditor, selectedTagSlugs: selected ? activeEditor.selectedTagSlugs.filter((slug) => slug !== item.slug) : [...activeEditor.selectedTagSlugs, item.slug] })
   }
 
   async function createArticleTaxonomy(kind: TaxonomyKind, name: string): Promise<BlogTag> {
@@ -895,13 +983,18 @@ function Dashboard({
     const items = kind === 'tags' ? tagOptions : categoryOptions
     const saved = items.find((item) => item.name === name.trim()) ?? await createTaxonomy(token, kind, name)
     taxonomyChanged(kind, saved, null)
-    setEditor((current) => current.id !== targetId ? current : kind === 'categories' ? { ...current, categoryId: saved.id } : { ...current, selectedTagSlugs: current.selectedTagSlugs.includes(saved.slug) ? current.selectedTagSlugs : [...current.selectedTagSlugs, saved.slug].slice(0, 10) })
+    setEditor((current) => {
+      if (current.id !== targetId || mutationLock.current) return current
+      const next = kind === 'categories' ? { ...current, categoryId: saved.id } : { ...current, selectedTagSlugs: current.selectedTagSlugs.includes(saved.slug) ? current.selectedTagSlugs : [...current.selectedTagSlugs, saved.slug].slice(0, 10) }
+      writeBlogDraft(user.id, next)
+      return next
+    })
     return saved
   }
 
   return (
     <div className="studio-app-shell">
-      <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={onLogout} user={user} />
+      <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={() => { if (hasUnsavedChanges) setLogoutRequested(true); else onLogout() }} user={user} />
 
       <div className="studio-workspace">
         {!isEditorOpen && (
@@ -930,14 +1023,20 @@ function Dashboard({
               feedback={feedback}
               isEditorOpen={isEditorOpen}
               isSaving={isSaving}
-              onChange={setEditor}
+              onChange={changeEditor}
               onCreatePost={createPost}
-              onDelete={() => void deletePost()}
+              onDelete={() => { setFeedback(null); setDeleteRequested(true) }}
               onEdit={() => { void navigate(activeEditor.id ? `${studioBasePath}/posts/${encodeURIComponent(activeEditor.id)}/edit` : `${studioBasePath}/posts/new/edit`) }}
               onOpenPost={openPost}
-              onPreview={() => { void navigate(activeEditor.id ? `${studioBasePath}/posts/${encodeURIComponent(activeEditor.id)}` : `${studioBasePath}/posts`) }}
+              onPreview={() => { void navigate(activeEditor.id ? `${studioBasePath}/posts/${encodeURIComponent(activeEditor.id)}` : `${studioBasePath}/posts/new`) }}
               onBack={() => { void navigate(`${studioBasePath}/posts`) }}
-              onSave={(status) => void savePost(status)}
+              onSave={requestSave}
+              saveState={isSaving ? '正在保存…' : recovery ? '待恢复本地内容' : hasUnsavedChanges ? localDraftSaved ? '未保存 · 本标签页已暂存' : '未保存 · 无法暂存，请及时保存' : activeEditor.id ? '已保存到站点' : '尚未保存'}
+              recovery={recovery}
+              onRestoreDraft={() => { if (recovery) { setEditor(recovery.editor); setRecovery(null); setLocalDraftSaved(writeBlogDraft(user.id, recovery.editor)) } }}
+              onDiscardDraft={() => { clearBlogDraft(user.id, postId); setRecovery(null) }}
+              hasVersionConflict={hasVersionConflict}
+              onCompareVersion={() => { void compareVersion() }}
               posts={managedPosts}
               tags={tagOptions}
               view={postView}
@@ -954,6 +1053,25 @@ function Dashboard({
           {activeSection !== 'overview' && activeSection !== 'posts' && activeSection !== 'categories' && activeSection !== 'tags' && <SectionPlaceholder section={activeSection} />}
         </main>
       </div>
+      {publication && <BlogWorkflowDialog title={publication.status === 'published' ? '更新已发布文章' : '发布前检查'} description={publication.status === 'published' ? '确认后，站点上的文章将更新为当前内容。' : '确认后，这篇文章将公开显示在博客中。'} confirmLabel={publication.status === 'published' ? '确认更新发布' : '确认发布'} busy={isSaving} error={feedback} onCancel={() => setPublication(null)} onConfirm={() => { void savePost('published', publication).then((saved) => { if (saved) setPublication(null) }) }}>
+        <dl>
+          <div><dt>标题</dt><dd>{publication.title}</dd></div>
+          <div><dt>地址</dt><dd>/articles/{publication.slug}</dd></div>
+          <div><dt>摘要</dt><dd>{toPayload(publication, tagOptions, 'published').excerpt}</dd></div>
+          <div><dt>分类</dt><dd>{categoryOptions.find((item) => item.id === publication.categoryId)?.name ?? '未分类'}</dd></div>
+          <div><dt>标签</dt><dd>{tagOptions.filter((tag) => publication.selectedTagSlugs.includes(tag.slug)).map((tag) => tag.name).join('、') || '未设置'}</dd></div>
+          <div><dt>正文</dt><dd>{articleStats(publication.contentMarkdown).count} 字 · 预计阅读 {articleStats(publication.contentMarkdown).minutes} 分钟</dd></div>
+        </dl>
+      </BlogWorkflowDialog>}
+      {deleteRequested && <BlogWorkflowDialog title="删除文章" description={`删除「${activeEditor.title || '未命名文章'}」后，文章及本标签页的暂存内容均无法恢复。`} confirmLabel="删除文章" busy={isSaving} error={feedback} onCancel={() => setDeleteRequested(false)} onConfirm={() => { void deletePost() }} />}
+      {comparison && <BlogWorkflowDialog title="核对文章版本" description="保留当前内容后，下次保存会替换下面展示的站点版本；也可以采用站点版本并丢弃当前修改。" confirmLabel="保留当前内容继续编辑" onCancel={() => setComparison(null)} onConfirm={() => reconcileVersion(true)}>
+        <div className="blog-version-comparison">
+          <details open><summary>当前输入：{activeEditor.title || '未命名文章'}</summary><pre>{activeEditor.contentMarkdown || '正文为空'}</pre></details>
+          <details open><summary>站点版本：{comparison.title || '未命名文章'}</summary><pre>{comparison.content_markdown || '正文为空'}</pre></details>
+          <button type="button" onClick={() => reconcileVersion(false)}>采用站点版本，丢弃当前修改</button>
+        </div>
+      </BlogWorkflowDialog>}
+      {(blocker.state === 'blocked' || logoutRequested) && <BlogWorkflowDialog title={isSaving ? '正在保存文章' : '还有未保存的内容'} description={isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel="离开写作页" busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
       {activeSection === 'posts' && <BlogAssistant
         page={{
           route: location.pathname,

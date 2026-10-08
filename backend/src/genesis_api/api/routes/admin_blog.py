@@ -1,3 +1,4 @@
+from datetime import UTC
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Response, status
@@ -195,9 +196,22 @@ def update_admin_post(
     session: SessionDependency,
     _: OwnerDependency,
 ) -> BlogPostAdminRead:
-    post = get_blog_post_by_id(session, post_id)
+    post = get_blog_post_by_id(session, post_id, for_update=True)
     if post is None:
         raise post_not_found()
+
+    if data.expected_updated_at is not None:
+        current_version = post.updated_at
+        expected_version = data.expected_updated_at
+        if current_version.tzinfo is None:
+            current_version = current_version.replace(tzinfo=UTC)
+        if expected_version.tzinfo is None:
+            expected_version = expected_version.replace(tzinfo=UTC)
+        if current_version != expected_version:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="文章已在其他页面或助手中更新。当前输入已保留，请重新打开文章核对后再保存。",
+            )
 
     try:
         with session.no_autoflush:

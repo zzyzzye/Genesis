@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from genesis_api.blog.models import BlogPostStatus
 
@@ -78,16 +78,26 @@ class BlogTagWrite(BaseModel):
 
 class BlogPostWrite(BaseModel):
     slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=160)
-    title: str = Field(min_length=1, max_length=200)
-    excerpt: str = Field(min_length=1, max_length=500)
-    content_markdown: str = Field(min_length=1)
+    title: str = Field(max_length=200)
+    excerpt: str = Field(max_length=500)
+    content_markdown: str
     cover_image_url: str | None = Field(default=None, max_length=500)
     category_id: UUID | None = None
     status: BlogPostStatus = BlogPostStatus.DRAFT
     is_featured: bool = False
     read_time_minutes: int = Field(default=1, ge=1, le=120)
     published_at: datetime | None = None
+    expected_updated_at: datetime | None = None
     tags: list[BlogTagWrite] = Field(default_factory=list, max_length=10)
+
+    @model_validator(mode="after")
+    def published_posts_require_content(self) -> "BlogPostWrite":
+        # 草稿可以暂缺内容；公开发布仍必须具备可阅读的标题、摘要和正文。
+        if self.status is BlogPostStatus.PUBLISHED and not all(
+            value.strip() for value in (self.title, self.excerpt, self.content_markdown)
+        ):
+            raise ValueError("发布前请填写标题、摘要和正文")
+        return self
 
     @field_validator("tags")
     @classmethod

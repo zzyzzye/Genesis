@@ -58,6 +58,7 @@ export interface BlogPostWrite {
   is_featured: boolean
   read_time_minutes: number
   tags: BlogTagWrite[]
+  expected_updated_at?: string | null
 }
 
 export interface BlogPostAdmin extends BlogPostWrite {
@@ -103,12 +104,19 @@ interface AccessToken {
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 
+export class ApiError extends Error {
+  constructor(public readonly status: number, detail: string | null) {
+    super(`请求失败：HTTP ${status}${detail ? `（${detail}）` : ''}`)
+    this.name = 'ApiError'
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, init)
   if (!response.ok) {
     const error: unknown = await response.json().catch((): null => null)
     const detail = formatApiErrorDetail(error)
-    throw new Error(`请求失败：HTTP ${response.status}${detail ? `（${detail}）` : ''}`)
+    throw new ApiError(response.status, detail)
   }
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
@@ -178,6 +186,10 @@ export function updateCurrentUser(token: string, data: ProfileUpdateData): Promi
 
 export function getAdminBlogPosts(token: string): Promise<BlogPostAdmin[]> {
   return request<BlogPostAdmin[]>('/admin/blog/posts', { headers: authHeaders(token) })
+}
+
+export function getAdminBlogPost(token: string, postId: string): Promise<BlogPostAdmin> {
+  return request<BlogPostAdmin>(`/admin/blog/posts/${encodeURIComponent(postId)}`, { headers: authHeaders(token) })
 }
 
 export function getAdminBlogTags(token: string): Promise<BlogTag[]> {

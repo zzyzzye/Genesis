@@ -121,10 +121,11 @@
 }
 .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
   overflow-x: auto;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: #bcc1c6 transparent;
 }
 .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar::-webkit-scrollbar {
-  display: none;
+  height: 6px;
 }
 .markdown-editor__source--mdx {
   position: relative;

@@ -36,21 +36,17 @@ def confirm_blog_action(
         session.commit()
         return {"action": action, "post_id": str(post_id), "status": "deleted"}
 
-    if action == "publish_post":
+    if action in {"update_post", "publish_post"}:
         post_id = _payload_uuid(payload, "post_id")
-        post = get_blog_post_by_id(session, post_id)
+        post = get_blog_post_by_id(session, post_id, for_update=True)
         if post is None:
             raise HTTPException(status_code=404, detail="文章不存在")
-        post.status = BlogPostStatus.PUBLISHED
-        session.commit()
-        return {"action": action, "post_id": str(post_id), "status": "published"}
-
-    if action == "update_post":
-        post_id = _payload_uuid(payload, "post_id")
-        post = get_blog_post_by_id(session, post_id)
-        if post is None:
-            raise HTTPException(status_code=404, detail="文章不存在")
-        changes = payload.get("changes")
+        # 发布共用人工编辑的校验与写入逻辑，不能遗漏发布时间或公开不完整草稿。
+        changes = (
+            {"status": BlogPostStatus.PUBLISHED}
+            if action == "publish_post"
+            else payload.get("changes")
+        )
         if isinstance(changes, str):
             try:
                 changes = json.loads(changes)
@@ -58,39 +54,49 @@ def confirm_blog_action(
                 raise HTTPException(status_code=422, detail="changes 必须是 JSON") from exc
         if not isinstance(changes, dict):
             raise HTTPException(status_code=422, detail="changes 必须是 JSON 对象")
-        data = BlogPostWrite.model_validate({
-            "slug": changes.get("slug", post.slug),
-            "title": changes.get("title", post.title),
-            "excerpt": changes.get("excerpt", post.excerpt),
-            "content_markdown": changes.get("content_markdown", post.content_markdown),
-            "cover_image_url": changes.get("cover_image_url", post.cover_image_url),
-            "category_id": changes.get("category_id", post.category_id),
-            "status": changes.get("status", post.status),
-            "is_featured": changes.get("is_featured", post.is_featured),
-            "read_time_minutes": changes.get("read_time_minutes", post.read_time_minutes),
-            "published_at": changes.get("published_at", post.published_at),
-            "tags": changes.get(
-                "tags", [{"name": tag.name, "slug": tag.slug} for tag in post.tags]
-            ),
-        })
+        data = BlogPostWrite.model_validate(
+            {
+                "slug": changes.get("slug", post.slug),
+                "title": changes.get("title", post.title),
+                "excerpt": changes.get("excerpt", post.excerpt),
+                "content_markdown": changes.get("content_markdown", post.content_markdown),
+                "cover_image_url": changes.get("cover_image_url", post.cover_image_url),
+                "category_id": changes.get("category_id", post.category_id),
+                "status": changes.get("status", post.status),
+                "is_featured": changes.get("is_featured", post.is_featured),
+                "read_time_minutes": changes.get("read_time_minutes", post.read_time_minutes),
+                "published_at": changes.get("published_at", post.published_at),
+                "tags": changes.get(
+                    "tags", [{"name": tag.name, "slug": tag.slug} for tag in post.tags]
+                ),
+            }
+        )
         try:
             apply_post_data(session, post, data)
             session.commit()
         except ValueError as exc:
             session.rollback()
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        return {"action": action, "post_id": str(post_id), "status": "updated"}
+        return {
+            "action": action,
+            "post_id": str(post_id),
+            "status": "published" if action == "publish_post" else "updated",
+        }
 
     required = ("title", "excerpt", "content_markdown", "slug")
     if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
         raise HTTPException(status_code=422, detail="创建草稿缺少必要字段")
     post = BlogPost(author=current_user)
     session.add(post)
-    data = BlogPostWrite.model_validate({
-        "title": payload["title"], "excerpt": payload["excerpt"],
-        "content_markdown": payload["content_markdown"], "slug": payload["slug"],
-        "status": BlogPostStatus.DRAFT,
-    })
+    data = BlogPostWrite.model_validate(
+        {
+            "title": payload["title"],
+            "excerpt": payload["excerpt"],
+            "content_markdown": payload["content_markdown"],
+            "slug": payload["slug"],
+            "status": BlogPostStatus.DRAFT,
+        }
+    )
     try:
         apply_post_data(session, post, data)
         session.commit()
