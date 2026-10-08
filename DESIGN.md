@@ -122,6 +122,8 @@ Genesis 的创作画布像一张深色剪辑台：内容浮在安静的底面上
 
 ### 博客写作与发布
 
+博客首页 `/blog` 的首屏、文章区和页脚均以 `width: 100%` 铺满可用宽度，不设置固定的外层最大宽度。三者与页眉统一消费 `BlogPage.css` 中 `.blog-page` 拥有的 `--blog-page-gutter: clamp(1rem, 4vw, 4rem)`，用内边距保持内容对齐；标题和摘要沿用既有文字行长。
+
 写作页沿用白色纸面和中文衬线标题，不加入新的卡片层级。`studio/styles/shell.css` 拥有工作台基础令牌，`studio/styles/writing.css` 拥有写作状态样式与次级文字 `--studio-editor-muted: #73797f`、低对比悬停 `--studio-editor-hover: #e7eaec`；`BlogWorkflowDialog.css` 消费这些令牌。头部显示草稿/发布状态和保存位置，底部显示字数与阅读时间。工具按钮与目录无边框、描边和阴影；输入聚焦保持原视觉，按钮键盘聚焦采用低对比背景或文字变化。
 
 发布检查、删除和离开确认共用 `BlogWorkflowDialog`，复用 `useModalDialog` 管理模态焦点、Escape 和焦点恢复。弹窗为单层白色表面，最大宽 440px，窄屏保留 16px 两侧空间，长内容在弹窗内滚动；默认聚焦取消。恢复提示是横向文字与动作，不再叠加卡片。
