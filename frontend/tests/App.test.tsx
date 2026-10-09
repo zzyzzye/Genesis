@@ -231,7 +231,9 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: '选择工作区' })).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: '系统导航' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('link', { name: /博客.*OPEN/ }))
+    expect(screen.getByRole('link', { name: /影音.*进入/ })).toHaveAttribute('href', '/media')
+    expect(screen.queryByRole('link', { name: /工具集/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: /博客.*进入/ }))
 
     fireEvent.change(await screen.findByLabelText('密码'), { target: { value: 'test-password' } })
     fireEvent.click(screen.getByRole('button', { name: '进入写作台' }))

@@ -6,6 +6,7 @@
 
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 | --- | --- | --- | --- | --- |
+| 工作区目录 / Navigation | StudioPortal、React Router Link | StudioPortal.tsx、App.tsx | 博客与影音进入真实路由，筹备中的工具集为静态说明 | 键盘激活、浏览器返回、筹备态、桌面与窄屏 |
 | Select/Listbox | 原生 select | ProjectCanvas.tsx、AssetLibrary.tsx | 系统菜单负责弹出几何与键盘选择；模型选择仍沿用 MediaAssistant 的现有组件 | 浏览器展开、选择、Escape，组件测试 |
 | Form | 画布节点直接编辑、MediaHome 的 ProjectDialog | ProjectCanvas.tsx、MediaHome.tsx | 节点编辑无需提交表单；提交表单使用 noValidate 与内联错误 | 整数时长、保存恢复、失败保留草稿 |
 | CRUD | useCanvas、作品素材 API | useCanvas.ts、api/routes/media.py | 节点修改可撤销；素材删除沿用既有确认流程 | 组件测试、后端权限与素材类型测试 |
