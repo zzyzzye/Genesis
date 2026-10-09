@@ -50,7 +50,13 @@ class EmbeddedAgentRuntime:
         self._graphs: dict[tuple[str, str, str, str | None], Any] = {}
 
     async def startup(self, settings: Settings) -> None:
-        """由应用生命周期初始化一次 checkpoint 存储，供各业务图共享。"""
+        """由应用生命周期初始化共享的 PostgreSQL checkpoint 存储。
+
+        重复调用会复用已初始化的存储；初始化失败时释放连接上下文。
+
+        Args:
+            settings: 应用配置，提供 checkpoint 数据库连接信息。
+        """
         if self._checkpointer is not None:
             return
         context = AsyncPostgresSaver.from_conn_string(settings.resolved_postgres_uri)
@@ -77,6 +83,19 @@ class EmbeddedAgentRuntime:
     def _model_config(
         settings: Settings, provider: str
     ) -> tuple[str, SecretStr | None, str | None, str]:
+        """读取指定供应商的模型配置，不验证凭据是否已配置。
+
+        Args:
+            settings: 应用配置。
+            provider: 项目供应商标识，如 openai、grok、gemini、claude、mimo。
+
+        Returns:
+            原生适配器标识、API Key、默认模型名称和上游基础地址。
+            兼容网关的实际适配器由模型构建阶段决定。
+
+        Raises:
+            ValueError: 供应商标识不受支持。
+        """
         configs: dict[str, tuple[str, SecretStr | None, str | None, str]] = {
             "openai": (
                 "openai", settings.text_openai_api_key,
@@ -106,7 +125,24 @@ class EmbeddedAgentRuntime:
     def _build_model(
         self, settings: Settings, provider: str, model: str, reasoning_effort: str | None = None
     ) -> BaseChatModel:
-        """优先使用 LangChain 原生模型适配，仅补充网关与 MiMo 的协议差异。"""
+        """构建模型客户端，补充兼容网关与 MiMo 所需的协议适配。
+
+        此处只初始化客户端，不发起生成请求；思考档位由框架能力校验，
+        参数转换交给 LangChain，避免自行维护供应商档位映射。
+
+        Args:
+            settings: 提供上游连接信息及生成参数的应用配置。
+            provider: 项目供应商标识。
+            model: 实际调用的模型名称。
+            reasoning_effort: 思考强度；None 表示沿用模型默认设置。
+
+        Returns:
+            供 DeepAgent 使用的聊天模型客户端。
+
+        Raises:
+            RuntimeError: 缺少 API Key，或框架能力信息不支持所选思考强度。
+            ValueError: 供应商不受支持，或模型客户端配置无效。
+        """
         _, api_key, _, base_url = self._model_config(settings, provider)
         if api_key is None or not api_key.get_secret_value().strip():
             raise RuntimeError(f"未配置 {provider} 的 API Key")
@@ -152,7 +188,26 @@ class EmbeddedAgentRuntime:
         self, settings: Settings, provider: str, model: str, module: str,
         reasoning_effort: str | None = None,
     ) -> Any:
-        """按模型、业务模块与思考强度缓存，避免复用其他档位的图。"""
+        """获取对应配置的 Agent 图，不存在时创建并缓存。
+
+        按供应商、模型、业务模块与思考强度复用图；用户对话状态由
+        checkpoint 的 thread_id 区分，不保存在图缓存键中。
+
+        Args:
+            settings: 应用配置，用于构建模型和业务能力。
+            provider: 项目供应商标识，如 openai、claude。
+            model: 模型名称。
+            module: 业务模块，如 blog、media、toolbox。
+            reasoning_effort: 思考强度；None 表示沿用模型默认设置。
+
+        Returns:
+            可执行的 Agent 图，相同配置复用进程内缓存实例。
+
+        Raises:
+            RuntimeError: 运行时未初始化、缺少 API Key，
+                或模型不支持指定的思考强度。
+            ValueError: 供应商、业务模块不受支持，或模型客户端配置无效。
+        """
         if self._checkpointer is None:
             raise RuntimeError("Agent runtime 尚未初始化")
         key = (provider, model, module, reasoning_effort)
@@ -171,7 +226,24 @@ class EmbeddedAgentRuntime:
     async def stream(
         self, request: AiChatRequest, settings: Settings, *, thread_id: str
     ) -> AsyncIterator[str]:
-        """在独立身份上下文中执行图，仅向上层传递模型消息文本。"""
+        """在独立用户身份上下文中执行 Agent 图并逐段产出文本。
+
+        恢复任务且存在 checkpoint 时从保存状态继续，不重复提交输入消息。
+        工具结果与非文本元数据不作为模型回答返回。
+
+        Args:
+            request: 对话消息、页面上下文、模型选项及服务端设置的用户身份。
+            settings: 提供默认模型配置与业务能力配置。
+            thread_id: checkpoint 的任务标识，用于隔离与恢复执行状态。
+
+        Yields:
+            模型消息中的非空文本片段。
+
+        Raises:
+            RuntimeError: 缺少用户身份、模型名称、API Key，
+                或运行时未初始化、所选思考强度不受支持。
+            ValueError: 供应商、业务模块不受支持，或模型客户端配置无效。
+        """
         if request.actor_id is None or request.actor_role is None:
             raise RuntimeError("Agent 调用缺少用户上下文")
         provider = request.provider or settings.text_provider
@@ -210,7 +282,14 @@ class EmbeddedAgentRuntime:
 
 
 def _message_text(message: object) -> list[str]:
-    """只提取模型消息文本，忽略工具结果和元数据。"""
+    """提取模型消息文本，忽略工具结果和元数据。
+
+    Args:
+        message: 框架产出的消息，支持纯字符串与列表形式的文本内容。
+
+    Returns:
+        非空文本片段列表；非模型消息或没有文本时返回空列表。
+    """
     if getattr(message, "type", None) not in ("ai", "AIMessageChunk"):
         return []
     content = getattr(message, "content", None)

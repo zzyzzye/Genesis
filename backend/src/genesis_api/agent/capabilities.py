@@ -23,7 +23,11 @@ class ResolvedAgentCapability:
 
 
 class AgentCapabilityRegistry:
-    """应用组合入口：业务模块拥有能力，运行时只负责按位置装配。"""
+    """按业务模块装配提示词和工具，供公共运行时创建 Agent 图。
+
+    实例持有各模块的能力入口，不保存用户身份或对话状态。
+    模块级实例 agent_capabilities 可直接导入复用，无需在调用处重复创建。
+    """
 
     def __init__(self) -> None:
         self._blog = BlogAgentCapability()
@@ -31,7 +35,18 @@ class AgentCapabilityRegistry:
         self._toolbox = ToolboxAgentCapability()
 
     def resolve(self, module: str, settings: Settings) -> ResolvedAgentCapability:
-        """按业务模块装配能力；未知模块直接拒绝，不回退到其他模块的工具。"""
+        """按业务模块装配能力，不回退到其他模块的工具。
+
+        Args:
+            module: 业务模块标识，如 blog、media、toolbox。
+            settings: 构建业务工具所需的应用配置。
+
+        Returns:
+            包含模块标识、Agent 名称、系统提示词和可调用工具的能力组合。
+
+        Raises:
+            ValueError: 模块尚未提供 Agent 能力。
+        """
         if module == self._blog.module:
             return ResolvedAgentCapability(
                 module=self._blog.module,
@@ -64,6 +79,24 @@ class AgentCapabilityRegistry:
         current_user: User,
         session: Session,
     ) -> object:
+        """将用户确认的写操作分派给对应业务模块。
+
+        调用前由公共 API 完成所有者权限与提议令牌校验；此处仅分派业务操作。
+
+        Args:
+            module: 提供该操作的业务模块标识。
+            action: 待执行的业务操作名称。
+            payload: 操作参数，由业务模块进一步校验。
+            current_user: 公共 API 已认证并校验权限的当前用户。
+            session: 当前请求的数据库会话。
+
+        Returns:
+            业务模块执行操作后返回的结果。
+
+        Raises:
+            ValueError: 模块不提供该操作。
+            HTTPException: 业务参数无效、目标不存在或业务校验失败。
+        """
         # 仅博客提供服务端确认写入；影音画布方案由前端确认，工具箱尚无写工具。
         if module == self._blog.module and self._blog.handles_action(action):
             return self._blog.confirm_action(
