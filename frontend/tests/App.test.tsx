@@ -284,7 +284,7 @@ describe('App', () => {
     window.history.pushState({}, '', '/blog/studio')
     render(<App />)
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '打开博客 AI 助手' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '打开博客 AI 助手' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '文章' }))
     fireEvent.click(await screen.findByRole('button', { name: '打开博客 AI 助手' }))
     expect(screen.getByRole('region', { name: '博客 AI 助手' })).toBeInTheDocument()

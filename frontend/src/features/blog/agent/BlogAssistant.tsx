@@ -53,7 +53,7 @@ const pageLabels: Record<AssistantPageContext['pageType'], string> = {
   section: '写作台功能页',
 }
 
-const defaultSuggestions = ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '创建一篇新的文章草稿']
+const defaultSuggestions = ['规划下一篇文章的主题与大纲', '梳理博客内容的分类与标签', '创建一篇新的文章草稿']
 const assistantSessionKey = 'genesis-blog-ai-conversation'
 
 function initialAssistantMessages(): AssistantMessage[] {
@@ -602,7 +602,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
       )}
       <button className="studio-assistant__launcher" type="button" aria-expanded={isOpen} aria-label={isOpen ? '关闭博客 AI 助手' : '打开博客 AI 助手'} onClick={() => setIsOpen((open) => !open)}>
         <span className="studio-assistant__launcher-icon"><StudioIcon name={isOpen ? 'close' : 'assistant'} /></span>
-        <span className="studio-assistant__launcher-copy"><strong>{isOpen ? '收起助手' : '博客助手'}</strong><small>{isOpen ? '继续当前文章' : '当前模块的创作搭档'}</small></span>
+        <span className="studio-assistant__launcher-copy"><strong>{isOpen ? '收起助手' : '博客助手'}</strong><small>{isOpen ? '继续当前工作' : '当前模块的创作搭档'}</small></span>
         {!isOpen && <span className="studio-assistant__launcher-signal" />}
       </button>
     </div>
