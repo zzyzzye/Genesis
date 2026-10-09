@@ -1,4 +1,5 @@
 /* 影音助手保留墨黑底，用细边界和阴影区分页面层次。 */
+.media-agent--styled { --reasoning-text:var(--agent-text); --reasoning-muted:var(--agent-muted); --reasoning-hover:var(--agent-hover); }
 .media-agent--styled { --agent-panel:#111214; --agent-surface:#191a1c; --agent-hover:#222326; --agent-text:#e8e8e8; --agent-muted:#a3a3a3; --agent-accent:#c3d1c5; }
 .media-agent--styled .media-agent__panel { width:min(392px,calc(100vw - 32px)); height:min(620px,calc(100dvh - 120px)); background:var(--agent-panel); color:var(--agent-text); border:1px solid #36383b; box-shadow:0 8px 24px #0009,0 24px 64px #0008; border-radius:12px; animation:none; }
 .media-agent--styled .media-agent__panel.is-empty { height:auto; max-height:calc(100dvh - 120px); }
@@ -50,4 +51,5 @@
 .media-agent--styled .media-agent__launcher-copy small { color:var(--agent-muted); }
 .media-agent--styled :is(.media-agent__header-actions button,.media-agent__node-context button,.media-agent__prompts button,.media-agent__provider-tabs button,.media-agent__model-option):hover:not(:disabled),.media-agent--styled .media-agent__provider-tabs button.is-active,.media-agent--styled .media-agent__model-option.is-selected,.media-agent--styled button:focus-visible { background:var(--agent-hover); color:#fff; }
 .media-agent--styled .media-agent__send:hover:not(:disabled),.media-agent--styled .media-agent__plan button:hover:not(:disabled) { background:#d2ddd3; color:#202820; }
-@media(max-width:700px) { .media-agent--styled .media-agent__panel { width:calc(100vw - 24px); height:calc(100dvh - 218px); max-height:680px; }.media-agent--styled .media-agent__panel.is-empty { height:auto; max-height:calc(100dvh - 218px); }.media-agent--styled .media-agent__body { padding-inline:15px; }.media-agent--styled .media-agent__header { padding:15px; }.media-agent__canvas-empty h2 { font-size:22px; } }
+/* 百分比避开页面滚动条占用的宽度，防止窄屏面板伸出左侧。 */
+@media(max-width:700px) { .media-agent--styled { width:calc(100% - 24px); }.media-agent--styled .media-agent__panel { width:100%; height:calc(100dvh - 218px); max-height:680px; }.media-agent--styled .media-agent__panel.is-empty { height:auto; max-height:calc(100dvh - 218px); }.media-agent--styled .media-agent__body { padding-inline:15px; }.media-agent--styled .media-agent__header { padding:15px; }.media-agent__canvas-empty h2 { font-size:22px; } }

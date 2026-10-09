@@ -35,7 +35,10 @@ import {
   type AiActionProposal,
   type AiExecutionMode,
   type AiProvider,
+  type AvailableModel,
 } from '../../../lib/api'
+import { ReasoningEffortControl } from '../../agent/ReasoningEffortControl'
+import { reasoningEffortLabel, useReasoningEffort } from '../../agent/useReasoningEffort'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
 
 type AssistantTiming = { startedAt: number; firstTokenAt?: number; completedAt?: number }
@@ -169,8 +172,8 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
   const [executionMode, setExecutionMode] = useState<AiExecutionMode>("approval_required")
   const [provider, setProvider] = useState<AiProvider>('openai')
   const [model, setModel] = useState('')
-  const [models, setModels] = useState<{ id: string; name: string | null; context_window: number | null }[]>([])
-  const modelsCache = useRef<Partial<Record<AiProvider, { id: string; name: string | null; context_window: number | null }[]>>>({})
+  const [models, setModels] = useState<AvailableModel[]>([])
+  const modelsCache = useRef<Partial<Record<AiProvider, AvailableModel[]>>>({})
   const selectedModels = useRef<Partial<Record<AiProvider, string>>>({})
   const modelTriggerRef = useRef<HTMLButtonElement | null>(null)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
@@ -181,6 +184,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const isBusy = isStarting || activeRun !== null
   const selectedModel = models.find((item) => item.id === model)
+  const reasoning = useReasoningEffort(provider, model, selectedModel)
   const contextWindow = selectedModel?.context_window ?? null
   const pageCharacters = useMemo(() => JSON.stringify({ page, editor }).length, [page, editor])
   const contextCharacters = pageCharacters + draft.length + messages.reduce((sum, message) => sum + message.content.length, 0)
@@ -398,6 +402,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
         messages: nextMessages,
         provider,
         model: model || undefined,
+        reasoning_effort: reasoning.effort,
         execution_mode: executionMode,
         context: {
           module: 'blog',
@@ -540,7 +545,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
                 >自动</button>
               </div>
               <button ref={modelTriggerRef} aria-label="选择模型" title={model || '选择模型'} className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
-                <ProviderIcon provider={provider} /><span className="studio-assistant__selected-model">{model || '选择模型'}</span><StudioIcon name="chevron" />
+                <ProviderIcon provider={provider} /><span className="studio-assistant__selected-model">{model || '选择模型'}</span><span>{reasoningEffortLabel(reasoning.effort)}</span><StudioIcon name="chevron" />
               </button>
               <span className="studio-assistant__context-ring" tabIndex={0} role={contextPercent === null ? 'img' : 'progressbar'} aria-label={contextDescription} aria-valuemin={contextPercent === null ? undefined : 0} aria-valuemax={contextPercent === null ? undefined : 100} aria-valuenow={contextPercent ?? undefined}>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -594,6 +599,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
                     ))}
                   </div>
                 )}
+                <ReasoningEffortControl levels={reasoning.levels} value={reasoning.effort} defaultValue={selectedModel?.reasoning_effort_default} hasModel={Boolean(selectedModel)} disabled={isBusy} onChange={reasoning.setEffort} />
               </div>}
               {activeRun
                 ? <button className="studio-assistant__stop" type="button" aria-label="停止生成" onClick={stopGeneration}><StudioIcon name="stop" /></button>

@@ -48,6 +48,8 @@ class AiChatRequest(BaseModel):
     context: AiContext | None = None
     provider: AiProvider | None = None
     model: str | None = None
+    # None 沿用模型默认；实际可选档位由运行时依据框架 profile 校验。
+    reasoning_effort: str | None = Field(default=None, min_length=1, max_length=32)
     # 内部字段不随普通 model_dump 输出；任务持久化时由管理器明确补入身份。
     actor_id: UUID | None = Field(default=None, exclude=True)
     actor_role: str | None = Field(default=None, exclude=True)

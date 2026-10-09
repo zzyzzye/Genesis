@@ -1,0 +1,8 @@
+.agent-reasoning { display:grid; gap:5px; padding:8px 2px 2px; color:var(--reasoning-text); }
+.agent-reasoning__title { color:var(--reasoning-muted); font-size:10px; }
+.agent-reasoning__options { display:flex; flex-wrap:wrap; gap:3px; }
+.agent-reasoning .agent-reasoning__option { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-height:28px; padding:4px 7px; border:0; outline:0; box-shadow:none; border-radius:5px; background:transparent; color:var(--reasoning-text); font-size:11px; cursor:pointer; }
+.agent-reasoning .agent-reasoning__option:is(:hover,:focus-visible,:active,[aria-pressed="true"]):not(:disabled) { background:var(--reasoning-hover); }
+.agent-reasoning .agent-reasoning__option:disabled { opacity:.4; cursor:not-allowed; }
+.agent-reasoning__check { width:8px; }
+.agent-reasoning p { margin:0; color:var(--reasoning-muted); font-size:10px; line-height:1.6; }

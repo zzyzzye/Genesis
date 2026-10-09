@@ -16,6 +16,7 @@ from genesis_api.ai.runs import (
     AiChatRunManager,
     ChatStreamer,
     _configured_model,
+    _request_from_payload,
     create_ai_chat_run,
     get_ai_chat_run_snapshot,
 )
@@ -157,6 +158,7 @@ def test_provider_model_selection_and_request_persistence() -> None:
             request=AiChatRequest(
                 surface="studio",
                 messages=[AiMessage(role="user", content="保存")],
+                reasoning_effort="high",
                 actor_id=user_id,
                 actor_role="owner",
             ),
@@ -166,6 +168,8 @@ def test_provider_model_selection_and_request_persistence() -> None:
         assert run is not None
         assert run.request_payload["actor_id"] == str(user_id)
         assert run.request_payload["messages"] == [{"role": "user", "content": "保存"}]
+        assert run.request_payload["reasoning_effort"] == "high"
+        assert _request_from_payload(run.request_payload).reasoning_effort == "high"
 
 
 @pytest.mark.anyio

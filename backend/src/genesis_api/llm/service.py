@@ -10,6 +10,7 @@ from pydantic import SecretStr
 from genesis_api.core.config import Settings
 from genesis_api.llm.context_windows import context_window_for
 from genesis_api.llm.models import AvailableModel, ProviderModels, ProviderName
+from genesis_api.llm.profiles import model_profile_for, model_provider_for
 
 logger = logging.getLogger(__name__)
 
@@ -51,13 +52,14 @@ class ModelDiscoveryService:
                 )
                 return ProviderModels(
                     provider=provider,
-                    models=[
-                        AvailableModel(
+                    models=self._with_profiles(
+                        provider,
+                        [AvailableModel(
                             id=fallback_model,
                             name=fallback_model,
                             context_window=context_window_for(provider, fallback_model),
-                        )
-                    ],
+                        )],
+                    ),
                 )
             logger.exception("获取模型列表时调用上游服务失败：provider=%s", provider)
             raise ModelDiscoveryError(f"获取 {provider} 模型列表失败") from exc
@@ -70,8 +72,21 @@ class ModelDiscoveryService:
         models = self._parse_models(payload, provider)
         return ProviderModels(
             provider=provider,
-            models=self._prioritize_configured_model(provider, models),
+            models=self._with_profiles(
+                provider, self._prioritize_configured_model(provider, models)
+            ),
         )
+
+    def _with_profiles(
+        self, provider: ProviderName, models: list[AvailableModel]
+    ) -> list[AvailableModel]:
+        _, base_url = self._provider_config(provider)
+        adapter = model_provider_for(provider, base_url)
+        for model in models:
+            profile = model_profile_for(adapter, model.id)
+            model.reasoning_effort_levels = profile.get("reasoning_effort_levels")
+            model.reasoning_effort_default = profile.get("reasoning_effort_default")
+        return models
 
     def _provider_config(self, provider: ProviderName) -> tuple[SecretStr | None, str]:
         if provider == "openai":

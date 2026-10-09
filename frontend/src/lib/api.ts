@@ -278,6 +278,8 @@ export interface AvailableModel {
   name: string | null
   created: number | null
   context_window: number | null
+  reasoning_effort_levels?: string[] | null
+  reasoning_effort_default?: string | null
 }
 
 export interface ProviderModels {
@@ -315,6 +317,7 @@ export interface AiChatRequest {
   context?: AiChatContext
   provider?: AiProvider
   model?: string
+  reasoning_effort?: string
   execution_mode?: AiExecutionMode
 }
 

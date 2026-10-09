@@ -215,6 +215,40 @@ def test_runtime_builds_and_caches_graph(monkeypatch: pytest.MonkeyPatch) -> Non
     assert runtime._graph(Settings(), "openai", "model", "blog") is sentinel
 
 
+def test_runtime_passes_supported_effort_and_rejects_unknown_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def build(**kwargs: object) -> Any:
+        calls.append(kwargs)
+        return object()
+
+    monkeypatch.setattr("genesis_api.agent.runtime.init_chat_model", build)
+    runtime = EmbeddedAgentRuntime()
+    settings = Settings(text_openai_api_key=SecretStr("test"))
+    runtime._build_model(settings, "openai", "gpt-5", "high")
+    assert calls[-1]["reasoning_effort"] == "high"
+    assert "temperature" not in calls[-1]
+    runtime._build_model(settings, "openai", "gpt-5")
+    assert "reasoning_effort" not in calls[-1]
+    with pytest.raises(RuntimeError, match="不支持所选思考强度"):
+        runtime._build_model(settings, "openai", "custom-unknown", "high")
+    with pytest.raises(RuntimeError, match="不支持所选思考强度"):
+        runtime._build_model(settings, "openai", "gpt-5", "max")
+
+
+def test_graph_cache_separates_reasoning_effort(monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime = EmbeddedAgentRuntime()
+    runtime._checkpointer = cast(Any, object())
+    monkeypatch.setattr(runtime, "_build_model", lambda *_: cast(Any, object()))
+    monkeypatch.setattr("genesis_api.agent.runtime.create_deep_agent", lambda **_: object())
+    high = runtime._graph(Settings(), "openai", "gpt-5", "blog", "high")
+    assert runtime._graph(Settings(), "openai", "gpt-5", "blog", "high") is high
+    assert runtime._graph(Settings(), "openai", "gpt-5", "blog", "low") is not high
+    assert runtime._graph(Settings(), "openai", "gpt-5", "blog") is not high
+
+
 @pytest.mark.anyio
 async def test_blog_tools_keep_invocation_context_isolated(
     monkeypatch: pytest.MonkeyPatch,

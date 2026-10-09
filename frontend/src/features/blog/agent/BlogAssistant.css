@@ -1,4 +1,7 @@
 .studio-assistant {
+  --reasoning-text:var(--assistant-ink);
+  --reasoning-muted:var(--assistant-muted);
+  --reasoning-hover:var(--assistant-hover);
   --assistant-paper: #fff;
   --assistant-surface: #f5f6f7;
   --assistant-composer: #f7f8f8;

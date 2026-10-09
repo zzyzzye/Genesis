@@ -5,6 +5,8 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider, type AvailableModel } from '../../lib/api'
+import { ReasoningEffortControl } from '../../features/agent/ReasoningEffortControl'
+import { reasoningEffortLabel, useReasoningEffort } from '../../features/agent/useReasoningEffort'
 
 type MediaAssistantPage = 'projects' | 'project' | 'canvas' | 'assets'
 export type MediaAssistantNode = { id: string; type: string; name: string; text: string; assetId: string | null }
@@ -88,6 +90,8 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
   const [provider, setProvider] = useState<AiProvider>('openai')
   const [model, setModel] = useState('')
   const [models, setModels] = useState<AvailableModel[]>([])
+  const selectedModel = models.find((item) => item.id === model)
+  const reasoning = useReasoningEffort(provider, model, selectedModel)
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const [dismissedNodeId, setDismissedNodeId] = useState<string | null>(null)
@@ -164,6 +168,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
     try {
       await streamAiChat(token, {
         surface: 'media', messages: nextMessages, provider, model: model || undefined,
+        reasoning_effort: reasoning.effort,
         context: {
           module: 'media', route: window.location.pathname, page_type: page,
           selected_node: discussionNode ? { id: discussionNode.id, type: discussionNode.type, name: discussionNode.name, text: discussionNode.text, asset_id: discussionNode.assetId } : undefined,
@@ -204,7 +209,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
       </div>
       <form className="media-agent__form" noValidate onSubmit={submit}>
         <textarea className="resize-none" ref={inputRef} aria-label="向镜头搭档提问" aria-keyshortcuts="Enter" rows={2} value={input} onChange={(event) => setInput(event.currentTarget.value)} onKeyDown={(event) => { if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return; event.preventDefault(); event.currentTarget.form?.requestSubmit() }} disabled={busy} placeholder="描述画面，或说说你想调整的地方…" />
-        <div className="media-agent__composer-tools"><button ref={modelTriggerRef} className="media-agent__model-trigger" type="button" aria-label="选择模型" aria-expanded={modelMenuOpen} onClick={() => setModelMenuOpen((value) => !value)}><span>{providerLabels[provider]}</span><i aria-hidden="true">·</i><strong>{model || '选择模型'}</strong><ChevronDown aria-hidden="true" /></button>
+        <div className="media-agent__composer-tools"><button ref={modelTriggerRef} className="media-agent__model-trigger" type="button" aria-label="选择模型" aria-expanded={modelMenuOpen} onClick={() => setModelMenuOpen((value) => !value)}><span>{providerLabels[provider]}</span><i aria-hidden="true">·</i><strong>{model || '选择模型'}</strong><span>{reasoningEffortLabel(reasoning.effort)}</span><ChevronDown aria-hidden="true" /></button>
           {modelMenuOpen && <div ref={modelMenuRef} className="media-agent__model-menu" aria-label="模型列表">
             <div className="media-agent__provider-tabs" role="group" aria-label="选择供应商">
               {providers.map((item) => <button className={provider === item ? 'is-active' : ''} type="button" key={item} aria-pressed={provider === item} aria-label={`切换到 ${providerLabels[item]} 模型`} onClick={() => { setProvider(item); setModelMenuOpen(true) }}>{providerLabels[item]}</button>)}
@@ -216,6 +221,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
                 {formatContextWindow(item.context_window) && <span className="media-agent__context-chip">{formatContextWindow(item.context_window)}</span>}
               </button>)}
             </div> : <p>当前服务商没有可用模型。</p>}
+            <ReasoningEffortControl levels={reasoning.levels} value={reasoning.effort} defaultValue={selectedModel?.reasoning_effort_default} hasModel={Boolean(selectedModel)} disabled={busy || modelsLoading} onChange={reasoning.setEffort} />
           </div>}
           <button className="media-agent__send" type="submit" aria-label="发送给镜头搭档" disabled={busy || !input.trim()}><Send aria-hidden="true" /></button>
         </div>{error && <p className="media-agent__error" role="alert">{error}</p>}

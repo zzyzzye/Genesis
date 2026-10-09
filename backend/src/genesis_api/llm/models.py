@@ -12,6 +12,9 @@ class AvailableModel(BaseModel):
     name: str | None = None
     created: int | None = None
     context_window: int | None = None
+    # 缺少能力信息时不猜测档位，前端只提供默认设置。
+    reasoning_effort_levels: list[str] | None = None
+    reasoning_effort_default: str | None = None
 
 
 class ProviderModels(BaseModel):

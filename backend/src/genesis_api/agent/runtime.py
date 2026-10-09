@@ -21,6 +21,7 @@ from genesis_api.agent.context import agent_invocation_context
 from genesis_api.agent.mimo import ChatMiMo
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
+from genesis_api.llm.profiles import model_profile_for, model_provider_for
 
 
 class YyapiAsyncTransport(httpx.AsyncBaseTransport):
@@ -46,7 +47,7 @@ class EmbeddedAgentRuntime:
     def __init__(self) -> None:
         self._checkpointer_context: AbstractAsyncContextManager[AsyncPostgresSaver] | None = None
         self._checkpointer: AsyncPostgresSaver | None = None
-        self._graphs: dict[tuple[str, str, str], Any] = {}
+        self._graphs: dict[tuple[str, str, str, str | None], Any] = {}
 
     async def startup(self, settings: Settings) -> None:
         """由应用生命周期初始化一次 checkpoint 存储，供各业务图共享。"""
@@ -102,24 +103,36 @@ class EmbeddedAgentRuntime:
             raise ValueError(f"不支持的 Agent Provider：{provider}")
         return configs[provider]
 
-    def _build_model(self, settings: Settings, provider: str, model: str) -> BaseChatModel:
+    def _build_model(
+        self, settings: Settings, provider: str, model: str, reasoning_effort: str | None = None
+    ) -> BaseChatModel:
         """优先使用 LangChain 原生模型适配，仅补充网关与 MiMo 的协议差异。"""
-        native_provider, api_key, _, base_url = self._model_config(settings, provider)
+        _, api_key, _, base_url = self._model_config(settings, provider)
         if api_key is None or not api_key.get_secret_value().strip():
             raise RuntimeError(f"未配置 {provider} 的 API Key")
         is_compatible_gateway = urlparse(base_url).hostname == "www.yyapi.cloud"
-        adapter_provider = "openai" if is_compatible_gateway else native_provider
+        adapter_provider = model_provider_for(provider, base_url)
+        profile = model_profile_for(adapter_provider, model)
+        if reasoning_effort is not None and reasoning_effort not in (
+            profile.get("reasoning_effort_levels") or []
+        ):
+            raise RuntimeError("当前模型不支持所选思考强度，请切换为默认或重新选择模型")
         kwargs: dict[str, Any] = {
             "model": f"{adapter_provider}:{model}",
             "api_key": api_key.get_secret_value(),
-            "temperature": settings.text_temperature,
             "max_tokens": settings.text_max_tokens,
         }
+        # 推理模型可能不接受 temperature；显式档位交由框架映射供应商参数。
+        if profile.get("temperature") is not False and reasoning_effort is None:
+            kwargs["temperature"] = settings.text_temperature
+        if reasoning_effort is not None:
+            kwargs["reasoning_effort"] = reasoning_effort
         if provider == "mimo":
             return ChatMiMo(
                 model=model, api_key=api_key, base_url=base_url,
                 default_headers={"api-key": api_key.get_secret_value()},
-                temperature=settings.text_temperature,
+                temperature=kwargs.get("temperature"),
+                reasoning_effort=reasoning_effort,
                 max_completion_tokens=settings.text_max_tokens,
                 use_responses_api=False,
             )
@@ -135,16 +148,19 @@ class EmbeddedAgentRuntime:
             kwargs["base_url"] = base_url
         return cast(BaseChatModel, init_chat_model(**kwargs))
 
-    def _graph(self, settings: Settings, provider: str, model: str, module: str) -> Any:
-        """首次使用时创建 DeepAgent 图，按供应商、模型与业务模块缓存。"""
+    def _graph(
+        self, settings: Settings, provider: str, model: str, module: str,
+        reasoning_effort: str | None = None,
+    ) -> Any:
+        """按模型、业务模块与思考强度缓存，避免复用其他档位的图。"""
         if self._checkpointer is None:
             raise RuntimeError("Agent runtime 尚未初始化")
-        key = (provider, model, module)
+        key = (provider, model, module, reasoning_effort)
         if key not in self._graphs:
             capability = agent_capabilities.resolve(module, settings)
             # 业务模块只提供提示词和工具，模型循环、工具编排与 checkpoint 交给框架。
             self._graphs[key] = create_deep_agent(
-                model=self._build_model(settings, provider, model),
+                model=self._build_model(settings, provider, model, reasoning_effort),
                 tools=capability.tools,
                 system_prompt=capability.prompt,
                 checkpointer=self._checkpointer,
@@ -166,7 +182,7 @@ class EmbeddedAgentRuntime:
         module = request.context.module if request.context and request.context.module else (
             "blog" if request.surface in ("blog", "studio") else request.surface
         )
-        graph = self._graph(settings, provider, model, module)
+        graph = self._graph(settings, provider, model, module, request.reasoning_effort)
         messages: list[BaseMessage | dict[str, str]] = [
             SystemMessage(
                 content=f"可信页面上下文：{request.context.model_dump() if request.context else {}}"

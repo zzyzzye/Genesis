@@ -6,7 +6,29 @@ from pydantic import SecretStr
 
 from genesis_api.core.config import Settings
 from genesis_api.llm.models import AvailableModel
+from genesis_api.llm.profiles import model_profile_for
 from genesis_api.llm.service import ModelDiscoveryError, ModelDiscoveryService
+
+
+@pytest.mark.anyio
+async def test_model_discovery_uses_framework_profiles_including_fallback() -> None:
+    settings = Settings(text_openai_api_key=SecretStr("test"), text_openai_model="gpt-5")
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": [{"id": "custom-unknown"}]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await ModelDiscoveryService(settings, client).list_models("openai")
+    assert result.models[0].reasoning_effort_levels == model_profile_for(
+        "openai", "gpt-5"
+    )["reasoning_effort_levels"]
+    assert result.models[1].reasoning_effort_levels is None
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(503))
+    ) as client:
+        fallback = await ModelDiscoveryService(settings, client).list_models("openai")
+    assert fallback.models[0].reasoning_effort_levels == result.models[0].reasoning_effort_levels
 
 
 @pytest.mark.anyio
@@ -33,6 +55,12 @@ async def test_list_openai_models_uses_configured_url_and_bearer_key() -> None:
         id="gpt-5.6-luna",
         name="gpt-5.6-luna",
         context_window=1_050_000,
+        reasoning_effort_levels=model_profile_for("openai", "gpt-5.6-luna").get(
+            "reasoning_effort_levels"
+        ),
+        reasoning_effort_default=model_profile_for("openai", "gpt-5.6-luna").get(
+            "reasoning_effort_default"
+        ),
     )
     assert result.models[1].id == "custom-model"
 
@@ -218,6 +246,12 @@ async def test_list_models_uses_default_model_when_upstream_is_unavailable(
             id="gpt-5.6-luna",
             name="gpt-5.6-luna",
             context_window=1_050_000,
+            reasoning_effort_levels=model_profile_for("openai", "gpt-5.6-luna").get(
+                "reasoning_effort_levels"
+            ),
+            reasoning_effort_default=model_profile_for("openai", "gpt-5.6-luna").get(
+                "reasoning_effort_default"
+            ),
         )
     ]
     assert (
