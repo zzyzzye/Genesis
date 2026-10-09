@@ -52,7 +52,11 @@ blog_post_tags = Table(
 
 
 class BlogTag(Base):
-    """多篇文章共用的标签，以唯一 slug 区分身份，名称可修改。"""
+    """多篇文章共用的标签，以唯一 slug 区分身份，名称可修改。
+
+    名称与 slug 分别有数据库唯一约束；posts 通过关联表维护多对多关系。
+    删除标签只清理关联记录，不删除文章；后台另行限制删除使用中的标签。
+    """
 
     __tablename__ = "blog_tags"
 
@@ -67,7 +71,11 @@ class BlogTag(Base):
 
 
 class BlogCategory(Base):
-    """文章的可选分类；删除分类时文章保留，category_id 置空。"""
+    """文章的可选分类；删除分类时文章保留，category_id 置空。
+
+    一篇文章最多关联一个分类；名称与 slug 均有数据库唯一约束。
+    外键描述数据库行为，后台接口仍单独检查分类是否正在被文章使用。
+    """
 
     __tablename__ = "blog_categories"
 
@@ -79,7 +87,13 @@ class BlogCategory(Base):
 
 
 class BlogPost(Base):
-    """文章记录：单一作者、可选分类和多个共享标签。"""
+    """文章记录：单一作者、可选分类和多个共享标签。
+
+    slug 是公开地址的唯一标识，id 是内部关联与后台操作使用的 UUID。
+    published_at 表示公开发布时间，updated_at 用于排序与后台版本比对；
+    发布时间维护及应用级更新时间规则由 service.py 负责。
+    ORM 字段约束不替代发布内容校验，完整输入契约见 schemas.py。
+    """
 
     __tablename__ = "blog_posts"
 

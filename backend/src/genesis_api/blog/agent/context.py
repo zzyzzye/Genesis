@@ -1,3 +1,5 @@
+"""构建博客页面参考数据，明确区分已保存记录与客户端编辑草稿。"""
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -10,7 +12,13 @@ from genesis_api.blog.service import get_blog_post_by_id, list_admin_posts
 
 
 def tool_manifest() -> list[dict[str, str | bool]]:
-    """提供给模型的能力说明，不替代工具注册、身份校验或执行权限检查。"""
+    """生成提示词与页面上下文使用的工具能力清单。
+
+    清单仅说明能力，不注册工具，也不授予执行权限；真实工具见 tools.py。
+
+    Returns:
+        工具名称、用途、读写模式和是否需要确认的说明列表。
+    """
     return [
         {"name": name, "description": description, "mode": mode, "requires_confirmation": requires}
         for name, description, mode, requires in (
@@ -28,6 +36,14 @@ def tool_manifest() -> list[dict[str, str | bool]]:
 
 
 def _post_list_item(post: BlogPost) -> dict[str, object]:
+    """将文章转为列表上下文摘要，不携带正文。
+
+    Args:
+        post: 已加载分类与标签的文章实体。
+
+    Returns:
+        可 JSON 序列化的摘要，UUID 与更新时间转换为字符串。
+    """
     return {
         "id": str(post.id), "title": post.title, "excerpt": post.excerpt,
         "status": post.status.value, "updated_at": post.updated_at.isoformat(),
@@ -37,6 +53,14 @@ def _post_list_item(post: BlogPost) -> dict[str, object]:
 
 
 def _persisted_post(post: BlogPost) -> dict[str, object]:
+    """提取数据库中已保存的文章内容，作为编辑草稿的比较基线。
+
+    Args:
+        post: 已加载标签的文章实体。
+
+    Returns:
+        包含正文与 database_status 的已保存快照，不含客户端草稿。
+    """
     return {
         "id": str(post.id), "title": post.title, "excerpt": post.excerpt,
         "content_markdown": post.content_markdown,
@@ -56,6 +80,21 @@ def build_blog_agent_context(
 
     调用方负责身份校验；数据库记录用于说明已保存状态，编辑内容仅供模型参考。
     返回的上下文不保存草稿，也不授予工具写入权限。
+
+    Args:
+        session: 调用方已完成身份校验的数据库会话。
+        route: 当前页面路径；未提供时使用博客文章管理地址。
+        section: 工作台栏目；未提供时使用 posts。
+        page_type: 页面类型；未提供时根据文章 ID 与编辑字段推断。
+        post_id: 可选文章 UUID 字符串；格式无效或文章不存在时不读取记录。
+        title: 客户端当前标题；None 表示未提供，空字符串仍是编辑值。
+        excerpt: 客户端当前摘要。
+        content_markdown: 客户端当前 Markdown 正文。
+        editor_status: 客户端当前编辑状态，仅作参考，不替代数据库状态。
+
+    Returns:
+        页面、工具清单和写入策略；列表页附带文章统计与摘要，
+        其他页面按可用数据附带数据库快照及 editor_draft。
     """
     resolved_page_type = page_type or (
         "post_editor"

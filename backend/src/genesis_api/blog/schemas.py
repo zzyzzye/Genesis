@@ -38,6 +38,7 @@ class BlogCategoryWrite(BaseModel):
     @field_validator("name", mode="before")
     @classmethod
     def trim_name(cls, value: str) -> str:
+        """在字段长度校验前去掉分类名称首尾空白，保留内部空格。"""
         # 在长度校验前去掉首尾空白，让纯空白名称按空值拒绝。
         return value.strip() if isinstance(value, str) else value
 
@@ -92,6 +93,7 @@ class BlogTagWrite(BaseModel):
     @field_validator("name", mode="before")
     @classmethod
     def trim_name(cls, value: str) -> str:
+        """在字段长度校验前去掉标签名称首尾空白，与分类保持一致。"""
         # 与分类名称采用相同的空白处理，保留名称内部空格。
         return value.strip() if isinstance(value, str) else value
 
@@ -100,6 +102,8 @@ class BlogPostWrite(BaseModel):
     """完整文章写入契约，供人工编辑和 Agent 确认写入共同校验。
 
     局部更新须由调用方先合并已有字段；草稿允许不完整内容，发布时校验正文。
+    category_id 引用已有分类；tags 按 slug 解析共享标签。此模型只校验输入，
+    不检查数据库中的唯一性、引用存在性或 expected_updated_at 并发版本。
     """
 
     slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=160)
@@ -118,6 +122,15 @@ class BlogPostWrite(BaseModel):
 
     @model_validator(mode="after")
     def published_posts_require_content(self) -> "BlogPostWrite":
+        """要求已发布文章具备非空标题、摘要和正文，允许草稿暂缺内容。
+
+        Returns:
+            校验通过的当前写入模型，不自动补全文本。
+
+        Raises:
+            ValueError: 发布状态下任一必要文本去除空白后为空。
+                Pydantic 会将此错误汇总到 ValidationError。
+        """
         # 草稿可以暂缺内容；公开发布仍必须具备可阅读的标题、摘要和正文。
         if self.status is BlogPostStatus.PUBLISHED and not all(
             value.strip() for value in (self.title, self.excerpt, self.content_markdown)
@@ -128,6 +141,17 @@ class BlogPostWrite(BaseModel):
     @field_validator("tags")
     @classmethod
     def tags_must_have_unique_slugs(cls, tags: list[BlogTagWrite]) -> list[BlogTagWrite]:
+        """拒绝同一文章写入请求中的重复标签标识。
+
+        Args:
+            tags: 已通过单个标签字段校验的输入列表。
+
+        Returns:
+            原始标签列表，保留输入顺序，不静默去重。
+
+        Raises:
+            ValueError: 存在重复 slug，由 Pydantic 汇总到 ValidationError。
+        """
         # 同一请求不能重复引用一个标签；数据库唯一性另由持久化约束保证。
         if len({tag.slug for tag in tags}) != len(tags):
             raise ValueError("标签 slug 不能重复")

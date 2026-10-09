@@ -1,3 +1,5 @@
+"""执行用户已确认的博客写操作；提议生成与验签由工具及公共 API 负责。"""
+
 from __future__ import annotations
 
 import json
@@ -15,6 +17,18 @@ BLOG_ACTIONS = {"create_draft", "update_post", "delete_post", "publish_post"}
 
 
 def _payload_uuid(payload: dict[str, object], key: str) -> UUID:
+    """读取操作载荷中的 UUID，将格式错误转换为 API 校验错误。
+
+    Args:
+        payload: 已确认操作的载荷。
+        key: UUID 字段名称。
+
+    Returns:
+        解析后的 UUID。
+
+    Raises:
+        HTTPException: 字段缺失或格式无效，状态码为 422。
+    """
     try:
         return UUID(str(payload.get(key)))
     except (TypeError, ValueError) as exc:
@@ -28,6 +42,19 @@ def confirm_blog_action(
 
     公共确认接口负责所有者权限、提议令牌及用户绑定校验；本函数负责业务校验
     与事务提交，不应作为模型可直接调用的工具注册。
+
+    Args:
+        action: create_draft、update_post、delete_post 或 publish_post。
+        payload: 操作载荷；更新可包含 JSON 字符串或对象形式的 changes。
+        current_user: 公共 API 已认证并校验权限的用户，也是新草稿的作者。
+        session: 写入会话；成功时在此提交，字段应用的 ValueError 会触发回滚。
+
+    Returns:
+        操作名称、文章 ID 与执行结果标识，不返回文章全文。
+
+    Raises:
+        HTTPException: 操作或载荷无效时返回 422，文章不存在时返回 404。
+        ValidationError: 合并后的文章数据不符合 BlogPostWrite 契约。
     """
     if action not in BLOG_ACTIONS:
         raise HTTPException(status_code=422, detail="博客操作类型无效")

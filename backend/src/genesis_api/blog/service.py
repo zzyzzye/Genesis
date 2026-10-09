@@ -17,7 +17,17 @@ def list_published_posts(
     offset: int,
     tag_slug: str | None,
 ) -> tuple[list[BlogPost], int]:
-    """按标签筛选公开文章，返回当前页及总数；精选文章优先，其后按发布时间。"""
+    """分页读取已发布文章，精选优先，其后按发布时间倒序。
+
+    Args:
+        session: 调用方提供的数据库会话。
+        limit: 当前页最多返回的文章数，由路由校验范围。
+        offset: 跳过的文章数。
+        tag_slug: 可选标签标识；空值表示不按标签筛选。
+
+    Returns:
+        当前页文章与筛选后的总数，关联作者、分类和标签已批量加载。
+    """
     statement = select(BlogPost).where(BlogPost.status == BlogPostStatus.PUBLISHED)
     if tag_slug:
         statement = statement.join(BlogPost.tags).where(BlogTag.slug == tag_slug)
@@ -41,7 +51,15 @@ def list_published_posts(
 
 
 def get_published_post(session: Session, slug: str) -> BlogPost | None:
-    """按公开地址读取已发布文章；对应文章为草稿或不存在时返回 None。"""
+    """按公开地址读取已发布文章。
+
+    Args:
+        session: 调用方提供的数据库会话。
+        slug: 文章公开地址中的稳定标识。
+
+    Returns:
+        已加载作者、分类和标签的文章；不存在或仍为草稿时返回 None。
+    """
     statement = (
         select(BlogPost)
         .where(
@@ -58,7 +76,16 @@ def get_published_post(session: Session, slug: str) -> BlogPost | None:
 
 
 def list_admin_posts(session: Session) -> list[BlogPost]:
-    """返回所有状态的文章，最近编辑的优先；调用方必须先检查后台权限。"""
+    """读取所有状态的文章，供后台列表与 Agent 使用。
+
+    调用方必须先检查后台权限；此查询不分页，也不按作者过滤。
+
+    Args:
+        session: 调用方提供的数据库会话。
+
+    Returns:
+        按更新时间倒序的文章列表，包含草稿与已发布文章。
+    """
     statement = (
         select(BlogPost)
         .options(
@@ -77,6 +104,14 @@ def get_blog_post_by_id(
     """按内部 ID 读取任意状态文章，不在此函数内执行权限校验。
 
     写入流程可指定 for_update 锁定文章行；锁随调用方事务提交或回滚释放。
+
+    Args:
+        session: 调用方提供的数据库会话。
+        post_id: 文章内部 UUID，不是公开地址 slug。
+        for_update: 是否申请行锁，供读后写流程使用；默认不锁定。
+
+    Returns:
+        任意状态的文章及其关联数据；不存在时返回 None。
     """
     statement = (
         select(BlogPost)
@@ -97,6 +132,14 @@ def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> No
 
     分类解析失败等异常可能发生在赋值之后，调用方须回滚整个事务。
     本函数不比较 expected_updated_at，并发版本检查由后台路由负责。
+
+    Args:
+        session: 当前事务的数据库会话，用于解析分类与标签。
+        post: 待修改的文章实体，字段会原地更新。
+        data: 经 BlogPostWrite 校验的完整文章数据，不是局部补丁。
+
+    Raises:
+        ValueError: 所选分类不存在。
     """
     post.slug = data.slug
     post.title = data.title
@@ -128,7 +171,18 @@ def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> No
 
 
 def resolve_tags(session: Session, tag_inputs: list[BlogTagWrite]) -> list[BlogTag]:
-    """按 slug 复用或新建共享标签，按输入顺序返回；不提交事务。"""
+    """按 slug 复用或新建共享标签，不提交事务。
+
+    已有标签的名称会被输入值更新，影响所有引用该标签的文章。
+    调用方应先用写入契约检查重复 slug，并负责最终提交或回滚。
+
+    Args:
+        session: 当前事务的数据库会话。
+        tag_inputs: 待关联的标签名称与稳定标识。
+
+    Returns:
+        按输入顺序排列的标签实体；空输入返回空列表。
+    """
     if not tag_inputs:
         return []
 
@@ -152,10 +206,24 @@ def resolve_tags(session: Session, tag_inputs: list[BlogTagWrite]) -> list[BlogT
 
 
 def list_admin_tags(session: Session) -> list[BlogTag]:
-    """按名称返回全部共享标签，包含当前未被文章使用的标签。"""
+    """按名称读取全部共享标签，包含未被文章使用的标签。
+
+    Args:
+        session: 调用方已完成后台权限检查的数据库会话。
+
+    Returns:
+        按名称升序排列的标签列表。
+    """
     return list(session.scalars(select(BlogTag).order_by(BlogTag.name.asc())))
 
 
 def list_admin_categories(session: Session) -> list[BlogCategory]:
-    """按名称返回全部分类，供后台管理与文章设置选择。"""
+    """按名称读取全部分类，供后台管理与文章设置选择。
+
+    Args:
+        session: 调用方已完成后台权限检查的数据库会话。
+
+    Returns:
+        按名称升序排列的分类列表。
+    """
     return list(session.scalars(select(BlogCategory).order_by(BlogCategory.name.asc())))

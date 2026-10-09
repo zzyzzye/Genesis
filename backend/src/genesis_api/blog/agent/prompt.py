@@ -1,3 +1,5 @@
+"""博客 Agent 的系统提示词，复用上下文模块的工具能力清单。"""
+
 from __future__ import annotations
 
 import json
@@ -10,6 +12,11 @@ class BlogAgentPrompt:
 
     @staticmethod
     def system_message() -> str:
+        """生成博客系统指令，明确只读任务与待确认写操作的边界。
+
+        Returns:
+            包含工具清单的中文提示词；执行权限仍由工具与确认 API 校验。
+        """
         # 提示词与页面上下文共用权限清单；实际权限仍由工具和确认接口校验。
         return (
             "你是 Genesis Agent，服务于站点所有者的私人博客后台。"
