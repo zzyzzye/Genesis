@@ -469,11 +469,11 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
   return (
     <div className={`studio-assistant${isOpen ? ' is-open' : ''}`}>
       {isOpen && (
-        <section className="studio-assistant__panel" aria-label="博客 AI 助手">
+        <section className={`studio-assistant__panel${messages.length === 1 && !isBusy ? ' is-empty' : ''}`} aria-label="博客 AI 助手">
           <header className="studio-assistant__header">
             <div className="studio-assistant__identity">
               <span className="studio-assistant__avatar"><StudioIcon name="assistant" /></span>
-              <div><strong>博客助手</strong><span><i />在线 · 当前模块</span></div>
+              <div><strong>博客助手</strong><span>构思 · 写作 · 整理</span></div>
             </div>
             <div className="studio-assistant__header-actions">
               <button className="studio-assistant__new-conversation" type="button" aria-label="新建对话" disabled={isBusy} onClick={startNewConversation}>
@@ -509,7 +509,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
               </div>
             )}
           </div>
-          <form className="studio-assistant__composer" onSubmit={(event) => { void submit(event) }}>
+          <form className="studio-assistant__composer" noValidate onSubmit={(event) => { void submit(event) }}>
             <textarea
               aria-label="向博客助手提问"
               placeholder="告诉我你想完成什么…"
@@ -539,8 +539,8 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
                   onClick={() => setExecutionMode('automatic')}
                 >自动</button>
               </div>
-              <button ref={modelTriggerRef} aria-label="选择模型" className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
-                <ProviderIcon provider={provider} /> {model || '选择模型'} <StudioIcon name="chevron" />
+              <button ref={modelTriggerRef} aria-label="选择模型" title={model || '选择模型'} className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
+                <ProviderIcon provider={provider} /><span className="studio-assistant__selected-model">{model || '选择模型'}</span><StudioIcon name="chevron" />
               </button>
               <span className="studio-assistant__context-ring" tabIndex={0} role={contextPercent === null ? 'img' : 'progressbar'} aria-label={contextDescription} aria-valuemin={contextPercent === null ? undefined : 0} aria-valuemax={contextPercent === null ? undefined : 100} aria-valuenow={contextPercent ?? undefined}>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -576,6 +576,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
                         key={item.id}
                         type="button"
                         className={`studio-assistant__model-option${model === item.id ? ' is-selected' : ''}`}
+                        title={item.name || item.id}
                         aria-pressed={model === item.id}
                         onClick={() => {
                           selectedModels.current[provider] = item.id
@@ -594,11 +595,11 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
                   </div>
                 )}
               </div>}
-              {!error && (isBusy || streamStatus) && <span className="studio-assistant__composer-status">{streamStatus ?? '正在生成…'}</span>}
               {activeRun
                 ? <button className="studio-assistant__stop" type="button" aria-label="停止生成" onClick={stopGeneration}><StudioIcon name="stop" /></button>
                 : <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>}
             </div>
+            {!error && (isBusy || streamStatus) && <p className="studio-assistant__composer-status" role="status">{streamStatus ?? '正在生成…'}</p>}
             {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
           </form>
         </section>

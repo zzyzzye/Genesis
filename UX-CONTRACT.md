@@ -6,6 +6,7 @@
 
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 | --- | --- | --- | --- | --- |
+| 博客助手 / 非模态浮层 | BlogAssistant、既有对话与模型菜单状态 | BlogAssistant.tsx、BlogAssistant.css | 后台常驻，空态紧凑、对话展开；输入保持编辑，执行模式与确认沿用原协议 | 开关、聚焦、模型选择与 Escape、上下文环、长回复与代码块、生成与失败、窄屏 |
 | 模块管理入口 / Navigation | React Router、Studio | App.tsx、Studio.tsx、Account.tsx | 所属模块下的 /studio 直接进入管理，旧博客链接保留路径、查询参数与锚点 | 直接访问、旧链接跳转、账户入口、桌面与窄屏 |
 | Select/Listbox | 原生 select | ProjectCanvas.tsx、AssetLibrary.tsx | 系统菜单负责弹出几何与键盘选择；模型选择仍沿用 MediaAssistant 的现有组件 | 浏览器展开、选择、Escape，组件测试 |
 | Form | 画布节点直接编辑、MediaHome 的 ProjectDialog | ProjectCanvas.tsx、MediaHome.tsx | 节点编辑无需提交表单；提交表单使用 noValidate 与内联错误 | 整数时长、保存恢复、失败保留草稿 |
