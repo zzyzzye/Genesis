@@ -21,6 +21,7 @@ class AgentService:
     async def stream(
         self, request: AiChatRequest, *, thread_id: str
     ) -> AsyncIterator[str]:
+        # 服务层只传递请求和线程标识，图创建与模型协议适配统一由 runtime 负责。
         async for text in self.runtime.stream(request, self.settings, thread_id=thread_id):
             yield text
 

@@ -201,6 +201,7 @@ def update_admin_post(
         raise post_not_found()
 
     if data.expected_updated_at is not None:
+        # 文章行已锁定；统一时区后比较客户端读取版本，避免覆盖其他页面的新编辑。
         current_version = post.updated_at
         expected_version = data.expected_updated_at
         if current_version.tzinfo is None:
@@ -215,6 +216,7 @@ def update_admin_post(
 
     try:
         with session.no_autoflush:
+            # 完整应用文章和标签后再提交，避免处理中间状态触发提前写入。
             apply_post_data(session, post, data)
         session.commit()
     except ValueError as error:

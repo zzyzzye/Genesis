@@ -1,3 +1,5 @@
+"""API 共用依赖：数据库会话、登录身份与站点所有者权限。"""
+
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -22,6 +24,7 @@ def credentials_exception() -> HTTPException:
 
 
 def get_current_user(token: TokenDependency, session: SessionDependency) -> User:
+    """校验令牌并读取当前用户，权限以数据库中的角色为准。"""
     user_id = get_user_id_from_token(token)
     if user_id is None:
         raise credentials_exception()
@@ -33,6 +36,7 @@ def get_current_user(token: TokenDependency, session: SessionDependency) -> User
 
 
 def require_owner(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    # 已登录但角色不足返回 403，与令牌失效或用户不存在的 401 区分。
     if current_user.role is not UserRole.OWNER:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要站点管理权限")
     return current_user

@@ -19,6 +19,8 @@ class AiMessage(BaseModel):
 
 
 class AiContext(BaseModel):
+    """页面与编辑参考数据；权限由服务端身份决定，不能由这些字段授予。"""
+
     module: str | None = None
     route: str | None = None
     section: str | None = None
@@ -39,11 +41,14 @@ class AiContext(BaseModel):
 
 
 class AiChatRequest(BaseModel):
+    """对话请求；API 在执行前覆盖调用身份，恢复标记由后台任务管理器设置。"""
+
     surface: AiSurface
     messages: list[AiMessage] = Field(min_length=1, max_length=40)
     context: AiContext | None = None
     provider: AiProvider | None = None
     model: str | None = None
+    # 内部字段不随普通 model_dump 输出；任务持久化时由管理器明确补入身份。
     actor_id: UUID | None = Field(default=None, exclude=True)
     actor_role: str | None = Field(default=None, exclude=True)
     resume_from_checkpoint: bool = Field(default=False, exclude=True)
@@ -56,6 +61,8 @@ class AiChatRunCreated(BaseModel):
 
 
 class AiChatRunSnapshot(BaseModel):
+    """完整文本快照；SSE 根据内容及修订序号判断追加输出或替换旧内容。"""
+
     id: UUID
     status: AiChatRunStatus
     content: str

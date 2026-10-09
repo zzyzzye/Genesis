@@ -1,3 +1,5 @@
+"""AI API：注入登录身份、创建后台任务、传递快照和确认签名业务操作。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -44,6 +46,7 @@ def _prepare_request(
     current_user_role: UserRole,
     session: SessionDependency,
 ) -> AiChatRequest:
+    """覆盖客户端身份字段；博客后台额外从数据库补充文章上下文。"""
     if request.surface == "studio" and current_user_role is not UserRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -51,6 +54,7 @@ def _prepare_request(
         )
 
     if request.surface != "studio":
+        # 其他页面上下文仍是客户端参考数据，不代表数据库事实或业务访问权限。
         return request.model_copy(
             update={
                 "actor_id": current_user.id,
@@ -95,6 +99,7 @@ def _encode_event(payload: dict[str, object], *, event_id: int | None = None) ->
 
 
 def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> StreamingResponse:
+    """订阅已持久化的输出快照；连接断开只停止订阅，不取消后台生成。"""
     async def events() -> AsyncIterator[str]:
         last_sequence = -1
         last_content = ""
@@ -107,6 +112,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                 return
 
             if last_sequence < 0:
+                # 每次新连接先发送完整内容，不要求浏览器保留上次连接的增量状态。
                 yield _encode_event(
                     {
                         "type": "snapshot",
@@ -129,6 +135,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                             event_id=snapshot.sequence,
                         )
                 else:
+                    # 后台恢复可能重置内容，此时整段替换，不能继续追加旧文本。
                     yield _encode_event(
                         {
                             "type": "snapshot",
@@ -159,6 +166,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                 )
                 return
             if await request.is_disconnected():
+                # 用户主动停止使用独立取消接口，离开页面仍可稍后重新订阅。
                 return
 
             now = monotonic()
@@ -196,6 +204,7 @@ def _start_run(
         request=prepared_request,
         settings=settings,
     )
+    # 数据库记录已提交后再启动独立任务，SSE 的生命周期不拥有生成任务。
     ai_chat_run_manager.start(run.id, prepared_request, settings)
     return run
 
@@ -282,6 +291,7 @@ def confirm_agent_action(
     settings: SettingsDependency,
 ) -> object:
     """执行已由用户确认的签名 proposal；Agent 本身永远不直接写业务库。"""
+    # 使用验签后的操作载荷，并绑定当前 Owner；显示文本不是执行依据。
     try:
         proposal = decode(
             confirmation.proposal_token,

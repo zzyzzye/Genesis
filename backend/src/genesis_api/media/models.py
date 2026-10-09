@@ -1,3 +1,5 @@
+"""影音作品与素材元数据；文件存于媒体目录，作品通过关联表复用素材。"""
+
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -8,6 +10,8 @@ from genesis_api.database.base import Base
 
 
 class MediaProject(Base):
+    """用户私有作品；画布以 JSON 保存，version 用于拒绝过期版本覆盖。"""
+
     __tablename__ = "media_projects"
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -19,6 +23,8 @@ class MediaProject(Base):
 
 
 class MediaAsset(Base):
+    """用户私有素材；in_library 表示独立保留在素材库，不随最后一个作品引用清理。"""
+
     __tablename__ = "media_assets"
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -32,6 +38,8 @@ class MediaAsset(Base):
 
 
 class ProjectAsset(Base):
+    """作品与素材的复用关系，不复制素材文件；联合主键避免重复引用。"""
+
     __tablename__ = "media_project_assets"
 
     project_id: Mapped[UUID] = mapped_column(ForeignKey("media_projects.id"), primary_key=True)

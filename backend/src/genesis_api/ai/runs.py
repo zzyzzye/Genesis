@@ -1,3 +1,5 @@
+"""后台文本任务与输出快照；模型执行状态的恢复由 LangGraph checkpoint 负责。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -47,6 +49,7 @@ def create_ai_chat_run(
     request: AiChatRequest,
     settings: Settings,
 ) -> AiChatRunCreated:
+    """先提交任务记录，再由调用方启动生成，确保返回的任务 ID 可被查询。"""
     provider = request.provider or settings.text_provider
     run = AiChatRun(
         user_id=user_id,
@@ -68,6 +71,7 @@ def get_ai_chat_run_snapshot(
     run_id: UUID,
     user_id: UUID,
 ) -> AiChatRunSnapshot | None:
+    # 同时按任务和用户筛选，不能仅凭客户端提供的 run_id 读取其他用户输出。
     run = session.scalar(
         select(AiChatRun).where(AiChatRun.id == run_id, AiChatRun.user_id == user_id)
     )
@@ -104,6 +108,7 @@ class AiChatRunManager:
         self._max_concurrent_runs: int | None = None
 
     def start(self, run_id: UUID, request: AiChatRequest, settings: Settings) -> None:
+        """避免本进程重复启动同一任务，并按配置限制同时执行的生成数量。"""
         if run_id in self._tasks:
             return
         if (
@@ -117,9 +122,11 @@ class AiChatRunManager:
             name=f"ai-chat-run-{run_id}",
         )
         self._tasks[run_id] = task
+        # 保留任务引用直至结束；记录持久化在数据库，内存只保存当前进程的执行句柄。
         task.add_done_callback(lambda _: self._tasks.pop(run_id, None))
 
     async def shutdown(self) -> None:
+        """取消并等待后台任务退出，保留未完成状态供下次启动恢复。"""
         tasks = list(self._tasks.values())
         for task in tasks:
             task.cancel()
@@ -148,6 +155,7 @@ class AiChatRunManager:
             session.commit()
 
     async def recover_interrupted_runs(self, settings: Settings) -> None:
+        """应用初始化 checkpoint 后调用，恢复数据库中尚未进入终态的任务。"""
         recovered = await asyncio.to_thread(self._recover_interrupted_runs_sync)
         for run_id, request in recovered:
             self.start(run_id, request, settings)
@@ -175,6 +183,7 @@ class AiChatRunManager:
                     token_stream = cast(Any, streamer).stream(request)
                 async for token in token_stream:
                     pending += token
+                    # 按长度或间隔批量写入快照，避免每个文本片段都产生数据库提交。
                     now = asyncio.get_running_loop().time()
                     if (
                         len(pending) >= self._flush_size
@@ -239,6 +248,7 @@ class AiChatRunManager:
                 return
             if append_content:
                 run.content += append_content
+                # 序号随内容提交递增；SSE 仍单独检查状态，终态可没有新增文本。
                 run.sequence += 1
             if status is not None:
                 run.status = status
@@ -265,6 +275,7 @@ class AiChatRunManager:
                     run.completed_at = datetime.now(UTC)
                     continue
                 run.status = AiChatRunStatus.PENDING
+                # 清空展示文本并递增序号，恢复时由图重新输出，不把旧快照重复拼接。
                 run.content = ""
                 run.sequence += 1
                 run.error = None
@@ -277,6 +288,7 @@ class AiChatRunManager:
 
 
 def _request_payload(request: AiChatRequest) -> dict[str, object]:
+    """显式保存 API 注入的身份，供后台恢复；普通请求序列化会排除这些字段。"""
     payload = request.model_dump(mode="json")
     payload["actor_id"] = str(request.actor_id) if request.actor_id else None
     payload["actor_role"] = request.actor_role

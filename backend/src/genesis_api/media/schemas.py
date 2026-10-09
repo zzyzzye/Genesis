@@ -1,3 +1,5 @@
+"""影音请求结构与数值边界；素材归属、连线和分组关系由路由结合数据库校验。"""
+
 from typing import Literal
 from uuid import UUID
 
@@ -10,6 +12,8 @@ class ProjectWrite(BaseModel):
 
 
 class GenerationSettings(BaseModel):
+    """随画布保存的生成参数草稿，不表示已经提交模型生成任务。"""
+
     model: str = Field(default="", max_length=200)
     mode: Literal["text", "reference", "first_last"] = "text"
     ratio: Literal["16:9", "9:16", "1:1", "4:3", "3:4"] = "16:9"
@@ -19,6 +23,8 @@ class GenerationSettings(BaseModel):
 
 
 class CanvasNode(BaseModel):
+    """画布节点结构；asset_id 只引用素材，member_ids 仅适用于分组。"""
+
     id: UUID
     type: Literal["asset", "note", "text", "shape", "group", "video", "image", "audio"]
     asset_id: UUID | None = None
@@ -51,6 +57,8 @@ class VideoFrame(BaseModel):
 
 
 class CanvasDocument(BaseModel):
+    """完整画布快照，包含节点、连线及用于重新打开画布的视口状态。"""
+
     nodes: list[CanvasNode] = Field(default_factory=list, max_length=1000)
     edges: list[CanvasEdge] = Field(default_factory=list, max_length=2000)
     background: Literal["dots", "lines", "none"] = "dots"
@@ -59,6 +67,8 @@ class CanvasDocument(BaseModel):
 
 
 class CanvasWrite(BaseModel):
+    """携带客户端读取版本的整份画布保存请求，版本不符时由路由返回 409。"""
+
     version: int = Field(ge=0)
     document: CanvasDocument
 

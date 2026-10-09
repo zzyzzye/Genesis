@@ -19,6 +19,7 @@ class ChatMiMo(ChatOpenAI):
         result = super()._convert_chunk_to_generation_chunk(
             chunk, default_chunk_class, base_generation_info
         )
+        # 复用 ChatOpenAI 的标准消息转换，仅补充供应商要求保留的额外字段。
         choices = chunk.get("choices") or chunk.get("chunk", {}).get("choices", [])
         if result is not None and choices:
             reasoning = (choices[0].get("delta") or {}).get("reasoning_content")
@@ -48,6 +49,7 @@ class ChatMiMo(ChatOpenAI):
     ) -> dict[str, Any]:
         messages = self._convert_input(input_).to_messages()
         payload = super()._get_request_payload(messages, stop=stop, **kwargs)
+        # 将历史模型消息中的思考字段原样带回工具调用后续请求，不拼入正文。
         for message, serialized in zip(messages, payload["messages"], strict=True):
             if isinstance(message, AIMessage):
                 reasoning = message.additional_kwargs.get("reasoning_content")

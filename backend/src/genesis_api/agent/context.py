@@ -32,10 +32,12 @@ def agent_invocation_context(
     try:
         yield
     finally:
+        # 即使工具异常或执行取消，也恢复外层上下文，避免身份泄漏到后续调用。
         _invocation.reset(token)
 
 
 def require_owner(*, module: str | None = None) -> UUID:
+    """校验运行时注入的身份和模块位置，工具参数不能替代这一权限检查。"""
     invocation = _invocation.get()
     if invocation is None or invocation.actor_role != UserRole.OWNER.value:
         raise RuntimeError("Agent 工具需要站点所有者权限")

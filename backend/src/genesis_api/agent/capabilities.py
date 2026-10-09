@@ -14,6 +14,8 @@ from genesis_api.toolbox.agent.capability import ToolboxAgentCapability
 
 @dataclass(frozen=True)
 class ResolvedAgentCapability:
+    """运行时消费的业务能力组合，不包含用户身份或对话状态。"""
+
     module: str
     name: str
     prompt: str
@@ -29,6 +31,7 @@ class AgentCapabilityRegistry:
         self._toolbox = ToolboxAgentCapability()
 
     def resolve(self, module: str, settings: Settings) -> ResolvedAgentCapability:
+        """按业务模块装配能力；未知模块直接拒绝，不回退到其他模块的工具。"""
         if module == self._blog.module:
             return ResolvedAgentCapability(
                 module=self._blog.module,
@@ -61,6 +64,7 @@ class AgentCapabilityRegistry:
         current_user: User,
         session: Session,
     ) -> object:
+        # 仅博客提供服务端确认写入；影音画布方案由前端确认，工具箱尚无写工具。
         if module == self._blog.module and self._blog.handles_action(action):
             return self._blog.confirm_action(
                 action, payload, current_user=current_user, session=session

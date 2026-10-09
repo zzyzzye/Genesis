@@ -17,4 +17,5 @@ class MediaAgentCapability:
 
     @staticmethod
     def build_tools(settings: Settings) -> list[BaseTool]:
+        # 画布方案由提示词约定、前端确认应用，目前不注册服务端业务写工具。
         return build_media_tools(settings)

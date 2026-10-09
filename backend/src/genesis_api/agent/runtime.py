@@ -1,3 +1,5 @@
+"""公共 Agent 运行时：复用框架创建图、执行工具并持久化执行状态。"""
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -47,6 +49,7 @@ class EmbeddedAgentRuntime:
         self._graphs: dict[tuple[str, str, str], Any] = {}
 
     async def startup(self, settings: Settings) -> None:
+        """由应用生命周期初始化一次 checkpoint 存储，供各业务图共享。"""
         if self._checkpointer is not None:
             return
         context = AsyncPostgresSaver.from_conn_string(settings.resolved_postgres_uri)
@@ -54,12 +57,14 @@ class EmbeddedAgentRuntime:
         try:
             await checkpointer.setup()
         except BaseException:
+            # 初始化失败也要退出连接上下文，避免留下未释放的数据库连接。
             await context.__aexit__(None, None, None)
             raise
         self._checkpointer_context = context
         self._checkpointer = checkpointer
 
     async def shutdown(self) -> None:
+        """在后台任务停止后释放图缓存和 checkpoint 连接。"""
         context = self._checkpointer_context
         self._graphs.clear()
         self._checkpointer = None
@@ -98,6 +103,7 @@ class EmbeddedAgentRuntime:
         return configs[provider]
 
     def _build_model(self, settings: Settings, provider: str, model: str) -> BaseChatModel:
+        """优先使用 LangChain 原生模型适配，仅补充网关与 MiMo 的协议差异。"""
         native_provider, api_key, _, base_url = self._model_config(settings, provider)
         if api_key is None or not api_key.get_secret_value().strip():
             raise RuntimeError(f"未配置 {provider} 的 API Key")
@@ -130,11 +136,13 @@ class EmbeddedAgentRuntime:
         return cast(BaseChatModel, init_chat_model(**kwargs))
 
     def _graph(self, settings: Settings, provider: str, model: str, module: str) -> Any:
+        """首次使用时创建 DeepAgent 图，按供应商、模型与业务模块缓存。"""
         if self._checkpointer is None:
             raise RuntimeError("Agent runtime 尚未初始化")
         key = (provider, model, module)
         if key not in self._graphs:
             capability = agent_capabilities.resolve(module, settings)
+            # 业务模块只提供提示词和工具，模型循环、工具编排与 checkpoint 交给框架。
             self._graphs[key] = create_deep_agent(
                 model=self._build_model(settings, provider, model),
                 tools=capability.tools,
@@ -147,6 +155,7 @@ class EmbeddedAgentRuntime:
     async def stream(
         self, request: AiChatRequest, settings: Settings, *, thread_id: str
     ) -> AsyncIterator[str]:
+        """在独立身份上下文中执行图，仅向上层传递模型消息文本。"""
         if request.actor_id is None or request.actor_role is None:
             raise RuntimeError("Agent 调用缺少用户上下文")
         provider = request.provider or settings.text_provider
@@ -165,16 +174,19 @@ class EmbeddedAgentRuntime:
             *[message.model_dump() for message in request.messages],
         ]
         config = RunnableConfig(configurable={"thread_id": thread_id})
+        # 图缓存不包含对话状态；thread_id 用于区分各次任务的 checkpoint。
         graph_input: dict[str, object] | None = {"messages": messages}
         if request.resume_from_checkpoint and self._checkpointer is not None:
             checkpoint = await self._checkpointer.aget_tuple(config)
             if checkpoint is not None:
+                # 已有 checkpoint 时不重复提交消息，交由 LangGraph 从保存状态继续。
                 graph_input = None
         with agent_invocation_context(request.actor_id, request.actor_role, module):
             async for message, _metadata in graph.astream(
                 graph_input,
                 config=config,
                 stream_mode="messages",
+                # 使用框架同步持久化策略，执行状态保存交给 checkpointer 管理。
                 durability="sync",
             ):
                 for text in _message_text(message):

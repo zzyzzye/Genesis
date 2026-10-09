@@ -1,3 +1,5 @@
+"""公开博客只读入口；服务层限制已发布状态，后台写入使用独立 Owner 路由。"""
+
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

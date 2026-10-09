@@ -1,3 +1,5 @@
+"""私有影音 API：校验资源归属、画布关联、并发版本与上传边界。"""
+
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
@@ -29,6 +31,7 @@ def copy_assets(
     session: SessionDependency,
 ) -> None:
     for item in sorted({project_id, target_id}):
+        # 源和目标作品采用相同锁定顺序，并都必须属于当前用户。
         service.project_for(session, user.id, item)
     for asset_id in sorted(set(data.asset_ids)):
         if session.get(ProjectAsset, (project_id, asset_id)) is None:
@@ -100,6 +103,7 @@ def delete_project(
     session.execute(delete(ProjectAsset).where(ProjectAsset.project_id == project.id))
     session.delete(project)
     paths = service.collect_orphans(session, ids)
+    # 先提交作品和引用删除，再清理文件；文件系统删除不属于数据库事务。
     session.commit()
     for path in paths:
         path.unlink(missing_ok=True)
@@ -119,6 +123,7 @@ def save_canvas(
 ) -> dict[str, object]:
     project = service.project_for(session, user.id, project_id)
     if project.version != data.version:
+        # 行锁保证版本检查与保存处于同一事务；客户端须先核对最新版本再重试。
         raise HTTPException(409, "作品已在其他窗口修改，请重新加载或另存为作品")
     ids = set(
         session.scalars(select(ProjectAsset.asset_id).where(ProjectAsset.project_id == project.id))
@@ -133,6 +138,7 @@ def save_canvas(
         if edge.source not in node_ids or edge.target not in node_ids or edge.source == edge.target:
             raise HTTPException(422, "连线必须连接作品内两个不同节点")
     grouped_ids: set[UUID] = set()
+    # Pydantic 负责节点字段范围，此处再检查节点之间的关系与数据库素材关联。
     node_by_id = {node.id: node for node in data.document.nodes}
     if any(
         node_by_id[edge.source].type == "group" or node_by_id[edge.target].type == "group"
@@ -210,10 +216,12 @@ def upload_asset(
         raise HTTPException(415, "请上传支持的图片、视频或音频格式")
     asset_id = uuid4()
     service.STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
+    # 服务端 UUID 决定文件路径，上传文件名只作为展示元数据，不参与路径拼接。
     path = service.STORAGE_ROOT / str(asset_id)
     size = 0
     try:
         with path.open("xb") as destination:
+            # 分块复制并累计实际大小，不把整个文件载入内存或只信任上传声明。
             while chunk := file.file.read(1024 * 1024):
                 size += len(chunk)
                 if size > service.MAX_UPLOAD_BYTES:
@@ -237,6 +245,7 @@ def upload_asset(
         session.commit()
         return service.asset_data(asset)
     except Exception:
+        # 文件写入与数据库提交不能组成原子事务，失败时回滚并清理本次文件。
         session.rollback()
         path.unlink(missing_ok=True)
         raise
@@ -330,6 +339,7 @@ def delete_asset(asset_id: UUID, user: CurrentUserDependency, session: SessionDe
         select(MediaProject).join(ProjectAsset).where(ProjectAsset.asset_id == asset_id)
     ).all()
     if referenced:
+        # 拒绝删除仍被作品使用的素材，避免留下失效的画布引用。
         raise HTTPException(409, "素材仍被作品引用：" + "、".join(p.name for p in referenced))
     session.delete(asset)
     session.commit()

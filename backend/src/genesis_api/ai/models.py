@@ -11,6 +11,8 @@ from genesis_api.database.base import Base
 
 
 class AiChatRunStatus(StrEnum):
+    """后台任务状态；用户主动停止也记录为 failed，并保存停止原因。"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -34,6 +36,7 @@ class AiChatRun(Base):
     thread_id: Mapped[str] = mapped_column(
         String(255), default=lambda: str(uuid4()), unique=True, index=True
     )
+    # 恢复所需的请求与调用身份由服务端保存，不在任务快照接口中返回。
     request_payload: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
     status: Mapped[AiChatRunStatus] = mapped_column(
         Enum(
@@ -45,6 +48,7 @@ class AiChatRun(Base):
         index=True,
     )
     content: Mapped[str] = mapped_column(Text, default="")
+    # 内容批次的修订序号，不是 token 数；恢复时也会递增以通知客户端重置快照。
     sequence: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
