@@ -193,6 +193,10 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
     if (value >= 1_000) return `${Math.round(value / 1_000)}K`
     return value.toLocaleString()
   }
+  const contextPercent = contextWindow && contextWindow > 0 ? Math.min(100, contextTokens / contextWindow * 100) : null
+  const contextDescription = contextPercent === null
+    ? `上下文容量未知 · 估算 ${formatTokens(contextTokens)} token`
+    : `上下文已用约 ${Math.round(contextPercent)}% · 估算 ${formatTokens(contextTokens)} / ${formatTokens(contextWindow)} token`
   const suggestions = editor ? ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '为当前文章生成更好的标题'] : defaultSuggestions
 
   useEffect(() => {
@@ -470,15 +474,6 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
             <div className="studio-assistant__identity">
               <span className="studio-assistant__avatar"><StudioIcon name="assistant" /></span>
               <div><strong>博客助手</strong><span><i />在线 · 当前模块</span></div>
-              <div className="studio-assistant__runtime-meta">
-                <span
-                  className="studio-assistant__context-usage"
-                  title="当前对话、页面和编辑器内容的估算 token 数 / 当前模型原生上下文窗口"
-                >{formatTokens(contextTokens)} / {formatTokens(contextWindow)}</span>
-                <span className={`studio-assistant__mode studio-assistant__mode--${executionMode}`}>
-                  {executionMode === 'automatic' ? '自动' : '审阅'}
-                </span>
-              </div>
             </div>
             <div className="studio-assistant__header-actions">
               <button className="studio-assistant__new-conversation" type="button" aria-label="新建对话" disabled={isBusy} onClick={startNewConversation}>
@@ -547,6 +542,14 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
               <button ref={modelTriggerRef} aria-label="选择模型" className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
                 <ProviderIcon provider={provider} /> {model || '选择模型'} <StudioIcon name="chevron" />
               </button>
+              <span className="studio-assistant__context-ring" tabIndex={0} role={contextPercent === null ? 'img' : 'progressbar'} aria-label={contextDescription} aria-valuemin={contextPercent === null ? undefined : 0} aria-valuemax={contextPercent === null ? undefined : 100} aria-valuenow={contextPercent ?? undefined}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle className="studio-assistant__ring-track" cx="12" cy="12" r="9" />
+                  {contextPercent !== null && <circle className="studio-assistant__ring-value" cx="12" cy="12" r="9" pathLength="100" strokeDasharray={`${contextPercent} 100`} transform="rotate(-90 12 12)" />}
+                  {contextPercent === null && <text x="12" y="16" textAnchor="middle">?</text>}
+                </svg>
+                <span className="studio-assistant__ring-tooltip" aria-hidden="true">{contextDescription}</span>
+              </span>
               {modelMenuOpen && <div ref={modelMenuRef} className="studio-assistant__model-menu">
                 <div className="studio-assistant__provider-tabs">
                   {(['openai', 'grok', 'gemini', 'claude', 'mimo'] as AiProvider[]).map((item) => (
