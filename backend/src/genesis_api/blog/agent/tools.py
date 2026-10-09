@@ -22,6 +22,7 @@ BlogAgentAction = Literal["create_draft", "update_post", "delete_post", "publish
 
 
 def _owner_id() -> UUID:
+    """从运行时注入的调用上下文取身份，不接受模型提供的用户 ID。"""
     return require_owner(module="blog")
 
 
@@ -82,6 +83,7 @@ def _search_posts(query: str) -> str:
 
 
 def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Settings) -> str:
+    """检查提议的基本条件并签名，实际写入留给用户确认后的处理流程。"""
     actor_id = _owner_id()
     with SessionLocal() as session:
         if action in {"update_post", "delete_post", "publish_post"}:
@@ -97,6 +99,7 @@ def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Sett
 
     proposal_id = uuid4()
     expires_at = datetime.now(UTC) + timedelta(seconds=settings.agent_action_expire_seconds)
+    # 把用户、模块、操作和载荷绑定到同一令牌，供确认接口验签并检查有效期。
     proposal_token = encode(
         {
             "proposal_id": str(proposal_id),
@@ -123,8 +126,11 @@ def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Sett
 
 
 def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
+    """使用 LangChain 原生工具装饰器注册博客工具，写工具仅返回操作提议。"""
     runtime_settings = settings or get_settings()
 
+    # 同步数据库操作交给工作线程，各次调用独立创建 Session，避免阻塞流式输出。
+    # asyncio.to_thread 会传播调用上下文，权限校验仍能取得运行时注入的身份。
     @tool
     async def list_posts() -> str:
         """列出博客文章及其状态。"""
@@ -143,11 +149,13 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
     @tool
     async def analyze_post(post_id: str) -> str:
         """获取指定文章的分析上下文。"""
+        # 工具只读取正文，文章分析由模型结合返回内容完成。
         return await asyncio.to_thread(_get_post, post_id)
 
     @tool
     async def suggest_revision(post_id: str) -> str:
         """获取指定文章的改写上下文。"""
+        # 改写建议由模型生成；采用建议时仍需走待确认的写操作。
         return await asyncio.to_thread(_get_post, post_id)
 
     @tool

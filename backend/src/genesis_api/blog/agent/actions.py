@@ -24,7 +24,11 @@ def _payload_uuid(payload: dict[str, object], key: str) -> UUID:
 def confirm_blog_action(
     action: str, payload: dict[str, object], *, current_user: User, session: Session
 ) -> object:
-    """执行博客模块已经由用户确认的写操作。"""
+    """执行已确认的博客写操作，复用人工编辑的校验和业务写入逻辑。
+
+    公共确认接口负责所有者权限、提议令牌及用户绑定校验；本函数负责业务校验
+    与事务提交，不应作为模型可直接调用的工具注册。
+    """
     if action not in BLOG_ACTIONS:
         raise HTTPException(status_code=422, detail="博客操作类型无效")
     if action == "delete_post":
@@ -38,6 +42,7 @@ def confirm_blog_action(
 
     if action in {"update_post", "publish_post"}:
         post_id = _payload_uuid(payload, "post_id")
+        # 确认时重新读取并锁定文章，以当前记录为基线；不把提议当作版本快照。
         post = get_blog_post_by_id(session, post_id, for_update=True)
         if post is None:
             raise HTTPException(status_code=404, detail="文章不存在")
@@ -54,6 +59,7 @@ def confirm_blog_action(
                 raise HTTPException(status_code=422, detail="changes 必须是 JSON") from exc
         if not isinstance(changes, dict):
             raise HTTPException(status_code=422, detail="changes 必须是 JSON 对象")
+        # 将局部修改合并到当前文章，再统一校验，避免绕过发布等业务约束。
         data = BlogPostWrite.model_validate(
             {
                 "slug": changes.get("slug", post.slug),
@@ -88,6 +94,7 @@ def confirm_blog_action(
         raise HTTPException(status_code=422, detail="创建草稿缺少必要字段")
     post = BlogPost(author=current_user)
     session.add(post)
+    # 创建提议只落为草稿，公开发布仍须单独确认。
     data = BlogPostWrite.model_validate(
         {
             "title": payload["title"],

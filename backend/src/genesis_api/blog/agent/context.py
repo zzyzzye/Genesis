@@ -10,6 +10,7 @@ from genesis_api.blog.service import get_blog_post_by_id, list_admin_posts
 
 
 def tool_manifest() -> list[dict[str, str | bool]]:
+    """提供给模型的能力说明，不替代工具注册、身份校验或执行权限检查。"""
     return [
         {"name": name, "description": description, "mode": mode, "requires_confirmation": requires}
         for name, description, mode, requires in (
@@ -51,7 +52,11 @@ def build_blog_agent_context(
     title: str | None = None, excerpt: str | None = None,
     content_markdown: str | None = None, editor_status: str | None = None,
 ) -> dict[str, object]:
-    """构建博客模块的可信页面上下文，以数据库状态为准。"""
+    """组装博客页面上下文，分开表示数据库记录和客户端未保存的编辑内容。
+
+    调用方负责身份校验；数据库记录用于说明已保存状态，编辑内容仅供模型参考。
+    返回的上下文不保存草稿，也不授予工具写入权限。
+    """
     resolved_page_type = page_type or (
         "post_editor"
         if post_id
@@ -79,6 +84,7 @@ def build_blog_agent_context(
 
     database_post: BlogPost | None = None
     if post_id:
+        # 无效或已不存在的文章 ID 不阻断对话，但不能据此认定文章已保存。
         with suppress(ValueError):
             database_post = get_blog_post_by_id(session, UUID(post_id))
     has_editor_context = any(
@@ -87,6 +93,7 @@ def build_blog_agent_context(
     if database_post is not None:
         current_post = _persisted_post(database_post)
         if has_editor_context:
+            # 草稿单独挂在 editor_draft 下，避免覆盖数据库正文与发布状态。
             editor_draft: dict[str, object] = {
                 "title": title, "excerpt": excerpt,
                 "content_markdown": content_markdown, "editor_status": editor_status,

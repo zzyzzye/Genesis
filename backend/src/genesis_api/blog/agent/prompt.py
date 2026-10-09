@@ -10,6 +10,7 @@ class BlogAgentPrompt:
 
     @staticmethod
     def system_message() -> str:
+        # 提示词与页面上下文共用权限清单；实际权限仍由工具和确认接口校验。
         return (
             "你是 Genesis Agent，服务于站点所有者的私人博客后台。"
             "请分析、处理、优化和创建文章；只读任务直接完成，"
