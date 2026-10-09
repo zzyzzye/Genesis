@@ -96,8 +96,8 @@
 .studio-assistant .studio-assistant__composer-tools > button[type=submit]:focus-visible:not(:disabled), .studio-assistant .studio-assistant__stop:focus-visible:not(:disabled) { background: #414950; }
 .studio-assistant__composer-tools > button[type=submit] svg, .studio-assistant__stop svg { width: 15px; height: 15px; }
 .studio-assistant__stop svg { fill: currentColor; }
-.studio-assistant__context-ring { display: inline-flex; flex: none; width: 24px; height: 24px; outline: 0; color: var(--assistant-muted); }
-.studio-assistant__context-ring > svg { width: 24px; height: 24px; }
+.studio-assistant__context-ring { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 24px; height: 24px; outline: 0; color: var(--assistant-muted); }
+.studio-assistant__context-ring > svg { width: 18px; height: 18px; }
 .studio-assistant__ring-track, .studio-assistant__ring-value { fill: none; stroke-width: 2; }
 .studio-assistant__ring-track { stroke: #dce1de; }
 .studio-assistant__ring-value { stroke: var(--assistant-accent); stroke-linecap: round; }
