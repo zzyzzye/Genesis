@@ -77,7 +77,7 @@ describe('App', () => {
     window.history.pushState({}, '', '/account')
     render(<App />)
 
-    expect(await screen.findByRole('link', { name: /进入 Genesis 工作台/ })).toHaveAttribute('href', '/studio')
+    expect(await screen.findByRole('link', { name: /进入博客工作台/ })).toHaveAttribute('href', '/blog/studio')
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('owner-token')
   })
 
@@ -229,11 +229,8 @@ describe('App', () => {
     window.history.pushState({}, '', '/studio')
     const view = render(<App />)
 
-    expect(await screen.findByRole('heading', { name: '选择工作区' })).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { name: '系统导航' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /影音.*进入/ })).toHaveAttribute('href', '/media')
-    expect(screen.queryByRole('link', { name: /工具集/ })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('link', { name: /博客.*进入/ }))
+    await waitFor(() => expect(window.location.pathname).toBe('/blog/studio'))
+    expect(screen.queryByRole('heading', { name: '选择工作区' })).not.toBeInTheDocument()
 
     fireEvent.change(await screen.findByLabelText('密码'), { target: { value: 'test-password' } })
     fireEvent.click(screen.getByRole('button', { name: '进入写作台' }))
@@ -245,7 +242,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^文章$/ }))
 
-    expect(window.location.pathname).toBe('/studio/blog/posts')
+    expect(window.location.pathname).toBe('/blog/studio/posts')
     expect(screen.getByRole('heading', { name: '文章管理' })).toBeInTheDocument()
     expect(screen.queryByText('一级')).not.toBeInTheDocument()
     expect(screen.queryByText('二级')).not.toBeInTheDocument()
@@ -254,7 +251,7 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /从一个完整模块开始/ }))
 
-    expect(window.location.pathname).toBe('/studio/blog/posts/post-1/edit')
+    expect(window.location.pathname).toBe('/blog/studio/posts/post-1/edit')
     expect(screen.queryByRole('region', { name: '文章列表' })).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Markdown 编辑区' })).toBeInTheDocument()
     expect(document.querySelector('.studio-topbar')).not.toBeInTheDocument()
@@ -270,7 +267,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '关闭文章设置' }))
     expect(screen.queryByRole('dialog', { name: '文章设置' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '预览' }))
-    expect(window.location.pathname).toBe('/studio/blog/posts/post-1')
+    expect(window.location.pathname).toBe('/blog/studio/posts/post-1')
     expect(screen.getByRole('region', { name: '从一个完整模块开始' })).toBeInTheDocument()
 
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('test-token')
@@ -284,7 +281,7 @@ describe('App', () => {
       ],
       activeRun: { id: 'resumable-run', assistantMessageIndex: 2 },
     }))
-    window.history.pushState({}, '', '/studio/blog')
+    window.history.pushState({}, '', '/blog/studio')
     render(<App />)
     expect(await screen.findByRole('heading', { name: '仪表盘' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '打开博客 AI 助手' })).not.toBeInTheDocument()
@@ -302,13 +299,13 @@ describe('App', () => {
     expect(screen.queryByText('三级')).not.toBeInTheDocument()
   })
 
-  it('旧博客后台入口先返回系统工作区选择页', async () => {
-    window.history.pushState({}, '', '/blog/studio')
-
+  it('旧博客后台深层链接保留查询参数与锚点，直接进入博客工作台', async () => {
+    window.history.pushState({}, '', '/studio/blog/posts?tag=sample#list')
     render(<App />)
-
-    expect(await screen.findByRole('heading', { name: '选择工作区' })).toBeInTheDocument()
-    expect(window.location.pathname).toBe('/studio')
+    await waitFor(() => expect(window.location.pathname).toBe('/blog/studio/posts'))
+    expect(window.location.search).toBe('?tag=sample')
+    expect(window.location.hash).toBe('#list')
+    expect(screen.queryByRole('heading', { name: '选择工作区' })).not.toBeInTheDocument()
   })
 
 })

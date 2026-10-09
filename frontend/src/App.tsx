@@ -4,7 +4,6 @@ import { AnimatePresence, motion, MotionConfig, useReducedMotion } from 'motion/
 
 import { Account } from './Account'
 import { Studio } from './Studio'
-import { StudioPortal } from './studio/StudioPortal'
 import { Home } from './pages/home/Home'
 import { PublicBlog } from './pages/blog/BlogPage'
 import { MediaPage } from './pages/media/MediaPage'
@@ -13,10 +12,7 @@ import { pageTransition } from './lib/motion'
 
 function LegacyStudioRedirect() {
   const location = useLocation()
-  const isStudioRoot = /^\/blog\/studio\/?$/.test(location.pathname)
-  const pathname = isStudioRoot
-    ? '/studio'
-    : location.pathname.replace(/^\/blog\/studio/, '/studio/blog')
+  const pathname = location.pathname.replace(/^\/studio(?:\/blog)?/, '/blog/studio')
 
   return <Navigate replace to={`${pathname}${location.search}${location.hash}`} />
 }
@@ -51,9 +47,9 @@ export function AppRoutes() {
         <Route path="/media/*" element={<MediaPage />} />
         <Route path="/media/projects/:projectId" element={<MediaPage />} />
         <Route path="/media/projects/:projectId/*" element={<MediaPage />} />
-        <Route path="/blog/studio/*" element={<LegacyStudioRedirect />} />
-        <Route path="/studio/blog/*" element={<Studio />} />
-        <Route path="/studio" element={<StudioPortal />} />
+        <Route path="/blog/studio/*" element={<Studio />} />
+        <Route path="/studio/blog/*" element={<LegacyStudioRedirect />} />
+        <Route path="/studio" element={<LegacyStudioRedirect />} />
         <Route path="/account" element={<Account />} />
       </Routes>
     </motion.div>

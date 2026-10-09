@@ -6,7 +6,7 @@
 
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 | --- | --- | --- | --- | --- |
-| 工作区目录 / Navigation | StudioPortal、React Router Link | StudioPortal.tsx、App.tsx | 博客与影音进入真实路由，筹备中的工具集为静态说明 | 键盘激活、浏览器返回、筹备态、桌面与窄屏 |
+| 模块管理入口 / Navigation | React Router、Studio | App.tsx、Studio.tsx、Account.tsx | 所属模块下的 /studio 直接进入管理，旧博客链接保留路径、查询参数与锚点 | 直接访问、旧链接跳转、账户入口、桌面与窄屏 |
 | Select/Listbox | 原生 select | ProjectCanvas.tsx、AssetLibrary.tsx | 系统菜单负责弹出几何与键盘选择；模型选择仍沿用 MediaAssistant 的现有组件 | 浏览器展开、选择、Escape，组件测试 |
 | Form | 画布节点直接编辑、MediaHome 的 ProjectDialog | ProjectCanvas.tsx、MediaHome.tsx | 节点编辑无需提交表单；提交表单使用 noValidate 与内联错误 | 整数时长、保存恢复、失败保留草稿 |
 | CRUD | useCanvas、作品素材 API | useCanvas.ts、api/routes/media.py | 节点修改可撤销；素材删除沿用既有确认流程 | 组件测试、后端权限与素材类型测试 |
@@ -36,7 +36,7 @@
 
 ## 博客分类与标签
 
-`/studio/blog/categories` 与 `/studio/blog/tags` 由 `TaxonomyWorkspace` 管理，同属博客内容管理导航。名称最多 50 字符，去除首尾空格且必须唯一，支持中文、大小写、空格与符号。两类均只填写名称，创建时自动生成 UUID 标识，编辑名称保留既有标识与文章关联，列表不展示内部标识。字段约束与唯一性由 `backend/src/genesis_api/blog/schemas.py` 和 `api/routes/admin_blog.py` 校验。
+`/blog/studio/categories` 与 `/blog/studio/tags` 由 `TaxonomyWorkspace` 管理，同属博客内容管理导航。名称最多 50 字符，去除首尾空格且必须唯一，支持中文、大小写、空格与符号。两类均只填写名称，创建时自动生成 UUID 标识，编辑名称保留既有标识与文章关联，列表不展示内部标识。字段约束与唯一性由 `backend/src/genesis_api/blog/schemas.py` 和 `api/routes/admin_blog.py` 校验。
 
 管理页只有一个搜索/新建输入，查询存入 URL 的 `q` 参数，并提供清空入口；输入新名称按 Enter 或点击「新建」创建，已有名称则定位原项。成功后清空输入并高亮新项，焦点回到输入；列表每次显示 40 项，可显示更多。名称按钮打开原生 dialog，由浏览器管理模态焦点和背景不可交互状态，取消或 Escape 丢弃当前改名草稿并恢复名称按钮焦点。名称未变化不发请求。错误留在操作处，保留输入供重试；同步锁阻止重复请求，输入法候选确认的 Enter 不提交。改名不改变 ID/Slug 与文章关联。
 

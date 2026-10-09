@@ -32,12 +32,12 @@ describe('可靠博客写作流程', () => {
   afterEach(() => { window.history.pushState({}, '', '/'); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks() })
 
   it('未保存的新文章可预览、返回编辑，并在离开时确认', async () => {
-    setup('/studio/blog/posts/new/edit')
+    setup('/blog/studio/posts/new/edit')
     const title = await screen.findByRole('textbox', { name: '文章标题' })
     fireEvent.change(title, { target: { value: '预览验收' } })
     fireEvent.click(screen.getByRole('button', { name: '预览' }))
     expect(await screen.findByRole('heading', { name: '预览验收' })).toBeInTheDocument()
-    expect(window.location.pathname).toBe('/studio/blog/posts/new')
+    expect(window.location.pathname).toBe('/blog/studio/posts/new')
     fireEvent.click(screen.getByRole('button', { name: '编辑文章' }))
     expect(await screen.findByRole('textbox', { name: '文章标题' })).toHaveValue('预览验收')
     fireEvent.click(screen.getByRole('button', { name: '← 返回文章列表' }))
@@ -49,7 +49,7 @@ describe('可靠博客写作流程', () => {
   it('恢复由作者决定，恢复前不会用旧内容覆盖当前页面', async () => {
     const editor = { ...createEmptyEditor(), title: '刷新前的草稿', contentMarkdown: '# 待恢复正文' }
     sessionStorage.setItem(blogDraftKey(author.id, null), JSON.stringify({ editor, savedAt: Date.now() }))
-    setup('/studio/blog/posts/new/edit')
+    setup('/blog/studio/posts/new/edit')
     expect(await screen.findByRole('button', { name: '恢复内容' })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '文章标题' })).toHaveValue('')
     fireEvent.click(screen.getByRole('button', { name: '恢复内容' }))
@@ -58,20 +58,20 @@ describe('可靠博客写作流程', () => {
   })
 
   it('空白草稿可保存，空白内容不能进入发布确认', async () => {
-    const { fetchMock } = setup('/studio/blog/posts/new/edit')
+    const { fetchMock } = setup('/blog/studio/posts/new/edit')
     await screen.findByRole('textbox', { name: '文章标题' })
     fireEvent.click(screen.getByRole('button', { name: '发布' }))
     expect(screen.getByText('发布前请填写标题和正文。')).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: '发布前检查' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '保存草稿' }))
     expect(await screen.findByText('草稿已保存到站点。')).toBeInTheDocument()
-    expect(window.location.pathname).toBe('/studio/blog/posts/writing-post/edit')
+    expect(window.location.pathname).toBe('/blog/studio/posts/writing-post/edit')
     const call = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')
     expect(JSON.parse(typeof call?.[1]?.body === 'string' ? call[1].body : '{}')).toMatchObject({ status: 'draft', title: '未命名文章', content_markdown: '' })
   })
 
   it('更新发布先审阅，保留发布状态并携带版本，只提交一次', async () => {
-    const { fetchMock } = setup('/studio/blog/posts/writing-post/edit', [savedPost])
+    const { fetchMock } = setup('/blog/studio/posts/writing-post/edit', [savedPost])
     fireEvent.change(await screen.findByRole('textbox', { name: '文章标题' }), { target: { value: '修改后的文章' } })
     expect(screen.queryByRole('button', { name: '保存草稿' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '更新发布' }))
@@ -90,7 +90,7 @@ describe('可靠博客写作流程', () => {
   })
 
   it('保存冲突保留输入，核对最新版本后可继续编辑并保存', async () => {
-    const { fetchMock } = setup('/studio/blog/posts/writing-post/edit', [savedPost])
+    const { fetchMock } = setup('/blog/studio/posts/writing-post/edit', [savedPost])
     fireEvent.change(await screen.findByRole('textbox', { name: '文章标题' }), { target: { value: '本地修改' } })
     let writeCount = 0
     const latest = { ...savedPost, title: '站点上的新标题', content_markdown: '站点的新正文', updated_at: '2026-10-08T00:00:00Z' }

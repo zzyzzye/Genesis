@@ -738,7 +738,7 @@ function getStudioRoute(pathname: string): {
   postView: 'list' | 'preview'
   isEditorOpen: boolean
 } {
-  const relativePath = pathname.replace(/^\/studio\/blog\/?/, '')
+  const relativePath = pathname.replace(/^\/blog\/studio\/?/, '')
   const [sectionSegment, postSegment, actionSegment] = relativePath.split('/').filter(Boolean)
   const activeSection = sectionSegment && studioSectionIds.includes(sectionSegment as StudioSection)
     ? sectionSegment as StudioSection
@@ -785,7 +785,7 @@ function Dashboard({
   const mutationLock = useRef(false)
   const bypassNavigation = useRef(false)
   const loadedResource = useRef<string | null>(null)
-  const studioBasePath = '/studio/blog'
+  const studioBasePath = '/blog/studio'
 
   const selectedPost = postId === null ? null : managedPosts.find((post) => post.id === postId) ?? null
   const activeEditor = selectedPost && editor.id !== postId ? toEditor(selectedPost) : editor

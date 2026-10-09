@@ -180,11 +180,11 @@ function Profile({ user, feedback, onLogout, onSave }: {
           </div>
         </div>
         {user.role === 'owner' && (
-          <Link className="account-studio-entry" to="/studio">
+          <Link className="account-studio-entry" to="/blog/studio">
             <span>
               <small>OWNER WORKSPACE</small>
-              <strong>进入 Genesis 工作台</strong>
-              <em>管理博客、工具与影音系统</em>
+              <strong>进入博客工作台</strong>
+              <em>写作、整理与发布文章</em>
             </span>
             <span aria-hidden="true">→</span>
           </Link>

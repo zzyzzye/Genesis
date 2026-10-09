@@ -17,7 +17,7 @@ describe.each(['categories', 'tags'] as const)('%s 管理', (kind) => {
   const createApi = kind === 'tags' ? createAdminBlogTag : createAdminBlogCategory
   function mount(usage: Record<string, number> = {}, query = '') {
     const onChanged = vi.fn()
-    const view = render(<MemoryRouter initialEntries={['/studio/blog/' + kind + query]}><TaxonomyWorkspace kind={kind} items={[item, other]} usage={usage} token="test-placeholder" onChanged={onChanged} /></MemoryRouter>)
+    const view = render(<MemoryRouter initialEntries={['/blog/studio/' + kind + query]}><TaxonomyWorkspace kind={kind} items={[item, other]} usage={usage} token="test-placeholder" onChanged={onChanged} /></MemoryRouter>)
     return { onChanged, ...view }
   }
   afterEach(() => { cleanup(); vi.resetAllMocks() })
