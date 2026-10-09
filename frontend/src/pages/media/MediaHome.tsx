@@ -63,7 +63,7 @@ export function MediaHome() {
         <button aria-current={!allProjects ? 'page' : undefined} onClick={() => changeView(false)}><House />首页</button>
         <button aria-current={allProjects ? 'page' : undefined} onClick={() => changeView(true)}><PanelsTopLeft />项目</button>
         <Link to="/media/assets"><LibraryBig />素材库</Link>
-        <Link to="/tools"><LayoutGrid />工具集<ChevronRight className="media-home-nav-arrow" /></Link>
+        <Link to="/toolbox"><LayoutGrid />工具箱<ChevronRight className="media-home-nav-arrow" /></Link>
         <span className="media-home-nav-label">探索</span>
         <Link to="/blog"><BookOpen />创作阅读</Link>
       </nav>

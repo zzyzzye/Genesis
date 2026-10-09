@@ -259,15 +259,15 @@ export async function deleteAdminBlogPost(token: string, id: string): Promise<vo
 }
 export interface SystemHealth {
   status: 'ok'
-  system: 'tools' | 'media'
+  system: 'toolbox' | 'media'
 }
 
-export function getSystemHealth(system: 'tools' | 'media', signal?: AbortSignal): Promise<SystemHealth> {
+export function getSystemHealth(system: 'toolbox' | 'media', signal?: AbortSignal): Promise<SystemHealth> {
   return request<SystemHealth>(`/${system}/health`, { signal })
 }
 
 
-export type AiSurface = 'blog' | 'studio' | 'tools' | 'media'
+export type AiSurface = 'blog' | 'studio' | 'toolbox' | 'media'
 
 export type AiExecutionMode = 'automatic' | 'approval_required'
 

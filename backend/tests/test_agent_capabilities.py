@@ -14,10 +14,10 @@ def test_media_package_preserves_prompt_and_public_entry() -> None:
     assert capability.tools == []
 
 
-def test_tools_shell_is_registered_without_business_tools() -> None:
-    capability = AgentCapabilityRegistry().resolve("tools", Settings())
-    assert capability.module == "tools"
-    assert capability.name == "genesis-tools-agent"
+def test_toolbox_shell_is_registered_without_business_tools() -> None:
+    capability = AgentCapabilityRegistry().resolve("toolbox", Settings())
+    assert capability.module == "toolbox"
+    assert capability.name == "genesis-toolbox-agent"
     assert "尚未接入" in capability.prompt
     assert capability.tools == []
 

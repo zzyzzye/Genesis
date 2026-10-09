@@ -16,3 +16,13 @@ async def test_health_check() -> None:
         "service": "genesis-api",
         "environment": "development",
     }
+
+
+@pytest.mark.anyio
+async def test_toolbox_health_uses_business_module_name() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/toolbox/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "system": "toolbox"}

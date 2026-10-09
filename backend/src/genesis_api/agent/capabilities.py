@@ -9,7 +9,7 @@ from genesis_api.blog.agent.capability import BlogAgentCapability
 from genesis_api.core.config import Settings
 from genesis_api.identity.models import User
 from genesis_api.media.agent import MediaAgentCapability
-from genesis_api.tools.agent.capability import ToolsAgentCapability
+from genesis_api.toolbox.agent.capability import ToolboxAgentCapability
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ class AgentCapabilityRegistry:
     def __init__(self) -> None:
         self._blog = BlogAgentCapability()
         self._media = MediaAgentCapability()
-        self._tools = ToolsAgentCapability()
+        self._toolbox = ToolboxAgentCapability()
 
     def resolve(self, module: str, settings: Settings) -> ResolvedAgentCapability:
         if module == self._blog.module:
@@ -43,12 +43,12 @@ class AgentCapabilityRegistry:
                 prompt=self._media.system_prompt(),
                 tools=self._media.build_tools(settings),
             )
-        if module == self._tools.module:
+        if module == self._toolbox.module:
             return ResolvedAgentCapability(
-                module=self._tools.module,
-                name=self._tools.name,
-                prompt=self._tools.system_prompt(),
-                tools=self._tools.build_tools(settings),
+                module=self._toolbox.module,
+                name=self._toolbox.name,
+                prompt=self._toolbox.system_prompt(),
+                tools=self._toolbox.build_tools(settings),
             )
         raise ValueError(f"模块 {module} 尚未提供 Agent 能力")
 

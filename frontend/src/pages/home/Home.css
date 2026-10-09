@@ -24,7 +24,7 @@
 .home-system-card h3 { margin: 4rem 0 1rem; font-family: Georgia, "Noto Serif SC", serif; font-size: clamp(2rem, 4vw, 3.4rem); font-weight: 500; letter-spacing: -.08em; }
 .home-system-card p { max-width: 18rem; min-height: 3.5rem; color: #686259; line-height: 1.75; }
 .home-system-card strong { display: block; margin-top: 2rem; font-size: .78rem; }
-.home-system-card--tools { background: #e7edf0; }
+.home-system-card--toolbox { background: #e7edf0; }
 .home-system-card--media { background: #202838; color: #fffdf9; }
 .home-system-card--media p { color: #c6c8c9; }
 @media (max-width: 680px) {

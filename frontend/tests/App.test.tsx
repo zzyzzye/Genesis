@@ -58,7 +58,7 @@ describe('App', () => {
 
     const navigation = screen.getByRole('navigation', { name: '主导航' })
     expect(navigation).toHaveTextContent('博客')
-    expect(navigation).toHaveTextContent('工具')
+    expect(navigation).toHaveTextContent('工具箱')
     expect(navigation).toHaveTextContent('影音')
     expect(navigation).not.toHaveTextContent('Studio')
     expect(screen.queryByRole('link', { name: /系统入口|Studio|工作台/ })).not.toBeInTheDocument()
@@ -122,7 +122,7 @@ describe('App', () => {
   })
 
   it.each([
-    ['/tools', '把重复工作，压缩成一次点击。', '工具系统标识'],
+    ['/toolbox', '把重复工作，压缩成一次点击。', '工具箱标识'],
   ])('为 %s 使用独立系统界面且不显示跨系统导航', (path, heading, landmark) => {
     window.history.pushState({}, '', path)
 
@@ -131,6 +131,18 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: '主导航' })).not.toBeInTheDocument()
     if (landmark) expect(screen.getByRole('complementary', { name: landmark })).toBeInTheDocument()
+  })
+
+  it('旧工具箱链接跳转时保留子路径、查询参数和锚点', async () => {
+    window.history.pushState({}, '', '/tools/text?q=hello#input')
+    render(<App />)
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/toolbox/text')
+      expect(window.location.search).toBe('?q=hello')
+      expect(window.location.hash).toBe('#input')
+    })
+    expect(await screen.findByRole('complementary', { name: '工具箱标识' })).toBeInTheDocument()
   })
 
   it('影音创作在开发环境自动登录后进入作品列表', async () => {

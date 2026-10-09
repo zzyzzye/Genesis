@@ -114,3 +114,9 @@ cp frontend/.env.example frontend/.env
 ```
 
 前端开发服务器会将 `/api` 请求代理到 `http://localhost:8000`。
+
+# 工具箱命名
+
+工具箱业务系统统一使用 `toolbox`：前端源码位于 `frontend/src/pages/toolbox/`，后端业务模块位于 `backend/src/genesis_api/toolbox/`，页面路径为 `/toolbox`，健康检查为 `/api/v1/toolbox/health`，AI 请求的 `surface` 和 `context.module` 均使用 `toolbox`。旧前端 `/tools/*` 链接会跳转到对应的新路径，并保留查询参数与锚点。
+
+Agent 的 `tools.py`、工具列表 `tools` 与第三方框架工具 API 保留原名，表示可调用能力，不表示业务系统。

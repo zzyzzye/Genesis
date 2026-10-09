@@ -10,7 +10,7 @@ function Home() {
         <Link className="brand" to="/">Genesis<span>.</span></Link>
         <nav aria-label="主导航">
           <Link to="/blog">博客</Link>
-          <Link to="/tools">工具</Link>
+          <Link to="/toolbox">工具箱</Link>
           <Link to="/media">影音</Link>
         </nav>
         <div className="header-utilities"><span className="module-state">00 / Genesis</span><Link className="account-entry" to="/account"><span aria-hidden="true">◌</span> 账户</Link></div>
@@ -27,7 +27,7 @@ function Home() {
           </div>
           <div className="home-system-grid">
             <Link className="home-system-card home-system-card--blog" to="/blog"><span>01</span><h3>博客</h3><p>沉淀值得反复回看的想法、文章与长期记录。</p><strong>进入博客 ↗</strong></Link>
-            <Link className="home-system-card home-system-card--tools" to="/tools"><span>02</span><h3>工具</h3><p>把重复的工作整理成可以直接使用的小工具。</p><strong>进入工具 ↗</strong></Link>
+            <Link className="home-system-card home-system-card--toolbox" to="/toolbox"><span>02</span><h3>工具箱</h3><p>把重复的工作整理成可以直接使用的小工具。</p><strong>进入工具箱 ↗</strong></Link>
             <Link className="home-system-card home-system-card--media" to="/media"><span>03</span><h3>影音</h3><p>记录正在发生的现场、声音和影像。</p><strong>进入影音 ↗</strong></Link>
           </div>
         </section>

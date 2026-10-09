@@ -7,7 +7,7 @@ import { Studio } from './Studio'
 import { Home } from './pages/home/Home'
 import { PublicBlog } from './pages/blog/BlogPage'
 import { MediaPage } from './pages/media/MediaPage'
-import { ToolsPage } from './pages/tools/ToolsPage'
+import { ToolboxPage } from './pages/toolbox/ToolboxPage'
 import { pageTransition } from './lib/motion'
 
 function LegacyStudioRedirect() {
@@ -17,11 +17,18 @@ function LegacyStudioRedirect() {
   return <Navigate replace to={`${pathname}${location.search}${location.hash}`} />
 }
 
+function LegacyToolboxRedirect() {
+  const location = useLocation()
+  const pathname = location.pathname.replace(/^\/tools(?=\/|$)/, '/toolbox')
+
+  return <Navigate replace to={`${pathname}${location.search}${location.hash}`} />
+}
+
 function getRouteMotionKey(pathname: string) {
   if (pathname.startsWith('/media')) return 'media'
   if (pathname.startsWith('/studio') || pathname.startsWith('/blog/studio')) return 'studio'
   if (pathname.startsWith('/blog') || pathname.startsWith('/articles')) return 'blog'
-  if (pathname.startsWith('/tools')) return 'tools'
+  if (pathname.startsWith('/toolbox')) return 'toolbox'
   if (pathname.startsWith('/account')) return 'account'
   return 'home'
 }
@@ -43,7 +50,8 @@ export function AppRoutes() {
         <Route path="/" element={<Home />} />
         <Route path="/blog/*" element={<PublicBlog />} />
         <Route path="/articles/:slug" element={<PublicBlog />} />
-        <Route path="/tools/*" element={<ToolsPage />} />
+        <Route path="/toolbox/*" element={<ToolboxPage />} />
+        <Route path="/tools/*" element={<LegacyToolboxRedirect />} />
         <Route path="/media/*" element={<MediaPage />} />
         <Route path="/media/projects/:projectId" element={<MediaPage />} />
         <Route path="/media/projects/:projectId/*" element={<MediaPage />} />

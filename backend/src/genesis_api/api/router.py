@@ -8,7 +8,7 @@ from genesis_api.api.routes import (
     health,
     llm,
     media,
-    tools,
+    toolbox,
 )
 
 api_router = APIRouter()
@@ -20,5 +20,5 @@ api_router.include_router(blog.router)
 api_router.include_router(admin_blog.router)
 api_router.include_router(llm.router)
 api_router.include_router(ai.router)
-api_router.include_router(tools.router)
+api_router.include_router(toolbox.router)
 api_router.include_router(media.router)
