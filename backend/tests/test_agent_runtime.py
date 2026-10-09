@@ -1,3 +1,5 @@
+"""验证 Agent 生命周期、模型适配、图缓存与工具身份隔离，不请求真实模型。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -27,13 +29,18 @@ from genesis_api.identity.models import UserRole
 
 
 class FakeSession:
+    """提供工具构建所需的最小会话接口，不连接数据库。"""
+
     def __enter__(self) -> FakeSession:
+        """进入测试会话，返回同一个替身。"""
         return self
 
     def __exit__(self, *_: object) -> None:
+        """保持上下文管理器约定，不吞掉测试过程中发生的异常。"""
         return None
 
     def scalars(self, _: object) -> list[SimpleNamespace]:
+        """模拟无博客记录的查询结果，使测试不依赖预置文章。"""
         return []
 
 

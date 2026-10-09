@@ -111,7 +111,19 @@ def create_project(
 def get_project(
     project_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
-    """返回当前用户的作品摘要，不存在或归属不符时返回 404。"""
+    """读取当前用户的作品摘要。
+
+    Args:
+        project_id: 要读取的作品 UUID。
+        user: 认证依赖提供的用户，用于限制作品归属。
+        session: 当前请求的查询会话。
+
+    Returns:
+        作品摘要，不包含完整画布。
+
+    Raises:
+        HTTPException: 作品不存在或不属于当前用户，统一返回 404。
+    """
     return service.project_data(service.project_for(session, user.id, project_id))
 
 
@@ -172,7 +184,19 @@ def delete_project(
 def canvas(
     project_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
-    """返回作品完整画布与版本；归属检查失败时返回 404。"""
+    """读取已保存的完整画布及其版本。
+
+    Args:
+        project_id: 目标作品 UUID。
+        user: 已认证用户。
+        session: 当前请求的查询会话。
+
+    Returns:
+        version 与 document；客户端后续保存时需携带读到的版本。
+
+    Raises:
+        HTTPException: 作品不存在或归属不符，返回 404。
+    """
     project = service.project_for(session, user.id, project_id)
     return {"version": project.version, "document": project.canvas}
 
@@ -363,7 +387,19 @@ def upload_asset(
 def get_asset(
     asset_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
-    """读取当前用户的素材元数据，不存在或归属不符时返回 404。"""
+    """读取当前用户的素材元数据。
+
+    Args:
+        asset_id: 目标素材 UUID。
+        user: 已认证用户，限制素材归属。
+        session: 当前请求的查询会话。
+
+    Returns:
+        素材展示数据，文件内容通过独立接口获取。
+
+    Raises:
+        HTTPException: 素材不存在或不属于当前用户，统一返回 404。
+    """
     return service.asset_data(service.asset_for(session, user.id, asset_id))
 
 
@@ -400,7 +436,19 @@ def asset_file(
 def promote_asset(
     asset_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
-    """将当前用户的素材保留到账户素材库，不复制文件或删除作品引用。"""
+    """将当前用户的素材保留到账户素材库。
+
+    Args:
+        asset_id: 要保留的素材 UUID。
+        user: 已认证用户，限制素材归属。
+        session: 当前事务会话，此处提交 in_library 状态。
+
+    Returns:
+        更新后的素材展示数据；已有作品引用和底层文件保持不变。
+
+    Raises:
+        HTTPException: 素材不存在或归属不符，返回 404。
+    """
     asset = service.asset_for(session, user.id, asset_id)
     asset.in_library = True
     session.commit()

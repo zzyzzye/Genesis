@@ -16,7 +16,14 @@ from genesis_api.toolbox.agent.capability import ToolboxAgentCapability
 
 @dataclass(frozen=True)
 class ResolvedAgentCapability:
-    """运行时消费的业务能力组合，不包含用户身份或对话状态。"""
+    """运行时消费的业务能力组合，不包含用户身份或对话状态。
+
+    Attributes:
+        module: 用于图缓存与能力分派的业务模块标识。
+        name: 创建 Agent 图时使用的名称。
+        prompt: 当前模块的系统提示词。
+        tools: LangChain 工具列表；冻结数据类不阻止列表内容被修改，调用方应只读使用。
+    """
 
     module: str
     name: str

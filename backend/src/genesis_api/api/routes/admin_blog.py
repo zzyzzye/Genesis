@@ -93,7 +93,15 @@ def duplicate_slug_error() -> HTTPException:
 
 @router.get("/tags", response_model=list[BlogTagRead])
 def get_admin_tags(session: SessionDependency, _: OwnerDependency) -> list[BlogTagRead]:
-    """返回所有者可管理的全部共享标签，包含未使用的标签。"""
+    """读取后台可管理的全部共享标签，包含未使用的标签。
+
+    Args:
+        session: 当前请求的数据库会话。
+        _: 所有者权限依赖；用于授权，不参与标签筛选。
+
+    Returns:
+        按名称升序排列的标签展示数据。
+    """
     return [BlogTagRead.model_validate(tag) for tag in list_admin_tags(session)]
 
 
@@ -131,7 +139,15 @@ def create_admin_tag(
 
 @router.get("/categories", response_model=list[BlogCategoryRead])
 def get_admin_categories(session: SessionDependency, _: OwnerDependency) -> list[BlogCategoryRead]:
-    """返回所有者可管理的全部分类，供后台选择与管理。"""
+    """读取后台可管理的全部共享分类。
+
+    Args:
+        session: 当前请求的数据库会话。
+        _: 所有者权限依赖，不将分类限定为某个账号创建的记录。
+
+    Returns:
+        供后台选择和管理的分类列表。
+    """
     return [
         BlogCategoryRead.model_validate(category) for category in list_admin_categories(session)
     ]
@@ -196,7 +212,19 @@ def update_admin_tag(
 
 @router.delete("/tags/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_admin_tag(item_id: UUID, session: SessionDependency, _: OwnerDependency) -> Response:
-    """锁定并删除未使用的标签；不存在返回 404，仍被引用返回 409。"""
+    """锁定目标标签并删除未被文章使用的记录。
+
+    Args:
+        item_id: 待删除标签 UUID。
+        session: 当前事务会话，成功时提交删除。
+        _: 所有者权限依赖。
+
+    Returns:
+        删除成功后的 204 空响应。
+
+    Raises:
+        HTTPException: 标签不存在时返回 404，仍被文章引用时返回 409。
+    """
     item = session.scalar(select(BlogTag).where(BlogTag.id == item_id).with_for_update())
     if item is None:
         raise HTTPException(status_code=404, detail="标签不存在")
@@ -232,7 +260,19 @@ def update_admin_category(
 def delete_admin_category(
     item_id: UUID, session: SessionDependency, _: OwnerDependency
 ) -> Response:
-    """锁定并删除未使用的分类；不存在返回 404，仍被引用返回 409。"""
+    """锁定目标分类并删除未被文章使用的记录。
+
+    Args:
+        item_id: 待删除分类 UUID。
+        session: 当前事务会话，成功时提交删除。
+        _: 所有者权限依赖。
+
+    Returns:
+        删除成功后的 204 空响应。
+
+    Raises:
+        HTTPException: 分类不存在时返回 404，仍被文章引用时返回 409。
+    """
     item = session.scalar(select(BlogCategory).where(BlogCategory.id == item_id).with_for_update())
     if item is None:
         raise HTTPException(status_code=404, detail="分类不存在")
@@ -241,7 +281,15 @@ def delete_admin_category(
 
 @router.get("/posts", response_model=list[BlogPostAdminRead])
 def get_admin_posts(session: SessionDependency, _: OwnerDependency) -> list[BlogPostAdminRead]:
-    """返回包含草稿的完整后台文章列表，按更新时间倒序，不在此分页。"""
+    """读取包含草稿的完整后台文章列表。
+
+    Args:
+        session: 当前请求的数据库会话。
+        _: 所有者权限依赖，不以当前用户过滤文章作者。
+
+    Returns:
+        按更新时间倒序排列的文章管理数据，当前接口不分页。
+    """
     return [BlogPostAdminRead.model_validate(post) for post in list_admin_posts(session)]
 
 

@@ -23,7 +23,21 @@ class AiMessage(BaseModel):
 
 
 class AiContext(BaseModel):
-    """页面与编辑参考数据；权限由服务端身份决定，不能由这些字段授予。"""
+    """页面与编辑参考数据；权限由服务端身份决定，不能由这些字段授予。
+
+    页面提交的数据可能包含未保存草稿，不能直接视为数据库中的文章或素材。
+    这些字段覆盖不同页面的上下文，具体取舍和可信记录读取由业务能力负责。
+
+    Attributes:
+        module: 页面声明的业务模块，执行前由 API 校正。
+        post_id: 页面关联文章的标识，读取实际文章仍需业务层查询。
+        content_markdown: 编辑器当前文本，可能尚未保存。
+        selected_text: 用户选中的文本片段，供模型理解当前编辑目标。
+        selected_node: 影音画布选中节点的页面快照。
+        current_post: 当前文章的页面快照，不替代数据库记录。
+        available_tools: 页面传入的工具说明，不赋予模型调用权限。
+        write_policy: 页面提供的写入提示，不能覆盖服务端授权与确认规则。
+    """
 
     module: str | None = None
     route: str | None = None
@@ -69,7 +83,15 @@ class AiChatRunCreated(BaseModel):
 
 
 class AiChatRunSnapshot(BaseModel):
-    """完整文本快照；SSE 根据内容及修订序号判断追加输出或替换旧内容。"""
+    """完整文本快照；SSE 根据内容及修订序号判断追加输出或替换旧内容。
+
+    Attributes:
+        id: 后台任务标识。
+        status: 任务执行状态，终态也可能没有新增文本。
+        content: 当前累计文本；恢复任务时可能重置，不能始终假定只增不减。
+        sequence: 内容提交修订号，不是 token 数或 SSE 事件总数。
+        error: 失败时展示的错误说明，正常情况下为 None。
+    """
 
     id: UUID
     status: AiChatRunStatus

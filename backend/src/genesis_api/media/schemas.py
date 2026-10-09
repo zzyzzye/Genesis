@@ -25,7 +25,20 @@ class GenerationSettings(BaseModel):
 
 
 class CanvasNode(BaseModel):
-    """画布节点结构；asset_id 只引用素材，member_ids 仅适用于分组。"""
+    """画布节点结构，字段范围由 Pydantic 校验，节点关系由保存路由校验。
+
+    Attributes:
+        id: 节点标识，与素材标识分开；同一画布中不能重复。
+        type: 节点种类，决定素材匹配与分组等额外约束。
+        asset_id: 可选素材引用，不包含素材文件内容。
+        member_ids: 分组成员的节点标识，不是素材标识。
+        duration_seconds: 视频节点保存的时长参数，单位为秒。
+        generation: 随画布保存的生成设置，保存节点不会启动生成任务。
+        x: 画布坐标中的水平位置，不是浏览器屏幕坐标。
+        y: 画布坐标中的垂直位置，不随视口缩放改写。
+        width: 节点在画布坐标中的宽度。
+        height: 节点在画布坐标中的高度。
+    """
 
     id: UUID
     type: Literal["asset", "note", "text", "shape", "group", "video", "image", "audio"]

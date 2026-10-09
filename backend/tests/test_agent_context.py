@@ -1,3 +1,5 @@
+"""验证博客上下文区分数据库记录、页面摘要与未保存草稿。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -13,6 +15,16 @@ from genesis_api.blog.models import BlogPostStatus
 
 
 def make_post(*, title: str, status: BlogPostStatus, content: str) -> SimpleNamespace:
+    """构造上下文组装需要的文章属性，不创建 ORM 实体或写入数据库。
+
+    Args:
+        title: 用来辨认不同文章来源的标题。
+        status: 草稿或发布状态，用于验证上下文权限边界。
+        content: 正文，测试据此判断上下文是否泄露或错误替换文章内容。
+
+    Returns:
+        具有分类、标签和更新时间的轻量文章替身。
+    """
     return SimpleNamespace(
         id=uuid4(),
         title=title,

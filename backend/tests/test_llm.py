@@ -1,3 +1,5 @@
+"""通过模拟 HTTP 响应验证模型目录、协议路径与框架能力补充。"""
+
 from __future__ import annotations
 
 import httpx

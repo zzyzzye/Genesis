@@ -1,3 +1,5 @@
+"""验证博客公开查询、后台写入、分类标签与共享账号权限。"""
+
 from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
 
@@ -23,6 +25,11 @@ from genesis_api.main import app
 
 @pytest.fixture
 def database_engine() -> Generator[Engine, None, None]:
+    """创建并在测试后销毁内存数据库，连接池保证不同会话共享同一组表。
+
+    Yields:
+        已注册所有实体并建表的测试引擎。
+    """
     engine = create_engine(
         "sqlite+pysqlite://",
         connect_args={"check_same_thread": False},
@@ -36,13 +43,30 @@ def database_engine() -> Generator[Engine, None, None]:
 
 @pytest.fixture
 def database_session(database_engine: Engine) -> Generator[Session, None, None]:
+    """提供提交后仍可读取实体字段的测试会话。
+
+    Args:
+        database_engine: 当前测试独立的内存数据库引擎。
+
+    Yields:
+        由上下文管理器在测试结束后关闭的会话。
+    """
     with Session(database_engine, expire_on_commit=False) as session:
         yield session
 
 
 @pytest.fixture
 async def client(database_session: Session) -> AsyncGenerator[AsyncClient, None]:
+    """用 ASGI 客户端请求应用，并将数据库依赖替换为当前测试会话。
+
+    Args:
+        database_session: fixture 创建的测试会话。
+
+    Yields:
+        不监听网络端口的 HTTP 客户端；正常结束时清理应用依赖覆盖。
+    """
     def override_get_session() -> Generator[Session, None, None]:
+        """复用 fixture 会话，关闭动作由外层 fixture 负责。"""
         yield database_session
 
     app.dependency_overrides[get_session] = override_get_session
@@ -52,6 +76,11 @@ async def client(database_session: Session) -> AsyncGenerator[AsyncClient, None]
 
 
 def add_blog_content(session: Session) -> None:
+    """提交两篇已发布文章与一篇草稿，用于验证公开边界和标签筛选。
+
+    Args:
+        session: 测试会话，调用后数据已提交。
+    """
     author = User(
         handle="genesis",
         display_name="Genesis",
@@ -101,6 +130,15 @@ def add_blog_content(session: Session) -> None:
 
 
 async def authenticate_owner(client: AsyncClient, session: Session) -> str:
+    """准备所有者测试账号并通过真实登录接口取得访问令牌。
+
+    Args:
+        client: 指向测试应用的 ASGI 客户端。
+        session: 准备账号和凭据使用的测试会话。
+
+    Returns:
+        测试登录返回的访问令牌，仅供当前测试构造认证请求。
+    """
     owner = session.scalar(select(User).where(User.handle == "genesis"))
     assert owner is not None
     owner.credential = UserCredential(password_hash=hash_password("correct-horse-battery-staple"))

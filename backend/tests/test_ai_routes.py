@@ -1,3 +1,5 @@
+"""验证 AI 请求身份注入、任务接口与签名提议确认的权限边界。"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
@@ -30,6 +32,7 @@ from genesis_api.identity.models import User, UserRole
 
 
 def session_factory() -> sessionmaker[Session]:
+    """创建共享内存连接的测试会话工厂，供路由与后台持久化使用。"""
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -45,6 +48,17 @@ def proposal_token(
     action: str,
     payload: object,
 ) -> str:
+    """签发测试提议，方便单独覆盖确认接口而不调用真实模型。
+
+    Args:
+        settings: 测试签名配置，与确认接口使用的配置保持一致。
+        actor_id: 提议所属测试用户。
+        action: 待确认的业务操作名。
+        payload: 测试载荷，允许传入无效结构以覆盖拒绝路径。
+
+    Returns:
+        十分钟内有效的测试签名令牌。
+    """
     return encode(
         {
             "actor_id": str(actor_id),

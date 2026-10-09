@@ -1,3 +1,5 @@
+"""验证业务能力注册、模块入口兼容与未知模块的拒绝行为。"""
+
 import pytest
 
 from genesis_api.agent.capabilities import AgentCapabilityRegistry

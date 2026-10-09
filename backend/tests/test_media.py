@@ -1,3 +1,5 @@
+"""验证影音素材生命周期、画布关联校验与跨账户访问隔离。"""
+
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from uuid import uuid4
@@ -21,6 +23,15 @@ from genesis_api.media import service
 async def media_client(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> AsyncGenerator[AsyncClient, None]:
+    """隔离素材目录、数据库与登录身份后提供影音路由测试客户端。
+
+    Args:
+        tmp_path: pytest 管理的临时目录，替代实际素材存储。
+        monkeypatch: 临时替换存储路径，并在测试结束后恢复。
+
+    Yields:
+        直接调用 ASGI 应用的客户端，使用固定普通用户身份，不覆盖登录流程。
+    """
     monkeypatch.setattr(service, "STORAGE_ROOT", tmp_path)
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool

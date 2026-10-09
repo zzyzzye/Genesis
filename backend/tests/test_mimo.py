@@ -1,3 +1,5 @@
+"""验证 MiMo 思考内容的保留、模型发现回退与兼容聊天接口。"""
+
 import json
 
 import httpx

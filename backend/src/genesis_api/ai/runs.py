@@ -26,7 +26,15 @@ class ChatStreamer(Protocol):
     """后台管理器依赖的最小流式服务协议，便于注入实现与测试替身。"""
 
     def stream(self, request: AiChatRequest, *, thread_id: str) -> AsyncIterator[str]:
-        """按任务线程执行请求，返回逐段产出模型文本的异步迭代器。"""
+        """提供后台管理器所需的流式调用接口。
+
+        Args:
+            request: 已完成身份注入的对话请求。
+            thread_id: 本次执行对应的 checkpoint 线程标识。
+
+        Returns:
+            逐段产出文本的异步迭代器；调用本身不要求等待整个回答完成。
+        """
         ...
 
 
@@ -34,7 +42,15 @@ ChatServiceFactory = Callable[[Settings], ChatStreamer]
 
 
 def _configured_model(settings: Settings, provider: str) -> str | None:
-    """读取供应商的默认模型；provider 应已通过请求或配置的字面量校验。"""
+    """读取供应商的默认模型。
+
+    Args:
+        settings: 应用配置，允许某些供应商未设置默认模型。
+        provider: 已通过请求或配置字面量校验的供应商名称；此处不做合法性校验。
+
+    Returns:
+        默认模型名称或 None；末尾分支处理 claude，不是未知供应商的容错策略。
+    """
     if provider == "openai":
         return settings.text_openai_model
     if provider == "grok":
@@ -229,6 +245,7 @@ class AiChatRunManager:
         if semaphore is None:
             raise RuntimeError("AI 运行管理器尚未初始化")
         async with semaphore:
+            # 状态在获得执行名额后才改为 running，排队期间仍保持 pending。
             await self._persist(run_id, status=AiChatRunStatus.RUNNING)
             pending = ""
             last_flush = asyncio.get_running_loop().time()
@@ -237,6 +254,7 @@ class AiChatRunManager:
                 try:
                     token_stream = streamer.stream(request, thread_id=str(run_id))
                 except TypeError as exc:
+                    # 兼容旧流式实现的签名；其他 TypeError 必须交给正常错误处理。
                     if "thread_id" not in str(exc):
                         raise
                     token_stream = cast(Any, streamer).stream(request)
@@ -257,7 +275,8 @@ class AiChatRunManager:
                     status=AiChatRunStatus.COMPLETED,
                 )
             except asyncio.CancelledError:
-                # 保留 running 状态和 checkpoint，由下次启动恢复。
+                # 未提交的 pending 文本不会在此补写；恢复依靠 checkpoint 而非内存缓冲。
+                # 保留 running 状态，由下次启动恢复；用户取消则由 cancel 写入失败终态。
                 raise
             except RuntimeError as exc:
                 await self._persist(

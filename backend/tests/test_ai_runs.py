@@ -1,3 +1,5 @@
+"""验证后台任务持久化、重启恢复、用户取消与 SSE 快照重放。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -28,16 +30,28 @@ from genesis_api.identity.models import User, UserRole
 
 
 class FakeChatService:
+    """用两个文本片段模拟模型流，供测试观察中间与完成快照。"""
+
     def __init__(self, _: Settings) -> None:
+        """保留生产工厂的配置入参，不创建模型客户端。"""
         pass
 
     async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
+        """分两次产出固定文本，中间让出事件循环以触发异步持久化。"""
         yield "断点"
         await asyncio.sleep(0.01)
         yield "续传"
 
 
 def build_session_factory() -> sessionmaker[Session]:
+    """创建跨工作线程共享的内存数据库会话工厂。
+
+    StaticPool 让多个会话访问同一个内存库；关闭线程检查是为了覆盖
+    asyncio.to_thread 中的持久化路径，不代表生产数据库采用相同连接策略。
+
+    Returns:
+        已建表且提交后不使实体失效的 SQLite 会话工厂。
+    """
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},

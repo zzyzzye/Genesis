@@ -1,3 +1,5 @@
+"""验证公共健康检查和工具箱业务模块的接口名称。"""
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
