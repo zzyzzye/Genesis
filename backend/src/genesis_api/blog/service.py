@@ -1,3 +1,5 @@
+"""博客查询与写入规则；调用方负责授权以及事务提交、失败回滚。"""
+
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -15,13 +17,16 @@ def list_published_posts(
     offset: int,
     tag_slug: str | None,
 ) -> tuple[list[BlogPost], int]:
+    """按标签筛选公开文章，返回当前页及总数；精选文章优先，其后按发布时间。"""
     statement = select(BlogPost).where(BlogPost.status == BlogPostStatus.PUBLISHED)
     if tag_slug:
         statement = statement.join(BlogPost.tags).where(BlogTag.slug == tag_slug)
 
+    # 计数和分页共用过滤条件，计数不应用 limit/offset。
     total = session.scalar(select(func.count()).select_from(statement.subquery())) or 0
     posts = list(
         session.scalars(
+            # 批量加载响应中的关联数据，避免逐篇访问作者、分类和标签触发查询。
             statement.options(
                 selectinload(BlogPost.author),
                 selectinload(BlogPost.category),
@@ -36,6 +41,7 @@ def list_published_posts(
 
 
 def get_published_post(session: Session, slug: str) -> BlogPost | None:
+    """按公开地址读取已发布文章；对应文章为草稿或不存在时返回 None。"""
     statement = (
         select(BlogPost)
         .where(
@@ -52,6 +58,7 @@ def get_published_post(session: Session, slug: str) -> BlogPost | None:
 
 
 def list_admin_posts(session: Session) -> list[BlogPost]:
+    """返回所有状态的文章，最近编辑的优先；调用方必须先检查后台权限。"""
     statement = (
         select(BlogPost)
         .options(
@@ -67,6 +74,10 @@ def list_admin_posts(session: Session) -> list[BlogPost]:
 def get_blog_post_by_id(
     session: Session, post_id: UUID, *, for_update: bool = False
 ) -> BlogPost | None:
+    """按内部 ID 读取任意状态文章，不在此函数内执行权限校验。
+
+    写入流程可指定 for_update 锁定文章行；锁随调用方事务提交或回滚释放。
+    """
     statement = (
         select(BlogPost)
         .where(BlogPost.id == post_id)
@@ -82,6 +93,11 @@ def get_blog_post_by_id(
 
 
 def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> None:
+    """将已校验的完整数据应用到文章及标签，不提交事务。
+
+    分类解析失败等异常可能发生在赋值之后，调用方须回滚整个事务。
+    本函数不比较 expected_updated_at，并发版本检查由后台路由负责。
+    """
     post.slug = data.slug
     post.title = data.title
     post.excerpt = data.excerpt
@@ -95,6 +111,7 @@ def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> No
     post.read_time_minutes = data.read_time_minutes
     post.tags = resolve_tags(session, data.tags)
 
+    # 首次发布补上时间，后续编辑保留原时间；转为草稿时清除公开发布时间。
     if data.status is BlogPostStatus.PUBLISHED:
         post.published_at = data.published_at or post.published_at or datetime.now(UTC)
     else:
@@ -111,6 +128,7 @@ def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> No
 
 
 def resolve_tags(session: Session, tag_inputs: list[BlogTagWrite]) -> list[BlogTag]:
+    """按 slug 复用或新建共享标签，按输入顺序返回；不提交事务。"""
     if not tag_inputs:
         return []
 
@@ -126,6 +144,7 @@ def resolve_tags(session: Session, tag_inputs: list[BlogTagWrite]) -> list[BlogT
             tag = BlogTag(name=tag_input.name, slug=tag_input.slug)
             session.add(tag)
         else:
+            # 标签是共享记录，改名会影响所有关联文章，而非只改当前文章的显示。
             tag.name = tag_input.name
         resolved_tags.append(tag)
 
@@ -133,8 +152,10 @@ def resolve_tags(session: Session, tag_inputs: list[BlogTagWrite]) -> list[BlogT
 
 
 def list_admin_tags(session: Session) -> list[BlogTag]:
+    """按名称返回全部共享标签，包含当前未被文章使用的标签。"""
     return list(session.scalars(select(BlogTag).order_by(BlogTag.name.asc())))
 
 
 def list_admin_categories(session: Session) -> list[BlogCategory]:
+    """按名称返回全部分类，供后台管理与文章设置选择。"""
     return list(session.scalars(select(BlogCategory).order_by(BlogCategory.name.asc())))
