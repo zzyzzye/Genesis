@@ -1,3 +1,5 @@
+"""开发示例数据初始化入口，不在应用启动时隐式重置已有内容。"""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -10,7 +12,11 @@ from genesis_api.identity.passwords import hash_password
 
 
 def seed_database() -> None:
-    """为开发环境写入幂等的示例内容，方便前端完成真实联调。"""
+    """初始化示例所有者、凭据和文章，并提交事务。
+
+    已有所有者不覆盖资料；缺少凭据时补建。检测到标志文章后不重复写入文章。
+    此函数自身不校验部署环境，调用方应确保仅在需要示例数据的环境执行。
+    """
     settings = get_settings()
     with SessionLocal() as session:
         owner = session.scalar(select(User).where(User.handle == "genesis"))

@@ -23,7 +23,10 @@ SessionFactory = Callable[[], Session]
 
 
 class ChatStreamer(Protocol):
+    """后台管理器依赖的最小流式服务协议，便于注入实现与测试替身。"""
+
     def stream(self, request: AiChatRequest, *, thread_id: str) -> AsyncIterator[str]:
+        """按任务线程执行请求，返回逐段产出模型文本的异步迭代器。"""
         ...
 
 
@@ -31,6 +34,7 @@ ChatServiceFactory = Callable[[Settings], ChatStreamer]
 
 
 def _configured_model(settings: Settings, provider: str) -> str | None:
+    """读取供应商的默认模型；provider 应已通过请求或配置的字面量校验。"""
     if provider == "openai":
         return settings.text_openai_model
     if provider == "grok":
@@ -49,7 +53,17 @@ def create_ai_chat_run(
     request: AiChatRequest,
     settings: Settings,
 ) -> AiChatRunCreated:
-    """先提交任务记录，再由调用方启动生成，确保返回的任务 ID 可被查询。"""
+    """先提交任务记录，再由调用方启动生成。
+
+    Args:
+        session: 创建记录的数据库会话，此处提交并刷新实体。
+        user_id: 任务所属用户，查询快照时用于隔离访问。
+        request: 已注入可信身份的请求，包含恢复所需消息与模型选项。
+        settings: 未指定供应商或模型时使用的默认配置。
+
+    Returns:
+        已持久化的任务 ID 与初始状态，不负责启动后台协程。
+    """
     provider = request.provider or settings.text_provider
     run = AiChatRun(
         user_id=user_id,
@@ -71,6 +85,16 @@ def get_ai_chat_run_snapshot(
     run_id: UUID,
     user_id: UUID,
 ) -> AiChatRunSnapshot | None:
+    """按用户与任务 ID 读取输出快照，不返回内部请求载荷。
+
+    Args:
+        session: 查询使用的数据库会话。
+        run_id: 目标任务 UUID。
+        user_id: 服务端认证的用户 UUID。
+
+    Returns:
+        任务文本、状态与修订序号；不存在或不属于该用户时返回 None。
+    """
     # 同时按任务和用户筛选，不能仅凭客户端提供的 run_id 读取其他用户输出。
     run = session.scalar(
         select(AiChatRun).where(AiChatRun.id == run_id, AiChatRun.user_id == user_id)
@@ -97,6 +121,14 @@ class AiChatRunManager:
         flush_interval: float = 0.08,
         flush_size: int = 160,
     ) -> None:
+        """配置后台服务与快照批量写入策略，不在构造时启动任务。
+
+        Args:
+            session_factory: 每次持久化使用的独立数据库会话工厂。
+            chat_service_factory: 流式服务工厂；None 时构建 AgentService。
+            flush_interval: 待写文本达到该时间间隔时提交，单位为秒。
+            flush_size: 待写文本达到该字符数时提交，不是模型 token 数。
+        """
         self._session_factory = session_factory
         self._chat_service_factory = chat_service_factory or (
             lambda settings: AgentService(settings)
@@ -108,7 +140,13 @@ class AiChatRunManager:
         self._max_concurrent_runs: int | None = None
 
     def start(self, run_id: UUID, request: AiChatRequest, settings: Settings) -> None:
-        """避免本进程重复启动同一任务，并按配置限制同时执行的生成数量。"""
+        """在当前进程启动任务，同一任务的重复调用直接返回。
+
+        Args:
+            run_id: 调用方已经持久化的任务 ID，也作为实际执行的线程标识。
+            request: 已准备好的消息、身份和恢复标记。
+            settings: 服务配置，其中并发上限用于构建执行信号量。
+        """
         if run_id in self._tasks:
             return
         if (
@@ -134,7 +172,11 @@ class AiChatRunManager:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def cancel(self, run_id: UUID) -> None:
-        """停止用户主动取消的任务，并将其标记为终态，避免服务重启后恢复。"""
+        """停止用户主动取消的任务，并标记为终态以阻止重启恢复。
+
+        Args:
+            run_id: 已由 API 检查归属的任务 ID；此方法不重复做权限查询。
+        """
         task = self._tasks.get(run_id)
         if task is not None and not task.done():
             task.cancel()
@@ -142,6 +184,7 @@ class AiChatRunManager:
         await asyncio.to_thread(self._cancel_sync, run_id)
 
     def _cancel_sync(self, run_id: UUID) -> None:
+        """在独立会话中将未完成任务标记为失败，保留已生成内容。"""
         with self._session_factory() as session:
             run = session.get(AiChatRun, run_id)
             if run is None or run.status not in (
@@ -155,7 +198,11 @@ class AiChatRunManager:
             session.commit()
 
     async def recover_interrupted_runs(self, settings: Settings) -> None:
-        """应用初始化 checkpoint 后调用，恢复数据库中尚未进入终态的任务。"""
+        """恢复未完成任务，应在应用初始化 checkpoint 后调用。
+
+        Args:
+            settings: 重启后的应用配置，用于重新构建流式服务。
+        """
         recovered = await asyncio.to_thread(self._recover_interrupted_runs_sync)
         for run_id, request in recovered:
             self.start(run_id, request, settings)
@@ -166,6 +213,18 @@ class AiChatRunManager:
         request: AiChatRequest,
         settings: Settings,
     ) -> None:
+        """受并发上限约束执行模型流，并按批次保存结果。
+
+        Args:
+            run_id: 已持久化的任务 ID。
+            request: 本次执行的可信请求，恢复任务含 checkpoint 恢复标记。
+            settings: 流式服务使用的应用配置。
+
+        Raises:
+            RuntimeError: 管理器尚未初始化执行信号量。
+            CancelledError: 服务关闭或用户停止时取消执行；取消本身不写失败终态。
+                用户主动停止的终态由 cancel 单独保存，其他生成异常记录为失败。
+        """
         semaphore = self._semaphore
         if semaphore is None:
             raise RuntimeError("AI 运行管理器尚未初始化")
@@ -227,6 +286,14 @@ class AiChatRunManager:
         status: AiChatRunStatus | None = None,
         error: str | None = None,
     ) -> None:
+        """将快照写入交给工作线程，避免同步数据库提交阻塞事件循环。
+
+        Args:
+            run_id: 待更新任务 ID。
+            append_content: 追加文本；空值不递增内容序号。
+            status: 新状态；None 表示保留现有状态。
+            error: 要保存的错误文本；None 表示不修改错误字段。
+        """
         await asyncio.to_thread(
             self._persist_sync,
             run_id,
@@ -242,6 +309,14 @@ class AiChatRunManager:
         status: AiChatRunStatus | None,
         error: str | None,
     ) -> None:
+        """在独立事务中追加文本并更新状态，任务已不存在时直接返回。
+
+        Args:
+            run_id: 待更新任务 ID。
+            append_content: 追加文本，非空时内容修订序号增加一次。
+            status: 可选新状态；进入完成或失败状态时记录结束时间。
+            error: 可选错误文本；None 不清除已有错误。
+        """
         with self._session_factory() as session:
             run = session.get(AiChatRun, run_id)
             if run is None:
@@ -259,6 +334,14 @@ class AiChatRunManager:
             session.commit()
 
     def _recover_interrupted_runs_sync(self) -> list[tuple[UUID, AiChatRequest]]:
+        """准备未完成任务的恢复请求，并重置可重放的展示快照。
+
+        请求无法还原的旧任务会标记为失败；有效任务清空文本并增加序号，
+        后续由 LangGraph checkpoint 恢复执行，不继续拼接旧文本快照。
+
+        Returns:
+            任务 ID 与附带恢复标记的请求列表，数据库修改已提交。
+        """
         recovered: list[tuple[UUID, AiChatRequest]] = []
         with self._session_factory() as session:
             runs = session.scalars(
@@ -288,7 +371,14 @@ class AiChatRunManager:
 
 
 def _request_payload(request: AiChatRequest) -> dict[str, object]:
-    """显式保存 API 注入的身份，供后台恢复；普通请求序列化会排除这些字段。"""
+    """序列化恢复请求，并显式补入普通序列化排除的身份字段。
+
+    Args:
+        request: 已由 API 准备的请求，不包含需要持久化的上游 API Key。
+
+    Returns:
+        JSON 兼容的请求字典，保留消息、模型选项与可信调用身份。
+    """
     payload = request.model_dump(mode="json")
     payload["actor_id"] = str(request.actor_id) if request.actor_id else None
     payload["actor_role"] = request.actor_role
@@ -296,6 +386,17 @@ def _request_payload(request: AiChatRequest) -> dict[str, object]:
 
 
 def _request_from_payload(payload: dict[str, object]) -> AiChatRequest:
+    """从数据库载荷还原恢复请求，继续使用 Pydantic 校验契约。
+
+    Args:
+        payload: 服务端此前持久化的请求，不是客户端重新提交的身份声明。
+
+    Returns:
+        校验通过的对话请求，恢复标记由任务管理器另行设置。
+
+    Raises:
+        ValueError: 载荷为空或不符合请求契约，包含 Pydantic ValidationError。
+    """
     if not payload:
         raise ValueError("empty request payload")
     return AiChatRequest.model_validate(payload)

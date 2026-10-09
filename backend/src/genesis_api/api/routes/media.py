@@ -30,6 +30,18 @@ def copy_assets(
     user: CurrentUserDependency,
     session: SessionDependency,
 ) -> None:
+    """在当前用户的两个作品间复制素材引用，不复制底层文件。
+
+    Args:
+        project_id: 素材当前所属的源作品 UUID。
+        target_id: 同一用户的目标作品 UUID。
+        data: 待引用素材 ID 列表，内部去重后处理。
+        user: 已认证用户，源与目标作品都按该身份校验归属。
+        session: 当前事务会话，按稳定顺序锁定作品后提交引用。
+
+    Raises:
+        HTTPException: 作品或素材不属于用户返回 404；源引用已移除返回 409。
+    """
     for item in sorted({project_id, target_id}):
         # 源和目标作品采用相同锁定顺序，并都必须属于当前用户。
         service.project_for(session, user.id, item)
@@ -44,6 +56,7 @@ def copy_assets(
 
 @router.get("/health")
 def media_health() -> dict[str, str]:
+    """返回影音模块存活标识，不检测素材存储或生成服务。"""
     return {"status": "ok", "system": "media"}
 
 
@@ -51,6 +64,16 @@ def media_health() -> dict[str, str]:
 def projects(
     user: CurrentUserDependency, session: SessionDependency, q: str = ""
 ) -> list[dict[str, object]]:
+    """按名称筛选当前用户的作品，按最近更新时间倒序返回。
+
+    Args:
+        user: 已认证用户，查询仅包含其作品。
+        session: 当前请求会话。
+        q: 名称查询片段，SQL 通配字符按普通文字处理。
+
+    Returns:
+        全部匹配作品的摘要，不包含画布文档，此接口不分页。
+    """
     rows = session.scalars(
         select(MediaProject)
         .where(
@@ -66,6 +89,16 @@ def projects(
 def create_project(
     data: ProjectWrite, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
+    """为当前用户创建带空画布的作品并提交。
+
+    Args:
+        data: 已规范化并校验的作品名称。
+        user: 已认证用户，作为作品所有者。
+        session: 当前请求会话。
+
+    Returns:
+        新作品摘要，包含初始画布版本。
+    """
     project = MediaProject(
         owner_id=user.id, name=data.name, canvas=CanvasDocument().model_dump(mode="json")
     )
@@ -78,6 +111,7 @@ def create_project(
 def get_project(
     project_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
+    """返回当前用户的作品摘要，不存在或归属不符时返回 404。"""
     return service.project_data(service.project_for(session, user.id, project_id))
 
 
@@ -85,6 +119,20 @@ def get_project(
 def rename_project(
     project_id: UUID, data: ProjectWrite, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
+    """锁定当前用户的作品并改名，不修改画布保存版本。
+
+    Args:
+        project_id: 待改名作品 UUID。
+        data: 已校验的新名称。
+        user: 已认证用户。
+        session: 当前事务会话，此处提交名称与更新时间。
+
+    Returns:
+        更新后的作品摘要。
+
+    Raises:
+        HTTPException: 作品不存在或不属于用户，返回 404。
+    """
     project = service.project_for(session, user.id, project_id)
     project.name = data.name
     project.updated_at = datetime.now(UTC)
@@ -96,6 +144,17 @@ def rename_project(
 def delete_project(
     project_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> None:
+    """删除作品及素材引用，提交后清理失去全部引用的临时素材文件。
+
+    Args:
+        project_id: 待删除作品 UUID。
+        user: 已认证用户，删除前检查作品归属。
+        session: 当前事务会话，数据库提交先于文件删除。
+
+    Raises:
+        HTTPException: 作品不存在或不属于用户，返回 404。
+        OSError: 数据库已提交后的文件清理失败，不会自动回滚作品删除。
+    """
     project = service.project_for(session, user.id, project_id)
     ids = list(
         session.scalars(select(ProjectAsset.asset_id).where(ProjectAsset.project_id == project.id))
@@ -113,6 +172,7 @@ def delete_project(
 def canvas(
     project_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
+    """返回作品完整画布与版本；归属检查失败时返回 404。"""
     project = service.project_for(session, user.id, project_id)
     return {"version": project.version, "document": project.canvas}
 
@@ -121,6 +181,21 @@ def canvas(
 def save_canvas(
     project_id: UUID, data: CanvasWrite, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
+    """锁定作品并按客户端版本保存完整画布，检查节点与素材引用关系。
+
+    Args:
+        project_id: 待保存作品 UUID。
+        data: 客户端读取的版本与完整画布文档，不是增量补丁。
+        user: 已认证用户，作为作品归属检查依据。
+        session: 当前事务会话，锁覆盖版本比较、关系校验与提交。
+
+    Returns:
+        保存后的画布文档与递增版本。
+
+    Raises:
+        HTTPException: 归属不符返回 404，客户端版本过期返回 409，
+            节点、连线、分组或素材引用关系无效返回 422。
+    """
     project = service.project_for(session, user.id, project_id)
     if project.version != data.version:
         # 行锁保证版本检查与保存处于同一事务；客户端须先核对最新版本再重试。
@@ -182,6 +257,23 @@ def assets(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 24,
 ) -> dict[str, object]:
+    """分页查询当前用户的作品素材或账户素材库。
+
+    Args:
+        user: 已认证用户，所有查询均限制素材归属。
+        session: 当前请求会话。
+        project_id: 有值时只查询该作品引用；None 时只查询账户库保留项。
+        q: 素材名称查询片段，按普通文字处理 SQL 通配字符。
+        kind: 可选图片、视频或音频筛选。
+        page: 从一开始的页码。
+        page_size: 每页数量，接口限制不超过一百。
+
+    Returns:
+        当前页素材展示数据及筛选后的总数。
+
+    Raises:
+        HTTPException: 指定作品不存在或不属于用户，返回 404。
+    """
     statement = select(MediaAsset).where(
         MediaAsset.owner_id == user.id, MediaAsset.name.contains(q, autoescape=True)
     )
@@ -209,6 +301,22 @@ def upload_asset(
     session: SessionDependency,
     project_id: UUID | None = None,
 ) -> dict[str, object]:
+    """分块保存上传文件及素材记录，失败时回滚并清理本次文件。
+
+    Args:
+        file: 上传文件，按声明的 MIME 类型白名单检查，不进行内容转码。
+        user: 已认证用户，作为素材所有者。
+        session: 当前事务会话，文件写入后保存记录并提交。
+        project_id: 指定时建立作品引用；None 时直接保留在账户素材库。
+
+    Returns:
+        素材展示信息，不包含服务器文件路径。
+
+    Raises:
+        HTTPException: 作品归属不符返回 404，类型不支持返回 415，
+            大小超过限制返回 413，文件为空返回 422。
+        OSError: 文件创建、写入或失败清理发生错误。
+    """
     if project_id:
         service.project_for(session, user.id, project_id)
     mime = (file.content_type or "").split(";")[0]
@@ -255,6 +363,7 @@ def upload_asset(
 def get_asset(
     asset_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
+    """读取当前用户的素材元数据，不存在或归属不符时返回 404。"""
     return service.asset_data(service.asset_for(session, user.id, asset_id))
 
 
@@ -262,6 +371,19 @@ def get_asset(
 def asset_file(
     asset_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> FileResponse:
+    """返回当前用户的素材文件，禁止共享缓存并关闭 MIME 嗅探。
+
+    Args:
+        asset_id: 素材 UUID，文件路径仅按服务端标识构建。
+        user: 已认证用户。
+        session: 当前请求会话，用于素材归属查询。
+
+    Returns:
+        使用展示名称及已存 MIME 类型的文件响应。
+
+    Raises:
+        HTTPException: 素材不属于用户、记录不存在或文件缺失，返回 404。
+    """
     asset = service.asset_for(session, user.id, asset_id)
     path = service.STORAGE_ROOT / str(asset.id)
     if not path.is_file():
@@ -278,6 +400,7 @@ def asset_file(
 def promote_asset(
     asset_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
+    """将当前用户的素材保留到账户素材库，不复制文件或删除作品引用。"""
     asset = service.asset_for(session, user.id, asset_id)
     asset.in_library = True
     session.commit()
@@ -288,6 +411,20 @@ def promote_asset(
 def reference_asset(
     project_id: UUID, data: AssetReference, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
+    """将账户库素材引用到当前用户的作品，已有引用不重复创建。
+
+    Args:
+        project_id: 目标作品 UUID。
+        data: 待引用素材 UUID。
+        user: 已认证用户，作品和素材都需属于该用户。
+        session: 当前事务会话，此处提交引用记录。
+
+    Returns:
+        被引用素材的展示数据。
+
+    Raises:
+        HTTPException: 归属不符或素材不在账户库且尚未关联该作品，返回 404。
+    """
     service.project_for(session, user.id, project_id)
     asset = service.asset_for(session, user.id, data.asset_id)
     if not asset.in_library and session.get(ProjectAsset, (project_id, asset.id)) is None:
@@ -302,6 +439,21 @@ def reference_asset(
 def remove_reference(
     project_id: UUID, asset_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
+    """移除作品素材引用，并清理引用它的节点、连线及不足两项的分组。
+
+    Args:
+        project_id: 当前用户的作品 UUID。
+        asset_id: 待移除引用的素材 UUID。
+        user: 已认证用户，作品与素材均按该身份检查。
+        session: 当前事务会话，保存画布后提交，再删除已成为孤立项的文件。
+
+    Returns:
+        清理后的完整画布及递增版本，其他作品和账户库中的素材保留。
+
+    Raises:
+        HTTPException: 作品或素材不存在或归属不符，返回 404。
+        OSError: 数据库提交后清理孤立文件失败。
+    """
     project = service.project_for(session, user.id, project_id)
     service.asset_for(session, user.id, asset_id)
     session.execute(
@@ -334,6 +486,17 @@ def remove_reference(
 
 @router.delete("/assets/{asset_id}", status_code=204)
 def delete_asset(asset_id: UUID, user: CurrentUserDependency, session: SessionDependency) -> None:
+    """删除没有作品引用的素材记录，再清理文件。
+
+    Args:
+        asset_id: 待删除素材 UUID。
+        user: 已认证用户，删除前检查素材归属。
+        session: 当前事务会话，记录删除先于文件清理提交。
+
+    Raises:
+        HTTPException: 素材归属不符返回 404，仍被作品引用返回 409。
+        OSError: 数据库提交后的文件清理失败。
+    """
     asset = service.asset_for(session, user.id, asset_id)
     referenced = session.scalars(
         select(MediaProject).join(ProjectAsset).where(ProjectAsset.asset_id == asset_id)

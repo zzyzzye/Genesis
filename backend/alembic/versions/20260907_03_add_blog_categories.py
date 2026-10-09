@@ -1,4 +1,4 @@
-"""add blog categories
+"""增加博客分类与文章的可选分类关联。
 
 Revision ID: 20260907_03
 Revises: 20260903_02
@@ -17,6 +17,7 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """建立分类表并增加文章分类外键，删除分类时数据库将关联置空。"""
     op.create_table(
         "blog_categories",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -40,6 +41,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """先移除文章分类引用，再删除分类表，会丢弃分类及关联信息。"""
     op.drop_constraint(
         "fk_blog_posts_category_id_blog_categories", "blog_posts", type_="foreignkey"
     )

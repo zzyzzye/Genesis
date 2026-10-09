@@ -1,4 +1,4 @@
-"""add user credentials
+"""为共享用户增加独立的密码哈希与最后登录时间记录。
 
 Revision ID: 20260903_02
 Revises: 20260903_01
@@ -17,6 +17,7 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """建立与用户一对一的凭据表，删除用户时级联删除其凭据。"""
     op.create_table(
         "user_credentials",
         sa.Column("user_id", sa.Uuid(), nullable=False),
@@ -28,4 +29,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """删除凭据表，会丢弃已存密码哈希与登录时间。"""
     op.drop_table("user_credentials")

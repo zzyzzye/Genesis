@@ -1,3 +1,5 @@
+"""AI 请求、后台任务响应及快照的数据契约；身份字段仅供服务端使用。"""
+
 from __future__ import annotations
 
 from typing import Literal
@@ -14,6 +16,8 @@ MessageRole = Literal["user", "assistant"]
 
 
 class AiMessage(BaseModel):
+    """客户端对话历史中的用户或助手文本，不允许客户端提交系统角色。"""
+
     role: MessageRole
     content: str = Field(min_length=1)
 
@@ -58,6 +62,8 @@ class AiChatRequest(BaseModel):
 
 
 class AiChatRunCreated(BaseModel):
+    """任务创建回执，只返回 ID 与状态，不表示模型已完成回答。"""
+
     id: UUID
     status: AiChatRunStatus
 
@@ -73,4 +79,6 @@ class AiChatRunSnapshot(BaseModel):
 
 
 class AiError(BaseModel):
+    """AI 错误文本响应结构，不携带上游凭据或内部请求载荷。"""
+
     error: str

@@ -1,3 +1,5 @@
+"""模型上下文容量的展示回退表，不代表上游服务的实时额度或能力。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -38,4 +40,13 @@ MODEL_CONTEXT_WINDOWS: Mapping[ProviderName, Mapping[str, int]] = {
 
 
 def context_window_for(provider: ProviderName, model_id: str) -> int | None:
+    """查询已知模型的上下文容量，不根据模型名称猜测未知别名。
+
+    Args:
+        provider: 已校验的供应商标识。
+        model_id: 上游目录中的模型 ID。
+
+    Returns:
+        已知容量，单位为 token；未知模型返回 None，仅用于界面展示回退。
+    """
     return MODEL_CONTEXT_WINDOWS[provider].get(model_id)

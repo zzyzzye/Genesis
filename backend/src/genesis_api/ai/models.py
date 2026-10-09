@@ -1,3 +1,5 @@
+"""AI 后台任务及文本快照的持久化结构，与 LangGraph checkpoint 分工存储。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -20,7 +22,11 @@ class AiChatRunStatus(StrEnum):
 
 
 class AiChatRun(Base):
-    """与浏览器连接解耦的文本生成任务。"""
+    """与浏览器连接解耦的文本生成任务。
+
+    content 与 sequence 支撑浏览器重连；request_payload 支撑服务端恢复。
+    这些字段不替代 LangGraph 的执行 checkpoint；实际执行线程由运行时调用决定。
+    """
 
     __tablename__ = "ai_chat_runs"
 

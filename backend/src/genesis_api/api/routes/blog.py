@@ -20,6 +20,17 @@ def get_blog_posts(
     offset: Annotated[int, Query(ge=0)] = 0,
     tag: str | None = None,
 ) -> BlogPostListResponse:
+    """分页返回公开文章摘要，不要求登录。
+
+    Args:
+        session: 当前请求的数据库会话。
+        limit: 每页数量，FastAPI 校验为 1 至 50。
+        offset: 非负分页偏移。
+        tag: 可选标签 slug，空值表示全部标签。
+
+    Returns:
+        已发布文章的当前页与筛选后总数，不包含正文。
+    """
     posts, total = list_published_posts(
         session,
         limit=limit,
@@ -34,6 +45,18 @@ def get_blog_posts(
 
 @router.get("/posts/{slug}", response_model=BlogPostDetail)
 def get_blog_post(slug: str, session: SessionDependency) -> BlogPostDetail:
+    """按公开地址返回已发布文章详情，隐藏草稿是否存在。
+
+    Args:
+        slug: 公开文章的地址标识。
+        session: 当前请求的数据库会话。
+
+    Returns:
+        包含正文、作者、分类及标签的公开文章。
+
+    Raises:
+        HTTPException: 文章不存在或未发布，统一返回 404。
+    """
     post = get_published_post(session, slug)
     if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文章不存在或尚未发布")

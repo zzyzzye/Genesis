@@ -1,3 +1,5 @@
+"""Agent 写操作的提议与确认契约，签名载荷是执行依据。"""
+
 from __future__ import annotations
 
 from datetime import datetime

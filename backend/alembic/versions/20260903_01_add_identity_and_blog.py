@@ -1,4 +1,4 @@
-"""add identity and blog
+"""建立共享身份、博客文章、标签与文章标签关联表。
 
 Revision ID: 20260903_01
 Revises:
@@ -17,6 +17,7 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """按依赖顺序建表及索引，作者禁止级联删除，标签关联允许级联清理。"""
     op.create_table(
         "users",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -106,6 +107,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """先删除关联表，再删除文章、标签与用户表，会丢弃对应业务数据。"""
     op.drop_table("blog_post_tags")
     op.drop_index(op.f("ix_blog_posts_status"), table_name="blog_posts")
     op.drop_index(op.f("ix_blog_posts_slug"), table_name="blog_posts")

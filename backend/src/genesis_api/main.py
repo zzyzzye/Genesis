@@ -1,3 +1,5 @@
+"""FastAPI 应用装配入口，统一管理路由、中间件与 Agent 资源生命周期。"""
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -12,7 +14,14 @@ from genesis_api.core.config import get_settings
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """统一管理后台任务与 Agent 存储，按依赖顺序启动并反向关闭。"""
+    """按依赖顺序启动 checkpoint 与后台任务，并反向关闭资源。
+
+    Args:
+        _: FastAPI 传入的应用实例，此处无需读取实例属性。
+
+    Yields:
+        不产出业务值；应用在资源就绪后开始处理请求。
+    """
     settings = get_settings()
     await embedded_agent_runtime.startup(settings)
     # 先准备 checkpoint，再恢复任务，避免生成流程访问尚未初始化的运行时。
@@ -26,7 +35,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    """装配中间件与版本化路由，资源初始化由 lifespan 在应用启动时执行。"""
+    """装配中间件与版本化路由，资源连接交给 lifespan 初始化。
+
+    Returns:
+        配置完成的 FastAPI 应用，不启动额外服务器进程。
+    """
     settings = get_settings()
     app = FastAPI(
         title=settings.app_name,

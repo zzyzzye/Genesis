@@ -1,4 +1,4 @@
-"""Persist media projects, assets and canvas documents."""
+"""建立影音作品、画布文档、素材元数据及作品素材引用表。"""
 
 from collections.abc import Sequence
 
@@ -12,6 +12,7 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """建立影音存储表及归属索引，不创建或迁移素材文件。"""
     op.create_table(
         "media_projects",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -46,6 +47,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """按依赖顺序删除引用、素材与作品表，不删除文件系统中的素材。"""
     op.drop_table("media_project_assets")
     op.drop_table("media_assets")
     op.drop_table("media_projects")

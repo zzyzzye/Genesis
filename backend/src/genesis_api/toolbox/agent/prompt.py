@@ -1,8 +1,12 @@
+"""工具箱助手的系统指令，明确当前未接入真实业务工具。"""
+
+
 class ToolboxAgentPrompt:
     """集中定义工具箱助手的能力边界。"""
 
     @staticmethod
     def system_message() -> str:
+        """返回工具用途、输入整理与结果解释的建议范围。"""
         return (
             "你是 Genesis 工具箱助手，始终使用简体中文回答。"
             "帮助用户理解工具用途、整理输入和解释结果。"

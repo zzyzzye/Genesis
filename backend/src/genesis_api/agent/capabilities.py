@@ -1,3 +1,5 @@
+"""按业务模块装配 Agent 能力，集中分派用户确认后的业务操作。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -30,6 +32,7 @@ class AgentCapabilityRegistry:
     """
 
     def __init__(self) -> None:
+        """创建各模块的能力入口，不在此构建模型、工具或执行图。"""
         self._blog = BlogAgentCapability()
         self._media = MediaAgentCapability()
         self._toolbox = ToolboxAgentCapability()

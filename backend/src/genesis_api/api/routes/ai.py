@@ -46,7 +46,20 @@ def _prepare_request(
     current_user_role: UserRole,
     session: SessionDependency,
 ) -> AiChatRequest:
-    """覆盖客户端身份字段；博客后台额外从数据库补充文章上下文。"""
+    """覆盖客户端身份字段，为博客后台补充数据库参考上下文。
+
+    Args:
+        request: 客户端对话请求，页面数据仅是编辑参考。
+        current_user: 已认证的数据库用户，作为可信身份来源。
+        current_user_role: 调用方传入的当前角色，用于检查后台访问权限。
+        session: 当前请求会话，用于读取博客记录。
+
+    Returns:
+        注入可信身份后的请求副本，原请求不被原地修改。
+
+    Raises:
+        HTTPException: 非所有者访问 studio 返回 403，后台模块或栏目不支持返回 422。
+    """
     if request.surface == "studio" and current_user_role is not UserRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -89,18 +102,43 @@ def _prepare_request(
 
 
 def _load_snapshot(run_id: UUID, user_id: UUID) -> AiChatRunSnapshot | None:
+    """为订阅轮询创建独立会话，返回当前用户的任务快照或 None。"""
     with SessionLocal() as session:
         return get_ai_chat_run_snapshot(session, run_id=run_id, user_id=user_id)
 
 
 def _encode_event(payload: dict[str, object], *, event_id: int | None = None) -> str:
+    """编码一条 SSE 数据事件，以空行结束供客户端分帧。
+
+    Args:
+        payload: 可 JSON 序列化的事件载荷，type 字段由调用方决定。
+        event_id: 可选内容修订序号，不是 token 数。
+
+    Returns:
+        可直接写入 SSE 响应的文本，中文不转换为转义序列。
+    """
     prefix = f"id: {event_id}\n" if event_id is not None else ""
     return f"{prefix}data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> StreamingResponse:
-    """订阅已持久化的输出快照；连接断开只停止订阅，不取消后台生成。"""
+    """订阅已持久化的输出快照，连接断开不取消后台生成。
+
+    Args:
+        run_id: 已由路由检查访问权限的任务 UUID。
+        user_id: 当前用户 UUID，后续轮询仍按归属过滤。
+        request: HTTP 请求，用于检测客户端是否断开连接。
+
+    Returns:
+        禁用响应缓存与代理缓冲的 SSE 响应，首帧包含完整文本快照。
+    """
+
     async def events() -> AsyncIterator[str]:
+        """产出完整快照、文本增量、终态及心跳，内容重置时重发完整快照。
+
+        Yields:
+            已编码的 SSE 事件或心跳注释，终态与断开连接后停止轮询。
+        """
         last_sequence = -1
         last_content = ""
         last_heartbeat = monotonic()
@@ -192,6 +230,20 @@ def _start_run(
     session: SessionDependency,
     settings: Settings,
 ) -> AiChatRunCreated:
+    """准备可信请求、提交任务记录，再启动与 HTTP 连接独立的生成。
+
+    Args:
+        request: 客户端对话消息及模型选项。
+        current_user: 已认证的当前用户。
+        session: 当前请求会话，用于上下文查询与任务创建。
+        settings: 创建和执行任务使用的应用配置。
+
+    Returns:
+        已持久化的任务创建回执。
+
+    Raises:
+        HTTPException: 请求不符合后台权限或模块范围。
+    """
     prepared_request = _prepare_request(
         request,
         current_user=current_user,
@@ -220,6 +272,20 @@ async def create_chat_run(
     session: SessionDependency,
     settings: SettingsDependency,
 ) -> AiChatRunCreated:
+    """创建后台生成任务并返回 202 回执，客户端随后按任务 ID 订阅输出。
+
+    Args:
+        request: 已通过请求字段校验的对话输入。
+        current_user: 身份依赖认证的用户。
+        session: 当前请求会话。
+        settings: 应用配置依赖。
+
+    Returns:
+        任务 ID 与初始状态，不等待模型生成完成。
+
+    Raises:
+        HTTPException: 博客后台权限不足或上下文模块不受支持。
+    """
     return _start_run(
         request,
         current_user=current_user,
@@ -234,6 +300,19 @@ async def get_chat_run(
     current_user: CurrentUserDependency,
     session: SessionDependency,
 ) -> AiChatRunSnapshot:
+    """读取当前用户的任务快照，隐藏其他用户的任务是否存在。
+
+    Args:
+        run_id: 目标任务 UUID。
+        current_user: 已认证用户，作为任务归属筛选条件。
+        session: 当前请求会话。
+
+    Returns:
+        完整文本、状态及修订序号。
+
+    Raises:
+        HTTPException: 任务不存在或不属于当前用户，返回 404。
+    """
     snapshot = get_ai_chat_run_snapshot(session, run_id=run_id, user_id=current_user.id)
     if snapshot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI 生成任务不存在")
@@ -246,6 +325,16 @@ async def cancel_chat_run(
     current_user: CurrentUserDependency,
     session: SessionDependency,
 ) -> None:
+    """停止当前用户的未完成任务，已进入终态的任务不重复取消。
+
+    Args:
+        run_id: 待停止的任务 UUID。
+        current_user: 已认证用户，取消前检查任务归属。
+        session: 归属查询使用的会话，取消状态由管理器独立保存。
+
+    Raises:
+        HTTPException: 任务不存在或不属于当前用户，返回 404。
+    """
     snapshot = get_ai_chat_run_snapshot(session, run_id=run_id, user_id=current_user.id)
     if snapshot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI 生成任务不存在")
@@ -260,6 +349,20 @@ async def stream_chat_run(
     current_user: CurrentUserDependency,
     session: SessionDependency,
 ) -> StreamingResponse:
+    """订阅当前用户的任务，重连先重放快照，再发送后续增量。
+
+    Args:
+        run_id: 已创建的任务 UUID。
+        request: 当前连接请求，用于检测断开。
+        current_user: 身份依赖认证的用户。
+        session: 首次检查任务归属的数据库会话。
+
+    Returns:
+        SSE 响应，不拥有后台任务的生命周期。
+
+    Raises:
+        HTTPException: 任务不存在或不属于当前用户，返回 404。
+    """
     snapshot = get_ai_chat_run_snapshot(session, run_id=run_id, user_id=current_user.id)
     if snapshot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI 生成任务不存在")
@@ -274,7 +377,18 @@ async def stream_chat(
     session: SessionDependency,
     settings: SettingsDependency,
 ) -> StreamingResponse:
-    """兼容旧客户端：任务仍在后台运行，但建议使用 runs 接口保存 run_id。"""
+    """为旧客户端创建任务并直接返回订阅响应。
+
+    Args:
+        chat_request: 客户端对话输入，身份仍由服务端覆盖。
+        request: 当前 HTTP 连接，用于订阅断开检测。
+        current_user: 已认证用户。
+        session: 上下文查询及任务创建使用的会话。
+        settings: 应用配置依赖。
+
+    Returns:
+        后台任务的 SSE 响应；新客户端应使用 runs 接口保存任务 ID。
+    """
     run = _start_run(
         chat_request,
         current_user=current_user,
@@ -283,6 +397,7 @@ async def stream_chat(
     )
     return _stream_response(run.id, current_user.id, request)
 
+
 @router.post("/actions/confirm", response_model=object)
 def confirm_agent_action(
     confirmation: AgentActionConfirmation,
@@ -290,7 +405,22 @@ def confirm_agent_action(
     session: SessionDependency,
     settings: SettingsDependency,
 ) -> object:
-    """执行已由用户确认的签名 proposal；Agent 本身永远不直接写业务库。"""
+    """验证签名提议后分派业务写入，仅接受令牌中的操作与载荷。
+
+    Args:
+        confirmation: 用户确认的提议令牌，不接受另外提交的可替换载荷。
+        current_user: 所有者权限依赖校验的当前用户。
+        session: 业务写操作使用的数据库会话。
+        settings: 提议验签所需配置，不得输出相关凭据。
+
+    Returns:
+        业务模块执行操作后返回的结果。
+
+    Raises:
+        HTTPException: 令牌无效、过期或操作结构无效返回 422，
+            提议不属于当前用户返回 403；业务层的 HTTP 错误原样传播。
+        ValidationError: 业务载荷不符合对应写入契约。
+    """
     # 使用验签后的操作载荷，并绑定当前 Owner；显示文本不是执行依据。
     try:
         proposal = decode(

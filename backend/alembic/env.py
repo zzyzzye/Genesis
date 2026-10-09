@@ -1,3 +1,5 @@
+"""Alembic 迁移环境，复用应用配置并导入实体以注册表结构。"""
+
 from logging.config import fileConfig
 
 from alembic import context
@@ -21,6 +23,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
+    """不连接数据库，仅编译迁移 SQL，实际执行由外部调用方负责。"""
     context.configure(
         url=get_settings().resolved_database_url,
         target_metadata=target_metadata,
@@ -33,6 +36,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    """建立迁移连接，在事务中执行所选升级或降级步骤。"""
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = get_settings().resolved_database_url
     connectable = engine_from_config(

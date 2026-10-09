@@ -1,3 +1,5 @@
+"""集中提供所有 ORM 实体共享的声明基类与迁移元数据。"""
+
 from sqlalchemy.orm import DeclarativeBase
 
 

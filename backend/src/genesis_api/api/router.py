@@ -1,3 +1,5 @@
+"""聚合各业务路由，统一版本前缀由应用装配层添加。"""
+
 from fastapi import APIRouter
 
 from genesis_api.api.routes import (

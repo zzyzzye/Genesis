@@ -9,7 +9,18 @@ from langchain_core.language_models.model_profile import ModelProfile
 
 
 def model_provider_for(provider: str, base_url: str) -> str:
-    """能力查询和实际调用使用相同适配器，避免网关与原生协议混用。"""
+    """选择能力查询与实际调用共同使用的 LangChain 适配器。
+
+    Args:
+        provider: 项目供应商标识，应已通过请求或配置校验。
+        base_url: 上游基础地址，用于识别已支持的兼容网关。
+
+    Returns:
+        LangChain 供应商标识；已识别的兼容网关统一使用 openai。
+
+    Raises:
+        KeyError: 原生调用的供应商标识不受支持。
+    """
     if urlparse(base_url).hostname == "www.yyapi.cloud":
         return "openai"
     return {
@@ -20,7 +31,16 @@ def model_provider_for(provider: str, base_url: str) -> str:
 
 @lru_cache(maxsize=256)
 def model_profile_for(adapter: str, model: str) -> ModelProfile:
-    """仅构造客户端读取公开 profile，不发请求，也不读取真实凭据。"""
+    """仅构造客户端读取公开 profile，不请求上游或使用真实凭据。
+
+    Args:
+        adapter: LangChain 模型适配器标识。
+        model: 模型名称，不自行转换未知别名。
+
+    Returns:
+        框架提供的能力字典，缺少 profile 时为空；按适配器与模型缓存。
+        返回字典供只读查询，调用方不得修改共享缓存内容。
+    """
     client = init_chat_model(
         model=model, model_provider=adapter, api_key="profile-inspection-only",
     )

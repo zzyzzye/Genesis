@@ -28,9 +28,18 @@ class YyapiAsyncTransport(httpx.AsyncBaseTransport):
     """移除会被兼容网关错误拦截的 OpenAI SDK 诊断请求头。"""
 
     def __init__(self) -> None:
+        """创建网关请求传输器，连接释放由 aclose 负责。"""
         self._transport = httpx.AsyncHTTPTransport()
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        """清理 SDK 诊断头后委托底层传输器发送请求。
+
+        Args:
+            request: 待发送的请求，请求头会原地调整。
+
+        Returns:
+            底层传输器返回的 HTTP 响应，网络异常原样传播。
+        """
         for header in tuple(request.headers):
             if header.lower().startswith("x-stainless-"):
                 del request.headers[header]
@@ -38,6 +47,7 @@ class YyapiAsyncTransport(httpx.AsyncBaseTransport):
         return await self._transport.handle_async_request(request)
 
     async def aclose(self) -> None:
+        """释放底层异步 HTTP 传输器持有的连接。"""
         await self._transport.aclose()
 
 
@@ -45,6 +55,7 @@ class EmbeddedAgentRuntime:
     """管理进程内 LangGraph 图和 PostgreSQL checkpoint 生命周期。"""
 
     def __init__(self) -> None:
+        """创建空图缓存与存储引用，实际连接由 startup 初始化。"""
         self._checkpointer_context: AbstractAsyncContextManager[AsyncPostgresSaver] | None = None
         self._checkpointer: AsyncPostgresSaver | None = None
         self._graphs: dict[tuple[str, str, str, str | None], Any] = {}

@@ -1,1 +1,1 @@
-"""Core application configuration."""
+"""应用公共配置及部署环境约束，业务模块通过 get_settings 复用配置。"""

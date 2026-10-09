@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProjectWrite(BaseModel):
+    """作品创建与改名输入，名称去除首尾空白后校验长度。"""
+
     model_config = ConfigDict(str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=120)
 
@@ -40,18 +42,24 @@ class CanvasNode(BaseModel):
 
 
 class CanvasEdge(BaseModel):
+    """画布连线标识与端点；端点存在性及分组限制由保存路由校验。"""
+
     id: UUID
     source: UUID
     target: UUID
 
 
 class Viewport(BaseModel):
+    """重新打开画布时恢复的平移与缩放参数，不代表节点的布局坐标。"""
+
     x: float = Field(default=0, allow_inf_nan=False, ge=-10000000, le=10000000)
     y: float = Field(default=0, allow_inf_nan=False, ge=-10000000, le=10000000)
     zoom: float = Field(default=1, ge=0.02, le=4)
 
 
 class VideoFrame(BaseModel):
+    """画布作品的目标画幅尺寸，单位为像素，不创建视频生成任务。"""
+
     width: int = Field(default=1920, ge=256, le=8192)
     height: int = Field(default=1080, ge=256, le=8192)
 
@@ -74,8 +82,12 @@ class CanvasWrite(BaseModel):
 
 
 class AssetReference(BaseModel):
+    """将已有素材关联到作品的请求，素材归属与可引用范围由路由检查。"""
+
     asset_id: UUID
 
 
 class AssetCopies(BaseModel):
+    """跨作品复制素材引用的 ID 列表，不复制底层文件。"""
+
     asset_ids: list[UUID] = Field(max_length=1000)

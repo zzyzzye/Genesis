@@ -1,3 +1,5 @@
+"""在 ChatOpenAI 的转换扩展点保留 MiMo 多轮工具调用要求的思考字段。"""
+
 from typing import Any
 
 import openai
@@ -16,6 +18,16 @@ class ChatMiMo(ChatOpenAI):
         default_chunk_class: type,
         base_generation_info: dict[str, Any] | None,
     ) -> ChatGenerationChunk | None:
+        """沿用框架流式转换，并把思考字段附加到模型消息元数据。
+
+        Args:
+            chunk: 上游返回的流式数据块，可包含 choices 或嵌套 chunk。
+            default_chunk_class: 框架选择的默认消息片段类型。
+            base_generation_info: 框架生成元数据，原样传给父类。
+
+        Returns:
+            转换后的消息片段；父类未生成有效片段时返回 None。
+        """
         result = super()._convert_chunk_to_generation_chunk(
             chunk, default_chunk_class, base_generation_info
         )
@@ -32,6 +44,18 @@ class ChatMiMo(ChatOpenAI):
         response: dict[str, Any] | openai.BaseModel,
         generation_info: dict[str, Any] | None = None,
     ) -> ChatResult:
+        """转换完整响应，并保留各候选回答的 reasoning_content。
+
+        Args:
+            response: 字典或 OpenAI SDK 响应对象。
+            generation_info: 框架生成元数据，原样传给父类。
+
+        Returns:
+            由父类构建并补充思考元数据的聊天结果。
+
+        Raises:
+            ValueError: 框架生成结果与上游候选回答数量不一致。
+        """
         result = super()._create_chat_result(response, generation_info)
         payload = response if isinstance(response, dict) else response.model_dump()
         for generation, choice in zip(result.generations, payload.get("choices", []), strict=True):
@@ -47,6 +71,19 @@ class ChatMiMo(ChatOpenAI):
         stop: list[str] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
+        """构建标准请求载荷，并回传历史模型消息中的思考字段。
+
+        Args:
+            input_: 框架支持的提示词或消息输入。
+            stop: 可选停止序列，沿用父类处理。
+            **kwargs: 传递给框架的其他调用参数。
+
+        Returns:
+            上游请求字典；思考字段独立保存，不拼入可见正文。
+
+        Raises:
+            ValueError: 输入消息与序列化消息数量不一致。
+        """
         messages = self._convert_input(input_).to_messages()
         payload = super()._get_request_payload(messages, stop=stop, **kwargs)
         # 将历史模型消息中的思考字段原样带回工具调用后续请求，不拼入正文。

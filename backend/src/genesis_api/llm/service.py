@@ -1,3 +1,5 @@
+"""发现供应商可用模型，并用框架能力信息补充前端选择所需元数据。"""
+
 from __future__ import annotations
 
 import logging
@@ -20,11 +22,31 @@ class ModelDiscoveryError(RuntimeError):
 
 
 class ModelDiscoveryService:
+    """查询上游模型目录，失败时可回退到当前配置中的默认模型。"""
+
     def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None) -> None:
+        """绑定应用配置与可选 HTTP 客户端，不在构造时请求目录。
+
+        Args:
+            settings: 供应商连接、默认模型等配置。
+            client: 可注入的异步客户端；提供时由调用方负责关闭。
+        """
         self.settings = settings
         self._client = client
 
     async def list_models(self, provider: ProviderName) -> ProviderModels:
+        """获取可用模型，将配置的默认模型置顶并附带思考档位。
+
+        Args:
+            provider: 已校验的供应商标识，用于选择地址和认证头。
+
+        Returns:
+            该供应商的模型列表；HTTP 或 JSON 解码失败时优先回退到默认模型。
+
+        Raises:
+            ModelDiscoveryError: 缺少 API Key、响应结构无效，
+                或目录调用失败且未配置可回退的模型。
+        """
         api_key, base_url = self._provider_config(provider)
         if api_key is None or not api_key.get_secret_value().strip():
             raise ModelDiscoveryError(f"未配置 {provider} 的 API Key")
@@ -80,6 +102,15 @@ class ModelDiscoveryService:
     def _with_profiles(
         self, provider: ProviderName, models: list[AvailableModel]
     ) -> list[AvailableModel]:
+        """按实际模型适配器补充能力字段，原地修改列表中的模型。
+
+        Args:
+            provider: 供应商标识，与基础地址共同决定实际协议适配器。
+            models: 已解析的模型列表。
+
+        Returns:
+            原列表；能力未知时档位字段为空，不猜测供应商支持范围。
+        """
         _, base_url = self._provider_config(provider)
         adapter = model_provider_for(provider, base_url)
         for model in models:
@@ -89,6 +120,14 @@ class ModelDiscoveryService:
         return models
 
     def _provider_config(self, provider: ProviderName) -> tuple[SecretStr | None, str]:
+        """读取供应商认证与地址配置，保持凭据为 SecretStr。
+
+        Args:
+            provider: 已通过字面量类型校验的供应商标识。
+
+        Returns:
+            可选 API Key 与基础地址；此处不检查 Key 是否已配置。
+        """
         if provider == "openai":
             return self.settings.text_openai_api_key, self.settings.text_openai_base_url
         if provider == "grok":
@@ -100,6 +139,7 @@ class ModelDiscoveryService:
         return self.settings.text_claude_api_key, self.settings.text_claude_base_url
 
     def _provider_model(self, provider: ProviderName) -> str | None:
+        """返回指定供应商配置的默认模型，未配置时返回 None。"""
         if provider == "openai":
             return self.settings.text_openai_model
         if provider == "grok":
@@ -115,7 +155,15 @@ class ModelDiscoveryService:
         provider: ProviderName,
         models: list[AvailableModel],
     ) -> list[AvailableModel]:
-        """将已配置的默认模型置顶，即使网关模型目录暂未返回该模型。"""
+        """将配置的默认模型置顶，目录缺少该模型时补入一个记录。
+
+        Args:
+            provider: 默认模型所属的供应商。
+            models: 已解析的目录模型列表。
+
+        Returns:
+            默认模型在首位的列表；未配置默认模型时返回原列表。
+        """
         configured_model = self._provider_model(provider)
         if not configured_model or not configured_model.strip():
             return models
@@ -130,6 +178,14 @@ class ModelDiscoveryService:
 
     @staticmethod
     def _models_url(base_url: str) -> str:
+        """生成模型目录地址，仅对已识别网关的根路径补充 /v1。
+
+        Args:
+            base_url: 配置的上游基础地址或完整 /models 地址。
+
+        Returns:
+            用于模型发现的 URL，不修改真实模型调用使用的配置地址。
+        """
         normalized = base_url.rstrip("/")
         if normalized.endswith("/models"):
             return normalized
@@ -142,6 +198,15 @@ class ModelDiscoveryService:
 
     @staticmethod
     def _headers(provider: ProviderName, api_key: str) -> dict[str, str]:
+        """为目录请求生成供应商要求的认证头。
+
+        Args:
+            provider: 已校验的供应商标识。
+            api_key: 仅用于 HTTP 请求的凭据，返回头不得写入日志或响应。
+
+        Returns:
+            认证及必要协议请求头。
+        """
         if provider == "mimo":
             return {"api-key": api_key, "accept": "application/json"}
         if provider == "claude":
@@ -154,6 +219,18 @@ class ModelDiscoveryService:
 
     @staticmethod
     def _parse_models(payload: dict[str, Any], provider: ProviderName) -> list[AvailableModel]:
+        """统一解析兼容目录与 Gemini 原生目录，跳过缺少模型标识的条目。
+
+        Args:
+            payload: 上游 JSON 对象，目录位于 data 或 models。
+            provider: 用于处理原生名称及 MiMo 语音模型过滤。
+
+        Returns:
+            解析后的模型列表；上下文容量优先用上游值，否则查本地已知容量。
+
+        Raises:
+            ModelDiscoveryError: 目录字段不是列表。
+        """
         raw_models = payload.get("data", payload.get("models", []))
         if not isinstance(raw_models, list):
             raise ModelDiscoveryError("模型列表响应格式无效")

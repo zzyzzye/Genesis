@@ -1,4 +1,4 @@
-"""add resumable ai chat runs
+"""增加与浏览器连接解耦的 AI 任务及可重放文本快照。
 
 Revision ID: 20260908_04
 Revises: 20260907_03
@@ -17,6 +17,7 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    """建立后台任务表和归属、状态索引，删除用户时级联清理任务记录。"""
     op.create_table(
         "ai_chat_runs",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -61,6 +62,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """删除任务索引与表，会丢弃任务状态及已生成文本。"""
     op.drop_index(op.f("ix_ai_chat_runs_user_id"), table_name="ai_chat_runs")
     op.drop_index(op.f("ix_ai_chat_runs_status"), table_name="ai_chat_runs")
     op.drop_table("ai_chat_runs")

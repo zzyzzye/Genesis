@@ -1,1 +1,1 @@
-"""Genesis API package."""
+"""Genesis 后端应用：公共身份与基础设施、版本化 API 及各业务模块。"""

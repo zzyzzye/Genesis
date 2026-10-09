@@ -1,3 +1,5 @@
+"""跨业务共享的用户与密码哈希实体，公开响应通过独立契约筛选字段。"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -15,6 +17,8 @@ if TYPE_CHECKING:
 
 
 class UserRole(StrEnum):
+    """站点所有者与普通成员角色，数据库存储枚举值。"""
+
     OWNER = "owner"
     MEMBER = "member"
 

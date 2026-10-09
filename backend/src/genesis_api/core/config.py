@@ -1,3 +1,5 @@
+"""应用配置与派生连接地址，使用 Pydantic Settings 校验配置边界。"""
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -9,6 +11,12 @@ from sqlalchemy import URL
 
 
 class Settings(BaseSettings):
+    """应用、数据库与模型供应商配置，敏感字段通过 SecretStr 包装。
+
+    配置由 Pydantic Settings 按 GENESIS_ 前缀解析；禁止输出完整配置对象
+    或已展开的敏感字段。派生数据库地址仅交给连接层使用。
+    """
+
     model_config = SettingsConfigDict(
         env_prefix="GENESIS_",
         extra="ignore",
@@ -54,6 +62,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> Settings:
+        """拒绝生产环境沿用开发签名配置，并检查任务并发上限。
+
+        Returns:
+            校验通过的配置对象，不修改已有配置值。
+
+        Raises:
+            ValueError: 生产环境签名配置未替换，或任务并发上限小于一。
+        """
         if (
             self.environment == "production"
             and self.jwt_secret.get_secret_value()
@@ -72,7 +88,11 @@ class Settings(BaseSettings):
 
     @property
     def resolved_database_url(self) -> str:
-        """优先使用完整连接串，否则由独立字段安全地组装连接串。"""
+        """优先使用完整连接串，否则由独立字段组装 SQLAlchemy 地址。
+
+        Returns:
+            包含认证信息的连接字符串，只供数据库连接使用，不得输出或记录。
+        """
         if self.database_url is not None:
             return self.database_url
         return URL.create(
@@ -86,10 +106,22 @@ class Settings(BaseSettings):
 
     @property
     def resolved_postgres_uri(self) -> str:
-        """返回 psycopg/LangGraph checkpoint 可直接使用的连接串。"""
+        """转换为 psycopg 与 LangGraph checkpoint 接受的协议前缀。
+
+        Returns:
+            PostgreSQL 连接字符串，保留原认证信息，不得输出或记录。
+        """
         return self.resolved_database_url.replace("postgresql+psycopg://", "postgresql://", 1)
 
 
 @lru_cache
 def get_settings() -> Settings:
+    """构建并缓存进程共享配置，调用方不应原地修改返回对象。
+
+    Returns:
+        通过配置校验的 Settings 实例。
+
+    Raises:
+        ValidationError: 配置字段或生产环境约束不符合契约。
+    """
     return Settings()
