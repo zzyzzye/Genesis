@@ -40,7 +40,6 @@ import {
 import '@mdxeditor/editor/style.css'
 import './studio/styles/shell.css'
 import './studio/styles/login.css'
-import './studio/styles/posts.css'
 import './studio/styles/editor.css'
 import './studio/styles/editor-content.css'
 import './studio/styles/editor-outline.css'
@@ -55,6 +54,7 @@ import { StudioNavigation } from './studio/StudioNavigation'
 import type { StudioSection } from './studio/StudioNavigationModel'
 import { BlogAssistant } from './features/blog/agent/BlogAssistant'
 import { StudioOverview } from './studio/StudioOverview'
+import { PostsIndex } from './studio/PostsIndex'
 import { TaxonomyWorkspace } from './studio/TaxonomyWorkspace'
 import { TaxonomyPicker } from './studio/TaxonomyPicker'
 import { createTaxonomy, type ArticleTaxonomyActions, type TaxonomyKind } from './studio/taxonomy'
@@ -579,48 +579,6 @@ const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; descr
   settings: { eyebrow: 'SYSTEM / SETTINGS', title: '系统设置', description: '配置博客系统的基础信息。' },
 }
 
-function PostsIndex({
-  posts,
-  onCreatePost,
-  onOpenPost,
-}: {
-  posts: BlogPostAdmin[]
-  onCreatePost: () => void
-  onOpenPost: (post: BlogPostAdmin) => void
-}) {
-
-  return (
-    <section className="studio-post-index" aria-label="文章列表">
-      <div className="studio-post-index__toolbar">
-        <strong className="studio-post-index__toolbar-title">文章</strong>
-        <label htmlFor="studio-post-search"><StudioIcon name="search" /><span className="sr-only">搜索文章</span><input id="studio-post-search" placeholder="输入关键词搜索" /></label>
-        <div className="studio-post-index__filters" aria-label="文章筛选">
-          <button className="is-active" type="button">状态：全部</button>
-          <button type="button">可见性：全部</button>
-          <button type="button">排序：最新</button>
-        </div>
-        <span className="studio-post-count">共 {posts.length} 篇</span>
-        <div className="studio-post-index__actions">
-          <button className="new-post-button" type="button" onClick={onCreatePost}><StudioIcon name="plus" /> 新建文章</button>
-        </div>
-      </div>
-      <div className="studio-content-list">
-        {posts.map((post) => (
-          <button className="studio-content-list__item" key={post.id} type="button" onClick={() => onOpenPost(post)}>
-            <span className="studio-post-check" aria-hidden="true" />
-            <span className="studio-content-list__body">
-              <strong>{post.title}</strong>
-              <small>分类：{post.category?.name ?? '未分类'} · 访问量：— · 评论：0</small>
-              <em>{post.status === 'published' ? '已发布' : '草稿'}</em>
-            </span>
-            <span className="studio-content-list__meta"><span>{post.status === 'published' ? '公开' : '未发布'}</span><time>{post.updated_at.slice(0, 10)}</time><StudioIcon name="chevron" /></span>
-          </button>
-        ))}
-        {posts.length === 0 && <p className="studio-context-empty">还没有文章，创建第一篇草稿吧。</p>}
-      </div>
-    </section>
-  )
-}
 
 function ArticleReader({
   editor,
@@ -1004,7 +962,6 @@ function Dashboard({
               <div><p>{meta.eyebrow}</p><h1>{meta.title}</h1><small>{meta.description}</small></div>
             </div>
             <div className="studio-topbar__actions">
-              <button type="button" aria-label="通知"><StudioIcon name="bell" /><span>2</span></button>
               <Link className="studio-topbar__site-link" to="/blog"><StudioIcon name="eye" />查看站点 <StudioIcon name="arrow-up-right" /></Link>
             </div>
           </header>

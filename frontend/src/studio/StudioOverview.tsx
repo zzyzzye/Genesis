@@ -33,26 +33,17 @@ export function StudioOverview({
   const quickActions: Array<{ title: string; description: string; icon: StudioIconName; action: () => void }> = [
     { title: '创建文章', description: '开启一篇新的 Markdown 草稿', icon: 'plus', action: onCreatePost },
     { title: '管理文章', description: '查看、编辑与发布现有内容', icon: 'articles', action: () => onChange('posts') },
-    { title: '创建页面', description: '搭建独立页面与专题入口', icon: 'pages', action: () => onChange('pages') },
-    { title: '附件管理', description: '整理图片、文件与媒体素材', icon: 'attachment', action: () => onChange('attachments') },
-    { title: '主题外观', description: '管理站点视觉与展示风格', icon: 'palette', action: () => onChange('themes') },
+    { title: '整理分类', description: '为文章建立清楚的内容分区', icon: 'folder', action: () => onChange('categories') },
+    { title: '管理标签', description: '用关键词串联相关的想法', icon: 'tag', action: () => onChange('tags') },
   ]
-  const activityItems = [
-    ...posts.slice(0, 6).map((post) => ({
+  const activityItems = [...posts].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5).map((post) => ({
       id: post.id,
       title: post.title,
       description: post.excerpt || '暂无摘要',
       label: post.status === 'published' ? '已发布' : '草稿',
       date: formatShortDate(post.updated_at),
       post,
-    })),
-    ...[
-      { id: 'editor-ready', title: '编辑器已准备就绪', description: '可以开始创建或继续编辑 Markdown 内容。', label: '系统提示', date: '今天' },
-      { id: 'preview-ready', title: '站点预览入口可用', description: '可随时从右上角检查公开页面的展示效果。', label: '系统提示', date: '今天' },
-      { id: 'draft-advice', title: '定期整理未完成草稿', description: '清理不再继续的选题，让内容计划保持清晰。', label: '内容建议', date: '本周' },
-      { id: 'asset-advice', title: '统一管理文章素材', description: '封面、图片和文档可集中归入附件管理。', label: '内容建议', date: '本周' },
-    ],
-  ].slice(0, 6)
+    }))
 
   return (
     <section className="studio-overview" aria-labelledby="studio-overview-title">
@@ -69,7 +60,6 @@ export function StudioOverview({
         <article className="studio-panel studio-quick-panel">
           <header className="studio-panel__header">
             <div><p>QUICK ACCESS</p><h2 id="studio-overview-title">快捷访问</h2></div>
-            <span>高频操作集中在这里</span>
           </header>
           <div className="studio-quick-grid">
             {quickActions.map((item) => (
@@ -93,18 +83,18 @@ export function StudioOverview({
             <button type="button" onClick={() => onChange('posts')}>查看全部</button>
           </header>
           <div className="studio-activity-list">
-            {activityItems.map((item, index) => (
+            {activityItems.map((item) => (
               <button
-                className={'post' in item ? '' : 'is-static'}
                 type="button"
-                onClick={() => 'post' in item && onOpenPost(item.post)}
+                onClick={() => onOpenPost(item.post)}
                 key={item.id}
               >
-                <span className={`studio-activity-index studio-activity-index--${(index % 3) + 1}`}>{String(index + 1).padStart(2, '0')}</span>
+                <StudioIcon name="articles" />
                 <span><strong>{item.title}</strong><small>{item.description}</small></span>
                 <span className="studio-activity-meta"><em>{item.label}</em><time>{item.date}</time></span>
               </button>
             ))}
+            {activityItems.length === 0 && <div className="studio-empty-activity"><StudioIcon name="articles" /><strong>还没有文章</strong><p>从一篇草稿开始，记录值得留下的想法。</p><button type="button" onClick={onCreatePost}>创建第一篇文章 <span aria-hidden="true">↗</span></button></div>}
           </div>
         </article>
       </div>

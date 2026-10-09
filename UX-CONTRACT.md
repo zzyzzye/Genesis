@@ -4,6 +4,8 @@
 
 ## Canonical UI Map
 
+博客工作台壳由 Studio、StudioNavigation 和 shell.css 统一拥有，复用既有内容滚动区；窄屏导航保留文字，可横向滚动。仪表盘仅显示真实文章与可用操作。文章列表由 PostsIndex 拥有，客户端对已加载数据进行标题/摘要/分类搜索与草稿/发布状态筛选，按更新时间倒序，每页最多 40 篇。查询、状态和页码保存为 URL 的 q/status/page；改变筛选回到第一页，清空搜索后焦点回到输入框。空数据与无匹配结果分别提供创建文章与清除筛选动作，不修改文章或发布流程。
+
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 | --- | --- | --- | --- | --- |
 | 博客助手 / 非模态浮层 | BlogAssistant、既有对话与模型菜单状态 | BlogAssistant.tsx、BlogAssistant.css | 后台常驻，空态紧凑、对话展开；输入保持编辑，执行模式与确认沿用原协议 | 开关、聚焦、模型选择与 Escape、上下文环、长回复与代码块、生成与失败、窄屏 |

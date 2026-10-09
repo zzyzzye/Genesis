@@ -1,6 +1,7 @@
 import './StudioNavigation.css'
 
 import { Link } from 'react-router-dom'
+import { useLayoutEffect, useRef } from 'react'
 
 import type { CurrentUser } from '../lib/api'
 import { StudioIcon } from './StudioIcon'
@@ -17,6 +18,25 @@ export function StudioNavigation({
   onLogout: () => void
   user: CurrentUser
 }) {
+  const navigationRef = useRef<HTMLElement>(null)
+
+  useLayoutEffect(() => {
+    const navigation = navigationRef.current
+    if (!navigation) return
+    function revealCurrentPage() {
+      if (!navigation || navigation.scrollWidth <= navigation.clientWidth) return
+      const current = navigation.querySelector<HTMLElement>('[aria-current="page"]')
+      if (!current) return
+      // 只滚动窄屏导航自身，避免切换页面时带动正文。
+      navigation.scrollLeft += current.getBoundingClientRect().left - navigation.getBoundingClientRect().left - (navigation.clientWidth - current.offsetWidth) / 2
+    }
+    revealCurrentPage()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(revealCurrentPage)
+    observer.observe(navigation)
+    return () => observer.disconnect()
+  }, [activeSection])
+
   return (
     <aside className="studio-section-nav" aria-label="博客管理导航">
       <header className="studio-section-nav__header">
@@ -30,14 +50,8 @@ export function StudioNavigation({
         <small>内容工作台</small>
       </header>
 
-      <button className="studio-nav-search" type="button">
-        <StudioIcon name="search" />
-        <span>搜索内容</span>
-        <kbd>Ctrl K</kbd>
-      </button>
-
-      <nav className="studio-nav-groups">
-        <button className={activeSection === 'overview' ? 'studio-nav-item is-active' : 'studio-nav-item'} type="button" onClick={() => onChange('overview')}>
+      <nav ref={navigationRef} className="studio-nav-groups" aria-label="工作台页面">
+        <button className={activeSection === 'overview' ? 'studio-nav-item is-active' : 'studio-nav-item'} aria-current={activeSection === 'overview' ? 'page' : undefined} type="button" onClick={() => onChange('overview')}>
           <StudioIcon name="dashboard" />
           <span>仪表盘</span>
         </button>
@@ -46,10 +60,10 @@ export function StudioNavigation({
           <div className="studio-nav-group" key={group.id}>
             <p>{group.label}</p>
             {group.items.map((item) => (
-              <button className={activeSection === item.id ? 'studio-nav-item is-active' : 'studio-nav-item'} key={item.id} type="button" onClick={() => onChange(item.id)}>
+              <button className={activeSection === item.id ? 'studio-nav-item is-active' : 'studio-nav-item'} aria-current={activeSection === item.id ? 'page' : undefined} key={item.id} type="button" onClick={() => onChange(item.id)}>
                 <StudioIcon name={item.icon} />
                 <span>{item.label}</span>
-                {item.id === 'comments' ? <em>0</em> : <StudioIcon className="studio-nav-chevron" name="chevron" />}
+                {!['posts', 'categories', 'tags'].includes(item.id) && <em>筹备</em>}
               </button>
             ))}
           </div>
