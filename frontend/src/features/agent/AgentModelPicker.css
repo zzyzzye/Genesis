@@ -1,7 +1,4 @@
-.agent-picker { display:grid; gap:12px; padding:6px; color:var(--reasoning-text); font-size:12px; }
-.agent-picker__heading { display:flex; justify-content:space-between; align-items:center; gap:8px; }
-.agent-picker__heading strong { font-size:13px; font-weight:550; }
-.agent-picker__heading>span { color:var(--reasoning-muted); font-size:10px; }
+.agent-picker { display:grid; gap:6px; padding:2px; color:var(--reasoning-text); font-size:12px; }
 .agent-picker__providers { display:flex; gap:3px; }
 .agent-picker .agent-picker__providers button { flex:1; min-width:0; padding:7px 2px; background:transparent; color:var(--reasoning-muted); font-size:11px; border-radius:6px; }
 .agent-picker button { border:0; outline:0; box-shadow:none; cursor:pointer; }
@@ -11,8 +8,8 @@
 .agent-picker__search svg { width:14px; height:14px; flex:none; }
 .agent-picker .agent-picker__search input { width:100%; min-width:0; height:28px; padding:0; border:0; outline:0; box-shadow:none; background:transparent; color:var(--reasoning-text); font-size:12px; }
 .agent-picker__search input::placeholder { color:var(--reasoning-muted); }
-.agent-picker__models { display:grid; align-content:start; gap:2px; max-height:min(180px,23dvh); min-height:68px; overflow:auto; scrollbar-gutter:stable; }
-.agent-picker .agent-picker__models button { display:flex; align-items:center; gap:10px; min-width:0; min-height:36px; padding:8px; text-align:left; border-radius:6px; background:transparent; color:var(--reasoning-text); font-size:12px; }
+.agent-picker__models { display:grid; align-content:start; gap:2px; max-height:min(160px,25dvh); overflow:auto; scrollbar-gutter:stable; }
+.agent-picker .agent-picker__models button { display:flex; align-items:center; gap:8px; min-width:0; min-height:32px; padding:6px 8px; text-align:left; border-radius:5px; background:transparent; color:var(--reasoning-text); font-size:11px; }
 .agent-picker .agent-picker__models button:is(:hover,:focus-visible,[aria-pressed="true"]) { background:var(--reasoning-hover); }
 .agent-picker__name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .agent-picker__models small { color:var(--reasoning-muted); font-size:10px; font-variant-numeric:tabular-nums; }

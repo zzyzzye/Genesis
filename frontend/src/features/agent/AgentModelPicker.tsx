@@ -24,7 +24,6 @@ export function AgentModelPicker({ provider, models, model, loading = false, dis
   const filtered = models.filter((item) => `${item.name} ${item.id}`.toLowerCase().includes(query.trim().toLowerCase()))
 
   return <div className="agent-picker" aria-label="模型与思考设置">
-    <div className="agent-picker__heading"><strong>模型</strong><span>选择本次对话使用的模型</span></div>
     <div className="agent-picker__providers" role="group" aria-label="选择供应商">
       {providers.map((item) => <button type="button" key={item} aria-label={`切换到 ${labels[item]} 模型`} aria-pressed={provider === item} disabled={disabled} onClick={() => { setQuery(''); onProviderChange(item) }}>{labels[item]}</button>)}
     </div>
