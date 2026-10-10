@@ -84,6 +84,15 @@ def test_runtime_caps_output_budget_using_shared_capabilities(budget: int, expec
     assert model.profile["max_output_tokens"] == 128000
 
 
+def test_runtime_omits_default_output_budget() -> None:
+    """默认请求不携带输出预算，避免压缩思考、正文和工具参数的空间。"""
+    settings = Settings(text_mimo_api_key=SecretStr("test"), text_max_tokens=None)
+    model = EmbeddedAgentRuntime()._build_model(settings, "mimo", "mimo-v2.6-flash")
+    payload = model._get_request_payload([HumanMessage("hi")])  # type: ignore[attr-defined]
+    assert "max_completion_tokens" not in payload
+    assert "max_tokens" not in payload
+
+
 @pytest.mark.parametrize("name, levels", [
     ("grok-4.5", ["low", "medium", "high"]),
     ("grok-4.6", ["low", "medium", "high", "xhigh"]),

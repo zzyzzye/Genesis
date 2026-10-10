@@ -176,18 +176,19 @@ class EmbeddedAgentRuntime:
             profile.get("reasoning_effort_levels") or []
         ):
             raise RuntimeError("当前模型不支持所选思考强度，请切换为默认或重新选择模型")
-        # 请求预算与模型上限不同；已知上限时收紧预算，未知时沿用项目设置。
+        # 默认不指定输出预算，沿用供应商默认；仅收紧显式配置的预算。
         output_limit = profile.get("max_output_tokens")
-        output_budget = min(settings.text_max_tokens, output_limit) if output_limit else (
-            settings.text_max_tokens
-        )
+        output_budget = settings.text_max_tokens
+        if output_budget is not None and output_limit:
+            output_budget = min(output_budget, output_limit)
         kwargs: dict[str, Any] = {
             "model": f"{adapter_provider}:{model}",
             "api_key": api_key.get_secret_value(),
-            "max_tokens": output_budget,
             # 向传输客户端注入原生 profile，DeepAgents 也使用同一份框架能力信息。
             "profile": profile,
         }
+        if output_budget is not None:
+            kwargs["max_tokens"] = output_budget
         if adapter_provider == "openai":
             kwargs["stream_usage"] = True
         # 推理模型可能不接受 temperature；显式档位交由框架映射供应商参数。

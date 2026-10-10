@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="GENESIS_",
+        env_parse_none_str="null",
         extra="ignore",
     )
 
@@ -54,7 +55,7 @@ class Settings(BaseSettings):
     text_mimo_base_url: str = "https://api.xiaomimimo.com/v1"
     text_mimo_model: str = "mimo-v2.6-flash"
     text_temperature: float = 0.7
-    text_max_tokens: int = 4096
+    text_max_tokens: int | None = None
 
     agent_action_secret: SecretStr = SecretStr("development-only-agent-action-secret")
     agent_action_expire_seconds: int = 600
