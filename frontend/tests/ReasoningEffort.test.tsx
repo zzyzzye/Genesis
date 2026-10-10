@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { BlogAssistant } from '../src/features/blog/agent/BlogAssistant'
 import { MediaAssistant } from '../src/pages/media/MediaAssistant'
 import { createAiChatRun, getProviderModels, streamAiChat, streamAiChatRun } from '../src/lib/api'
 import { studioAuthTokenKey } from '../src/lib/auth'
+import { ReasoningEffortControl } from '../src/features/agent/ReasoningEffortControl'
 
 vi.mock('../src/lib/api', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/lib/api')>(),
@@ -39,17 +40,17 @@ it('博客按模型记忆档位，未知模型用默认，请求携带当前强�
   render(<BlogAssistant page={{ route: '/blog/studio/posts', section: 'posts', pageType: 'posts_list' }} editor={null} />)
   const trigger = screen.getByRole('button', { name: '选择模型' })
   fireEvent.click(trigger)
-  const group = await screen.findByRole('group', { name: '思考强度' })
-  await waitFor(() => expect(within(group).getByRole('button', { name: '高' })).toBeEnabled())
-  fireEvent.click(within(group).getByRole('button', { name: '高' }))
-  expect(within(group).getByRole('button', { name: '高' })).toHaveAttribute('aria-pressed', 'true')
+  const slider = await screen.findByRole('slider', { name: '思考强度' })
+  await waitFor(() => expect(slider).toBeEnabled())
+  fireEvent.change(slider, { target: { value: '2' } })
+  expect(slider).toHaveAttribute('aria-valuetext', '高')
   fireEvent.click(screen.getByRole('button', { name: '未知模型' }))
   fireEvent.click(trigger)
   expect(screen.getByText('当前模型暂无可选档位，沿用默认设置。')).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: '高' })).not.toBeInTheDocument()
+  expect(screen.getByRole('slider', { name: '思考强度' })).toBeDisabled()
   fireEvent.click(screen.getByRole('button', { name: '可调模型' }))
   fireEvent.click(trigger)
-  expect(screen.getByRole('button', { name: '高' })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('slider', { name: '思考强度' })).toHaveAttribute('aria-valuetext', '高')
   fireEvent.keyDown(document, { key: 'Escape' })
   fireEvent.change(screen.getByRole('textbox'), { target: { value: '测试' } })
   fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
@@ -62,16 +63,31 @@ it('影音使用相同控件，默认不传档位，选择后发送强度', asyn
   render(<MediaAssistant token="test-placeholder" page="projects" selectedNode={null} />)
   fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
   fireEvent.click(screen.getByRole('button', { name: '选择模型' }))
-  await screen.findByRole('button', { name: '高' })
+  await waitFor(() => expect(screen.getByRole('slider', { name: '思考强度' })).toBeEnabled())
   const input = screen.getByRole('textbox', { name: '向镜头搭档提问' })
   fireEvent.keyDown(window, { key: 'Escape' })
   fireEvent.change(input, { target: { value: '默认任务' } })
   fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
   await waitFor(() => expect(streamAiChat).toHaveBeenCalledWith('test-placeholder', expect.objectContaining({ reasoning_effort: undefined }), expect.any(Function)))
   fireEvent.click(screen.getByRole('button', { name: '选择模型' }))
-  fireEvent.click(screen.getByRole('button', { name: '高' }))
+  fireEvent.change(screen.getByRole('slider', { name: '思考强度' }), { target: { value: '2' } })
   fireEvent.keyDown(window, { key: 'Escape' })
   fireEvent.change(input, { target: { value: '认真规划' } })
   fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
   await waitFor(() => expect(streamAiChat).toHaveBeenLastCalledWith('test-placeholder', expect.objectContaining({ surface: 'media', reasoning_effort: 'high' }), expect.any(Function)))
+})
+
+it('滑杆可恢复默认，无模型和执行期间不能修改', () => {
+  const onChange = vi.fn()
+  const props = { levels: ['low', 'medium', 'high'], value: 'medium', hasModel: true, disabled: false, onChange }
+  const { rerender } = render(<ReasoningEffortControl {...props} modelName="测试模型" />)
+  expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '中')
+  fireEvent.click(screen.getByRole('button', { name: '恢复默认思考强度' }))
+  expect(onChange).toHaveBeenCalledWith(undefined)
+  rerender(<ReasoningEffortControl {...props} disabled />)
+  expect(screen.getByRole('slider')).toBeDisabled()
+  expect(screen.getByRole('button')).toBeDisabled()
+  rerender(<ReasoningEffortControl {...props} hasModel={false} />)
+  expect(screen.getByRole('slider')).toBeDisabled()
+  expect(screen.getByText('选择模型后可设置思考强度。')).toBeInTheDocument()
 })

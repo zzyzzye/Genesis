@@ -221,7 +221,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
                 {formatContextWindow(item.context_window) && <span className="media-agent__context-chip">{formatContextWindow(item.context_window)}</span>}
               </button>)}
             </div> : <p>当前服务商没有可用模型。</p>}
-            <ReasoningEffortControl levels={reasoning.levels} value={reasoning.effort} defaultValue={selectedModel?.reasoning_effort_default} hasModel={Boolean(selectedModel)} disabled={busy || modelsLoading} onChange={reasoning.setEffort} />
+            <ReasoningEffortControl levels={reasoning.levels} value={reasoning.effort} defaultValue={selectedModel?.reasoning_effort_default} modelName={selectedModel?.name || model} hasModel={Boolean(selectedModel)} disabled={busy || modelsLoading} onChange={reasoning.setEffort} />
           </div>}
           <button className="media-agent__send" type="submit" aria-label="发送给镜头搭档" disabled={busy || !input.trim()}><Send aria-hidden="true" /></button>
         </div>{error && <p className="media-agent__error" role="alert">{error}</p>}

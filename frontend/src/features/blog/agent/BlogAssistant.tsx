@@ -599,7 +599,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
                     ))}
                   </div>
                 )}
-                <ReasoningEffortControl levels={reasoning.levels} value={reasoning.effort} defaultValue={selectedModel?.reasoning_effort_default} hasModel={Boolean(selectedModel)} disabled={isBusy} onChange={reasoning.setEffort} />
+                <ReasoningEffortControl levels={reasoning.levels} value={reasoning.effort} defaultValue={selectedModel?.reasoning_effort_default} modelName={selectedModel?.name || model} hasModel={Boolean(selectedModel)} disabled={isBusy} onChange={reasoning.setEffort} />
               </div>}
               {activeRun
                 ? <button className="studio-assistant__stop" type="button" aria-label="停止生成" onClick={stopGeneration}><StudioIcon name="stop" /></button>
