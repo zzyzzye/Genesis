@@ -181,6 +181,11 @@
 .studio-assistant.is-expanded { position: fixed; inset: 0 0 0 auto; width: min(var(--assistant-motion-width, 960px), calc(100vw - var(--studio-nav-width))); }
 .studio-assistant.is-expanded .studio-assistant__history { flex: 0 0 224px; }
 .studio-assistant.is-expanded .studio-assistant__workspace.is-history > .studio-assistant__chat { display: flex; }
+/* 写作页保留编辑器宽度，助手浮在上层，避免工具栏和正文被再次压缩。 */
+@media (min-width: 1101px) {
+  .studio-app-shell:has(.markdown-editor):has(.studio-assistant) { grid-template-columns: var(--studio-nav-width) minmax(0, 1fr); }
+  .studio-app-shell:has(.markdown-editor) .studio-assistant.is-open { position: fixed; inset: 0 0 0 auto; width: min(var(--assistant-motion-width, 420px), calc(100vw - var(--studio-nav-width))); height: 100dvh; box-shadow: -12px 0 32px rgb(0 0 0 / 6%); }
+}
 @media (max-width: 1100px) {
   .studio-assistant__resize { display: none; }
   .studio-app-shell:has(.studio-assistant) { grid-template-columns: var(--studio-nav-width) minmax(0, 1fr); }

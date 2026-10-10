@@ -9,6 +9,7 @@
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 | --- | --- | --- | --- | --- |
 | 博客助手 / 非模态浮层 | BlogAssistant、既有对话与模型菜单状态 | BlogAssistant.tsx、BlogAssistant.css | 后台常驻，空态紧凑、对话展开；输入保持编辑，执行模式与确认沿用原协议 | 开关、聚焦、模型选择与 Escape、上下文环、长回复与代码块、生成与失败、窄屏 |
+| 写作页助手布局 | BlogAssistant.css 的写作页布局变体 | 实际存在的 .markdown-editor | 右侧浮层不挤压编辑器，收起后恢复被覆盖区域；其他页面继续并排 | 编辑区开合宽度一致、菜单、展开、桌面与窄屏 |
 | 助手思考设置 | AgentModelPicker、ReasoningEffortControl、useReasoningEffort | 框架原生 profile 与 MiMo 官方协议最小补充 | native select 承担思考模式和强度选择；两者独立；按模型记忆；选完模型保持菜单展开 | 请求参数、恢复、图缓存、菜单保持展开、键盘与窄屏 |
 | 博客 Agent 写入确认 | BlogAssistant 的确认卡片、/ai/actions/confirm | 工具更新事件及服务端任务 proposals | 结构化提议与正文分离；点击确认执行才写入；执行中禁用，失败保留，成功状态恢复；下一轮注入可信执行回执 | 无 JSON 正文、重连、历史恢复、写入成功与失败、桌面与窄屏 |
 | 模块管理入口 / Navigation | React Router、Studio | App.tsx、Studio.tsx、Account.tsx | 所属模块下的 /studio 直接进入管理，旧博客链接保留路径、查询参数与锚点 | 直接访问、旧链接跳转、账户入口、桌面与窄屏 |
