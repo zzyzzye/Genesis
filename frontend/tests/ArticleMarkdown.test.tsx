@@ -53,6 +53,7 @@ it('超过 20 行默认折叠，展开收起后仍复制完整代码，边界行
   expect(writeText).toHaveBeenCalledWith(`${source}\n`)
   await act(async () => {
     view.rerender(<ArticleMarkdown>{`\`\`\`python\n${source.split('\n').slice(0, 20).join('\n')}\n\`\`\``}</ArticleMarkdown>)
+    await Promise.resolve()
   })
   expect(screen.queryByRole('button', { name: /展开剩余|收起代码/ })).not.toBeInTheDocument()
 })

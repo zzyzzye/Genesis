@@ -77,7 +77,7 @@ describe('助手失败后的继续对话', () => {
     mount([{ role: 'assistant', content: '你好' }])
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '写文章' } })
     fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
-    const confirm = await screen.findByRole('button', { name: '确认执行' })
+    const confirm = await screen.findByRole('button', { name: '确认创建' })
     await waitFor(() => expect(confirm).toBeEnabled())
     expect(screen.getByText('嫌麻烦的代价')).toBeInTheDocument()
     fireEvent.click(confirm)

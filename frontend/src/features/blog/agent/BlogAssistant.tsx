@@ -46,6 +46,7 @@ import {
   type AiGenerationMetrics,
 } from '../../../lib/api'
 import { AgentModelPicker } from '../../agent/AgentModelPicker'
+import { BlogActionProposal } from './BlogActionProposal'
 import { AgentQuestion } from '../../agent/AgentQuestion'
 import { questionAnswers, splitAgentQuestion } from '../../agent/questionProtocol'
 import { modelDisplayName } from '../../agent/modelDisplayName'
@@ -180,7 +181,7 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
   </div>
 })
 
-const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, timing, metrics, proposals, executedProposals, index, onConfirm, confirming, streaming, onProgress, onAnswer, questionDisabled, questionAnswer }: AssistantMessage & { index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void; onAnswer: (answer: string) => void; questionDisabled: boolean; questionAnswer?: string }) {
+const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, timing, metrics, proposals, executedProposals, index, onConfirm, confirming, streaming, onProgress, onAnswer, questionDisabled, questionAnswer, targetPost }: AssistantMessage & { index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void; onAnswer: (answer: string) => void; questionDisabled: boolean; questionAnswer?: string; targetPost: AssistantEditorContext | null }) {
   const legacyAction = streaming ? null : parsePendingAction(content)
   const actions = proposals?.length ? proposals : legacyAction ? [legacyAction] : []
   const question = splitAgentQuestion(content)
@@ -190,10 +191,7 @@ const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, 
     {!streaming && !error && status === 'completed' && !content.trim() && !actions.length && <p className="studio-assistant__message-status">本轮未返回正文，请重试或切换模型。</p>}
     {question.request && <AgentQuestion key={question.request.id} request={question.request} disabled={questionDisabled} answered={questionAnswer !== undefined} answerContent={questionAnswer} onAnswer={onAnswer} />}
     <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} />
-    {actions.map((action) => <div className="studio-assistant__action-card" key={action.proposal_id}>
-      <strong>{action.executed || executedProposals?.includes(action.proposal_id) ? '已执行' : '待确认操作'}</strong><span>{typeof action.payload.title === 'string' ? action.payload.title : action.summary}</span>
-      <button type="button" disabled={streaming || confirming || action.executed || executedProposals?.includes(action.proposal_id)} onClick={() => { void onConfirm(index, action) }}>{action.executed || executedProposals?.includes(action.proposal_id) ? '已完成' : confirming ? '执行中…' : '确认执行'}</button>
-    </div>)}
+    {actions.map((action) => <BlogActionProposal key={action.proposal_id} action={action} targetPost={targetPost} executed={Boolean(action.executed || executedProposals?.includes(action.proposal_id))} busy={confirming} disabled={streaming} onConfirm={() => { void onConfirm(index, action) }} />)}
   </div>
 })
 
@@ -777,7 +775,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
                 return (
                 <motion.div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={(message.role === 'assistant' ? splitAgentQuestion(message.content).request?.id : null) ?? `${conversationId ?? 'new'}-${message.role}-${index}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={transition}>
                   {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
-                  {message.role === 'assistant' ? <MarkdownMessage {...message} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} onAnswer={(answer) => { void sendMessage(answer) }} questionDisabled={isBusy || conversationLoading} questionAnswer={messages.slice(index + 1).find((item) => item.role === 'user')?.content} /> : <p>{message.content}</p>}
+                  {message.role === 'assistant' ? <MarkdownMessage {...message} targetPost={editor} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} onAnswer={(answer) => { void sendMessage(answer) }} questionDisabled={isBusy || conversationLoading} questionAnswer={messages.slice(index + 1).find((item) => item.role === 'user')?.content} /> : <p>{message.content}</p>}
                 </motion.div>
               )})}
             </div>
