@@ -174,7 +174,7 @@ describe('助手失败后的继续对话', () => {
     fireEvent.click(screen.getByRole('button', { name: '聊天历史' }))
     fireEvent.click(await screen.findByRole('button', { name: /已保存的博客规划/ }))
     expect(await screen.findByText('历史回答')).toBeInTheDocument()
-    expect(screen.getByText('输出 3.00 秒')).toBeInTheDocument()
+    expect(screen.getByText('3.00 秒').parentElement).toHaveTextContent('输出 3.00 秒')
     expect(screen.getByText('120 tokens · 40.0 tokens/s')).toBeInTheDocument()
     expect(screen.queryByText(/实测/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '重命名' }))

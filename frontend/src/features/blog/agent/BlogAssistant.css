@@ -132,7 +132,10 @@
 .studio-assistant__action-card span { flex: 1; overflow-wrap: anywhere; }
 .studio-assistant__action-card button { padding: 5px 8px; border-radius: 5px; background: var(--assistant-ink); color: #fff; font-size: 11px; }
 .studio-assistant .studio-assistant__action-card button:hover:not(:disabled), .studio-assistant .studio-assistant__action-card button:focus-visible:not(:disabled) { background: #414950; }
-.studio-assistant__timing { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--assistant-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.studio-assistant__timing { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 10px; color: var(--assistant-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.studio-assistant__timing > span:not(.studio-assistant__speed) { white-space: nowrap; }
+.studio-assistant__duration { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+.studio-assistant__speed { grid-column: 1 / -1; }
 .studio-assistant__stream-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
 .studio-assistant__typing-cursor { display: inline-block; width: 2px; height: 1em; margin-left: 2px; background: currentColor; vertical-align: -2px; animation: studio-caret 1s steps(2, start) infinite; }
 @keyframes studio-caret { to { visibility: hidden; } }

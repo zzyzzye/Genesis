@@ -149,13 +149,13 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
   const suffix = source === 'estimated' ? '（估算）' : ''
   return <div className="studio-assistant__timing" aria-label="生成耗时" title="首字是开始执行到首次正文输出的耗时；输出是最后一次正文调用的首末片段耗时；总计还包含工具调用与收尾处理，因此不一定等于前两项之和。">
     {metrics ? <>
-      <span>首字 {metrics.first_token_seconds === null ? '等待中' : formatDuration(metrics.first_token_seconds * 1000)}</span>
-      <span>输出 {metrics.output_seconds === null ? '等待中' : formatDuration(metrics.output_seconds * 1000)}</span>
-      <span>总计 {formatDuration(metrics.total_seconds * 1000)}</span>
+      <span>首字 <span className="studio-assistant__duration">{metrics.first_token_seconds === null ? '等待中' : formatDuration(metrics.first_token_seconds * 1000)}</span></span>
+      <span>输出 <span className="studio-assistant__duration">{metrics.output_seconds === null ? '等待中' : formatDuration(metrics.output_seconds * 1000)}</span></span>
+      <span>总计 <span className="studio-assistant__duration">{formatDuration(metrics.total_seconds * 1000)}</span></span>
     </> : timing && <>
-      <span>首字 {formatDuration((firstToken ?? end) - timing.startedAt)}</span>
-      <span>输出 {firstToken ? formatDuration(end - firstToken) : '等待中'}</span>
-      <span>总计 {formatDuration(end - timing.startedAt)}</span>
+      <span>首字 <span className="studio-assistant__duration">{formatDuration((firstToken ?? end) - timing.startedAt)}</span></span>
+      <span>输出 <span className="studio-assistant__duration">{firstToken ? formatDuration(end - firstToken) : '等待中'}</span></span>
+      <span>总计 <span className="studio-assistant__duration">{formatDuration(end - timing.startedAt)}</span></span>
     </>}
     {showMetrics && <span className="studio-assistant__speed" title="输出速度 = 输出 token 数 ÷ 界面显示的输出时长（两位小数）。统计最后一次有正文输出的模型调用，用量来自供应商并扣除明确报告的推理 token，可能包含该调用的工具参数。缺少真实用量时按字符估算；单片段或缺少耗时时速度不可用。">
       {count !== null && count !== undefined ? `${count.toLocaleString('zh-CN')} tokens${suffix} · ` : ''}
