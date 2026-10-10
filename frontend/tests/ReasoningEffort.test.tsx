@@ -6,6 +6,7 @@ import { MediaAssistant } from '../src/pages/media/MediaAssistant'
 import { createAiChatRun, getProviderModels, streamAiChat, streamAiChatRun } from '../src/lib/api'
 import { studioAuthTokenKey } from '../src/lib/auth'
 import { ReasoningEffortControl } from '../src/features/agent/ReasoningEffortControl'
+import { AgentModelPicker } from '../src/features/agent/AgentModelPicker'
 
 vi.mock('../src/lib/api', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/lib/api')>(),
@@ -80,7 +81,7 @@ it('影音使用相同控件，默认不传档位，选择后发送强度', asyn
 it('滑杆可恢复默认，无模型和执行期间不能修改', () => {
   const onChange = vi.fn()
   const props = { levels: ['low', 'medium', 'high'], value: 'medium', hasModel: true, disabled: false, onChange }
-  const { rerender } = render(<ReasoningEffortControl {...props} modelName="测试模型" />)
+  const { rerender } = render(<ReasoningEffortControl {...props} />)
   expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '中')
   fireEvent.click(screen.getByRole('button', { name: '恢复默认思考强度' }))
   expect(onChange).toHaveBeenCalledWith(undefined)
@@ -90,4 +91,22 @@ it('滑杆可恢复默认，无模型和执行期间不能修改', () => {
   rerender(<ReasoningEffortControl {...props} hasModel={false} />)
   expect(screen.getByRole('slider')).toBeDisabled()
   expect(screen.getByText('选择模型后可设置思考强度。')).toBeInTheDocument()
+})
+
+it('共享模型选择器支持搜索、空态与供应商切换后清空搜索', () => {
+  const onProviderChange = vi.fn()
+  const onModelChange = vi.fn()
+  render(<AgentModelPicker provider="openai" models={[
+    { id: 'alpha', name: 'Alpha', created: null, context_window: 128000 },
+    { id: 'beta', name: 'Beta', created: null, context_window: null },
+  ]} model="alpha" disabled={false} effort={undefined} onProviderChange={onProviderChange} onModelChange={onModelChange} onEffortChange={vi.fn()} />)
+  fireEvent.change(screen.getByRole('textbox', { name: '搜索模型' }), { target: { value: 'beta' } })
+  expect(screen.queryByRole('button', { name: 'Alpha 128K' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Beta' }))
+  expect(onModelChange).toHaveBeenCalledWith('beta')
+  fireEvent.change(screen.getByRole('textbox', { name: '搜索模型' }), { target: { value: 'missing' } })
+  expect(screen.getByText('没有匹配的模型，试试其他名称。')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '切换到 Grok 模型' }))
+  expect(onProviderChange).toHaveBeenCalledWith('grok')
+  expect(screen.getByRole('textbox', { name: '搜索模型' })).toHaveValue('')
 })

@@ -5,7 +5,7 @@ import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider, type AvailableModel } from '../../lib/api'
-import { ReasoningEffortControl } from '../../features/agent/ReasoningEffortControl'
+import { AgentModelPicker } from '../../features/agent/AgentModelPicker'
 import { reasoningEffortLabel, useReasoningEffort } from '../../features/agent/useReasoningEffort'
 
 type MediaAssistantPage = 'projects' | 'project' | 'canvas' | 'assets'
@@ -18,7 +18,6 @@ type MediaCanvasOperation =
   | { action: 'update_node'; node_id: string; name?: string; text?: string; duration_seconds?: number }
 export type MediaCanvasPlan = { title: string; operations: MediaCanvasOperation[] }
 
-const providers: AiProvider[] = ['openai', 'grok', 'gemini', 'claude', 'mimo']
 const providerLabels: Record<AiProvider, string> = { openai: 'OpenAI', grok: 'Grok', gemini: 'Gemini', claude: 'Claude', mimo: 'MiMo' }
 const promptsByPage: Record<MediaAssistantPage, string[]> = {
   projects: ['把一句想法拆成短片方案', '给我一个可拍的 6 镜头结构'],
@@ -30,11 +29,6 @@ const pageLabels: Record<MediaAssistantPage, string> = { projects: '作品列表
 const nodeTypeLabels: Record<string, string> = { video: '视频节点', image: '图片节点', audio: '音频节点', note: '便签', text: '文本', shape: '形状', asset: '素材', group: '分组' }
 
 function nodeLabel(node: MediaAssistantNode) { return node.name.trim() || node.text.trim().slice(0, 24) || nodeTypeLabels[node.type] || '节点' }
-function formatContextWindow(value: number | null) {
-  if (value === null) return null
-  if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(2))}M`
-  return `${Math.round(value / 1000)}K`
-}
 function canvasPlanFromMessage(content: string): MediaCanvasPlan | null {
   const match = content.match(/```canvas-plan\s*\n?([\s\S]*?)```/i)
   if (!match) return null
@@ -209,19 +203,9 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
       </div>
       <form className="media-agent__form" noValidate onSubmit={submit}>
         <textarea className="resize-none" ref={inputRef} aria-label="向镜头搭档提问" aria-keyshortcuts="Enter" rows={2} value={input} onChange={(event) => setInput(event.currentTarget.value)} onKeyDown={(event) => { if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return; event.preventDefault(); event.currentTarget.form?.requestSubmit() }} disabled={busy} placeholder="描述画面，或说说你想调整的地方…" />
-        <div className="media-agent__composer-tools"><button ref={modelTriggerRef} className="media-agent__model-trigger" type="button" aria-label="选择模型" aria-expanded={modelMenuOpen} onClick={() => setModelMenuOpen((value) => !value)}><span>{providerLabels[provider]}</span><i aria-hidden="true">·</i><strong>{model || '选择模型'}</strong><span>{reasoningEffortLabel(reasoning.effort)}</span><ChevronDown aria-hidden="true" /></button>
+        <div className="media-agent__composer-tools"><button ref={modelTriggerRef} className="media-agent__model-trigger" type="button" aria-label="选择模型" aria-expanded={modelMenuOpen} onClick={() => setModelMenuOpen((value) => !value)}><span>{providerLabels[provider]}</span><i aria-hidden="true">·</i><strong>{selectedModel?.name || model || '选择模型'}</strong><span>{reasoningEffortLabel(reasoning.effort)}</span><ChevronDown aria-hidden="true" /></button>
           {modelMenuOpen && <div ref={modelMenuRef} className="media-agent__model-menu" aria-label="模型列表">
-            <div className="media-agent__provider-tabs" role="group" aria-label="选择供应商">
-              {providers.map((item) => <button className={provider === item ? 'is-active' : ''} type="button" key={item} aria-pressed={provider === item} aria-label={`切换到 ${providerLabels[item]} 模型`} onClick={() => { setProvider(item); setModelMenuOpen(true) }}>{providerLabels[item]}</button>)}
-            </div>
-            {modelsLoading ? <p role="status">正在加载模型…</p> : models.length ? <div className="media-agent__model-list" aria-label={`${providerLabels[provider]} 模型列表`}>
-              {models.map((item) => <button className={`media-agent__model-option${model === item.id ? ' is-selected' : ''}`} type="button" key={item.id} aria-pressed={model === item.id} onClick={() => selectModel(item.id)}>
-                <span className="media-agent__model-check" aria-hidden="true">{model === item.id && <Check size={12} />}</span>
-                <span className="media-agent__model-name">{item.name || item.id}</span>
-                {formatContextWindow(item.context_window) && <span className="media-agent__context-chip">{formatContextWindow(item.context_window)}</span>}
-              </button>)}
-            </div> : <p>当前服务商没有可用模型。</p>}
-            <ReasoningEffortControl levels={reasoning.levels} value={reasoning.effort} defaultValue={selectedModel?.reasoning_effort_default} modelName={selectedModel?.name || model} hasModel={Boolean(selectedModel)} disabled={busy || modelsLoading} onChange={reasoning.setEffort} />
+            <AgentModelPicker provider={provider} models={models} model={model} loading={modelsLoading} disabled={busy} effort={reasoning.effort} onProviderChange={setProvider} onModelChange={selectModel} onEffortChange={reasoning.setEffort} />
           </div>}
           <button className="media-agent__send" type="submit" aria-label="发送给镜头搭档" disabled={busy || !input.trim()}><Send aria-hidden="true" /></button>
         </div>{error && <p className="media-agent__error" role="alert">{error}</p>}

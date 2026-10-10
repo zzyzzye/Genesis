@@ -37,7 +37,7 @@ import {
   type AiProvider,
   type AvailableModel,
 } from '../../../lib/api'
-import { ReasoningEffortControl } from '../../agent/ReasoningEffortControl'
+import { AgentModelPicker } from '../../agent/AgentModelPicker'
 import { reasoningEffortLabel, useReasoningEffort } from '../../agent/useReasoningEffort'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
 
@@ -173,6 +173,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
   const [provider, setProvider] = useState<AiProvider>('openai')
   const [model, setModel] = useState('')
   const [models, setModels] = useState<AvailableModel[]>([])
+  const [modelsLoading, setModelsLoading] = useState(true)
   const modelsCache = useRef<Partial<Record<AiProvider, AvailableModel[]>>>({})
   const selectedModels = useRef<Partial<Record<AiProvider, string>>>({})
   const modelTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -219,6 +220,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
       }
     })).then(() => {
       if (cancelled) return
+      setModelsLoading(false)
       const availableModels = modelsCache.current[provider] ?? []
       setModels(availableModels)
       const preferredModel = selectedModels.current[provider]
@@ -545,7 +547,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
                 >自动</button>
               </div>
               <button ref={modelTriggerRef} aria-label="选择模型" title={model || '选择模型'} className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
-                <ProviderIcon provider={provider} /><span className="studio-assistant__selected-model">{model || '选择模型'}</span><span>{reasoningEffortLabel(reasoning.effort)}</span><StudioIcon name="chevron" />
+                <ProviderIcon provider={provider} /><span className="studio-assistant__selected-model">{selectedModel?.name || model || '选择模型'}</span><span>{reasoningEffortLabel(reasoning.effort)}</span><StudioIcon name="chevron" />
               </button>
               <span className="studio-assistant__context-ring" tabIndex={0} role={contextPercent === null ? 'img' : 'progressbar'} aria-label={contextDescription} aria-valuemin={contextPercent === null ? undefined : 0} aria-valuemax={contextPercent === null ? undefined : 100} aria-valuenow={contextPercent ?? undefined}>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -556,50 +558,18 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
                 <span className="studio-assistant__ring-tooltip" aria-hidden="true">{contextDescription}</span>
               </span>
               {modelMenuOpen && <div ref={modelMenuRef} className="studio-assistant__model-menu">
-                <div className="studio-assistant__provider-tabs">
-                  {(['openai', 'grok', 'gemini', 'claude', 'mimo'] as AiProvider[]).map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      className={provider === item ? 'is-active' : ''}
-                      aria-label={`切换到 ${item} 模型`}
-                      onClick={() => {
-                        setProvider(item)
-                        setModels(modelsCache.current[item] ?? [])
-                        setModel(selectedModels.current[item] ?? modelsCache.current[item]?.[0]?.id ?? '')
-                      }}
-                    >
-                      <ProviderIcon provider={item} />
-                      <span>{item}</span>
-                    </button>
-                  ))}
-                </div>
-                {models.length === 0 ? <span className="studio-assistant__model-empty">暂无可用模型</span> : (
-                  <div className="studio-assistant__model-list" aria-label={`${provider} 模型列表`}>
-                    {models.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={`studio-assistant__model-option${model === item.id ? ' is-selected' : ''}`}
-                        title={item.name || item.id}
-                        aria-pressed={model === item.id}
-                        onClick={() => {
-                          selectedModels.current[provider] = item.id
-                          setModel(item.id)
-                          setModelMenuOpen(false)
-                        }}
-                      >
-                        <span className="studio-assistant__model-name">{item.name || item.id}</span>
-                        {item.context_window !== null && (
-                          <span className="studio-assistant__context-chip">
-                            <strong>{formatTokens(item.context_window)}</strong>
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <ReasoningEffortControl levels={reasoning.levels} value={reasoning.effort} defaultValue={selectedModel?.reasoning_effort_default} modelName={selectedModel?.name || model} hasModel={Boolean(selectedModel)} disabled={isBusy} onChange={reasoning.setEffort} />
+                <AgentModelPicker provider={provider} models={models} model={model} loading={modelsLoading} disabled={isBusy} effort={reasoning.effort} onProviderChange={(next) => {
+                  if (next === provider) return
+                  setModelsLoading(true)
+                  setProvider(next)
+                  setModels(modelsCache.current[next] ?? [])
+                  setModel(selectedModels.current[next] ?? modelsCache.current[next]?.[0]?.id ?? '')
+                }} onModelChange={(next) => {
+                  selectedModels.current[provider] = next
+                  setModel(next)
+                  setModelMenuOpen(false)
+                  modelTriggerRef.current?.focus()
+                }} onEffortChange={reasoning.setEffort} />
               </div>}
               {activeRun
                 ? <button className="studio-assistant__stop" type="button" aria-label="停止生成" onClick={stopGeneration}><StudioIcon name="stop" /></button>
