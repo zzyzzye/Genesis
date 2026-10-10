@@ -2,8 +2,7 @@ import './BlogPage.css'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { ArticleMarkdown } from '../../features/blog/ArticleMarkdown'
 
 import { getBlogPost, getBlogPosts, type BlogPostDetail, type BlogPostPreview, type BlogTag } from '../../lib/api'
 
@@ -30,7 +29,7 @@ function getTags(posts: BlogPostPreview[]): BlogTag[] {
 }
 
 function MarkdownContent({ content }: { content: string }) {
-  return <div className="article-content"><Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown></div>
+  return <div className="article-content"><ArticleMarkdown>{content}</ArticleMarkdown></div>
 }
 
 function TagList({ tags }: { tags: BlogTag[] }) {

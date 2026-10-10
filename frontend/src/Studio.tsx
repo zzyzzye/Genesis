@@ -1,8 +1,7 @@
 import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate } from 'react-router-dom'
-import Markdown from 'react-markdown'
+import { ArticleMarkdown } from './features/blog/ArticleMarkdown'
 import { EditorView } from '@codemirror/view'
-import remarkGfm from 'remark-gfm'
 import {
   BlockTypeSelect,
   BoldItalicUnderlineToggles,
@@ -607,7 +606,7 @@ function ArticleReader({
         </div>
       </header>
       <article className="article-reader__content article-content">
-        <Markdown remarkPlugins={[remarkGfm]}>{editor.contentMarkdown || '开始输入 Markdown 内容。'}</Markdown>
+        <ArticleMarkdown>{editor.contentMarkdown || '开始输入 Markdown 内容。'}</ArticleMarkdown>
       </article>
     </section>
   )
