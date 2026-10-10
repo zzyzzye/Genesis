@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { ArticleMarkdown } from '../src/features/blog/ArticleMarkdown'
@@ -33,4 +33,26 @@ it('未知语言和空代码保留可读内容并安全显示标签', () => {
   expect(screen.getByText('<script>alert(1)</script>')).toBeInTheDocument()
   expect(view.container.querySelector('script')).toBeNull()
   expect(screen.getAllByRole('button')).toHaveLength(2)
+})
+
+it('超过 20 行默认折叠，展开收起后仍复制完整代码，边界行数不折叠', async () => {
+  const source = Array.from({ length: 22 }, (_, index) => `print(${index + 1})`).join('\n')
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('navigator', { clipboard: { writeText } })
+  const view = render(<ArticleMarkdown>{`\`\`\`python\n${source}\n\`\`\``}</ArticleMarkdown>)
+  expect(view.container.querySelectorAll('.article-code__line')).toHaveLength(20)
+  const toggle = screen.getByRole('button', { name: '展开剩余 2 行' })
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(toggle)
+  expect(view.container.querySelectorAll('.article-code__line')).toHaveLength(22)
+  expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  fireEvent.click(screen.getByRole('button', { name: '收起代码' }))
+  expect(view.container.querySelectorAll('.article-code__line')).toHaveLength(20)
+  fireEvent.click(screen.getByRole('button', { name: '复制 Python 代码' }))
+  await screen.findByText('已复制')
+  expect(writeText).toHaveBeenCalledWith(`${source}\n`)
+  await act(async () => {
+    view.rerender(<ArticleMarkdown>{`\`\`\`python\n${source.split('\n').slice(0, 20).join('\n')}\n\`\`\``}</ArticleMarkdown>)
+  })
+  expect(screen.queryByRole('button', { name: /展开剩余|收起代码/ })).not.toBeInTheDocument()
 })

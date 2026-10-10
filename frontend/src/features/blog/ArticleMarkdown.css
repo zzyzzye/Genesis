@@ -18,8 +18,10 @@
 .article-code__error { padding: 6px 16px 0; color: #e1bb86; font: 12px/1.5 Inter, "PingFang SC", sans-serif; }
 .article-content .article-code pre { margin: 0; padding: 12px 0 16px; max-width: 100%; overflow-x: auto; border: 0; outline: none; box-shadow: none; border-radius: 0; background: transparent; color: inherit; font: inherit; white-space: pre; tab-size: 4; }
 .article-content .article-code pre code { display: block; width: max-content; min-width: 100%; padding: 0; background: transparent; color: inherit; font: inherit; white-space: pre; }
-.article-code__line { display: grid; grid-template-columns: 4ch 1fr; min-height: 1.55em; padding-right: 16px; }
-.article-code__number { position: sticky; left: 0; padding-right: 12px; background: var(--code-surface); color: #8c8d94; text-align: right; user-select: none; }
+.article-code__line { display: grid; grid-template-columns: calc(var(--code-number-width, 4ch) + 40px) 1fr; min-height: 1.55em; padding-right: 16px; }
+.article-code__number { position: sticky; left: 0; padding-left: 16px; padding-right: 24px; background: var(--code-surface); color: #8c8d94; text-align: right; user-select: none; }
+.article-content .article-code__toggle { display: flex; justify-content: center; align-items: center; gap: 6px; width: 100%; min-height: 36px; padding: 8px 16px; border: 0; outline: none; box-shadow: none; background: transparent; color: #bbbcc1; font: 12px/1.5 Inter, "PingFang SC", sans-serif; cursor: pointer; }
+.article-content .article-code__toggle:is(:hover, :focus-visible) { background: #2c2d30; color: #fff; outline: none; box-shadow: none; }
 .article-code .tok-keyword, .article-code .tok-bool, .article-code .tok-null { color: #d7a9e3; }
 .article-code .tok-string, .article-code .tok-string2 { color: #b9ce9a; }
 .article-code .tok-number, .article-code .tok-literal { color: #e1bb86; }
