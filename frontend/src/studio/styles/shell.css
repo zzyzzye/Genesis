@@ -16,7 +16,7 @@
   --studio-ui: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
   --studio-scroll-thumb: #c3c8cd;
   --studio-scroll-hover: #969ea6;
-  display: grid; grid-template-columns: var(--studio-nav-width) minmax(0, 1fr);
+  display: grid; grid-template-columns: var(--studio-nav-width) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
   height: 100dvh; min-width: 0; overflow: hidden;
   background: var(--studio-canvas); color: var(--studio-ink); font: 13px/1.6 var(--studio-ui);
 }

@@ -149,13 +149,13 @@
 /* 助手占据独立栏，历史和正文分别滚动，不覆盖桌面写作内容。 */
 .studio-app-shell:has(.studio-assistant.is-open) { grid-template-columns: var(--studio-nav-width) minmax(0, 1fr) var(--studio-assistant-width, 420px); }
 .studio-assistant .studio-assistant__resize { position: absolute; z-index: 1; left: -4px; top: 0; width: 8px; height: 100%; padding: 0; background: transparent; cursor: col-resize; touch-action: none; }
-.studio-assistant.is-open { position: relative; inset: auto; grid-column: 3; grid-row: 1; min-width: 0; height: 100%; }
+.studio-assistant.is-open { position: relative; inset: auto; grid-column: 3; grid-row: 1; min-width: 0; min-height: 0; height: 100dvh; }
 .studio-assistant.is-open .studio-assistant__panel,
-.studio-assistant.is-open .studio-assistant__panel.is-empty { width: 100%; height: 100%; max-height: none; border-radius: 0; box-shadow: none; background: var(--assistant-paper); }
+.studio-assistant.is-open .studio-assistant__panel.is-empty { flex: 1; min-height: 0; width: 100%; height: 100%; max-height: 100%; border-radius: 0; box-shadow: none; background: var(--assistant-paper); }
 .studio-assistant.is-open .studio-assistant__header { padding: 20px; }
 .studio-assistant__workspace { display: flex; flex: 1; min-height: 0; min-width: 0; }
 .studio-assistant__chat { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
-.studio-assistant__conversation-heading { display: flex; align-items: center; gap: 12px; min-height: 42px; padding: 0 20px 12px; }
+.studio-assistant__conversation-heading { display: flex; flex: none; align-items: center; gap: 12px; min-height: 42px; padding: 0 20px 12px; }
 .studio-assistant__conversation-heading > strong { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 500; }
 .studio-assistant__conversation-heading button, .studio-assistant__history-heading button, .studio-assistant__history-back { flex: none; padding: 4px 6px; color: var(--assistant-muted); font-size: 11px; background: transparent; border-radius: 5px; }
 .studio-assistant__conversation-heading form { display: flex; flex-wrap: wrap; align-items: center; width: 100%; gap: 6px; }
