@@ -1030,6 +1030,7 @@ function Dashboard({
       </BlogWorkflowDialog>}
       {(blocker.state === 'blocked' || logoutRequested) && <BlogWorkflowDialog title={isSaving ? '正在保存文章' : '还有未保存的内容'} description={isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel="离开写作页" busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
       <BlogAssistant
+        userId={user.id}
         page={{
           route: location.pathname,
           section: activeSection,

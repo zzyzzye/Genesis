@@ -21,6 +21,21 @@ class AiChatRunStatus(StrEnum):
     FAILED = "failed"
 
 
+class AiConversation(Base):
+    """博客会话目录；正文复用生成任务，执行状态由 LangGraph 保存。"""
+
+    __tablename__ = "ai_conversations"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id"), index=True)
+    title: Mapped[str] = mapped_column(String(80), default="新对话")
+    title_source: Mapped[str] = mapped_column(String(20), default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class AiChatRun(Base):
     """与浏览器连接解耦的文本生成任务。
 
@@ -39,6 +54,9 @@ class AiChatRun(Base):
     surface: Mapped[str] = mapped_column(String(20))
     provider: Mapped[str] = mapped_column(String(20))
     model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    conversation_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("ai_conversations.id"), nullable=True, index=True
+    )
     thread_id: Mapped[str] = mapped_column(
         String(255), default=lambda: str(uuid4()), unique=True, index=True
     )

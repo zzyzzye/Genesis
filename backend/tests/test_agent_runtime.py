@@ -54,6 +54,71 @@ def test_prompt_and_message_text() -> None:
 
 
 @pytest.mark.anyio
+async def test_conversation_checkpoint_keeps_turns_and_replaces_page_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from langchain_core.language_models.fake_chat_models import FakeListChatModel
+    from langgraph.checkpoint.memory import InMemorySaver
+    from langgraph.graph import END, START, MessagesState, StateGraph
+
+    from genesis_api.ai.schemas import AiContext
+
+    model = FakeListChatModel(responses=["第一轮回答", "第二轮回答"])
+
+    async def respond(state: MessagesState) -> dict[str, object]:
+        return {"messages": [await model.ainvoke(state["messages"])]}
+
+    builder = StateGraph(MessagesState)
+    builder.add_node("respond", respond)
+    builder.add_edge(START, "respond")
+    builder.add_edge("respond", END)
+    graph = builder.compile(checkpointer=InMemorySaver())
+    runtime = EmbeddedAgentRuntime()
+    monkeypatch.setattr(runtime, "_graph", lambda *_: graph)
+    request = AiChatRequest(
+        surface="studio", conversation_id=uuid4(), actor_id=uuid4(), actor_role="owner",
+        messages=[AiMessage(role="user", content="第一轮问题")],
+        context=AiContext(title="文章甲"),
+    )
+    settings = Settings(text_openai_model="test")
+    assert "".join([text async for text in runtime.stream(
+        request, settings, thread_id="conversation",
+    )]) == "第一轮回答"
+    await_input = request.model_copy(update={
+        "messages": [AiMessage(role="user", content="第二轮问题")],
+        "context": AiContext(title="文章乙"),
+    })
+    assert "".join([text async for text in runtime.stream(
+        await_input, settings, thread_id="conversation",
+    )]) == "第二轮回答"
+    snapshot = await graph.aget_state({"configurable": {"thread_id": "conversation"}})
+    messages = snapshot.values["messages"]
+    assert [message.content for message in messages if message.type == "human"] == [
+        "第一轮问题", "第二轮问题",
+    ]
+    contexts = [message for message in messages if message.type == "system"]
+    assert len(contexts) == 1
+    assert "文章乙" in contexts[0].content
+    assert "文章甲" not in contexts[0].content
+
+
+@pytest.mark.anyio
+async def test_title_uses_model_without_agent_tools(monkeypatch: pytest.MonkeyPatch) -> None:
+    from langchain_core.language_models.fake_chat_models import FakeListChatModel
+
+    runtime = EmbeddedAgentRuntime()
+    model = FakeListChatModel(responses=['“规划博客选题”', '  '])
+    monkeypatch.setattr(runtime, "_build_model", lambda *_: model)
+    request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="规划博客")])
+    service = AgentService(Settings(text_openai_model="test"), runtime)
+    assert await service.generate_title(request) == "规划博客选题"
+    with pytest.raises(RuntimeError, match="未返回"):
+        await service.generate_title(request)
+    with pytest.raises(RuntimeError, match="未配置"):
+        await runtime.generate_title(request, Settings(text_openai_model=""))
+
+
+@pytest.mark.anyio
 async def test_runtime_lifecycle_uses_postgres_checkpointer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

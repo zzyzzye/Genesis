@@ -10,13 +10,15 @@ from time import monotonic
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from jwt import InvalidTokenError, decode
+from sqlalchemy import select
 
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.contracts import AgentActionConfirmation
-from genesis_api.ai.models import AiChatRunStatus
+from genesis_api.ai.conversations import conversation_detail, owned_conversation
+from genesis_api.ai.models import AiChatRunStatus, AiConversation
 from genesis_api.ai.runs import (
     ai_chat_run_manager,
     create_ai_chat_run,
@@ -27,6 +29,9 @@ from genesis_api.ai.schemas import (
     AiChatRunCreated,
     AiChatRunSnapshot,
     AiContext,
+    AiConversationDetail,
+    AiConversationRename,
+    AiConversationSummary,
 )
 from genesis_api.api.dependencies import CurrentUserDependency, OwnerDependency, SessionDependency
 from genesis_api.blog.agent.context import build_blog_agent_context
@@ -37,6 +42,58 @@ from genesis_api.identity.models import User, UserRole
 router = APIRouter(prefix="/ai", tags=["ai"])
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
 logger = logging.getLogger(__name__)
+
+
+@router.post("/chat/conversations", response_model=AiConversationSummary, status_code=201)
+def create_conversation(
+    current_user: OwnerDependency, session: SessionDependency,
+) -> AiConversationSummary:
+    """为博客所有者创建空会话；模型生成仍通过现有任务接口执行。"""
+    conversation = AiConversation(user_id=current_user.id)
+    session.add(conversation)
+    session.commit()
+    session.refresh(conversation)
+    return AiConversationSummary.model_validate(conversation)
+
+
+@router.get("/chat/conversations", response_model=list[AiConversationSummary])
+def list_conversations(
+    current_user: OwnerDependency, session: SessionDependency,
+    offset: int = Query(default=0, ge=0), limit: int = Query(default=30, ge=1, le=100),
+) -> list[AiConversationSummary]:
+    """分页列出当前所有者的博客会话，按最近活动排序。"""
+    conversations = session.scalars(select(AiConversation).where(
+        AiConversation.user_id == current_user.id,
+    ).order_by(
+        AiConversation.updated_at.desc(), AiConversation.id.desc()
+    ).offset(offset).limit(limit))
+    return [AiConversationSummary.model_validate(item) for item in conversations]
+
+
+@router.get("/chat/conversations/{conversation_id}", response_model=AiConversationDetail)
+def get_conversation(
+    conversation_id: UUID, current_user: OwnerDependency, session: SessionDependency,
+) -> AiConversationDetail:
+    """读取会话正文及任务状态，以便刷新后继续订阅未完成回答。"""
+    conversation = owned_conversation(session, current_user.id, conversation_id)
+    return conversation_detail(session, conversation)
+
+
+@router.patch("/chat/conversations/{conversation_id}", response_model=AiConversationSummary)
+def rename_conversation(
+    conversation_id: UUID, payload: AiConversationRename,
+    current_user: OwnerDependency, session: SessionDependency,
+) -> AiConversationSummary:
+    """手动命名后标记来源，后台自动标题不能覆盖用户选择。"""
+    title = payload.title.strip()
+    if not title:
+        raise HTTPException(422, "请输入对话标题")
+    conversation = owned_conversation(session, current_user.id, conversation_id)
+    conversation.title = title
+    conversation.title_source = "manual"
+    session.commit()
+    session.refresh(conversation)
+    return AiConversationSummary.model_validate(conversation)
 
 
 def _prepare_request(
@@ -76,7 +133,7 @@ def _prepare_request(
         )
 
     context = request.context or AiContext()
-    if context.module not in (None, "blog") or context.section not in (None, "posts"):
+    if context.module not in (None, "blog"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="当前后台模块尚未提供 Agent 能力",

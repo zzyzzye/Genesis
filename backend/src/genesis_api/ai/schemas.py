@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
@@ -62,6 +63,7 @@ class AiChatRequest(BaseModel):
     """对话请求；API 在执行前覆盖调用身份，恢复标记由后台任务管理器设置。"""
 
     surface: AiSurface
+    conversation_id: UUID | None = None
     messages: list[AiMessage] = Field(min_length=1, max_length=40)
     context: AiContext | None = None
     provider: AiProvider | None = None
@@ -82,6 +84,40 @@ class AiChatRunCreated(BaseModel):
 
     id: UUID
     status: AiChatRunStatus
+
+
+class AiConversationSummary(BaseModel):
+    """会话列表条目，不包含消息或内部上下文。"""
+
+    model_config = {"from_attributes": True}
+
+    id: UUID
+    title: str
+    title_source: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class AiConversationRename(BaseModel):
+    """用户指定的新标题；空白标题由服务层拒绝。"""
+
+    title: str = Field(min_length=1, max_length=80)
+
+
+class AiConversationMessage(BaseModel):
+    """由生成任务构建的展示消息，包含任务状态供浏览器恢复订阅。"""
+
+    role: MessageRole
+    content: str
+    run_id: UUID
+    status: AiChatRunStatus
+    error: str | None = None
+
+
+class AiConversationDetail(AiConversationSummary):
+    """会话详情，正文来自服务端任务快照。"""
+
+    messages: list[AiConversationMessage]
 
 
 class AiChatRunSnapshot(BaseModel):

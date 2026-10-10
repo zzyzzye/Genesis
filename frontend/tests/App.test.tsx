@@ -48,7 +48,7 @@ describe('App', () => {
     window.history.pushState({}, '', '/')
     window.localStorage.removeItem('genesis-account-token')
     window.localStorage.removeItem('genesis-studio-token')
-    window.sessionStorage.removeItem('genesis-blog-ai-conversation')
+    window.sessionStorage.clear()
     vi.restoreAllMocks()
   })
 
@@ -284,7 +284,7 @@ describe('App', () => {
 
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('test-token')
     view.unmount()
-    window.sessionStorage.setItem('genesis-blog-ai-conversation', JSON.stringify({
+    window.sessionStorage.setItem('genesis-blog-ai-conversation:user-1', JSON.stringify({
       isOpen: false,
       messages: [
         { role: 'assistant', content: '上一轮回复' },

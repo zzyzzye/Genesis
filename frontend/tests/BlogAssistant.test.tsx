@@ -2,12 +2,16 @@ import { fireEvent, render, screen, waitFor, cleanup, act } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { BlogAssistant } from '../src/features/blog/agent/BlogAssistant'
-import { AiChatRunTerminalError, cancelAiChatRun, createAiChatRun, streamAiChatRun } from '../src/lib/api'
+import { AiChatRunTerminalError, cancelAiChatRun, createAiChatRun, streamAiChatRun, getAiConversation, renameAiConversation } from '../src/lib/api'
 import { studioAuthTokenKey } from '../src/lib/auth'
 
 vi.mock('../src/lib/api', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/lib/api')>(),
   createAiChatRun: vi.fn(),
+  createAiConversation: vi.fn().mockResolvedValue({ id: 'conversation-1', title: '新对话', title_source: 'pending' }),
+  listAiConversations: vi.fn().mockResolvedValue([{ id: 'saved-conversation', title: '已保存的博客规划', title_source: 'model', updated_at: '2026-10-10T00:00:00Z' }]),
+  getAiConversation: vi.fn(),
+  renameAiConversation: vi.fn(),
   cancelAiChatRun: vi.fn().mockResolvedValue(undefined),
   streamAiChatRun: vi.fn(),
   getProviderModels: vi.fn().mockResolvedValue({ models: [] }),
@@ -70,13 +74,14 @@ describe('助手失败后的继续对话', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '开始' } })
     fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
     const stop = await screen.findByRole('button', { name: '停止生成' })
+    await waitFor(() => expect(streamAiChatRun).toHaveBeenCalled())
     fireEvent.click(stop)
     expect(await screen.findByText('已经生成')).toBeInTheDocument()
     expect(cancelAiChatRun).toHaveBeenCalledWith('test-placeholder', 'stop-run')
     expect(screen.getByRole('button', { name: '发送消息' })).toBeInTheDocument()
   })
 
-  it('恢复旧会话时清理空回复，发送有效历史并展示后续回复', async () => {
+  it('新会话只发送新增消息，历史由服务端和 checkpoint 管理', async () => {
     vi.mocked(createAiChatRun).mockResolvedValue({ id: 'next-run', status: 'pending' })
     vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
       callbacks.onSnapshot('新的回复', 1)
@@ -92,8 +97,9 @@ describe('助手失败后的继续对话', () => {
     fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
     expect(await screen.findByText('新的回复')).toBeInTheDocument()
     expect(vi.mocked(createAiChatRun).mock.calls[0]![1].messages).toEqual([
-      { role: 'user', content: '之前的问题' }, { role: 'user', content: '继续' },
+      { role: 'user', content: '继续' },
     ])
+    expect(vi.mocked(createAiChatRun).mock.calls[0]![1].conversation_id).toBe('conversation-1')
   })
 
   it.each(['failed', 'completed'])('运行 %s 且无内容时，移除占位并允许继续发送', async (status) => {
@@ -122,5 +128,32 @@ describe('助手失败后的继续对话', () => {
     expect(screen.getByRole('textbox')).toHaveValue('继续')
     expect(createAiChatRun).not.toHaveBeenCalled()
     await act(async () => { await Promise.resolve() })
+  })
+
+  it('从历史恢复消息、重命名并在新建后保留历史入口', async () => {
+    vi.mocked(getAiConversation).mockResolvedValue({
+      id: 'saved-conversation', title: '已保存的博客规划', title_source: 'model',
+      created_at: '2026-10-10T00:00:00Z', updated_at: '2026-10-10T00:00:00Z',
+      messages: [
+        { role: 'user', content: '历史问题', run_id: 'saved-run', status: 'completed', error: null },
+        { role: 'assistant', content: '历史回答', run_id: 'saved-run', status: 'completed', error: null },
+      ],
+    })
+    vi.mocked(renameAiConversation).mockResolvedValue({
+      id: 'saved-conversation', title: '我的写作计划', title_source: 'manual',
+      created_at: '2026-10-10T00:00:00Z', updated_at: '2026-10-10T00:00:00Z',
+    })
+    mount([{ role: 'assistant', content: '你好' }])
+    fireEvent.click(screen.getByRole('button', { name: '聊天历史' }))
+    fireEvent.click(await screen.findByRole('button', { name: /已保存的博客规划/ }))
+    expect(await screen.findByText('历史回答')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重命名' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '对话标题' }), { target: { value: '我的写作计划' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    expect(await screen.findByText('我的写作计划')).toBeInTheDocument()
+    expect(renameAiConversation).toHaveBeenCalledWith('test-placeholder', 'saved-conversation', '我的写作计划')
+    fireEvent.click(screen.getByRole('button', { name: '新建对话' }))
+    expect(screen.queryByText('历史回答')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '聊天历史' })).toBeInTheDocument()
   })
 })

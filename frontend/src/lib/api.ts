@@ -318,6 +318,7 @@ export interface AiChatContext {
 
 export interface AiChatRequest {
   surface: AiSurface
+  conversation_id?: string
   messages: AiChatMessage[]
   context?: AiChatContext
   provider?: AiProvider
@@ -343,6 +344,36 @@ export interface AiChatRunSnapshot {
 }
 
 export class AiChatRunTerminalError extends Error {}
+
+export interface AiConversation {
+  id: string
+  title: string
+  title_source: 'pending' | 'model' | 'manual' | 'fallback'
+  created_at: string
+  updated_at: string
+}
+
+export interface AiConversationDetail extends AiConversation {
+  messages: (AiChatMessage & { run_id: string; status: AiChatRunStatus; error: string | null })[]
+}
+
+export function listAiConversations(token: string, offset = 0): Promise<AiConversation[]> {
+  return request<AiConversation[]>(`/ai/chat/conversations?offset=${offset}&limit=30`, { headers: authHeaders(token) })
+}
+
+export function createAiConversation(token: string): Promise<AiConversation> {
+  return request<AiConversation>('/ai/chat/conversations', { method: 'POST', headers: authHeaders(token) })
+}
+
+export function getAiConversation(token: string, id: string): Promise<AiConversationDetail> {
+  return request<AiConversationDetail>(`/ai/chat/conversations/${encodeURIComponent(id)}`, { headers: authHeaders(token) })
+}
+
+export function renameAiConversation(token: string, id: string, title: string): Promise<AiConversation> {
+  return request<AiConversation>(`/ai/chat/conversations/${encodeURIComponent(id)}`, {
+    method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
+  })
+}
 
 export type AiAction = 'create_draft' | 'update_post' | 'delete_post' | 'publish_post'
 

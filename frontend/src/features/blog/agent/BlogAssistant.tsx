@@ -29,6 +29,10 @@ import {
   cancelAiChatRun,
   confirmAiAction,
   createAiChatRun,
+  createAiConversation,
+  getAiConversation,
+  listAiConversations,
+  renameAiConversation,
   getProviderModels,
   streamAiChatRun,
   type AiChatMessage,
@@ -36,6 +40,7 @@ import {
   type AiExecutionMode,
   type AiProvider,
   type AvailableModel,
+  type AiConversation,
 } from '../../../lib/api'
 import { AgentModelPicker } from '../../agent/AgentModelPicker'
 import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from '../../agent/useReasoningEffort'
@@ -46,7 +51,7 @@ type AssistantMessage = { role: 'assistant' | 'user'; content: string; timing?: 
 type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string; status: 'draft' | 'published' }
 type AssistantPageContext = { route: string; section: string; pageType: 'overview' | 'posts_list' | 'post_editor' | 'post_preview' | 'section' }
 type ActiveAssistantRun = { id: string; assistantMessageIndex: number }
-type AssistantSession = { isOpen: boolean; messages: AssistantMessage[]; activeRun: ActiveAssistantRun | null }
+type AssistantSession = { isOpen: boolean; messages: AssistantMessage[]; activeRun: ActiveAssistantRun | null; conversationId?: string | null }
 
 const pageLabels: Record<AssistantPageContext['pageType'], string> = {
   overview: '内容总览',
@@ -63,14 +68,14 @@ function initialAssistantMessages(): AssistantMessage[] {
   return [{ role: 'assistant', content: '你好，我是博客助手。\n我会结合当前文章和页面帮你构思、改写与整理内容。' }]
 }
 
-function readAssistantSession(): AssistantSession {
+function readAssistantSession(key = assistantSessionKey): AssistantSession {
   const fallback = { isOpen: false, messages: initialAssistantMessages(), activeRun: null }
   if (typeof window === 'undefined') return fallback
 
   try {
-    const stored = JSON.parse(window.sessionStorage.getItem(assistantSessionKey) ?? 'null') as unknown
+    const stored = JSON.parse(window.sessionStorage.getItem(key) ?? 'null') as unknown
     if (!stored || typeof stored !== 'object') return fallback
-    const value = stored as { isOpen?: unknown; messages?: unknown; activeRun?: unknown }
+    const value = stored as { isOpen?: unknown; messages?: unknown; activeRun?: unknown; conversationId?: unknown }
     const messages = Array.isArray(value.messages)
       ? value.messages.filter((message): message is AssistantMessage => (
         typeof message === 'object'
@@ -95,6 +100,7 @@ function readAssistantSession(): AssistantSession {
       isOpen: value.isOpen === true,
       messages: restoredMessages.length ? restoredMessages : initialAssistantMessages(),
       activeRun,
+      conversationId: typeof value.conversationId === 'string' ? value.conversationId : null,
     }
   } catch {
     return fallback
@@ -159,9 +165,29 @@ function updateAssistantMessage(
   ))
 }
 
-export function BlogAssistant({ page, editor }: { page: AssistantPageContext; editor: AssistantEditorContext | null }) {
-  const [initialSession] = useState(readAssistantSession)
+export function BlogAssistant({ page, editor, userId }: { page: AssistantPageContext; editor: AssistantEditorContext | null; userId?: string }) {
+  const storageKey = userId ? `${assistantSessionKey}:${userId}` : assistantSessionKey
+  const [initialSession] = useState(() => readAssistantSession(storageKey))
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [panelWidth, setPanelWidth] = useState(420)
+  const resizeStart = useRef<{ x: number; width: number } | null>(null)
+  const drafts = useRef<Record<string, string>>({})
   const [isOpen, setIsOpen] = useState(initialSession.isOpen)
+  const [conversation, setConversation] = useState<AiConversation | null>(null)
+  const [conversationId, setConversationId] = useState(initialSession.conversationId ?? null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [history, setHistory] = useState<AiConversation[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [hasMoreHistory, setHasMoreHistory] = useState(false)
+  const [conversationLoading, setConversationLoading] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
+  const [renameBusy, setRenameBusy] = useState(false)
+  const [renameError, setRenameError] = useState<string | null>(null)
+  const selectionVersion = useRef(0)
+  const hydrated = useRef<string | null>(null)
   const [messages, setMessages] = useState<AssistantMessage[]>(initialSession.messages)
   const [activeRun, setActiveRun] = useState<ActiveAssistantRun | null>(initialSession.activeRun)
   const [isStarting, setIsStarting] = useState(false)
@@ -183,7 +209,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
   const streamControllerRef = useRef<AbortController | null>(null)
   const activeReceivedRef = useRef<{ index: number; content: string } | null>(null)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
-  const isBusy = isStarting || activeRun !== null
+  const isBusy = isStarting || activeRun !== null || conversationLoading
   const selectedModel = models.find((item) => item.id === model)
   const reasoning = useReasoningEffort(provider, model, selectedModel)
   const contextWindow = selectedModel?.context_window ?? null
@@ -234,13 +260,13 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
     return () => { cancelled = true }
   }, [isOpen, provider])
 
-  const sessionRef = useRef({ isOpen, messages, activeRun })
+  const sessionRef = useRef({ isOpen, messages, activeRun, conversationId })
   const saveTimer = useRef<number | null>(null)
   useEffect(() => {
-    sessionRef.current = { isOpen, messages, activeRun }
+    sessionRef.current = { isOpen, messages, activeRun, conversationId }
     const save = () => {
       saveTimer.current = null
-      try { sessionStorage.setItem(assistantSessionKey, JSON.stringify(sessionRef.current)) } catch { /* 存储不可用时仍可继续对话。 */ }
+      try { sessionStorage.setItem(storageKey, JSON.stringify(sessionRef.current.conversationId ? { isOpen: sessionRef.current.isOpen, conversationId: sessionRef.current.conversationId } : sessionRef.current)) } catch { /* 存储不可用时仍可继续对话。 */ }
     }
     if (!activeRun) {
       if (saveTimer.current !== null) window.clearTimeout(saveTimer.current)
@@ -248,17 +274,121 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
     } else if (saveTimer.current === null) {
       saveTimer.current = window.setTimeout(save, 300)
     }
-  }, [activeRun, isOpen, messages])
+  }, [activeRun, isOpen, messages, conversationId, storageKey])
+
+  useEffect(() => { drafts.current[conversationId ?? 'new'] = draft }, [draft, conversationId])
+
+  useEffect(() => {
+    const shell = rootRef.current?.closest<HTMLElement>('.studio-app-shell')
+    shell?.style.setProperty('--studio-assistant-width', `${panelWidth}px`)
+    return () => { shell?.style.removeProperty('--studio-assistant-width') }
+  }, [panelWidth])
+
+  const loadConversation = useCallback(async (id: string) => {
+    const token = getStoredAuthToken(studioAuthTokenKey)
+    if (!token) return
+    const version = ++selectionVersion.current
+    setConversationLoading(true)
+    setHistoryError(null)
+    try {
+      const result = await getAiConversation(token, id)
+      if (version !== selectionVersion.current) return
+      streamControllerRef.current?.abort()
+      hydrated.current = id
+      setConversationId(id)
+      setConversation(result)
+      const restored: AssistantMessage[] = [
+        ...initialAssistantMessages(),
+        ...result.messages.map(({ role, content }) => ({ role, content })),
+      ]
+      setMessages(restored)
+      const runningIndex = result.messages.findIndex((message) => message.role === 'assistant' && (message.status === 'pending' || message.status === 'running'))
+      const runningMessage = result.messages[runningIndex]
+      setActiveRun(runningMessage ? { id: runningMessage.run_id, assistantMessageIndex: runningIndex + 1 } : null)
+      setError(result.messages.at(-1)?.error ?? null)
+      setHistoryOpen(false)
+      setRenaming(false)
+      setConfirmingAction(null)
+      setModelMenuOpen(false)
+      setDraft(drafts.current[id] ?? '')
+      shouldStickToBottomRef.current = true
+    } catch (caught) {
+      if (version === selectionVersion.current) {
+        setHistoryError(caught instanceof Error ? caught.message : '读取对话失败，请重试。')
+        setActiveRun((current) => current ? { ...current } : null)
+      }
+    } finally {
+      if (version === selectionVersion.current) setConversationLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (isOpen && conversationId && hydrated.current !== conversationId) void loadConversation(conversationId)
+  }, [isOpen, conversationId, loadConversation])
+
+  const loadHistory = useCallback(async (offset = 0) => {
+    const token = getStoredAuthToken(studioAuthTokenKey)
+    if (!token) return
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      const result = await listAiConversations(token, offset)
+      setHistory((current) => offset ? [...current, ...result.filter((item) => !current.some((existing) => existing.id === item.id))] : result)
+      setHasMoreHistory(result.length === 30)
+    } catch (caught) {
+      setHistoryError(caught instanceof Error ? caught.message : '读取历史失败，请重试。')
+    } finally { setHistoryLoading(false) }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    if (isOpen && (historyOpen || expanded)) void Promise.resolve().then(() => { if (!cancelled) void loadHistory() })
+    return () => { cancelled = true }
+  }, [historyOpen, expanded, isOpen, loadHistory])
+
+  useEffect(() => {
+    if (!isOpen || !conversationId || conversation?.title_source !== 'pending') return
+    let cancelled = false
+    const token = getStoredAuthToken(studioAuthTokenKey)
+    if (!token) return
+    const timer = window.setInterval(() => {
+      void getAiConversation(token, conversationId).then((result) => {
+        if (!cancelled) {
+          setConversation(result)
+          setHistory((current) => current.map((item) => item.id === result.id ? result : item))
+        }
+      }).catch(() => { /* 标题轮询失败不打断正文；重新打开时恢复。 */ })
+    }, 2500)
+    return () => { cancelled = true; window.clearInterval(timer) }
+  }, [isOpen, conversationId, conversation?.title_source])
+
+  async function saveTitle(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const token = getStoredAuthToken(studioAuthTokenKey)
+    if (!conversationId || !token || renameBusy) return
+    if (!titleDraft.trim()) { setRenameError('请输入对话标题。'); return }
+    setRenameBusy(true)
+    setRenameError(null)
+    const id = conversationId
+    try {
+      const saved = await renameAiConversation(token, id, titleDraft.trim())
+      setConversation(saved)
+      setHistory((current) => current.map((item) => item.id === id ? saved : item))
+      setRenaming(false)
+    } catch (caught) {
+      setRenameError(caught instanceof Error ? caught.message : '重命名失败，请重试。')
+    } finally { setRenameBusy(false) }
+  }
 
   useEffect(() => {
     const flush = () => {
       if (saveTimer.current !== null) window.clearTimeout(saveTimer.current)
       saveTimer.current = null
-      try { sessionStorage.setItem(assistantSessionKey, JSON.stringify(sessionRef.current)) } catch { /* 忽略存储配额错误。 */ }
+      try { sessionStorage.setItem(storageKey, JSON.stringify(sessionRef.current.conversationId ? { isOpen: sessionRef.current.isOpen, conversationId: sessionRef.current.conversationId } : sessionRef.current)) } catch { /* 忽略存储配额错误。 */ }
     }
     window.addEventListener('pagehide', flush)
     return () => { window.removeEventListener('pagehide', flush); flush() }
-  }, [])
+  }, [storageKey])
 
   useEffect(() => {
     if (!modelMenuOpen || !isOpen) return
@@ -300,6 +430,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
 
     let cancelled = false
     const controller = new AbortController()
+    const selection = selectionVersion.current
     streamControllerRef.current = controller
     let received = sessionRef.current.messages[run.assistantMessageIndex]?.content ?? ''
     activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }
@@ -308,6 +439,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
     const flush = () => {
       if (pendingFrame !== null) cancelAnimationFrame(pendingFrame)
       pendingFrame = null
+      if (selection !== selectionVersion.current) return
       setMessages((current) => updateAssistantMessage(current, run.assistantMessageIndex, () => received))
     }
     const queue = () => { if (pendingFrame === null) pendingFrame = requestAnimationFrame(flush) }
@@ -328,7 +460,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
             onSnapshot: (content) => { received = content; activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }; markFirstToken(content); queue(); setStreamStatus('正在生成…') },
             onToken: (content) => { received += content; activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }; markFirstToken(content); queue() },
           }, controller.signal)
-          if (cancelled) return
+          if (cancelled || selection !== selectionVersion.current) return
           if (result === 'completed') {
             flush()
             const completedAt = Date.now()
@@ -370,7 +502,16 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
   }, [activeRun, isOpen])
 
   function startNewConversation() {
-    if (isBusy) return
+    if (isStarting || conversationLoading || renameBusy) return
+    ++selectionVersion.current
+    streamControllerRef.current?.abort()
+    setActiveRun(null)
+    setConversationId(null)
+    setConversation(null)
+    setConfirmingAction(null)
+    hydrated.current = null
+    setHistoryOpen(false)
+    setRenaming(false)
     setMessages(initialAssistantMessages())
     setDraft('')
     setError(null)
@@ -387,7 +528,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
       ...messages.filter((message) => message.content.trim().length > 0).map(({ role, content: messageContent }) => ({ role, content: messageContent })),
       { role: 'user', content },
     ]
-    if (nextMessages.length > 40) {
+    if (!conversationId && nextMessages.length > 40) {
       setError('当前对话已达到 40 条消息上限，请新建对话后继续。')
       return
     }
@@ -399,9 +540,18 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
     setStreamStatus('正在创建生成任务…')
     setIsStarting(true)
     try {
+      let id = conversationId
+      if (!id) {
+        const created = await createAiConversation(token)
+        id = created.id
+        hydrated.current = id
+        setConversation(created)
+        setConversationId(id)
+      }
       const run = await createAiChatRun(token, {
         surface: 'studio',
-        messages: nextMessages,
+        conversation_id: id,
+        messages: [{ role: 'user', content }],
         provider,
         model: model || undefined,
         reasoning_effort: reasoning.effort,
@@ -426,7 +576,8 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'AI 请求失败，请稍后再试。')
       setStreamStatus(null)
-      setMessages((current) => current.filter((_, index) => index !== assistantMessageIndex))
+      setMessages((current) => current.slice(0, assistantMessageIndex - 1))
+      setDraft(content)
     } finally {
       setIsStarting(false)
     }
@@ -463,19 +614,25 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
   const handleConfirmAction = useCallback(async (messageIndex: number, action: AiActionProposal) => {
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!token) return
+    const selection = selectionVersion.current
     setConfirmingAction(messageIndex)
     try {
       await confirmAiAction(token, action.proposal_token)
+      if (selection !== selectionVersion.current) return
       setMessages((current) => current.map((message, index) => index === messageIndex
         ? { ...message, content: `${message.content}\n\n✅ 已确认并执行：${action.action}` }
         : message))
     } catch (caught) {
+      if (selection !== selectionVersion.current) return
       setError(caught instanceof Error ? caught.message : '操作执行失败，请稍后重试。')
-    } finally { setConfirmingAction(null) }
+    } finally {
+      if (selection === selectionVersion.current) setConfirmingAction(null)
+    }
   }, [])
 
   return (
-    <div className={`studio-assistant${isOpen ? ' is-open' : ''}`}>
+    <div ref={rootRef} className={`studio-assistant${isOpen ? ' is-open' : ''}${expanded ? ' is-expanded' : ''}`}>
+      {isOpen && !expanded && <button type="button" role="separator" aria-label="调整助手宽度" aria-orientation="vertical" aria-valuemin={340} aria-valuemax={600} aria-valuenow={panelWidth} className="studio-assistant__resize" title="拖动或用左右方向键调整宽度" onPointerDown={(event) => { resizeStart.current = { x: event.clientX, width: panelWidth }; event.currentTarget.setPointerCapture(event.pointerId) }} onPointerMove={(event) => { const start = resizeStart.current; if (start) setPanelWidth(Math.max(340, Math.min(600, start.width + start.x - event.clientX))) }} onPointerUp={() => { resizeStart.current = null }} onPointerCancel={() => { resizeStart.current = null }} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setPanelWidth((width) => Math.max(340, Math.min(600, width + (event.key === 'ArrowLeft' ? 16 : -16)))) } }} />}
       {isOpen && (
         <section className={`studio-assistant__panel${messages.length === 1 && !isBusy ? ' is-empty' : ''}`} aria-label="博客 AI 助手">
           <header className="studio-assistant__header">
@@ -484,14 +641,38 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
               <div><strong>博客助手</strong><span>构思 · 写作 · 整理</span></div>
             </div>
             <div className="studio-assistant__header-actions">
-              <button className="studio-assistant__new-conversation" type="button" aria-label="新建对话" disabled={isBusy} onClick={startNewConversation}>
+              <button type="button" aria-label="聊天历史" title="聊天历史" aria-expanded={historyOpen || expanded} onClick={() => { setHistoryOpen((open) => !open); setModelMenuOpen(false) }}><StudioIcon name="menu" /></button>
+              <button className="studio-assistant__new-conversation" type="button" aria-label="新建对话" title="新建对话" disabled={isStarting || conversationLoading || renameBusy} onClick={startNewConversation}>
                 <StudioIcon name="plus" />
               </button>
+              <button type="button" aria-label={expanded ? '还原助手宽度' : '展开助手'} title={expanded ? '还原助手宽度' : '展开助手'} onClick={() => { setExpanded((value) => !value); setHistoryOpen(false) }}><StudioIcon name={expanded ? 'arrow-right' : 'arrow-up-right'} /></button>
               <button className="studio-assistant__close" type="button" aria-label="关闭 AI 助手" onClick={() => setIsOpen(false)}>
                 <StudioIcon name="close" />
               </button>
             </div>
           </header>
+          <div className={`studio-assistant__workspace${historyOpen ? ' is-history' : ''}`}>
+          {(historyOpen || expanded) && <nav className="studio-assistant__history" aria-label="历史对话">
+            <div className="studio-assistant__history-heading"><strong>历史对话</strong><button type="button" disabled={historyLoading} onClick={() => { void loadHistory() }}>刷新</button></div>
+            {historyError && <div role="alert"><p>{historyError}</p><button type="button" onClick={() => { void loadHistory() }}>重试</button></div>}
+            {!historyLoading && !historyError && history.length === 0 && <p className="studio-assistant__history-empty">还没有历史对话。发送第一条消息后，会自动保存在这里。</p>}
+            {history.map((item) => <button key={item.id} type="button" className={`studio-assistant__history-item${item.id === conversationId ? ' is-selected' : ''}`} aria-current={item.id === conversationId ? 'true' : undefined} disabled={isStarting || conversationLoading || renameBusy} onClick={() => { void loadConversation(item.id) }}>
+              <span>{item.title}</span><small>{new Date(item.updated_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}{item.title_source === 'pending' ? ' · 待命名' : ''}</small>
+            </button>)}
+            {historyLoading && <p role="status">正在读取历史…</p>}
+            {hasMoreHistory && <button type="button" disabled={historyLoading} onClick={() => { void loadHistory(history.length) }}>加载更多</button>}
+            {!expanded && <button type="button" className="studio-assistant__history-back" onClick={() => setHistoryOpen(false)}>返回当前对话</button>}
+          </nav>}
+          <div className="studio-assistant__chat">
+          <div className="studio-assistant__conversation-heading">
+            {renaming ? <form noValidate onSubmit={(event) => { void saveTitle(event) }}>
+              <input autoFocus aria-label="对话标题" maxLength={80} value={titleDraft} disabled={renameBusy} onChange={(event) => setTitleDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape' && !renameBusy) setRenaming(false) }} />
+              <button type="submit" disabled={renameBusy}>{renameBusy ? '保存中…' : '保存'}</button><button type="button" disabled={renameBusy} onClick={() => setRenaming(false)}>取消</button>
+              {renameError && <p role="alert">{renameError}</p>}
+            </form> : <><strong title={conversation?.title}>{conversation?.title ?? '新对话'}</strong><button type="button" disabled={!conversationId || conversationLoading} onClick={() => { setTitleDraft(conversation?.title ?? '新对话'); setRenameError(null); setRenaming(true) }}>重命名</button></>}
+          </div>
+          {conversationLoading && <p className="studio-assistant__loading" role="status">正在读取对话…</p>}
+          {historyError && !historyOpen && <p className="studio-assistant__request-error" role="alert">{historyError}<button type="button" onClick={() => { if (conversationId) void loadConversation(conversationId) }}>重试</button></p>}
           <div
             className="studio-assistant__body"
             ref={bodyRef}
@@ -523,6 +704,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
               placeholder="告诉我你想完成什么…"
               rows={2}
               value={draft}
+              disabled={conversationLoading}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
@@ -577,13 +759,15 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
             {!error && (isBusy || streamStatus) && <p className="studio-assistant__composer-status" role="status">{streamStatus ?? '正在生成…'}</p>}
             {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
           </form>
+          </div>
+          </div>
         </section>
       )}
-      <button className="studio-assistant__launcher" type="button" aria-expanded={isOpen} aria-label={isOpen ? '关闭博客 AI 助手' : '打开博客 AI 助手'} onClick={() => setIsOpen((open) => !open)}>
+      {!isOpen && <button className="studio-assistant__launcher" type="button" aria-expanded={isOpen} aria-label="打开博客 AI 助手" onClick={() => setIsOpen(true)}>
         <span className="studio-assistant__launcher-icon"><StudioIcon name={isOpen ? 'close' : 'assistant'} /></span>
         <span className="studio-assistant__launcher-copy"><strong>{isOpen ? '收起助手' : '博客助手'}</strong><small>{isOpen ? '继续当前工作' : '当前模块的创作搭档'}</small></span>
         {!isOpen && <span className="studio-assistant__launcher-signal" />}
-      </button>
+      </button>}
     </div>
   )
 }

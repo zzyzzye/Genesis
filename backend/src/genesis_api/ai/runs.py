@@ -9,10 +9,12 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from fastapi import HTTPException
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from genesis_api.ai.models import AiChatRun, AiChatRunStatus
+from genesis_api.ai.conversations import prepare_conversation_run
+from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
 from genesis_api.ai.schemas import AiChatRequest, AiChatRunCreated, AiChatRunSnapshot
 from genesis_api.ai.service import AgentService
 from genesis_api.core.config import Settings
@@ -81,11 +83,16 @@ def create_ai_chat_run(
         已持久化的任务 ID 与初始状态，不负责启动后台协程。
     """
     provider = request.provider or settings.text_provider
+    if request.conversation_id is not None:
+        prepare_conversation_run(session, user_id, request.conversation_id, request.surface)
+        if len(request.messages) != 1 or request.messages[0].role != "user":
+            raise HTTPException(422, "历史会话每次只提交一条新的用户消息")
     run = AiChatRun(
         user_id=user_id,
         surface=request.surface,
         provider=provider,
         model=request.model or _configured_model(settings, provider),
+        conversation_id=request.conversation_id,
         thread_id=str(uuid4()),
         request_payload=_request_payload(request),
     )
@@ -152,6 +159,7 @@ class AiChatRunManager:
         self._flush_interval = flush_interval
         self._flush_size = flush_size
         self._tasks: dict[UUID, asyncio.Task[None]] = {}
+        self._title_tasks: dict[UUID, asyncio.Task[None]] = {}
         self._semaphore: asyncio.Semaphore | None = None
         self._max_concurrent_runs: int | None = None
 
@@ -178,10 +186,12 @@ class AiChatRunManager:
         self._tasks[run_id] = task
         # 保留任务引用直至结束；记录持久化在数据库，内存只保存当前进程的执行句柄。
         task.add_done_callback(lambda _: self._tasks.pop(run_id, None))
+        if request.conversation_id is not None:
+            self._start_title(request, settings)
 
     async def shutdown(self) -> None:
         """取消并等待后台任务退出，保留未完成状态供下次启动恢复。"""
-        tasks = list(self._tasks.values())
+        tasks = [*self._tasks.values(), *self._title_tasks.values()]
         for task in tasks:
             task.cancel()
         if tasks:
@@ -222,6 +232,8 @@ class AiChatRunManager:
         recovered = await asyncio.to_thread(self._recover_interrupted_runs_sync)
         for run_id, request in recovered:
             self.start(run_id, request, settings)
+        for request in await asyncio.to_thread(self._pending_titles_sync):
+            self._start_title(request, settings)
 
     async def _generate(
         self,
@@ -252,7 +264,9 @@ class AiChatRunManager:
             try:
                 streamer = self._chat_service_factory(settings)
                 try:
-                    token_stream = streamer.stream(request, thread_id=str(run_id))
+                    token_stream = streamer.stream(
+                        request, thread_id=str(request.conversation_id or run_id)
+                    )
                 except TypeError as exc:
                     # 兼容旧流式实现的签名；其他 TypeError 必须交给正常错误处理。
                     if "thread_id" not in str(exc):
@@ -274,6 +288,8 @@ class AiChatRunManager:
                     append_content=pending,
                     status=AiChatRunStatus.COMPLETED,
                 )
+                if request.conversation_id is not None:
+                    self._start_title(request, settings)
             except asyncio.CancelledError:
                 # 未提交的 pending 文本不会在此补写；恢复依靠 checkpoint 而非内存缓冲。
                 # 保留 running 状态，由下次启动恢复；用户取消则由 cancel 写入失败终态。
@@ -320,6 +336,57 @@ class AiChatRunManager:
             status,
             error,
         )
+
+    def _start_title(self, request: AiChatRequest, settings: Settings) -> None:
+        """独立生成标题，避免占用正文并发名额；同会话只启动一次。"""
+        conversation_id = request.conversation_id
+        if conversation_id is None or conversation_id in self._title_tasks:
+            return
+        task = asyncio.create_task(self._generate_title(request, settings))
+        self._title_tasks[conversation_id] = task
+        task.add_done_callback(lambda _: self._title_tasks.pop(conversation_id, None))
+
+    def _pending_titles_sync(self) -> list[AiChatRequest]:
+        """重启后补做已经回答但尚未命名的会话，始终使用首轮消息。"""
+        requests: dict[UUID, AiChatRequest] = {}
+        with self._session_factory() as session:
+            runs = session.scalars(select(AiChatRun).join(
+                AiConversation, AiChatRun.conversation_id == AiConversation.id,
+            ).where(
+                AiConversation.title_source == "pending",
+                AiChatRun.status.in_([AiChatRunStatus.COMPLETED, AiChatRunStatus.FAILED]),
+            ).order_by(AiChatRun.created_at, AiChatRun.id))
+            for run in runs:
+                if run.conversation_id is not None and run.conversation_id not in requests:
+                    requests[run.conversation_id] = _request_from_payload(run.request_payload)
+        return list(requests.values())
+
+    async def _generate_title(self, request: AiChatRequest, settings: Settings) -> None:
+        """根据首条消息生成标题，失败不影响正文，条件更新防止覆盖用户改名。"""
+        conversation_id = request.conversation_id
+        with self._session_factory() as session:
+            conversation = session.get(AiConversation, conversation_id)
+            if conversation is None or conversation.title_source != "pending":
+                return
+        fallback = request.messages[0].content.strip().replace("\n", " ")[:32] or "新对话"
+        source = "fallback"
+        title = fallback
+        try:
+            title = await asyncio.wait_for(
+                AgentService(settings).generate_title(request), timeout=60,
+            )
+            source = "model"
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # 不记录模型异常正文，避免上游响应携带敏感信息。
+            logger.warning("会话标题生成失败，使用首句摘要：conversation_id=%s", conversation_id)
+        with self._session_factory() as session:
+            session.execute(update(AiConversation).where(
+                AiConversation.id == conversation_id,
+                AiConversation.title_source == "pending",
+            ).values(title=title, title_source=source))
+            session.commit()
 
     def _persist_sync(
         self,

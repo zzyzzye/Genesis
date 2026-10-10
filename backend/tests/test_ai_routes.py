@@ -105,6 +105,16 @@ def test_prepare_request_embeds_authenticated_actor_and_studio_context(
     )
     assert studio.context is not None
     assert studio.context.page == {"type": "posts_list"}
+    for section in ("overview", "categories", "tags"):
+        prepared_page = ai_route._prepare_request(
+            AiChatRequest(
+                surface="studio", messages=[AiMessage(role="user", content="整理博客")],
+                context=AiContext(module="blog", section=section),
+            ),
+            current_user=owner, current_user_role=owner.role,
+            session=pytest.MonkeyPatch(),  # type: ignore[arg-type]
+        )
+        assert prepared_page.actor_id == owner.id
 
     member = User(id=uuid4(), handle="member", display_name="Member", role=UserRole.MEMBER)
     with pytest.raises(HTTPException) as exc_info:

@@ -12,6 +12,7 @@ vi.mock('../src/lib/api', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/lib/api')>(),
   getProviderModels: vi.fn(),
   createAiChatRun: vi.fn(),
+  createAiConversation: vi.fn().mockResolvedValue({ id: 'test-conversation', title: '新对话', title_source: 'pending' }),
   streamAiChat: vi.fn().mockResolvedValue(undefined),
   streamAiChatRun: vi.fn().mockResolvedValue('completed'),
 }))
