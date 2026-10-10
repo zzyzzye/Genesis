@@ -743,6 +743,8 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
                 event.currentTarget.form?.requestSubmit()
               }}
             />
+            <p className="studio-assistant__composer-status" role="status">{!error && (isBusy || streamStatus) ? (streamStatus ?? '正在生成…') : ''}</p>
+            {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
             <div className="studio-assistant__composer-tools">
               <div className="studio-assistant__mode-switch" role="group" aria-label="Agent 执行方式">
                 <button
@@ -787,8 +789,6 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
                 ? <button className="studio-assistant__stop" type="button" aria-label="停止生成" onClick={stopGeneration}><StudioIcon name="stop" /></button>
                 : <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>}
             </div>
-            <p className="studio-assistant__composer-status" role="status">{!error && (isBusy || streamStatus) ? (streamStatus ?? '正在生成…') : ''}</p>
-            {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
           </form>
           </motion.div>
           </div>
