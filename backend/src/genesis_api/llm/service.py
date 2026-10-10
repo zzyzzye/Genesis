@@ -10,9 +10,8 @@ import httpx
 from pydantic import SecretStr
 
 from genesis_api.core.config import Settings
-from genesis_api.llm.context_windows import context_window_for
+from genesis_api.llm.capabilities import model_capabilities_for
 from genesis_api.llm.models import AvailableModel, ProviderModels, ProviderName
-from genesis_api.llm.profiles import capability_provider_for, model_profile_for, thinking_modes_for
 
 logger = logging.getLogger(__name__)
 
@@ -74,12 +73,11 @@ class ModelDiscoveryService:
                 )
                 return ProviderModels(
                     provider=provider,
-                    models=self._with_profiles(
+                    models=self._with_capabilities(
                         provider,
                         [AvailableModel(
                             id=fallback_model,
                             name=fallback_model,
-                            context_window=context_window_for(provider, fallback_model),
                         )],
                     ),
                 )
@@ -94,15 +92,15 @@ class ModelDiscoveryService:
         models = self._parse_models(payload, provider)
         return ProviderModels(
             provider=provider,
-            models=self._with_profiles(
+            models=self._with_capabilities(
                 provider, self._prioritize_configured_model(provider, models)
             ),
         )
 
-    def _with_profiles(
+    def _with_capabilities(
         self, provider: ProviderName, models: list[AvailableModel]
     ) -> list[AvailableModel]:
-        """按原生供应商的框架 profile 补充能力，不让网关协议改变模型能力。
+        """通过统一能力入口补齐目录缺失字段，不让网关协议改变原生能力。
 
         Args:
             provider: 模型所属供应商，不使用基础地址推断能力。
@@ -111,12 +109,21 @@ class ModelDiscoveryService:
         Returns:
             原列表；能力未知时档位字段为空，不猜测供应商支持范围。
         """
-        adapter = capability_provider_for(provider)
         for model in models:
-            profile = model_profile_for(adapter, model.id)
+            capabilities = model_capabilities_for(provider, model.id)
+            profile = capabilities.profile
+            # 上游目录的有效限制优先展示；目录省略时使用同一能力入口补充。
+            if model.context_window is None:
+                model.context_window = profile.get("max_input_tokens")
+            if model.max_output_tokens is None:
+                model.max_output_tokens = profile.get("max_output_tokens")
             model.reasoning_effort_levels = profile.get("reasoning_effort_levels")
             model.reasoning_effort_default = profile.get("reasoning_effort_default")
-            model.thinking_modes = thinking_modes_for(provider, model.id)
+            model.thinking_modes = (
+                list(capabilities.thinking_modes)
+                if capabilities.thinking_modes is not None else None
+            )
+            model.thinking_mode_default = capabilities.thinking_mode_default
         return models
 
     def _provider_config(self, provider: ProviderName) -> tuple[SecretStr | None, str]:
@@ -172,7 +179,6 @@ class ModelDiscoveryService:
         default_model = matched or AvailableModel(
             id=configured_model,
             name=configured_model,
-            context_window=context_window_for(provider, configured_model),
         )
         return [default_model, *(item for item in models if item.id != configured_model)]
 
@@ -226,7 +232,7 @@ class ModelDiscoveryService:
             provider: 用于处理原生名称及 MiMo 语音模型过滤。
 
         Returns:
-            解析后的模型列表；上下文容量优先用上游值，否则查本地已知容量。
+            解析后的模型列表；保留上游有效长度，缺失值随后由统一能力入口补齐。
 
         Raises:
             ModelDiscoveryError: 目录字段不是列表。
@@ -251,15 +257,24 @@ class ModelDiscoveryService:
                 part in {"asr", "tts"} for part in model_id.split("-")
             ):
                 continue
-            context_window = raw_model.get("context_window") or raw_model.get("context_length")
-            if not isinstance(context_window, int) or context_window <= 0:
-                context_window = context_window_for(provider, model_id)
+            context_window = (
+                raw_model.get("context_window") or raw_model.get("context_length")
+                or raw_model.get("inputTokenLimit")
+            )
+            if type(context_window) is not int or context_window <= 0:
+                context_window = None
+            max_output_tokens = (
+                raw_model.get("max_output_tokens") or raw_model.get("outputTokenLimit")
+            )
+            if type(max_output_tokens) is not int or max_output_tokens <= 0:
+                max_output_tokens = None
             models.append(
                 AvailableModel(
                     id=model_id,
                     name=raw_model.get("display_name") or raw_model.get("name"),
                     created=raw_model.get("created"),
                     context_window=context_window,
+                    max_output_tokens=max_output_tokens,
                 )
             )
         return models

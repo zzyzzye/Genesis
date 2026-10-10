@@ -100,6 +100,7 @@ async def test_list_openai_models_uses_configured_url_and_bearer_key() -> None:
         id="gpt-5.6-luna",
         name="gpt-5.6-luna",
         context_window=1_050_000,
+        max_output_tokens=128_000,
         reasoning_effort_levels=model_profile_for("openai", "gpt-5.6-luna").get(
             "reasoning_effort_levels"
         ),
@@ -207,9 +208,9 @@ async def test_list_claude_models_supports_base_url_with_v1() -> None:
 
 
 @pytest.mark.anyio
-async def test_list_models_enriches_known_model_with_maintained_context_window() -> None:
+async def test_list_models_enriches_known_model_with_framework_context_window() -> None:
     def handler(_: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"data": [{"id": "gemini-3.8-flash"}]})
+        return httpx.Response(200, json={"data": [{"id": "gemini-2.5-flash"}]})
 
     settings = Settings(
         text_gemini_api_key=SecretStr("gemini-test-key"),
@@ -291,6 +292,7 @@ async def test_list_models_uses_default_model_when_upstream_is_unavailable(
             id="gpt-5.6-luna",
             name="gpt-5.6-luna",
             context_window=1_050_000,
+            max_output_tokens=128_000,
             reasoning_effort_levels=model_profile_for("openai", "gpt-5.6-luna").get(
                 "reasoning_effort_levels"
             ),

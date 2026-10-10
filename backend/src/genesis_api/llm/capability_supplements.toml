@@ -1,0 +1,76 @@
+# 仅补充框架缺失的公开能力；精确匹配供应商与模型 ID，不推断别名。
+# MiMo 官方以 1M / 128K 标注 token 容量，此处按十进制记录。
+# 核实日期：2026-10-10。
+# https://mimo.mi.com/docs/zh-CN/quick-start/summary/model
+# https://mimo.mi.com/docs/zh-CN/quick-start/usage-guide/text-generation/deep-thinking
+[mimo."mimo-v2.6-flash"]
+max_input_tokens = 1000000
+max_output_tokens = 128000
+thinking_modes = ["enabled", "disabled"]
+thinking_mode_default = "enabled"
+reasoning_effort_levels = [] # 官方仅提供开关，没有强度档位。
+reasoning_output = true
+tool_calling = true
+structured_output = true
+
+# 框架尚未收录以下档位，按官方文档补充；不把强度伪装成独立开关。
+# https://docs.x.ai/developers/model-capabilities/text/reasoning
+[grok."grok-4.5"]
+reasoning_effort_levels = ["low", "medium", "high"]
+reasoning_effort_default = "high"
+thinking_modes = []
+
+[grok."grok-4.6"]
+reasoning_effort_levels = ["low", "medium", "high", "xhigh"]
+reasoning_effort_default = "high"
+thinking_modes = []
+
+# https://docs.x.ai/developers/grok-4-7
+# 官方未设独立文本输出上限，不编造 max_output_tokens 数字。
+[grok."grok-4.7"]
+max_input_tokens = 500000
+reasoning_effort_levels = ["low", "medium", "high", "xhigh"]
+reasoning_effort_default = "high"
+thinking_modes = []
+reasoning_output = true
+tool_calling = true
+
+[mimo."mimo-v2.6-pro"]
+max_input_tokens = 1000000
+max_output_tokens = 128000
+thinking_modes = ["enabled", "disabled"]
+thinking_mode_default = "enabled"
+reasoning_effort_levels = []
+reasoning_output = true
+tool_calling = true
+structured_output = true
+
+[mimo."mimo-v2.6-pro-ultraspeed"]
+max_input_tokens = 1000000
+max_output_tokens = 128000
+thinking_modes = ["enabled", "disabled"]
+thinking_mode_default = "enabled"
+reasoning_effort_levels = []
+reasoning_output = true
+tool_calling = true
+structured_output = true
+
+[mimo."mimo-v2.5-pro"]
+max_input_tokens = 1000000
+max_output_tokens = 128000
+thinking_modes = ["enabled", "disabled"]
+thinking_mode_default = "enabled"
+reasoning_effort_levels = []
+reasoning_output = true
+tool_calling = true
+structured_output = true
+
+[mimo."mimo-v2.5"]
+max_input_tokens = 1000000
+max_output_tokens = 128000
+thinking_modes = ["enabled", "disabled"]
+thinking_mode_default = "enabled"
+reasoning_effort_levels = []
+reasoning_output = true
+tool_calling = true
+structured_output = true

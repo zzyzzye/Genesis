@@ -12,7 +12,7 @@ from genesis_api.agent.runtime import EmbeddedAgentRuntime
 from genesis_api.ai.runs import _configured_model
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
-from genesis_api.llm.profiles import thinking_modes_for
+from genesis_api.llm.capabilities import model_capabilities_for
 from genesis_api.llm.service import ModelDiscoveryService
 
 
@@ -22,10 +22,10 @@ def test_thinking_switch_scope_is_limited_to_documented_mimo_models() -> None:
         "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.6-pro-ultraspeed",
         "mimo-v2.5-pro", "mimo-v2.5",
     ):
-        assert thinking_modes_for("mimo", name) == ["enabled", "disabled"]
-    assert thinking_modes_for("mimo", "mimo-v2.5-tts") is None
-    assert thinking_modes_for("mimo", "unknown") is None
-    assert thinking_modes_for("openai", "mimo-v2.6-flash") is None
+        assert model_capabilities_for("mimo", name).thinking_modes == ["enabled", "disabled"]
+    assert model_capabilities_for("mimo", "mimo-v2.5-tts").thinking_modes is None
+    assert model_capabilities_for("mimo", "unknown").thinking_modes is None
+    assert model_capabilities_for("openai", "mimo-v2.6-flash").thinking_modes is None
 
 
 @pytest.mark.parametrize("mode", [None, "enabled", "disabled"])

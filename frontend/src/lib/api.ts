@@ -280,6 +280,8 @@ export interface AvailableModel {
   name: string | null
   created: number | null
   context_window: number | null
+  max_output_tokens?: number | null
+  thinking_mode_default?: ThinkingMode | null
   reasoning_effort_levels?: string[] | null
   thinking_modes?: ThinkingMode[] | null
   reasoning_effort_default?: string | null

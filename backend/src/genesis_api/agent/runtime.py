@@ -21,10 +21,8 @@ from genesis_api.agent.context import agent_invocation_context
 from genesis_api.agent.mimo import ChatMiMo
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
+from genesis_api.llm.capabilities import model_capabilities_for
 from genesis_api.llm.profiles import (
-    capability_provider_for,
-    model_profile_for,
-    thinking_modes_for,
     transport_provider_for,
 )
 
@@ -158,7 +156,7 @@ class EmbeddedAgentRuntime:
             供 DeepAgent 使用的聊天模型客户端。
 
         Raises:
-            RuntimeError: 缺少 API Key，或框架能力信息不支持所选思考强度。
+            RuntimeError: 缺少 API Key，或统一能力信息不支持所选思考强度或开关。
             ValueError: 供应商不受支持，或模型客户端配置无效。
         """
         _, api_key, _, base_url = self._model_config(settings, provider)
@@ -167,19 +165,25 @@ class EmbeddedAgentRuntime:
         is_compatible_gateway = urlparse(base_url).hostname == "www.yyapi.cloud"
         adapter_provider = transport_provider_for(provider, base_url)
         # 能力属于模型；兼容网关只改变请求协议，不改变档位与温度等模型约束。
-        profile = model_profile_for(capability_provider_for(provider), model)
+        capabilities = model_capabilities_for(provider, model)
+        profile = capabilities.profile
         if thinking_mode is not None and thinking_mode not in (
-            thinking_modes_for(provider, model) or []
+            capabilities.thinking_modes or []
         ):
             raise RuntimeError("当前模型不支持所选思考开关，请切换为默认")
         if reasoning_effort is not None and reasoning_effort not in (
             profile.get("reasoning_effort_levels") or []
         ):
             raise RuntimeError("当前模型不支持所选思考强度，请切换为默认或重新选择模型")
+        # 请求预算与模型上限不同；已知上限时收紧预算，未知时沿用项目设置。
+        output_limit = profile.get("max_output_tokens")
+        output_budget = min(settings.text_max_tokens, output_limit) if output_limit else (
+            settings.text_max_tokens
+        )
         kwargs: dict[str, Any] = {
             "model": f"{adapter_provider}:{model}",
             "api_key": api_key.get_secret_value(),
-            "max_tokens": settings.text_max_tokens,
+            "max_tokens": output_budget,
             # 向传输客户端注入原生 profile，DeepAgents 也使用同一份框架能力信息。
             "profile": profile,
         }
@@ -197,7 +201,7 @@ class EmbeddedAgentRuntime:
                 reasoning_effort=reasoning_effort,
                 extra_body={"thinking": {"type": thinking_mode}} if thinking_mode else None,
                 profile=profile,
-                max_completion_tokens=settings.text_max_tokens,
+                max_completion_tokens=output_budget,
                 use_responses_api=False,
             )
         if is_compatible_gateway:
