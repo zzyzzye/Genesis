@@ -9,6 +9,15 @@ from sqlalchemy.orm import Session, selectinload
 from genesis_api.blog.models import BlogCategory, BlogPost, BlogPostStatus, BlogTag
 from genesis_api.blog.schemas import BlogPostWrite, BlogTagWrite
 
+POST_SLUG_CONFLICT_MESSAGE = (
+    "文章路径已被使用；修改现有文章请使用更新操作，新建草稿请换一个路径。"
+)
+
+
+def get_blog_post_by_slug(session: Session, slug: str) -> BlogPost | None:
+    """按路径查询文章，包含草稿，供写入前检查路径冲突。"""
+    return session.scalar(select(BlogPost).where(BlogPost.slug == slug))
+
 
 def list_published_posts(
     session: Session,

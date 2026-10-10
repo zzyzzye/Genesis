@@ -417,6 +417,7 @@ async def test_blog_tools_keep_invocation_context_isolated(
     monkeypatch.setattr(agent_tools, "SessionLocal", FakeSession)
     monkeypatch.setattr(agent_tools, "list_admin_posts", lambda _: [post])
     monkeypatch.setattr(agent_tools, "get_blog_post_by_id", lambda *_: post)
+    monkeypatch.setattr(agent_tools, "get_blog_post_by_slug", lambda *_: None)
     monkeypatch.setattr(agent_tools, "get_settings", lambda: Settings())
 
     with agent_invocation_context(first, UserRole.OWNER.value, "blog"):
@@ -435,6 +436,14 @@ async def test_blog_tools_keep_invocation_context_isolated(
         )
         assert proposal["type"] == "pending_action"
         assert proposal["action"] == "create_draft"
+        monkeypatch.setattr(agent_tools, "get_blog_post_by_slug", lambda *_: post)
+        with pytest.raises(ValueError, match="文章路径已被使用"):
+            agent_tools._preview(
+                "create_draft",
+                {"title": "新文章", "excerpt": "摘要", "content_markdown": "正文", "slug": "post"},
+                Settings(agent_action_secret=SecretStr("x" * 32)),
+            )
+        monkeypatch.setattr(agent_tools, "get_blog_post_by_slug", lambda *_: None)
         update = json.loads(
             agent_tools._preview(
                 "update_post",

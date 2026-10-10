@@ -20,7 +20,12 @@ from sqlalchemy.orm import selectinload
 from genesis_api.agent.context import require_owner
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.blog.models import BlogPost
-from genesis_api.blog.service import get_blog_post_by_id, list_admin_posts
+from genesis_api.blog.service import (
+    POST_SLUG_CONFLICT_MESSAGE,
+    get_blog_post_by_id,
+    get_blog_post_by_slug,
+    list_admin_posts,
+)
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.database.session import SessionLocal
 
@@ -170,8 +175,11 @@ def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Sett
             if get_blog_post_by_id(session, post_id) is None:
                 raise ValueError("文章不存在")
         required = ("title", "excerpt", "content_markdown", "slug")
-        if action == "create_draft" and any(not payload.get(key) for key in required):
-            raise ValueError("创建草稿缺少必要字段")
+        if action == "create_draft":
+            if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
+                raise ValueError("创建草稿缺少必要字段")
+            if get_blog_post_by_slug(session, str(payload["slug"])) is not None:
+                raise ValueError(POST_SLUG_CONFLICT_MESSAGE)
 
     proposal_id = uuid4()
     expires_at = datetime.now(UTC) + timedelta(seconds=settings.agent_action_expire_seconds)
@@ -280,13 +288,15 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
     async def create_draft(
         title: str, excerpt: str, content_markdown: str, slug: str
     ) -> str:
-        """生成创建草稿的待确认操作，不直接写入数据库。
+        """为全新文章生成创建草稿的待确认操作，不直接写入数据库。
+
+        补充、修订已有文章应使用 update_post，不要用同一 slug 再次创建。
 
         Args:
             title: 草稿标题，不能留空。
             excerpt: 草稿摘要，不能留空。
             content_markdown: 草稿 Markdown 正文，不能留空。
-            slug: 拟使用的文章地址标识，完整格式由确认阶段校验。
+            slug: 未被任何文章或草稿占用的地址标识，完整格式由确认阶段校验。
 
         Returns:
             创建草稿的签名提议 JSON，必须交给用户确认后才能写入。

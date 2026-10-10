@@ -6,14 +6,56 @@ import json
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from genesis_api.blog.models import BlogPost, BlogPostStatus
 from genesis_api.blog.schemas import BlogPostWrite
-from genesis_api.blog.service import apply_post_data, get_blog_post_by_id
+from genesis_api.blog.service import (
+    POST_SLUG_CONFLICT_MESSAGE,
+    apply_post_data,
+    get_blog_post_by_id,
+    get_blog_post_by_slug,
+)
 from genesis_api.identity.models import User
 
 BLOG_ACTIONS = {"create_draft", "update_post", "delete_post", "publish_post"}
+
+
+def _save_post(session: Session, post: BlogPost, data: BlogPostWrite) -> None:
+    """检查文章路径并提交写入，失败时回滚，避免泄露数据库语句与正文。
+
+    Args:
+        session: 当前确认请求的数据库会话。
+        post: 待创建或更新的文章。
+        data: 已通过完整写入契约校验的数据。
+
+    Raises:
+        HTTPException: 路径冲突返回 409，关联数据或业务校验失败返回 422。
+    """
+    try:
+        # 查询时不提前刷新待写实体，避免路径检查本身触发唯一约束。
+        with session.no_autoflush:
+            existing = get_blog_post_by_slug(session, data.slug)
+            if existing is not None and existing.id != post.id:
+                raise HTTPException(status_code=409, detail=POST_SLUG_CONFLICT_MESSAGE)
+            apply_post_data(session, post, data)
+        session.commit()
+    except HTTPException:
+        session.rollback()
+        raise
+    except ValueError as exc:
+        session.rollback()
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except IntegrityError as exc:
+        session.rollback()
+        # 预检查之后仍可能并发占用路径，数据库约束是最终保障。
+        constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+        if constraint == "blog_posts_slug_key" or "blog_posts.slug" in str(exc.orig):
+            raise HTTPException(status_code=409, detail=POST_SLUG_CONFLICT_MESSAGE) from None
+        raise HTTPException(
+            status_code=422, detail="文章保存失败，关联数据可能已变更，请刷新后重试。"
+        ) from None
 
 
 def _payload_uuid(payload: dict[str, object], key: str) -> UUID:
@@ -53,7 +95,7 @@ def confirm_blog_action(
         操作名称、文章 ID 与执行结果标识，不返回文章全文。
 
     Raises:
-        HTTPException: 操作或载荷无效时返回 422，文章不存在时返回 404。
+        HTTPException: 操作或载荷无效时返回 422，文章不存在时返回 404，路径冲突返回 409。
         ValidationError: 合并后的文章数据不符合 BlogPostWrite 契约。
     """
     if action not in BLOG_ACTIONS:
@@ -104,12 +146,7 @@ def confirm_blog_action(
                 ),
             }
         )
-        try:
-            apply_post_data(session, post, data)
-            session.commit()
-        except ValueError as exc:
-            session.rollback()
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        _save_post(session, post, data)
         return {
             "action": action,
             "post_id": str(post_id),
@@ -131,10 +168,5 @@ def confirm_blog_action(
             "status": BlogPostStatus.DRAFT,
         }
     )
-    try:
-        apply_post_data(session, post, data)
-        session.commit()
-    except ValueError as exc:
-        session.rollback()
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _save_post(session, post, data)
     return {"action": action, "post_id": str(post.id), "status": "created"}

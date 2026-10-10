@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr, ValidationError
 from sqlalchemy import Engine, create_engine, select
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from genesis_api.api.routes.blog import router
+from genesis_api.blog.agent import actions as blog_actions
 from genesis_api.blog.agent.actions import confirm_blog_action
 from genesis_api.blog.models import BlogPost, BlogPostStatus, BlogTag
 from genesis_api.core.config import Settings
@@ -592,3 +594,52 @@ def test_agent_publication_checks_content_and_sets_publish_time(database_session
     assert published_post.status is BlogPostStatus.PUBLISHED
     assert published_post.published_at is not None
     assert published_post.updated_at != previous_version
+
+
+@pytest.mark.parametrize("action", ["create_draft", "update_post"])
+@pytest.mark.parametrize("concurrent_conflict", [False, True])
+def test_agent_slug_conflicts_rollback_without_changing_articles(
+    database_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+    concurrent_conflict: bool,
+) -> None:
+    """覆盖已有路径与检查后并发冲突，确认失败不得覆盖原文或污染会话。"""
+    add_blog_content(database_session)
+    owner = database_session.scalar(select(User).where(User.handle == "genesis"))
+    target = database_session.scalar(select(BlogPost).where(BlogPost.slug == "published-note"))
+    occupied = database_session.scalar(
+        select(BlogPost).where(BlogPost.slug == "published-featured")
+    )
+    assert owner is not None and target is not None and occupied is not None
+    original_title = target.title
+    original_content = occupied.content_markdown
+    if concurrent_conflict:
+        # 模拟查询时路径尚未被占用，提交时由真实数据库唯一约束拒绝。
+        monkeypatch.setattr(blog_actions, "get_blog_post_by_slug", lambda *_: None)
+    changes: dict[str, object] = {
+        "slug": occupied.slug,
+        "title": "不应被保存的标题",
+        "excerpt": "摘要",
+        "content_markdown": "不应被保存的正文",
+    }
+    payload: dict[str, object] = (
+        changes if action == "create_draft" else {"post_id": str(target.id), "changes": changes}
+    )
+    with pytest.raises(HTTPException) as raised:
+        confirm_blog_action(action, payload, current_user=owner, session=database_session)
+    assert raised.value.status_code == 409
+    assert "文章路径已被使用" in raised.value.detail
+    assert target.title == original_title
+    assert target.slug == "published-note"
+    assert occupied.content_markdown == original_content
+    assert len(list(database_session.scalars(select(BlogPost)))) == 3
+    # 同一个会话仍可更新原文章，保持自己的路径不构成冲突。
+    result = confirm_blog_action(
+        "update_post",
+        {"post_id": str(target.id), "changes": {"excerpt": "成功更新摘要"}},
+        current_user=owner,
+        session=database_session,
+    )
+    assert isinstance(result, dict) and result["status"] == "updated"
+    assert target.excerpt == "成功更新摘要"
