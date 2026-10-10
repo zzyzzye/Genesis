@@ -8,6 +8,28 @@ from langchain.chat_models import init_chat_model
 from langchain_core.language_models.model_profile import ModelProfile
 
 
+def thinking_modes_for(provider: str, model: str) -> list[str] | None:
+    """补充框架尚未描述的 MiMo 思考开关，不推断其他模型或强度档位。
+
+    框架 profile 目前不提供该开关，因此仅按官方文档增加最小补充：
+    https://mimo.mi.com/docs/zh-CN/quick-start/usage-guide/text-generation/deep-thinking
+
+    Args:
+        provider: 模型所属供应商。
+        model: 官方模型标识，未知别名不匹配。
+
+    Returns:
+        官方明确支持的开关值；其他模型返回 None。
+
+    """
+    if provider == "mimo" and model in {
+        "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.6-pro-ultraspeed",
+        "mimo-v2.5-pro", "mimo-v2.5",
+    }:
+        return ["enabled", "disabled"]
+    return None
+
+
 def capability_provider_for(provider: str) -> str:
     """选择模型原生供应商的能力来源，不受网关地址影响。
 

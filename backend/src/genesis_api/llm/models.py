@@ -19,6 +19,7 @@ class AvailableModel(BaseModel):
     # 缺少能力信息时不猜测档位，前端只提供默认设置。
     reasoning_effort_levels: list[str] | None = None
     reasoning_effort_default: str | None = None
+    thinking_modes: list[str] | None = None
 
 
 class ProviderModels(BaseModel):

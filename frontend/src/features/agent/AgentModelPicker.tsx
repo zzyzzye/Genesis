@@ -1,20 +1,22 @@
 import { Check, Search } from 'lucide-react'
 import { useState } from 'react'
 
-import type { AiProvider, AvailableModel } from '../../lib/api'
+import type { AiProvider, AvailableModel, ThinkingMode } from '../../lib/api'
 import { ReasoningEffortControl } from './ReasoningEffortControl'
 import './AgentModelPicker.css'
 
 const providers: AiProvider[] = ['openai', 'grok', 'gemini', 'claude', 'mimo']
 const labels: Record<AiProvider, string> = { openai: 'OpenAI', grok: 'Grok', gemini: 'Gemini', claude: 'Claude', mimo: 'MiMo' }
 
-export function AgentModelPicker({ provider, models, model, loading = false, disabled, effort, onProviderChange, onModelChange, onEffortChange }: {
+export function AgentModelPicker({ provider, models, model, loading = false, disabled, effort, thinkingMode, onThinkingModeChange, onProviderChange, onModelChange, onEffortChange }: {
   provider: AiProvider
   models: AvailableModel[]
   model: string
   loading?: boolean
   disabled: boolean
   effort: string | undefined
+  thinkingMode?: ThinkingMode
+  onThinkingModeChange?: (mode: ThinkingMode | undefined) => void
   onProviderChange: (provider: AiProvider) => void
   onModelChange: (model: string) => void
   onEffortChange: (effort: string | undefined) => void
@@ -35,6 +37,14 @@ export function AgentModelPicker({ provider, models, model, loading = false, dis
         <span className="agent-picker__check" aria-hidden="true">{model === item.id && <Check />}</span>
       </button>)}
     </div>
-    <ReasoningEffortControl levels={selected?.reasoning_effort_levels ?? []} value={effort} defaultValue={selected?.reasoning_effort_default} hasModel={Boolean(selected)} disabled={disabled || loading} onChange={onEffortChange} />
+    {Boolean(selected?.thinking_modes?.length) && <div className="agent-reasoning">
+      <span className="agent-reasoning__title">思考模式</span>
+      <select aria-label="思考模式" value={thinkingMode ?? ''} disabled={disabled || loading} onChange={(event) => onThinkingModeChange?.(event.target.value === 'enabled' ? 'enabled' : event.target.value === 'disabled' ? 'disabled' : undefined)}>
+        <option value="">默认</option>
+        {selected?.thinking_modes?.includes('enabled') && <option value="enabled">开启</option>}
+        {selected?.thinking_modes?.includes('disabled') && <option value="disabled">关闭</option>}
+      </select>
+    </div>}
+    {(!selected?.thinking_modes?.length || Boolean(selected?.reasoning_effort_levels?.length)) && <ReasoningEffortControl levels={selected?.reasoning_effort_levels ?? []} value={effort} defaultValue={selected?.reasoning_effort_default} hasModel={Boolean(selected)} disabled={disabled || loading || thinkingMode === 'disabled'} onChange={onEffortChange} />}
   </div>
 }

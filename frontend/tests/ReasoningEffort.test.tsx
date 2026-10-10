@@ -33,6 +33,37 @@ function setupModels() {
   }))
 }
 
+it('选择 MiMo 后菜单保持展开，开关按模型记忆并随请求发送', async () => {
+  vi.mocked(getProviderModels).mockImplementation((_token, provider) => Promise.resolve({
+    provider,
+    models: [
+      { id: 'mimo-v2.6-flash', name: 'MiMo', created: null, context_window: null, thinking_modes: ['enabled', 'disabled'] },
+      { id: 'unknown', name: '未知模型', created: null, context_window: null },
+    ],
+  }))
+  render(<MediaAssistant token="test-placeholder" page="projects" selectedNode={null} />)
+  fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
+  const trigger = screen.getByRole('button', { name: '选择模型' })
+  fireEvent.click(trigger)
+  fireEvent.click(screen.getByRole('button', { name: '切换到 MiMo 模型' }))
+  await screen.findByRole('combobox', { name: '思考模式' })
+  fireEvent.click(screen.getByRole('button', { name: 'MiMo' }))
+  expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  expect(screen.queryByRole('combobox', { name: '思考强度' })).not.toBeInTheDocument()
+  fireEvent.change(screen.getByRole('combobox', { name: '思考模式' }), { target: { value: 'disabled' } })
+  fireEvent.click(screen.getByRole('button', { name: '未知模型' }))
+  expect(screen.queryByRole('combobox', { name: '思考模式' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'MiMo' }))
+  expect(screen.getByRole('combobox', { name: '思考模式' })).toHaveValue('disabled')
+  fireEvent.keyDown(window, { key: 'Escape' })
+  fireEvent.change(screen.getByRole('textbox', { name: '向镜头搭档提问' }), { target: { value: '开始' } })
+  fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
+  await waitFor(() => expect(streamAiChat).toHaveBeenCalledWith(
+    'test-placeholder', expect.objectContaining({ thinking_mode: 'disabled', reasoning_effort: undefined }),
+    expect.any(Function),
+  ))
+})
+
 it('博客按模型记忆档位，未知模型用默认，请求携带当前强度', async () => {
   setupModels()
   vi.mocked(createAiChatRun).mockResolvedValue({ id: 'effort-run', status: 'pending' })
@@ -46,11 +77,11 @@ it('博客按模型记忆档位，未知模型用默认，请求携带当前强�
   fireEvent.change(slider, { target: { value: 'high' } })
   expect(slider).toHaveValue('high')
   fireEvent.click(screen.getByRole('button', { name: '未知模型' }))
-  fireEvent.click(trigger)
+  expect(trigger).toHaveAttribute('aria-expanded', 'true')
   expect(screen.getByText('使用模型默认设置')).toBeInTheDocument()
   expect(screen.queryByRole('combobox', { name: '思考强度' })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '可调模型' }))
-  fireEvent.click(trigger)
+  expect(trigger).toHaveAttribute('aria-expanded', 'true')
   expect(screen.getByRole('combobox', { name: '思考强度' })).toHaveValue('high')
   fireEvent.keyDown(document, { key: 'Escape' })
   fireEvent.change(screen.getByRole('textbox'), { target: { value: '测试' } })

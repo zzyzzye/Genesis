@@ -68,6 +68,8 @@ class AiChatRequest(BaseModel):
     model: str | None = None
     # None 沿用模型默认；实际可选档位由运行时依据框架 profile 校验。
     reasoning_effort: str | None = Field(default=None, min_length=1, max_length=32)
+    # 与强度独立；None 沿用上游默认，目前 MiMo 支持明确开启或关闭。
+    thinking_mode: Literal["enabled", "disabled"] | None = None
     # 内部字段不随普通 model_dump 输出；任务持久化时由管理器明确补入身份。
     actor_id: UUID | None = Field(default=None, exclude=True)
     actor_role: str | None = Field(default=None, exclude=True)

@@ -12,7 +12,68 @@ from genesis_api.agent.runtime import EmbeddedAgentRuntime
 from genesis_api.ai.runs import _configured_model
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
+from genesis_api.llm.profiles import thinking_modes_for
 from genesis_api.llm.service import ModelDiscoveryService
+
+
+def test_thinking_switch_scope_is_limited_to_documented_mimo_models() -> None:
+    """官方开关范围不扩展到未知名称、语音模型或其他供应商。"""
+    for name in (
+        "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.6-pro-ultraspeed",
+        "mimo-v2.5-pro", "mimo-v2.5",
+    ):
+        assert thinking_modes_for("mimo", name) == ["enabled", "disabled"]
+    assert thinking_modes_for("mimo", "mimo-v2.5-tts") is None
+    assert thinking_modes_for("mimo", "unknown") is None
+    assert thinking_modes_for("openai", "mimo-v2.6-flash") is None
+
+
+@pytest.mark.parametrize("mode", [None, "enabled", "disabled"])
+def test_mimo_thinking_switch_uses_extra_body(mode: str | None) -> None:
+    """思考开关独立序列化，默认不发送，显式关闭时才使用配置温度。"""
+    settings = Settings(text_mimo_api_key=SecretStr("test-placeholder"))
+    model = EmbeddedAgentRuntime()._build_model(
+        settings, "mimo", "mimo-v2.6-flash", thinking_mode=mode
+    )
+    assert isinstance(model, ChatMiMo)
+    payload = model._get_request_payload([HumanMessage("hi")])
+    assert "reasoning_effort" not in payload
+    if mode:
+        assert payload["extra_body"] == {"thinking": {"type": mode}}
+    else:
+        assert not payload.get("extra_body")
+    assert ("temperature" in payload) == (mode == "disabled")
+    with pytest.raises(RuntimeError, match="思考开关"):
+        EmbeddedAgentRuntime()._build_model(
+            settings, "mimo", "unknown", thinking_mode="enabled"
+        )
+
+
+def test_thinking_switch_survives_request_persistence_and_graph_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """后台恢复保留思考开关，不同开关不能复用同一张图。"""
+    from typing import Any, cast
+
+    from genesis_api.ai.runs import _request_from_payload, _request_payload
+
+    request = AiChatRequest(
+        surface="studio", provider="mimo", thinking_mode="disabled",
+        messages=[{"role": "user", "content": "hi"}],
+    )
+    assert _request_from_payload(_request_payload(request)).thinking_mode == "disabled"
+    runtime = EmbeddedAgentRuntime()
+    runtime._checkpointer = cast(Any, object())
+    monkeypatch.setattr(runtime, "_build_model", lambda *_: object())
+    monkeypatch.setattr("genesis_api.agent.runtime.create_deep_agent", lambda **_: object())
+    settings = Settings()
+    enabled = runtime._graph(settings, "mimo", "mimo-v2.6-flash", "blog", None, "enabled")
+    assert runtime._graph(
+        settings, "mimo", "mimo-v2.6-flash", "blog", None, "enabled"
+    ) is enabled
+    assert runtime._graph(
+        settings, "mimo", "mimo-v2.6-flash", "blog", None, "disabled"
+    ) is not enabled
 
 
 def test_mimo_configuration_and_reasoning_roundtrip() -> None:

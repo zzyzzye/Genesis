@@ -12,7 +12,7 @@ from pydantic import SecretStr
 from genesis_api.core.config import Settings
 from genesis_api.llm.context_windows import context_window_for
 from genesis_api.llm.models import AvailableModel, ProviderModels, ProviderName
-from genesis_api.llm.profiles import capability_provider_for, model_profile_for
+from genesis_api.llm.profiles import capability_provider_for, model_profile_for, thinking_modes_for
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +116,7 @@ class ModelDiscoveryService:
             profile = model_profile_for(adapter, model.id)
             model.reasoning_effort_levels = profile.get("reasoning_effort_levels")
             model.reasoning_effort_default = profile.get("reasoning_effort_default")
+            model.thinking_modes = thinking_modes_for(provider, model.id)
         return models
 
     def _provider_config(self, provider: ProviderName) -> tuple[SecretStr | None, str]:

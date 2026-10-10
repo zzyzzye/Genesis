@@ -273,12 +273,15 @@ export type AiExecutionMode = 'automatic' | 'approval_required'
 
 export type AiProvider = 'openai' | 'grok' | 'gemini' | 'claude' | 'mimo'
 
+export type ThinkingMode = 'enabled' | 'disabled'
+
 export interface AvailableModel {
   id: string
   name: string | null
   created: number | null
   context_window: number | null
   reasoning_effort_levels?: string[] | null
+  thinking_modes?: ThinkingMode[] | null
   reasoning_effort_default?: string | null
 }
 
@@ -318,6 +321,7 @@ export interface AiChatRequest {
   provider?: AiProvider
   model?: string
   reasoning_effort?: string
+  thinking_mode?: ThinkingMode
   execution_mode?: AiExecutionMode
 }
 

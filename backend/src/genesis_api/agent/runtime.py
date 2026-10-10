@@ -24,6 +24,7 @@ from genesis_api.core.config import Settings
 from genesis_api.llm.profiles import (
     capability_provider_for,
     model_profile_for,
+    thinking_modes_for,
     transport_provider_for,
 )
 
@@ -62,7 +63,7 @@ class EmbeddedAgentRuntime:
         """创建空图缓存与存储引用，实际连接由 startup 初始化。"""
         self._checkpointer_context: AbstractAsyncContextManager[AsyncPostgresSaver] | None = None
         self._checkpointer: AsyncPostgresSaver | None = None
-        self._graphs: dict[tuple[str, str, str, str | None], Any] = {}
+        self._graphs: dict[tuple[str, str, str, str | None, str | None], Any] = {}
 
     async def startup(self, settings: Settings) -> None:
         """由应用生命周期初始化共享的 PostgreSQL checkpoint 存储。
@@ -138,7 +139,8 @@ class EmbeddedAgentRuntime:
         return configs[provider]
 
     def _build_model(
-        self, settings: Settings, provider: str, model: str, reasoning_effort: str | None = None
+        self, settings: Settings, provider: str, model: str, reasoning_effort: str | None = None,
+        thinking_mode: str | None = None,
     ) -> BaseChatModel:
         """构建模型客户端，补充兼容网关与 MiMo 所需的协议适配。
 
@@ -150,6 +152,7 @@ class EmbeddedAgentRuntime:
             provider: 项目供应商标识。
             model: 实际调用的模型名称。
             reasoning_effort: 思考强度；None 表示沿用模型默认设置。
+            thinking_mode: 思考开关；None 不发送开关参数，不等于关闭思考。
 
         Returns:
             供 DeepAgent 使用的聊天模型客户端。
@@ -165,6 +168,10 @@ class EmbeddedAgentRuntime:
         adapter_provider = transport_provider_for(provider, base_url)
         # 能力属于模型；兼容网关只改变请求协议，不改变档位与温度等模型约束。
         profile = model_profile_for(capability_provider_for(provider), model)
+        if thinking_mode is not None and thinking_mode not in (
+            thinking_modes_for(provider, model) or []
+        ):
+            raise RuntimeError("当前模型不支持所选思考开关，请切换为默认")
         if reasoning_effort is not None and reasoning_effort not in (
             profile.get("reasoning_effort_levels") or []
         ):
@@ -185,8 +192,10 @@ class EmbeddedAgentRuntime:
             return ChatMiMo(
                 model=model, api_key=api_key, base_url=base_url,
                 default_headers={"api-key": api_key.get_secret_value()},
-                temperature=kwargs.get("temperature"),
+                # MiMo 默认开启思考；官方要求思考模式沿用推荐采样参数。
+                temperature=kwargs.get("temperature") if thinking_mode == "disabled" else None,
                 reasoning_effort=reasoning_effort,
+                extra_body={"thinking": {"type": thinking_mode}} if thinking_mode else None,
                 profile=profile,
                 max_completion_tokens=settings.text_max_tokens,
                 use_responses_api=False,
@@ -206,10 +215,11 @@ class EmbeddedAgentRuntime:
     def _graph(
         self, settings: Settings, provider: str, model: str, module: str,
         reasoning_effort: str | None = None,
+        thinking_mode: str | None = None,
     ) -> Any:
         """获取对应配置的 Agent 图，不存在时创建并缓存。
 
-        按供应商、模型、业务模块与思考强度复用图；用户对话状态由
+        按供应商、模型、业务模块、思考强度与开关复用图；用户对话状态由
         checkpoint 的 thread_id 区分，不保存在图缓存键中。
 
         Args:
@@ -218,6 +228,7 @@ class EmbeddedAgentRuntime:
             model: 模型名称。
             module: 业务模块，如 blog、media、toolbox。
             reasoning_effort: 思考强度；None 表示沿用模型默认设置。
+            thinking_mode: 独立思考开关，也参与图缓存隔离。
 
         Returns:
             可执行的 Agent 图，相同配置复用进程内缓存实例。
@@ -229,12 +240,12 @@ class EmbeddedAgentRuntime:
         """
         if self._checkpointer is None:
             raise RuntimeError("Agent runtime 尚未初始化")
-        key = (provider, model, module, reasoning_effort)
+        key = (provider, model, module, reasoning_effort, thinking_mode)
         if key not in self._graphs:
             capability = agent_capabilities.resolve(module, settings)
             # 业务模块只提供提示词和工具，模型循环、工具编排与 checkpoint 交给框架。
             self._graphs[key] = create_deep_agent(
-                model=self._build_model(settings, provider, model, reasoning_effort),
+                model=self._build_model(settings, provider, model, reasoning_effort, thinking_mode),
                 tools=capability.tools,
                 system_prompt=capability.prompt,
                 checkpointer=self._checkpointer,
@@ -273,7 +284,9 @@ class EmbeddedAgentRuntime:
         module = request.context.module if request.context and request.context.module else (
             "blog" if request.surface in ("blog", "studio") else request.surface
         )
-        graph = self._graph(settings, provider, model, module, request.reasoning_effort)
+        graph = self._graph(
+            settings, provider, model, module, request.reasoning_effort, request.thinking_mode
+        )
         messages: list[BaseMessage | dict[str, str]] = [
             SystemMessage(
                 content=f"可信页面上下文：{request.context.model_dump() if request.context else {}}"

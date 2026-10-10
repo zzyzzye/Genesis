@@ -332,8 +332,7 @@ describe('作品画布', () => {
     expect(trigger).toHaveFocus()
     fireEvent.click(trigger)
     fireEvent.click(screen.getByRole('button', { name: /gpt-6-sol\s*1.05M/ }))
-    expect(trigger).toHaveFocus()
-    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
   })
   it('切换供应商时清除上一家的模型，加载完成后显示真实空态', async () => {
     let finish!: (value: Awaited<ReturnType<typeof ai.getProviderModels>>) => void

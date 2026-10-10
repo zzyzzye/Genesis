@@ -38,7 +38,7 @@ import {
   type AvailableModel,
 } from '../../../lib/api'
 import { AgentModelPicker } from '../../agent/AgentModelPicker'
-import { reasoningEffortLabel, useReasoningEffort } from '../../agent/useReasoningEffort'
+import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from '../../agent/useReasoningEffort'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
 
 type AssistantTiming = { startedAt: number; firstTokenAt?: number; completedAt?: number }
@@ -405,6 +405,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
         provider,
         model: model || undefined,
         reasoning_effort: reasoning.effort,
+        thinking_mode: reasoning.thinkingMode,
         execution_mode: executionMode,
         context: {
           module: 'blog',
@@ -547,7 +548,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
                 >自动</button>
               </div>
               <button ref={modelTriggerRef} aria-label="选择模型" title={model || '选择模型'} className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
-                <ProviderIcon provider={provider} /><span className="studio-assistant__selected-model">{selectedModel?.name || model || '选择模型'}</span><span>{reasoningEffortLabel(reasoning.effort)}</span><StudioIcon name="chevron" />
+                <ProviderIcon provider={provider} /><span className="studio-assistant__selected-model">{selectedModel?.name || model || '选择模型'}</span><span>{thinkingModeLabel(reasoning.thinkingMode) ?? reasoningEffortLabel(reasoning.effort)}</span><StudioIcon name="chevron" />
               </button>
               <span className="studio-assistant__context-ring" tabIndex={0} role={contextPercent === null ? 'img' : 'progressbar'} aria-label={contextDescription} aria-valuemin={contextPercent === null ? undefined : 0} aria-valuemax={contextPercent === null ? undefined : 100} aria-valuenow={contextPercent ?? undefined}>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -567,9 +568,7 @@ export function BlogAssistant({ page, editor }: { page: AssistantPageContext; ed
                 }} onModelChange={(next) => {
                   selectedModels.current[provider] = next
                   setModel(next)
-                  setModelMenuOpen(false)
-                  modelTriggerRef.current?.focus()
-                }} onEffortChange={reasoning.setEffort} />
+                }} onEffortChange={reasoning.setEffort} thinkingMode={reasoning.thinkingMode} onThinkingModeChange={reasoning.setThinkingMode} />
               </div>}
               {activeRun
                 ? <button className="studio-assistant__stop" type="button" aria-label="停止生成" onClick={stopGeneration}><StudioIcon name="stop" /></button>

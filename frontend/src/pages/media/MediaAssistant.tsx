@@ -6,7 +6,7 @@ import remarkGfm from 'remark-gfm'
 
 import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider, type AvailableModel } from '../../lib/api'
 import { AgentModelPicker } from '../../features/agent/AgentModelPicker'
-import { reasoningEffortLabel, useReasoningEffort } from '../../features/agent/useReasoningEffort'
+import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from '../../features/agent/useReasoningEffort'
 
 type MediaAssistantPage = 'projects' | 'project' | 'canvas' | 'assets'
 export type MediaAssistantNode = { id: string; type: string; name: string; text: string; assetId: string | null }
@@ -163,6 +163,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
       await streamAiChat(token, {
         surface: 'media', messages: nextMessages, provider, model: model || undefined,
         reasoning_effort: reasoning.effort,
+        thinking_mode: reasoning.thinkingMode,
         context: {
           module: 'media', route: window.location.pathname, page_type: page,
           selected_node: discussionNode ? { id: discussionNode.id, type: discussionNode.type, name: discussionNode.name, text: discussionNode.text, asset_id: discussionNode.assetId } : undefined,
@@ -179,7 +180,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
   }
 
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void send(input) }
-  function selectModel(next: string) { selectedModels.current[provider] = next; setModel(next); setModelMenuOpen(false); modelTriggerRef.current?.focus() }
+  function selectModel(next: string) { selectedModels.current[provider] = next; setModel(next) }
   function startNewConversation() { if (!busy) { setMessages([]); setInput(''); setError(''); setAppliedPlans(new Set()) } }
 
   return <aside className={`media-agent media-agent--styled${page === 'canvas' ? ' media-agent--canvas' : ''}`} aria-label="影音创作助手">
@@ -203,9 +204,9 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
       </div>
       <form className="media-agent__form" noValidate onSubmit={submit}>
         <textarea className="resize-none" ref={inputRef} aria-label="向镜头搭档提问" aria-keyshortcuts="Enter" rows={2} value={input} onChange={(event) => setInput(event.currentTarget.value)} onKeyDown={(event) => { if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return; event.preventDefault(); event.currentTarget.form?.requestSubmit() }} disabled={busy} placeholder="描述画面，或说说你想调整的地方…" />
-        <div className="media-agent__composer-tools"><button ref={modelTriggerRef} className="media-agent__model-trigger" type="button" aria-label="选择模型" aria-expanded={modelMenuOpen} onClick={() => setModelMenuOpen((value) => !value)}><span>{providerLabels[provider]}</span><i aria-hidden="true">·</i><strong>{selectedModel?.name || model || '选择模型'}</strong><span>{reasoningEffortLabel(reasoning.effort)}</span><ChevronDown aria-hidden="true" /></button>
+        <div className="media-agent__composer-tools"><button ref={modelTriggerRef} className="media-agent__model-trigger" type="button" aria-label="选择模型" aria-expanded={modelMenuOpen} onClick={() => setModelMenuOpen((value) => !value)}><span>{providerLabels[provider]}</span><i aria-hidden="true">·</i><strong>{selectedModel?.name || model || '选择模型'}</strong><span>{thinkingModeLabel(reasoning.thinkingMode) ?? reasoningEffortLabel(reasoning.effort)}</span><ChevronDown aria-hidden="true" /></button>
           {modelMenuOpen && <div ref={modelMenuRef} className="media-agent__model-menu" aria-label="模型列表">
-            <AgentModelPicker provider={provider} models={models} model={model} loading={modelsLoading} disabled={busy} effort={reasoning.effort} onProviderChange={setProvider} onModelChange={selectModel} onEffortChange={reasoning.setEffort} />
+            <AgentModelPicker provider={provider} models={models} model={model} loading={modelsLoading} disabled={busy} effort={reasoning.effort} thinkingMode={reasoning.thinkingMode} onThinkingModeChange={reasoning.setThinkingMode} onProviderChange={setProvider} onModelChange={selectModel} onEffortChange={reasoning.setEffort} />
           </div>}
           <button className="media-agent__send" type="submit" aria-label="发送给镜头搭档" disabled={busy || !input.trim()}><Send aria-hidden="true" /></button>
         </div>{error && <p className="media-agent__error" role="alert">{error}</p>}
