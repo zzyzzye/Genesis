@@ -21,7 +21,11 @@ from genesis_api.agent.context import agent_invocation_context
 from genesis_api.agent.mimo import ChatMiMo
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
-from genesis_api.llm.profiles import model_profile_for, model_provider_for
+from genesis_api.llm.profiles import (
+    capability_provider_for,
+    model_profile_for,
+    transport_provider_for,
+)
 
 
 class YyapiAsyncTransport(httpx.AsyncBaseTransport):
@@ -158,8 +162,9 @@ class EmbeddedAgentRuntime:
         if api_key is None or not api_key.get_secret_value().strip():
             raise RuntimeError(f"未配置 {provider} 的 API Key")
         is_compatible_gateway = urlparse(base_url).hostname == "www.yyapi.cloud"
-        adapter_provider = model_provider_for(provider, base_url)
-        profile = model_profile_for(adapter_provider, model)
+        adapter_provider = transport_provider_for(provider, base_url)
+        # 能力属于模型；兼容网关只改变请求协议，不改变档位与温度等模型约束。
+        profile = model_profile_for(capability_provider_for(provider), model)
         if reasoning_effort is not None and reasoning_effort not in (
             profile.get("reasoning_effort_levels") or []
         ):
@@ -168,6 +173,8 @@ class EmbeddedAgentRuntime:
             "model": f"{adapter_provider}:{model}",
             "api_key": api_key.get_secret_value(),
             "max_tokens": settings.text_max_tokens,
+            # 向传输客户端注入原生 profile，DeepAgents 也使用同一份框架能力信息。
+            "profile": profile,
         }
         # 推理模型可能不接受 temperature；显式档位交由框架映射供应商参数。
         if profile.get("temperature") is not False and reasoning_effort is None:
@@ -180,6 +187,7 @@ class EmbeddedAgentRuntime:
                 default_headers={"api-key": api_key.get_secret_value()},
                 temperature=kwargs.get("temperature"),
                 reasoning_effort=reasoning_effort,
+                profile=profile,
                 max_completion_tokens=settings.text_max_tokens,
                 use_responses_api=False,
             )

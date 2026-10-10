@@ -8,8 +8,26 @@ from langchain.chat_models import init_chat_model
 from langchain_core.language_models.model_profile import ModelProfile
 
 
-def model_provider_for(provider: str, base_url: str) -> str:
-    """选择能力查询与实际调用共同使用的 LangChain 适配器。
+def capability_provider_for(provider: str) -> str:
+    """选择模型原生供应商的能力来源，不受网关地址影响。
+
+    Args:
+        provider: 项目供应商标识，不依据模型名称猜测归属。
+
+    Returns:
+        LangChain 原生适配器标识；MiMo 沿用已有 OpenAI 兼容实现。
+
+    Raises:
+        KeyError: 供应商标识不受支持。
+    """
+    return {
+        "openai": "openai", "grok": "xai", "gemini": "google_genai",
+        "claude": "anthropic", "mimo": "openai",
+    }[provider]
+
+
+def transport_provider_for(provider: str, base_url: str) -> str:
+    """选择实际发送请求的 LangChain 协议适配器，不用于查询模型能力。
 
     Args:
         provider: 项目供应商标识，应已通过请求或配置校验。
@@ -23,10 +41,7 @@ def model_provider_for(provider: str, base_url: str) -> str:
     """
     if urlparse(base_url).hostname == "www.yyapi.cloud":
         return "openai"
-    return {
-        "openai": "openai", "grok": "xai", "gemini": "google_genai",
-        "claude": "anthropic", "mimo": "openai",
-    }[provider]
+    return capability_provider_for(provider)
 
 
 @lru_cache(maxsize=256)
@@ -34,7 +49,7 @@ def model_profile_for(adapter: str, model: str) -> ModelProfile:
     """仅构造客户端读取公开 profile，不请求上游或使用真实凭据。
 
     Args:
-        adapter: LangChain 模型适配器标识。
+        adapter: 模型原生供应商的 LangChain 适配器标识，不是网关传输适配器。
         model: 模型名称，不自行转换未知别名。
 
     Returns:

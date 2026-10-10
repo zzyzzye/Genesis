@@ -8,8 +8,51 @@ from pydantic import SecretStr
 
 from genesis_api.core.config import Settings
 from genesis_api.llm.models import AvailableModel
-from genesis_api.llm.profiles import model_profile_for
+from genesis_api.llm.profiles import (
+    capability_provider_for,
+    model_profile_for,
+    transport_provider_for,
+)
 from genesis_api.llm.service import ModelDiscoveryError, ModelDiscoveryService
+
+
+def test_capability_source_is_independent_of_gateway_transport() -> None:
+    """网关改变请求协议，但不改变 Gemini 与 Claude 的原生能力来源。"""
+    for provider, native in (("gemini", "google_genai"), ("claude", "anthropic")):
+        assert capability_provider_for(provider) == native
+        assert transport_provider_for(provider, "https://www.yyapi.cloud/v1") == "openai"
+        assert transport_provider_for(provider, "https://native.example") == native
+    with pytest.raises(KeyError):
+        capability_provider_for("unknown")
+
+
+@pytest.mark.anyio
+async def test_gateway_model_catalog_uses_native_framework_capabilities() -> None:
+    """模型目录即使来自兼容网关，也使用框架原生 profile 展示思考档位。"""
+    settings = Settings(
+        text_gemini_api_key=SecretStr("test"),
+        text_gemini_base_url="https://www.yyapi.cloud",
+        text_gemini_model="gemini-3.1-pro-preview",
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"data": [
+            {"id": "gemini-2.5-flash"}, {"id": "custom-unknown"},
+        ]}))
+    ) as client:
+        result = await ModelDiscoveryService(settings, client).list_models("gemini")
+    models = {model.id: model for model in result.models}
+    native = model_profile_for("google_genai", "gemini-3.1-pro-preview")
+    assert native.get("reasoning_effort_levels")
+    assert models["gemini-3.1-pro-preview"].reasoning_effort_levels == native.get(
+        "reasoning_effort_levels"
+    )
+    assert models["gemini-2.5-flash"].reasoning_effort_levels is None
+    assert models["custom-unknown"].reasoning_effort_levels is None
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(503))
+    ) as client:
+        fallback = await ModelDiscoveryService(settings, client).list_models("gemini")
+    assert fallback.models[0].reasoning_effort_levels == native.get("reasoning_effort_levels")
 
 
 @pytest.mark.anyio

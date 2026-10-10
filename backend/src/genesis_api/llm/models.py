@@ -10,7 +10,7 @@ ProviderName = Literal["openai", "grok", "gemini", "claude", "mimo"]
 
 
 class AvailableModel(BaseModel):
-    """可选模型及展示元数据，思考档位取自实际框架适配器的 profile。"""
+    """可选模型及展示元数据，思考档位取自原生供应商的框架 profile。"""
 
     id: str
     name: str | None = None

@@ -245,6 +245,38 @@ def test_runtime_passes_supported_effort_and_rejects_unknown_models(
         runtime._build_model(settings, "openai", "gpt-5", "max")
 
 
+@pytest.mark.anyio
+async def test_gateway_runtime_uses_native_profile_with_openai_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """原生 profile 校验通过后，经兼容客户端传递参数并保留模型能力。"""
+    from genesis_api.llm.profiles import model_profile_for
+
+    calls: list[dict[str, Any]] = []
+
+    def build(**kwargs: Any) -> Any:
+        calls.append(kwargs)
+        return object()
+
+    monkeypatch.setattr("genesis_api.agent.runtime.init_chat_model", build)
+    runtime = EmbeddedAgentRuntime()
+    settings = Settings(
+        text_gemini_api_key=SecretStr("test"),
+        text_gemini_base_url="https://www.yyapi.cloud",
+    )
+    model = "gemini-3.1-pro-preview"
+    profile = model_profile_for("google_genai", model)
+    runtime._build_model(settings, "gemini", model, "high")
+    assert calls[-1]["model"] == f"openai:{model}"
+    assert calls[-1]["profile"] == profile
+    assert calls[-1]["reasoning_effort"] == "high"
+    await calls[-1]["http_async_client"].aclose()
+    with pytest.raises(RuntimeError, match="不支持所选思考强度"):
+        runtime._build_model(settings, "gemini", model, "max")
+    with pytest.raises(RuntimeError, match="不支持所选思考强度"):
+        runtime._build_model(settings, "gemini", "gemini-2.5-flash", "high")
+
+
 def test_graph_cache_separates_reasoning_effort(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime = EmbeddedAgentRuntime()
     runtime._checkpointer = cast(Any, object())

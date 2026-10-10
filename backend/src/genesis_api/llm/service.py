@@ -12,7 +12,7 @@ from pydantic import SecretStr
 from genesis_api.core.config import Settings
 from genesis_api.llm.context_windows import context_window_for
 from genesis_api.llm.models import AvailableModel, ProviderModels, ProviderName
-from genesis_api.llm.profiles import model_profile_for, model_provider_for
+from genesis_api.llm.profiles import capability_provider_for, model_profile_for
 
 logger = logging.getLogger(__name__)
 
@@ -102,17 +102,16 @@ class ModelDiscoveryService:
     def _with_profiles(
         self, provider: ProviderName, models: list[AvailableModel]
     ) -> list[AvailableModel]:
-        """按实际模型适配器补充能力字段，原地修改列表中的模型。
+        """按原生供应商的框架 profile 补充能力，不让网关协议改变模型能力。
 
         Args:
-            provider: 供应商标识，与基础地址共同决定实际协议适配器。
+            provider: 模型所属供应商，不使用基础地址推断能力。
             models: 已解析的模型列表。
 
         Returns:
             原列表；能力未知时档位字段为空，不猜测供应商支持范围。
         """
-        _, base_url = self._provider_config(provider)
-        adapter = model_provider_for(provider, base_url)
+        adapter = capability_provider_for(provider)
         for model in models:
             profile = model_profile_for(adapter, model.id)
             model.reasoning_effort_levels = profile.get("reasoning_effort_levels")
