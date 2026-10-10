@@ -25,6 +25,8 @@
 .studio-app-shell ::-webkit-scrollbar-thumb { border-radius: 6px; background: var(--studio-scroll-thumb); }
 .studio-app-shell ::-webkit-scrollbar-thumb:hover { background: var(--studio-scroll-hover); }
 .studio-app-shell ::-webkit-scrollbar-thumb:active { background: var(--studio-muted); }
+.studio-app-shell .studio-nav-groups, .studio-app-shell .studio-content { scrollbar-width: none; }
+.studio-app-shell .studio-nav-groups::-webkit-scrollbar, .studio-app-shell .studio-content::-webkit-scrollbar { display: none; }
 .studio-app-shell button, .studio-app-shell a { -webkit-tap-highlight-color: transparent; outline: 0; box-shadow: none; }
 .studio-app-shell button { border: 0; transition: background-color 140ms ease, color 140ms ease; }
 .studio-app-shell button:disabled { cursor: not-allowed; opacity: .45; }

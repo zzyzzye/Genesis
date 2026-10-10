@@ -1,11 +1,13 @@
 import './BlogAssistant.css'
 
 import { type FormEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { StudioIcon } from '../../../studio/StudioIcon'
 import { TypewriterText } from '../../../studio/TypewriterText'
+import { motionTiming } from '../../../lib/motion'
 
 function ProviderIcon({ provider }: { provider: AiProvider }) {
   const common = { viewBox: '0 0 24 24', role: 'img' as const, focusable: 'false' as const }
@@ -186,6 +188,8 @@ function updateAssistantMessage(
 }
 
 export function BlogAssistant({ page, editor, userId }: { page: AssistantPageContext; editor: AssistantEditorContext | null; userId?: string }) {
+  const reducedMotion = useReducedMotion()
+  const transition = { duration: reducedMotion ? 0 : motionTiming.page, ease: motionTiming.ease }
   const storageKey = userId ? `${assistantSessionKey}:${userId}` : assistantSessionKey
   const [initialSession] = useState(() => readAssistantSession(storageKey))
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -656,9 +660,11 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
   }, [])
 
   return (
-    <div ref={rootRef} className={`studio-assistant${isOpen ? ' is-open' : ''}${expanded ? ' is-expanded' : ''}`}>
+    <AnimatePresence initial={false}>
+    {isOpen ? <motion.div key="assistant" ref={rootRef} className={`studio-assistant is-open${expanded ? ' is-expanded' : ''}`}
+      initial={{ opacity: 0, x: reducedMotion ? 0 : 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: reducedMotion ? 0 : 16 }}
+      transition={transition} layout={reducedMotion ? false : 'position'} layoutDependency={expanded}>
       {isOpen && !expanded && <button type="button" role="separator" aria-label="调整助手宽度" aria-orientation="vertical" aria-valuemin={340} aria-valuemax={600} aria-valuenow={panelWidth} className="studio-assistant__resize" title="拖动或用左右方向键调整宽度" onPointerDown={(event) => { resizeStart.current = { x: event.clientX, width: panelWidth }; event.currentTarget.setPointerCapture(event.pointerId) }} onPointerMove={(event) => { const start = resizeStart.current; if (start) setPanelWidth(Math.max(340, Math.min(600, start.width + start.x - event.clientX))) }} onPointerUp={() => { resizeStart.current = null }} onPointerCancel={() => { resizeStart.current = null }} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setPanelWidth((width) => Math.max(340, Math.min(600, width + (event.key === 'ArrowLeft' ? 16 : -16)))) } }} />}
-      {isOpen && (
         <section className={`studio-assistant__panel${messages.length === 1 && !isBusy ? ' is-empty' : ''}`} aria-label="博客 AI 助手">
           <header className="studio-assistant__header">
             <div className="studio-assistant__identity">
@@ -677,7 +683,7 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
             </div>
           </header>
           <div className={`studio-assistant__workspace${historyOpen ? ' is-history' : ''}`}>
-          {(historyOpen || expanded) && <nav className="studio-assistant__history" aria-label="历史对话">
+          {(historyOpen || expanded) && <motion.nav className="studio-assistant__history" aria-label="历史对话" initial={{ opacity: 0, x: reducedMotion ? 0 : -8 }} animate={{ opacity: 1, x: 0 }} transition={transition}>
             <div className="studio-assistant__history-heading"><strong>历史对话</strong><button type="button" disabled={historyLoading} onClick={() => { void loadHistory() }}>刷新</button></div>
             {historyError && <div role="alert"><p>{historyError}</p><button type="button" onClick={() => { void loadHistory() }}>重试</button></div>}
             {!historyLoading && !historyError && history.length === 0 && <p className="studio-assistant__history-empty">还没有历史对话。发送第一条消息后，会自动保存在这里。</p>}
@@ -687,8 +693,8 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
             {historyLoading && <p role="status">正在读取历史…</p>}
             {hasMoreHistory && <button type="button" disabled={historyLoading} onClick={() => { void loadHistory(history.length) }}>加载更多</button>}
             {!expanded && <button type="button" className="studio-assistant__history-back" onClick={() => setHistoryOpen(false)}>返回当前对话</button>}
-          </nav>}
-          <div className="studio-assistant__chat">
+          </motion.nav>}
+          <motion.div className="studio-assistant__chat" animate={{ opacity: historyOpen && !expanded ? 0 : 1 }} transition={transition}>
           <div className="studio-assistant__conversation-heading">
             {renaming ? <form noValidate onSubmit={(event) => { void saveTitle(event) }}>
               <input autoFocus aria-label="对话标题" maxLength={80} value={titleDraft} disabled={renameBusy} onChange={(event) => setTitleDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape' && !renameBusy) setRenaming(false) }} />
@@ -710,10 +716,10 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
             <div className="studio-assistant__context"><StudioIcon name="spark" /> {editor ? `当前文章：${editor.title || '未命名草稿'}` : `当前页面：${pageLabels[page.pageType]}`}</div>
             <div className="studio-assistant__messages">
               {messages.map((message, index) => (
-                <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${message.role}-${index}`}>
+                <motion.div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${conversationId ?? 'new'}-${message.role}-${index}`} initial={{ opacity: 0, y: reducedMotion ? 0 : 6 }} animate={{ opacity: 1, y: 0 }} transition={transition}>
                   {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
                   {message.role === 'assistant' ? <MarkdownMessage content={message.content} timing={message.timing} metrics={message.metrics} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} /> : <p>{message.content}</p>}
-                </div>
+                </motion.div>
               ))}
             </div>
             {messages.length === 1 && (
@@ -784,15 +790,16 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
             <p className="studio-assistant__composer-status" role="status">{!error && (isBusy || streamStatus) ? (streamStatus ?? '正在生成…') : ''}</p>
             {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
           </form>
-          </div>
+          </motion.div>
           </div>
         </section>
-      )}
-      {!isOpen && <button className="studio-assistant__launcher" type="button" aria-expanded={isOpen} aria-label="打开博客 AI 助手" onClick={() => setIsOpen(true)}>
+    </motion.div> : <motion.div key="launcher" ref={rootRef} className="studio-assistant" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={transition}>
+      <button className="studio-assistant__launcher" type="button" aria-expanded={isOpen} aria-label="打开博客 AI 助手" onClick={() => setIsOpen(true)}>
         <span className="studio-assistant__launcher-icon"><StudioIcon name={isOpen ? 'close' : 'assistant'} /></span>
         <span className="studio-assistant__launcher-copy"><strong>{isOpen ? '收起助手' : '博客助手'}</strong><small>{isOpen ? '继续当前工作' : '当前模块的创作搭档'}</small></span>
         {!isOpen && <span className="studio-assistant__launcher-signal" />}
-      </button>}
-    </div>
+      </button>
+    </motion.div>}
+    </AnimatePresence>
   )
 }
