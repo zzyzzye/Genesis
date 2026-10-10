@@ -4,6 +4,8 @@ export const motionTiming = {
   quick: 0.14,
   page: 0.2,
   ease: [0.22, 1, 0.36, 1] as const,
+  assistant: 0.36,
+  assistantEase: [0.25, 0.8, 0.25, 1] as const,
 }
 
 export const pageTransition: Variants = {
