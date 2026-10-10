@@ -84,14 +84,14 @@ async def test_conversation_checkpoint_keeps_turns_and_replaces_page_context(
     settings = Settings(text_openai_model="test")
     assert "".join([text async for text in runtime.stream(
         request, settings, thread_id="conversation",
-    )]) == "第一轮回答"
+    ) if isinstance(text, str)]) == "第一轮回答"
     await_input = request.model_copy(update={
         "messages": [AiMessage(role="user", content="第二轮问题")],
         "context": AiContext(title="文章乙"),
     })
     assert "".join([text async for text in runtime.stream(
         await_input, settings, thread_id="conversation",
-    )]) == "第二轮回答"
+    ) if isinstance(text, str)]) == "第二轮回答"
     snapshot = await graph.aget_state({"configurable": {"thread_id": "conversation"}})
     messages = snapshot.values["messages"]
     assert [message.content for message in messages if message.type == "human"] == [

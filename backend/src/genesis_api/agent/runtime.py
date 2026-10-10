@@ -21,6 +21,7 @@ from genesis_api.agent.context import agent_invocation_context
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.mimo import ChatMiMo
+from genesis_api.agent.questions import COLLABORATION_PROMPT, ask_user_question
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
 from genesis_api.llm.capabilities import model_capabilities_for
@@ -256,8 +257,8 @@ class EmbeddedAgentRuntime:
             # 业务模块只提供提示词和工具，模型循环、工具编排与 checkpoint 交给框架。
             self._graphs[key] = create_deep_agent(
                 model=self._build_model(settings, provider, model, reasoning_effort, thinking_mode),
-                tools=capability.tools,
-                system_prompt=capability.prompt,
+                tools=[*capability.tools, ask_user_question],
+                system_prompt=capability.prompt + "\n" + COLLABORATION_PROMPT,
                 checkpointer=self._checkpointer,
                 name=capability.name,
             )
@@ -331,6 +332,15 @@ class EmbeddedAgentRuntime:
                             continue
                         for message in update.get("messages", []):
                             if getattr(message, "type", None) != "tool":
+                                continue
+                            if getattr(message, "name", None) == "ask_user_question":
+                                if getattr(message, "status", None) == "error":
+                                    yield (
+                                        "澄清问题暂时无法显示，请在聊天中补充需求，"
+                                        "或请助手重新提问。"
+                                    )
+                                else:
+                                    yield str(message.content)
                                 continue
                             try:
                                 proposal = AgentActionProposal.model_validate_json(message.content)

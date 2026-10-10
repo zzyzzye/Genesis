@@ -107,7 +107,7 @@ class AiConversationRename(BaseModel):
 
 
 class AiGenerationMetrics(BaseModel):
-    """最后一次可见正文模型调用的输出统计，不包含自动标题调用。"""
+    """整条回复的首末正文耗时与有正文调用的用量，不包含自动标题调用。"""
 
     output_tokens: int | None = None
     token_source: Literal["actual", "estimated", "unavailable"] = "unavailable"

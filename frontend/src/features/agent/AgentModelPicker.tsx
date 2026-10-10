@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import type { AiProvider, AvailableModel, ThinkingMode } from '../../lib/api'
 import { ReasoningEffortControl } from './ReasoningEffortControl'
+import { modelDisplayName } from './modelDisplayName'
 import './AgentModelPicker.css'
 
 const providers: AiProvider[] = ['openai', 'grok', 'gemini', 'claude', 'mimo']
@@ -23,7 +24,7 @@ export function AgentModelPicker({ provider, models, model, loading = false, dis
 }) {
   const [query, setQuery] = useState('')
   const selected = models.find((item) => item.id === model)
-  const filtered = models.filter((item) => `${item.name} ${item.id}`.toLowerCase().includes(query.trim().toLowerCase()))
+  const filtered = models.filter((item) => `${modelDisplayName(item.name || item.id)} ${item.name} ${item.id}`.toLowerCase().includes(query.trim().toLowerCase()))
 
   return <div className="agent-picker" aria-label="模型与思考设置">
     <div className="agent-picker__providers" role="group" aria-label="选择供应商">
@@ -32,7 +33,7 @@ export function AgentModelPicker({ provider, models, model, loading = false, dis
     <label className="agent-picker__search"><Search aria-hidden="true" /><input aria-label="搜索模型" placeholder="搜索模型…" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.preventDefault() }} /></label>
     <div className="agent-picker__models" aria-label={`${provider} 模型列表`} aria-busy={loading}>
       {loading ? <p role="status">正在加载模型…</p> : !models.length ? <p>当前服务商没有可用模型。</p> : !filtered.length ? <p>没有匹配的模型，试试其他名称。</p> : filtered.map((item) => <button type="button" key={item.id} title={item.name || item.id} aria-pressed={model === item.id} disabled={disabled} onClick={() => onModelChange(item.id)}>
-        <span className="agent-picker__name">{item.name || item.id}</span>
+        <span className="agent-picker__name">{modelDisplayName(item.name || item.id)}</span>
         {item.context_window != null && <small>{item.context_window >= 1_000_000 ? `${Number((item.context_window / 1_000_000).toFixed(2))}M` : `${Math.round(item.context_window / 1000)}K`}</small>}
         <span className="agent-picker__check" aria-hidden="true">{model === item.id && <Check />}</span>
       </button>)}

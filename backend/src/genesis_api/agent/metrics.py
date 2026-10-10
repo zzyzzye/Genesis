@@ -1,4 +1,4 @@
-"""复用 LangChain 回调采集用量，按模型调用统计可见正文的输出速度。"""
+"""复用 LangChain 回调采集用量，统计整条回复首末正文之间的耗时。"""
 
 from __future__ import annotations
 
@@ -12,13 +12,13 @@ from genesis_api.ai.schemas import AiGenerationMetrics
 
 
 class GenerationMetrics(BaseCallbackHandler):
-    """记录最后一段正文所属调用；缺少供应商用量时明确使用字符估算。"""
+    """汇总有正文输出的调用；缺少供应商用量时明确使用字符估算。"""
 
     def __init__(self) -> None:
         """仅保存统计所需计数，不复制提示词、工具参数或完整模型响应。"""
         self.started = monotonic()
         self.first: float | None = None
-        self.latest_id: str | None = None
+        self.last: float | None = None
         self.calls: dict[str, tuple[float, float, int, int]] = {}
         self.usage: dict[str, int] = {}
 
@@ -49,7 +49,7 @@ class GenerationMetrics(BaseCallbackHandler):
         if self.first is None:
             self.first = now
         message_id = str(getattr(message, "id", None) or "unidentified")
-        self.latest_id = message_id
+        self.last = now
         first, _, ascii_count, other_count = self.calls.get(message_id, (now, now, 0, 0))
         ascii_count += sum(ord(character) < 128 for character in text)
         other_count += sum(ord(character) >= 128 for character in text)
@@ -57,19 +57,23 @@ class GenerationMetrics(BaseCallbackHandler):
 
     def snapshot(self) -> AiGenerationMetrics:
         """返回当前统计；单片段或耗时过短时速度不可用，不显示虚假的极大值。"""
+        end = self.last if self.last is not None else monotonic()
         metrics = AiGenerationMetrics(
             first_token_seconds=self.first - self.started if self.first is not None else None,
-            total_seconds=max(0, monotonic() - self.started),
+            total_seconds=max(0, end - self.started),
         )
-        if self.latest_id is None:
+        if self.first is None or self.last is None:
             return metrics
-        first, last, ascii_count, other_count = self.calls[self.latest_id]
-        count = self.usage.get(self.latest_id)
-        source = "actual" if count is not None else "estimated"
-        if count is None:
-            # 中文等非 ASCII 字符按一字约一个 token，ASCII 按四字符约一个 token。
-            count = max(1, round(other_count + ascii_count / 4))
-        seconds = max(0, last - first)
+        count = 0
+        source = "actual"
+        for message_id, (_, _, ascii_count, other_count) in self.calls.items():
+            call_count = self.usage.get(message_id)
+            if call_count is None:
+                # 中文等非 ASCII 字符按一字约一个 token，ASCII 按四字符约一个 token。
+                call_count = max(1, round(other_count + ascii_count / 4))
+                source = "estimated"
+            count += call_count
+        seconds = max(0, self.last - self.first)
         return metrics.model_copy(update={
             "output_tokens": count,
             "token_source": source,

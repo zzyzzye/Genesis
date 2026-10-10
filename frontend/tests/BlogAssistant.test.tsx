@@ -35,6 +35,32 @@ describe('助手失败后的继续对话', () => {
     vi.clearAllMocks()
   })
 
+  it('澄清卡片提交回答后继续对话，创建失败可保留选择重试', async () => {
+    const question = '\n```user-question\n' + JSON.stringify({ id: 'clarification-1', questions: [{
+      question: '文章面向谁？', options: [
+        { label: '入门读者', description: '补充背景与例子', recommended: true },
+        { label: '专业读者', description: '保留技术细节' },
+      ],
+    }] }) + '\n```\n'
+    vi.mocked(createAiChatRun).mockRejectedValueOnce(new Error('创建失败')).mockResolvedValue({ id: 'answer-run', status: 'pending' })
+    vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
+      callbacks.onToken('按你的选择继续。', 1)
+      return Promise.resolve('completed')
+    })
+    mount([{ role: 'assistant', content: question }])
+    fireEvent.click(screen.getByRole('button', { name: /入门读者/ }))
+    fireEvent.click(screen.getByRole('button', { name: '继续' }))
+    expect(await screen.findByText('创建失败')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /入门读者/ })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: '继续' }))
+    expect(await screen.findByText('按你的选择继续。')).toBeInTheDocument()
+    expect(createAiChatRun).toHaveBeenLastCalledWith('test-placeholder', expect.objectContaining({
+      conversation_id: 'conversation-1', messages: [{ role: 'user', content: '文章面向谁？\n入门读者' }],
+    }))
+    expect(screen.getByText('已询问')).toBeInTheDocument()
+    expect(screen.queryByRole('form', { name: '补充关键信息' })).not.toBeInTheDocument()
+  })
+
   it('正文没有 JSON 时仍展示工具提议，失败可重试，成功后禁用确认', async () => {
     const proposal: AiActionProposal = {
       type: 'pending_action', proposal_id: 'draft-1', module: 'blog', action: 'create_draft',
@@ -185,5 +211,53 @@ describe('助手失败后的继续对话', () => {
     fireEvent.click(screen.getByRole('button', { name: '新建对话' }))
     expect(screen.queryByText('历史回答')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '聊天历史' })).toBeInTheDocument()
+  })
+
+  it('历史停止任务显示终态而非等待中，后续聊天不抹去失败原因', async () => {
+    vi.mocked(getAiConversation).mockResolvedValue({
+      id: 'saved-conversation', title: '历史任务', title_source: 'manual',
+      created_at: '2026-10-10T00:00:00Z', updated_at: '2026-10-10T00:00:00Z',
+      messages: [
+        { role: 'user', content: '写文章', run_id: 'stopped', status: 'failed', error: null },
+        { role: 'assistant', content: '', run_id: 'stopped', status: 'failed', error: '生成已由用户停止。', metrics: { output_tokens: null, token_source: 'unavailable', output_seconds: null, tokens_per_second: null, first_token_seconds: null, total_seconds: 35 } },
+        { role: 'user', content: '啥情况', run_id: 'done', status: 'completed', error: null },
+        { role: 'assistant', content: '继续回答', run_id: 'done', status: 'completed', error: null },
+      ],
+    })
+    mount([{ role: 'assistant', content: '你好' }])
+    fireEvent.click(screen.getByRole('button', { name: '聊天历史' }))
+    fireEvent.click(await screen.findByRole('button', { name: /已保存的博客规划/ }))
+    expect(await screen.findByText('已停止，未收到模型正文。')).toBeInTheDocument()
+    expect(screen.getByText('35.00 秒')).toBeInTheDocument()
+    expect(screen.getByText('未输出')).toBeInTheDocument()
+    expect(screen.queryByText('等待中')).not.toBeInTheDocument()
+    expect(screen.getByText('继续回答')).toBeInTheDocument()
+  })
+
+  it('等待首字期间持续计时，不提前显示输出速度', async () => {
+    vi.mocked(streamAiChatRun).mockImplementation(() => new Promise(() => {}))
+    localStorage.setItem(studioAuthTokenKey, 'test-placeholder')
+    sessionStorage.setItem(sessionKey, JSON.stringify({ isOpen: true, messages: [
+      { role: 'user', content: '写文章' },
+      { role: 'assistant', content: '', timing: { startedAt: Date.now() - 20000 } },
+    ], activeRun: { id: 'waiting', assistantMessageIndex: 1 } }))
+    render(<BlogAssistant page={page} editor={null} />)
+    expect(await screen.findByText(/模型尚未返回正文/)).toBeInTheDocument()
+    expect(screen.getByText(/等待首字/)).toBeInTheDocument()
+    expect(screen.queryByText(/tokens\/s/)).not.toBeInTheDocument()
+  })
+
+  it('刷新后保留供应商和模型，显示与下次请求一致', async () => {
+    sessionStorage.setItem(`${sessionKey}:model-choice`, JSON.stringify({ provider: 'mimo', model: 'mimo-v2.6-flash' }))
+    const { getProviderModels } = await import('../src/lib/api')
+    vi.mocked(getProviderModels).mockResolvedValue({ provider: 'mimo', models: [{ id: 'mimo-v2.6-flash', name: 'mimo-v2.6-flash', created: null, context_window: 1000000 }] })
+    vi.mocked(createAiChatRun).mockRejectedValue(new Error('测试终止'))
+    mount([{ role: 'assistant', content: '你好' }])
+    expect(await screen.findByText('MiMo V2.6 Flash')).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '继续' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
+    await screen.findByText('测试终止')
+    expect(createAiChatRun).toHaveBeenCalledWith('test-placeholder', expect.objectContaining({ provider: 'mimo', model: 'mimo-v2.6-flash' }))
+    vi.mocked(getProviderModels).mockResolvedValue({ provider: 'openai', models: [] })
   })
 })

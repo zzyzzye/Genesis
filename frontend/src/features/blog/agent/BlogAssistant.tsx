@@ -46,11 +46,14 @@ import {
   type AiGenerationMetrics,
 } from '../../../lib/api'
 import { AgentModelPicker } from '../../agent/AgentModelPicker'
+import { AgentQuestion } from '../../agent/AgentQuestion'
+import { questionAnswers, splitAgentQuestion } from '../../agent/questionProtocol'
+import { modelDisplayName } from '../../agent/modelDisplayName'
 import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from '../../agent/useReasoningEffort'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
 
 type AssistantTiming = { startedAt: number; firstTokenAt?: number; completedAt?: number }
-type AssistantMessage = { role: 'assistant' | 'user'; content: string; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; executedProposals?: string[] }
+type AssistantMessage = { role: 'assistant' | 'user'; content: string; status?: string; error?: string | null; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; executedProposals?: string[] }
 type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string; status: 'draft' | 'published' }
 type AssistantPageContext = { route: string; section: string; pageType: 'overview' | 'posts_list' | 'post_editor' | 'post_preview' | 'section' }
 type ActiveAssistantRun = { id: string; assistantMessageIndex: number }
@@ -98,7 +101,7 @@ function readAssistantSession(key = assistantSessionKey): AssistantSession {
     ) ? activeCandidate as ActiveAssistantRun : null
     const restoredMessages = activeRun
       ? normalizedMessages
-      : normalizedMessages.filter((message) => message.content.trim().length > 0 || message.proposals?.length)
+      : normalizedMessages.filter((message) => message.content.trim().length > 0 || message.proposals?.length || message.status)
     return {
       isOpen: value.isOpen === true,
       messages: restoredMessages.length ? restoredMessages : initialAssistantMessages(),
@@ -118,6 +121,14 @@ function parsePendingAction(content: string): AiActionProposal | null {
     if (value.type !== 'pending_action' || typeof value.action !== 'string' || !value.payload || typeof value.payload !== 'object' || typeof value.proposal_token !== 'string') return null
     return value as unknown as AiActionProposal
   } catch { return null }
+}
+
+function readModelChoice(key: string): { provider: AiProvider; model: string } {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(key) ?? 'null') as { provider?: AiProvider; model?: string } | null
+    if (value?.provider && ['openai', 'grok', 'gemini', 'claude', 'mimo'].includes(value.provider) && typeof value.model === 'string') return { provider: value.provider, model: value.model }
+  } catch { /* 存储不可用时使用默认模型。 */ }
+  return { provider: 'openai', model: '' }
 }
 
 function displaySeconds(seconds: number) {
@@ -147,28 +158,37 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
   // 用界面同精度的输出时长计算，避免用户手算时与隐藏精度的结果不一致。
   const speed = metrics?.tokens_per_second != null && count != null && seconds !== null && seconds > 0 ? count / seconds : null
   const suffix = source === 'estimated' ? '（估算）' : ''
-  return <div className="studio-assistant__timing" aria-label="生成耗时" title="首字是开始执行到首次正文输出的耗时；输出是最后一次正文调用的首末片段耗时；总计还包含工具调用与收尾处理，因此不一定等于前两项之和。">
-    {metrics ? <>
-      <span>首字 <span className="studio-assistant__duration">{metrics.first_token_seconds === null ? '等待中' : formatDuration(metrics.first_token_seconds * 1000)}</span></span>
-      <span>输出 <span className="studio-assistant__duration">{metrics.output_seconds === null ? '等待中' : formatDuration(metrics.output_seconds * 1000)}</span></span>
+  const waiting = streaming && !firstToken && metrics?.first_token_seconds == null
+  if (waiting) return <div className="studio-assistant__timing" aria-label="生成耗时">
+    <span>等待首字 <span className="studio-assistant__duration">{formatDuration(timing ? end - timing.startedAt : (metrics?.total_seconds ?? 0) * 1000)}</span></span>
+    {timing && end - timing.startedAt >= 15000 && <span className="studio-assistant__wait-hint">模型尚未返回正文，可继续等待，或停止后切换模型。</span>}
+  </div>
+  return <div className="studio-assistant__timing" aria-label="生成耗时" title="首字是开始执行到首次正文输出的等待时间；输出是首次到最后一次正文输出的时间，包含中途工具调用与模型等待；总计为首字与输出之和，不包含输出结束后的收尾处理。">
+    {metrics && !streaming ? <>
+      <span>首字 <span className="studio-assistant__duration">{metrics.first_token_seconds === null ? '未输出' : formatDuration(metrics.first_token_seconds * 1000)}</span></span>
+      <span>输出 <span className="studio-assistant__duration">{metrics.output_seconds === null ? '—' : formatDuration(metrics.output_seconds * 1000)}</span></span>
       <span>总计 <span className="studio-assistant__duration">{formatDuration(metrics.total_seconds * 1000)}</span></span>
     </> : timing && <>
-      <span>首字 <span className="studio-assistant__duration">{formatDuration((firstToken ?? end) - timing.startedAt)}</span></span>
-      <span>输出 <span className="studio-assistant__duration">{firstToken ? formatDuration(end - firstToken) : '等待中'}</span></span>
+      <span>首字 <span className="studio-assistant__duration">{firstToken ? formatDuration(firstToken - timing.startedAt) : '未输出'}</span></span>
+      <span>输出 <span className="studio-assistant__duration">{firstToken ? formatDuration(end - firstToken) : '—'}</span></span>
       <span>总计 <span className="studio-assistant__duration">{formatDuration(end - timing.startedAt)}</span></span>
     </>}
-    {showMetrics && <span className="studio-assistant__speed" title="输出速度 = 输出 token 数 ÷ 界面显示的输出时长（两位小数）。统计最后一次有正文输出的模型调用，用量来自供应商并扣除明确报告的推理 token，可能包含该调用的工具参数。缺少真实用量时按字符估算；单片段或缺少耗时时速度不可用。">
+    {showMetrics && <span className="studio-assistant__speed" title="平均输出速度 = 输出 token 数 ÷ 界面显示的输出时长（两位小数）。汇总整条回复所有有正文输出的模型调用，用量来自供应商并扣除明确报告的推理 token，可能包含工具参数；输出时长包含中途工具调用与等待。任一调用缺少真实用量时标记为估算；单片段或缺少耗时时速度不可用。">
       {count !== null && count !== undefined ? `${count.toLocaleString('zh-CN')} tokens${suffix} · ` : ''}
       {speed !== null && Number.isFinite(speed) ? `${speed.toFixed(1)} tokens/s${suffix}` : `tokens/s ${streaming ? '等待统计' : '不可用'}`}
     </span>}
   </div>
 })
 
-const MarkdownMessage = memo(function MarkdownMessage({ content, timing, metrics, proposals, executedProposals, index, onConfirm, confirming, streaming, onProgress }: AssistantMessage & { index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void }) {
+const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, timing, metrics, proposals, executedProposals, index, onConfirm, confirming, streaming, onProgress, onAnswer, questionDisabled, questionAnswer }: AssistantMessage & { index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void; onAnswer: (answer: string) => void; questionDisabled: boolean; questionAnswer?: string }) {
   const legacyAction = streaming ? null : parsePendingAction(content)
   const actions = proposals?.length ? proposals : legacyAction ? [legacyAction] : []
+  const question = splitAgentQuestion(content)
   return <div className="studio-assistant__response">
-    <div className="studio-assistant__markdown">{streaming ? <TypewriterText content={content} onProgress={onProgress} /> : <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>}</div>
+    {question.text && <div className="studio-assistant__markdown">{streaming ? <TypewriterText content={question.text} onProgress={onProgress} /> : <Markdown remarkPlugins={[remarkGfm]}>{question.text}</Markdown>}</div>}
+    {!streaming && error && <p className="studio-assistant__message-status">{error.includes('停止') && !content.trim() ? '已停止，未收到模型正文。' : error}</p>}
+    {!streaming && !error && status === 'completed' && !content.trim() && !actions.length && <p className="studio-assistant__message-status">本轮未返回正文，请重试或切换模型。</p>}
+    {question.request && <AgentQuestion key={question.request.id} request={question.request} disabled={questionDisabled} answered={questionAnswer !== undefined} answerContent={questionAnswer} onAnswer={onAnswer} />}
     <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} />
     {actions.map((action) => <div className="studio-assistant__action-card" key={action.proposal_id}>
       <strong>{action.executed || executedProposals?.includes(action.proposal_id) ? '已执行' : '待确认操作'}</strong><span>{typeof action.payload.title === 'string' ? action.payload.title : action.summary}</span>
@@ -193,6 +213,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const transition = { duration: reducedMotion ? 0 : motionTiming.assistant, ease: motionTiming.assistantEase }
   const storageKey = userId ? `${assistantSessionKey}:${userId}` : assistantSessionKey
   const [initialSession] = useState(() => readAssistantSession(storageKey))
+  const [initialModel] = useState(() => readModelChoice(`${storageKey}:model-choice`))
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [panelWidth, setPanelWidth] = useState(420)
   const [resizing, setResizing] = useState(false)
@@ -222,12 +243,12 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const [error, setError] = useState<string | null>(null)
   const [confirmingAction, setConfirmingAction] = useState<number | null>(null)
   const [executionMode, setExecutionMode] = useState<AiExecutionMode>("approval_required")
-  const [provider, setProvider] = useState<AiProvider>('openai')
-  const [model, setModel] = useState('')
+  const [provider, setProvider] = useState<AiProvider>(initialModel.provider)
+  const [model, setModel] = useState(initialModel.model)
   const [models, setModels] = useState<AvailableModel[]>([])
   const [modelsLoading, setModelsLoading] = useState(true)
   const modelsCache = useRef<Partial<Record<AiProvider, AvailableModel[]>>>({})
-  const selectedModels = useRef<Partial<Record<AiProvider, string>>>({})
+  const selectedModels = useRef<Partial<Record<AiProvider, string>>>({ [initialModel.provider]: initialModel.model })
   const modelTriggerRef = useRef<HTMLButtonElement | null>(null)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
   const bodyRef = useRef<HTMLDivElement | null>(null)
@@ -255,6 +276,11 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
     ? `上下文容量未知 · 估算 ${formatTokens(contextTokens)} token`
     : `上下文已用约 ${Math.round(contextPercent)}% · 估算 ${formatTokens(contextTokens)} / ${formatTokens(contextWindow)} token`
   const suggestions = editor ? ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '为当前文章生成更好的标题'] : defaultSuggestions
+
+  useEffect(() => {
+    if (!model) return
+    try { sessionStorage.setItem(`${storageKey}:model-choice`, JSON.stringify({ provider, model })) } catch { /* 不影响当前请求。 */ }
+  }, [storageKey, provider, model])
 
   useEffect(() => {
     const token = getStoredAuthToken(studioAuthTokenKey)
@@ -331,7 +357,12 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
       setConversation(result)
       const restored: AssistantMessage[] = [
         ...initialAssistantMessages(),
-        ...result.messages.map(({ role, content, metrics, proposals }) => ({ role, content, metrics, proposals })),
+        ...result.messages.map(({ role, content, metrics, proposals, status, error }) => ({
+          role, content, metrics, proposals, status, error,
+          ...((status === 'pending' || status === 'running') ? {
+            timing: { startedAt: Date.now() - (metrics?.total_seconds ?? 0) * 1000 },
+          } : {}),
+        })),
       ]
       setMessages(restored)
       const runningIndex = result.messages.findIndex((message) => message.role === 'assistant' && (message.status === 'pending' || message.status === 'running'))
@@ -507,10 +538,9 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
             flush()
             const completedAt = Date.now()
             setMessages((current) => current
-              .map((message, index) => index === run.assistantMessageIndex && message.timing
-                ? { ...message, timing: { ...message.timing, firstTokenAt, completedAt } }
-                : message)
-              .filter((message) => message.content.trim().length > 0 || message.proposals?.length))
+              .map((message, index) => index === run.assistantMessageIndex
+                ? { ...message, status: 'completed', timing: message.timing ? { ...message.timing, firstTokenAt, completedAt } : undefined }
+                : message))
             setActiveRun((current) => current?.id === run.id ? null : current)
             setStreamStatus(null)
             setError(null)
@@ -521,8 +551,11 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
           if (cancelled || (caught instanceof DOMException && caught.name === 'AbortError')) return
           if (caught instanceof AiChatRunTerminalError) {
             flush()
-            setMessages((current) => current.filter((message) => message.content.trim().length > 0 || message.proposals?.length))
-            setError(caught.message)
+            setMessages((current) => current.map((message, index) => index === run.assistantMessageIndex ? {
+              ...message, status: 'failed', error: caught.message,
+              timing: message.timing ? { ...message.timing, firstTokenAt, completedAt: Date.now() } : undefined,
+            } : message))
+            setError(null)
             setActiveRun((current) => current?.id === run.id ? null : current)
             setStreamStatus(null)
             return
@@ -563,7 +596,11 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const content = draft.trim()
+    await sendMessage(draft)
+  }
+
+  async function sendMessage(answer: string) {
+    const content = answer.trim()
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!content || isBusy || !token) return
     const nextMessages: AiChatMessage[] = [
@@ -574,7 +611,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
       setError('当前对话已达到 40 条消息上限，请新建对话后继续。')
       return
     }
-    const retainedMessages = messages.filter((message) => message.content.trim().length > 0 || message.proposals?.length)
+    const retainedMessages = messages.filter((message) => message.content.trim().length > 0 || message.proposals?.length || message.status)
     const assistantMessageIndex = retainedMessages.length + 1
     shouldStickToBottomRef.current = true
     setMessages([...retainedMessages, { role: 'user', content }, { role: 'assistant', content: '', timing: { startedAt: Date.now() } }])
@@ -642,10 +679,11 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
         ? {
             ...message,
             content: latest?.index === index ? latest.content : message.content,
+            status: 'failed', error: '生成已由用户停止。',
             timing: message.timing ? { ...message.timing, completedAt } : undefined,
           }
         : message)
-      .filter((message) => message.content.trim().length > 0 || message.proposals?.length))
+      .filter((message) => message.content.trim().length > 0 || message.proposals?.length || message.status))
     setActiveRun(null)
     setStreamStatus(null)
     setError(null)
@@ -731,13 +769,19 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
           >
             <div className="studio-assistant__context"><StudioIcon name="spark" /> {editor ? `当前文章：${editor.title || '未命名草稿'}` : `当前页面：${pageLabels[page.pageType]}`}</div>
             <div className="studio-assistant__messages">
-              {messages.map((message, index) => (
-                <motion.div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${conversationId ?? 'new'}-${message.role}-${index}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={transition}>
+              {messages.map((message, index) => {
+                const previous = messages[index - 1]
+                const previousQuestion = previous?.role === 'assistant' ? splitAgentQuestion(previous.content).request : null
+                // 卡片回答已汇入问题摘要，避免再用用户气泡重复整组问答。
+                if (message.role === 'user' && previousQuestion && questionAnswers(previousQuestion, message.content)) return null
+                return (
+                <motion.div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={(message.role === 'assistant' ? splitAgentQuestion(message.content).request?.id : null) ?? `${conversationId ?? 'new'}-${message.role}-${index}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={transition}>
                   {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
-                  {message.role === 'assistant' ? <MarkdownMessage {...message} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} /> : <p>{message.content}</p>}
+                  {message.role === 'assistant' ? <MarkdownMessage {...message} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} onAnswer={(answer) => { void sendMessage(answer) }} questionDisabled={isBusy || conversationLoading} questionAnswer={messages.slice(index + 1).find((item) => item.role === 'user')?.content} /> : <p>{message.content}</p>}
                 </motion.div>
-              ))}
+              )})}
             </div>
+            <p className={streamStatus?.startsWith('连接中断') ? 'studio-assistant__message-status' : 'sr-only'} role="status">{!error && (isBusy || streamStatus) ? (streamStatus ?? '正在生成…') : ''}</p>
             {messages.length === 1 && (
               <div className="studio-assistant__suggestions">
                 <span>你可以这样开始</span>
@@ -759,27 +803,22 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
                 event.currentTarget.form?.requestSubmit()
               }}
             />
-            <p className="studio-assistant__composer-status" role="status">{!error && (isBusy || streamStatus) ? (streamStatus ?? '正在生成…') : ''}</p>
             {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
             <div className="studio-assistant__composer-tools">
-              <div className="studio-assistant__mode-switch" role="group" aria-label="Agent 执行方式">
-                <button
-                  className={executionMode === 'approval_required' ? 'is-active' : ''}
-                  type="button"
-                  aria-pressed={executionMode === 'approval_required'}
-                  title="执行操作前先请求你的确认"
-                  onClick={() => setExecutionMode('approval_required')}
-                >审阅</button>
-                <button
-                  className={executionMode === 'automatic' ? 'is-active' : ''}
-                  type="button"
-                  aria-pressed={executionMode === 'automatic'}
-                  title="允许助手自动执行已请求的操作"
-                  onClick={() => setExecutionMode('automatic')}
-                >自动</button>
+              <div className="studio-assistant__mode-switch">
+                <select
+                  aria-label="Agent 执行方式"
+                  value={executionMode}
+                  title={executionMode === 'approval_required' ? '执行操作前先请求你的确认' : '允许助手自动执行已请求的操作'}
+                  onChange={(event) => setExecutionMode(event.target.value === 'automatic' ? 'automatic' : 'approval_required')}
+                >
+                  <option value="approval_required">审阅</option>
+                  <option value="automatic">自动</option>
+                </select>
+                <StudioIcon name="chevron" />
               </div>
               <button ref={modelTriggerRef} aria-label="选择模型" title={model || '选择模型'} className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
-                <ProviderIcon provider={provider} /><span className="studio-assistant__selected-model">{selectedModel?.name || model || '选择模型'}</span><span>{thinkingModeLabel(reasoning.thinkingMode) ?? reasoningEffortLabel(reasoning.effort)}</span><StudioIcon name="chevron" />
+                {provider !== 'mimo' && <ProviderIcon provider={provider} />}<span className="studio-assistant__selected-model">{modelDisplayName(selectedModel?.name || model || '选择模型')}</span><span className="studio-assistant__selected-reasoning">{thinkingModeLabel(reasoning.thinkingMode) ?? reasoningEffortLabel(reasoning.effort)}</span><StudioIcon name="chevron" />
               </button>
               <span className="studio-assistant__context-ring" tabIndex={0} role={contextPercent === null ? 'img' : 'progressbar'} aria-label={contextDescription} aria-valuemin={contextPercent === null ? undefined : 0} aria-valuemax={contextPercent === null ? undefined : 100} aria-valuenow={contextPercent ?? undefined}>
                 <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -6,6 +6,9 @@ import remarkGfm from 'remark-gfm'
 
 import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider, type AvailableModel } from '../../lib/api'
 import { AgentModelPicker } from '../../features/agent/AgentModelPicker'
+import { AgentQuestion } from '../../features/agent/AgentQuestion'
+import { questionAnswers, splitAgentQuestion } from '../../features/agent/questionProtocol'
+import { modelDisplayName } from '../../features/agent/modelDisplayName'
 import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from '../../features/agent/useReasoningEffort'
 
 type MediaAssistantPage = 'projects' | 'project' | 'canvas' | 'assets'
@@ -175,7 +178,8 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
       }))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '镜头搭档暂时无法回应，请稍后重试。')
-      setMessages((current) => current.filter((message, index) => !(index === current.length - 1 && message.role === 'assistant' && !message.content)))
+      setMessages((current) => current.at(-1)?.role === 'assistant' && !current.at(-1)?.content ? current.slice(0, -2) : current)
+      setInput(text)
     } finally { setBusy(false) }
   }
 
@@ -194,17 +198,22 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
         <div className="media-agent__messages" aria-live="polite">
           {messages.length === 0 && <div className="media-agent__canvas-empty"><span>镜头与叙事</span><h2>{discussionNode ? '接着这个镜头，往下想。' : page === 'assets' ? '整理素材，再开始拍。' : '下一段，怎么拍？'}</h2><p>{discussionNode ? '细化画面、调整节奏，或继续编排下一个镜头。' : page === 'canvas' ? '写下故事想法，或选中画布上的镜头一起讨论。' : page === 'assets' ? '讨论素材命名、分组与需要补充的画面。' : '写下故事想法，一起规划镜头与素材。'}</p></div>}
           {messages.map((message, index) => {
+            const previous = messages[index - 1]
+            const previousQuestion = previous?.role === 'assistant' ? splitAgentQuestion(previous.content).request : null
+            if (message.role === 'user' && previousQuestion && questionAnswers(previousQuestion, message.content)) return null
             const plan = message.role === 'assistant' ? canvasPlanFromMessage(message.content) : null
-            const visibleContent = message.role === 'assistant' ? message.content.replace(/```canvas-plan\s*\n?[\s\S]*?```/ig, '').trim() : message.content
+            const question = message.role === 'assistant' ? splitAgentQuestion(message.content) : { text: message.content, request: null }
+            const visibleContent = message.role === 'assistant' ? question.text.replace(/```canvas-plan\s*\n?[\s\S]*?```/ig, '').trim() : message.content
             const applied = appliedPlans.has(index)
-            return <div className={`media-agent__message media-agent__message--${message.role}`} key={`${message.role}-${index}`}>{message.role === 'assistant' && <span className="media-agent__message-mark"><Clapperboard aria-hidden="true" /></span>}<div className="media-agent__response"><Markdown remarkPlugins={[remarkGfm]}>{visibleContent || '正在整理镜头…'}</Markdown>{plan && page === 'canvas' && onApplyCanvasPlan && <div className="media-agent__plan"><span><WandSparkles aria-hidden="true" />{planSummary(plan)}</span><button type="button" disabled={applied || busy} onClick={() => { onApplyCanvasPlan(plan); setAppliedPlans((current) => new Set(current).add(index)) }}>{applied ? <><Check aria-hidden="true" />已应用</> : '应用到画布'}</button></div>}</div></div>
+            const questionAnswer = messages.slice(index + 1).find((item) => item.role === 'user')?.content
+            return <div className={`media-agent__message media-agent__message--${message.role}`} key={`${message.role}-${index}`}>{message.role === 'assistant' && <span className="media-agent__message-mark"><Clapperboard aria-hidden="true" /></span>}<div className="media-agent__response"><Markdown remarkPlugins={[remarkGfm]}>{visibleContent || (question.request ? '' : '正在整理镜头…')}</Markdown>{question.request && <AgentQuestion key={question.request.id} request={question.request} disabled={busy} answered={questionAnswer !== undefined} answerContent={questionAnswer} onAnswer={(answer) => { void send(answer) }} />}{plan && page === 'canvas' && onApplyCanvasPlan && <div className="media-agent__plan"><span><WandSparkles aria-hidden="true" />{planSummary(plan)}</span><button type="button" disabled={applied || busy} onClick={() => { onApplyCanvasPlan(plan); setAppliedPlans((current) => new Set(current).add(index)) }}>{applied ? <><Check aria-hidden="true" />已应用</> : '应用到画布'}</button></div>}</div></div>
           })}
         </div>
         {messages.length === 0 && <div className="media-agent__prompts" aria-label="快捷提问">{prompts.map((prompt, index) => <button type="button" key={prompt} onClick={() => void send(prompt)} disabled={busy}><span className="media-agent__prompt-icon">{index === 0 ? <Clapperboard /> : <WandSparkles />}</span><span className="media-agent__prompt-copy"><strong>{page === 'assets' ? (index === 0 ? '整理素材' : '补充画面') : page === 'project' ? (index === 0 ? '规划节奏' : '补齐素材') : index === 0 ? '拆成分镜' : '检查节奏'}</strong><small>{page === 'assets' ? (index === 0 ? '命名与分组' : '列出拍摄清单') : page === 'project' ? (index === 0 ? '安排镜头与叙事' : '列出素材清单') : index === 0 ? '整理镜头与画面' : '梳理转场与衔接'}</small></span><span>↗</span></button>)}</div>}
       </div>
       <form className="media-agent__form" noValidate onSubmit={submit}>
         <textarea className="resize-none" ref={inputRef} aria-label="向镜头搭档提问" aria-keyshortcuts="Enter" rows={2} value={input} onChange={(event) => setInput(event.currentTarget.value)} onKeyDown={(event) => { if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return; event.preventDefault(); event.currentTarget.form?.requestSubmit() }} disabled={busy} placeholder="描述画面，或说说你想调整的地方…" />
-        <div className="media-agent__composer-tools"><button ref={modelTriggerRef} className="media-agent__model-trigger" type="button" aria-label="选择模型" aria-expanded={modelMenuOpen} onClick={() => setModelMenuOpen((value) => !value)}><span>{providerLabels[provider]}</span><i aria-hidden="true">·</i><strong>{selectedModel?.name || model || '选择模型'}</strong><span>{thinkingModeLabel(reasoning.thinkingMode) ?? reasoningEffortLabel(reasoning.effort)}</span><ChevronDown aria-hidden="true" /></button>
+        <div className="media-agent__composer-tools"><button ref={modelTriggerRef} className="media-agent__model-trigger" type="button" aria-label="选择模型" aria-expanded={modelMenuOpen} onClick={() => setModelMenuOpen((value) => !value)}><span>{providerLabels[provider]}</span><i aria-hidden="true">·</i><strong>{modelDisplayName(selectedModel?.name || model || '选择模型')}</strong><span>{thinkingModeLabel(reasoning.thinkingMode) ?? reasoningEffortLabel(reasoning.effort)}</span><ChevronDown aria-hidden="true" /></button>
           {modelMenuOpen && <div ref={modelMenuRef} className="media-agent__model-menu" aria-label="模型列表">
             <AgentModelPicker provider={provider} models={models} model={model} loading={modelsLoading} disabled={busy} effort={reasoning.effort} thinkingMode={reasoning.thinkingMode} onThinkingModeChange={reasoning.setThinkingMode} onProviderChange={setProvider} onModelChange={selectModel} onEffortChange={reasoning.setEffort} />
           </div>}
