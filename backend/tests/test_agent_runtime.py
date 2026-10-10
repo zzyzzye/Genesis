@@ -11,10 +11,11 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 from pydantic import SecretStr
 
 from genesis_api.agent.context import agent_invocation_context
+from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.runtime import (
     EmbeddedAgentRuntime,
     YyapiAsyncTransport,
@@ -205,8 +206,8 @@ async def test_runtime_streams_only_ai_text_and_resumes_checkpoint(
     class FakeGraph:
         async def astream(self, graph_input: object, **_: object) -> Any:
             received_inputs.append(graph_input)
-            yield HumanMessage(content="忽略"), {}
-            yield AIMessage(content="保留"), {}
+            yield "messages", (HumanMessage(content="忽略"), {})
+            yield "messages", (AIMessage(content="保留"), {})
 
     runtime = EmbeddedAgentRuntime()
     runtime._checkpointer = cast(Any, FakeCheckpointer())
@@ -227,6 +228,36 @@ async def test_runtime_streams_only_ai_text_and_resumes_checkpoint(
 
     service = AgentService(settings, runtime)
     assert [item async for item in service.stream(request, thread_id="thread")] == ["保留"]
+
+
+@pytest.mark.anyio
+async def test_tool_proposal_is_forwarded_without_model_repeating_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """只转发通过提议契约校验的工具结果，普通工具输出不混入正文。"""
+    proposal = AgentActionProposal(
+        proposal_id=uuid4(), module="blog", action="create_draft", payload={"title": "草稿"},
+        summary="创建草稿", expires_at="2099-01-01T00:00:00Z", proposal_token="test",
+    )
+
+    class FakeGraph:
+        async def astream(self, *_: object, **kwargs: object) -> Any:
+            assert kwargs["stream_mode"] == ["messages", "updates"]
+            yield "updates", {"tools": {"messages": [
+                ToolMessage(content="普通搜索结果", tool_call_id="search"),
+                ToolMessage(content=proposal.model_dump_json(), tool_call_id="draft"),
+            ]}}
+            yield "messages", (AIMessage(content="请点击确认执行"), {})
+
+    runtime = EmbeddedAgentRuntime()
+    monkeypatch.setattr(runtime, "_graph", lambda *_: FakeGraph())
+    request = AiChatRequest(
+        surface="studio", messages=[AiMessage(role="user", content="写文章")],
+        actor_id=uuid4(), actor_role="owner",
+    )
+    assert [item async for item in runtime.stream(
+        request, Settings(text_openai_model="test"), thread_id="proposal-thread",
+    )] == [proposal, "请点击确认执行"]
 
 
 @pytest.mark.anyio

@@ -76,6 +76,8 @@ class AiChatRun(Base):
     sequence: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     generation_metrics: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    # 工具提议独立于模型正文保存，重连和读取历史不依赖模型复述。
+    proposals: Mapped[list[dict[str, object]] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

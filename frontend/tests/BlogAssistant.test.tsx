@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, cleanup, act } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { BlogAssistant } from '../src/features/blog/agent/BlogAssistant'
-import { AiChatRunTerminalError, cancelAiChatRun, createAiChatRun, streamAiChatRun, getAiConversation, renameAiConversation } from '../src/lib/api'
+import { AiChatRunTerminalError, cancelAiChatRun, confirmAiAction, createAiChatRun, streamAiChatRun, getAiConversation, renameAiConversation, type AiActionProposal } from '../src/lib/api'
 import { studioAuthTokenKey } from '../src/lib/auth'
 
 vi.mock('../src/lib/api', async (importOriginal) => ({
@@ -13,6 +13,7 @@ vi.mock('../src/lib/api', async (importOriginal) => ({
   getAiConversation: vi.fn(),
   renameAiConversation: vi.fn(),
   cancelAiChatRun: vi.fn().mockResolvedValue(undefined),
+  confirmAiAction: vi.fn(),
   streamAiChatRun: vi.fn(),
   getProviderModels: vi.fn().mockResolvedValue({ models: [] }),
 }))
@@ -32,6 +33,32 @@ describe('助手失败后的继续对话', () => {
     localStorage.clear()
     sessionStorage.clear()
     vi.clearAllMocks()
+  })
+
+  it('正文没有 JSON 时仍展示工具提议，失败可重试，成功后禁用确认', async () => {
+    const proposal: AiActionProposal = {
+      type: 'pending_action', proposal_id: 'draft-1', module: 'blog', action: 'create_draft',
+      payload: { title: '嫌麻烦的代价' }, summary: '创建草稿', requires_confirmation: true,
+      expires_at: '2099-01-01T00:00:00Z', proposal_token: 'test-proposal',
+    }
+    vi.mocked(createAiChatRun).mockResolvedValue({ id: 'proposal-run', status: 'pending' })
+    vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
+      callbacks.onToken('请点击确认执行。', 1)
+      callbacks.onProposals?.([proposal])
+      return Promise.resolve('completed')
+    })
+    vi.mocked(confirmAiAction).mockRejectedValueOnce(new Error('模拟保存失败')).mockResolvedValue({ action: 'create_draft', post_id: 'post-1', status: 'created' })
+    mount([{ role: 'assistant', content: '你好' }])
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '写文章' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
+    const confirm = await screen.findByRole('button', { name: '确认执行' })
+    await waitFor(() => expect(confirm).toBeEnabled())
+    expect(screen.getByText('嫌麻烦的代价')).toBeInTheDocument()
+    fireEvent.click(confirm)
+    expect(await screen.findByText('模拟保存失败')).toBeInTheDocument()
+    fireEvent.click(confirm)
+    expect(await screen.findByRole('button', { name: '已完成' })).toBeDisabled()
+    expect(confirmAiAction).toHaveBeenLastCalledWith('test-placeholder', 'test-proposal')
   })
 
   it('菜单内部操作保持展开，点击外部或按 Escape 后关闭', async () => {

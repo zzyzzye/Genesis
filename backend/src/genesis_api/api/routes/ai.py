@@ -18,7 +18,7 @@ from sqlalchemy import select
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.contracts import AgentActionConfirmation
 from genesis_api.ai.conversations import conversation_detail, owned_conversation
-from genesis_api.ai.models import AiChatRunStatus, AiConversation
+from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
 from genesis_api.ai.runs import (
     ai_chat_run_manager,
     create_ai_chat_run,
@@ -149,6 +149,19 @@ def _prepare_request(
         content_markdown=context.content_markdown,
         editor_status=context.editor_status,
     )
+    # 执行回执只来自当前用户和会话的数据库记录，不接受客户端自报成功。
+    agent_context["action_results"] = []
+    if request.conversation_id is not None:
+        agent_context["action_results"] = [
+            item["execution_result"]
+            for run in session.scalars(select(AiChatRun).where(
+                AiChatRun.user_id == current_user.id,
+                AiChatRun.conversation_id == request.conversation_id,
+                AiChatRun.proposals.is_not(None),
+            ))
+            for item in run.proposals or []
+            if item.get("executed") and isinstance(item.get("execution_result"), dict)
+        ]
     return request.model_copy(
         update={
             "context": context.model_copy(update=agent_context),
@@ -198,6 +211,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
         """
         last_sequence = -1
         last_content = ""
+        last_proposals: list[dict[str, object]] = []
         last_heartbeat = monotonic()
 
         while True:
@@ -247,6 +261,14 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
 
             last_sequence = snapshot.sequence
             last_content = snapshot.content
+
+            proposals = [item.model_dump(mode="json") for item in snapshot.proposals]
+            if proposals != last_proposals:
+                yield _encode_event({
+                    "type": "proposals",
+                    "proposals": proposals,
+                })
+                last_proposals = proposals
 
             if snapshot.status is AiChatRunStatus.COMPLETED:
                 yield _encode_event(
@@ -502,9 +524,30 @@ def confirm_agent_action(
         raise HTTPException(status_code=422, detail="操作类型无效")
     if not isinstance(payload, dict):
         raise HTTPException(status_code=422, detail="操作参数无效")
+    # 仅查当前用户的结构化提议；执行记录供历史卡片恢复，避免刷新后再次确认。
+    proposal_id = str(proposal.get("proposal_id"))
+    stored_run = None
+    for run in session.scalars(select(AiChatRun).where(
+        AiChatRun.user_id == current_user.id, AiChatRun.proposals.is_not(None),
+    )):
+        matching = next((item for item in run.proposals or []
+                         if item.get("proposal_id") == proposal_id), None)
+        if matching is not None:
+            if matching.get("executed"):
+                raise HTTPException(status_code=409, detail="此操作已经执行，请刷新对话查看结果")
+            stored_run = run
+            break
     try:
-        return agent_capabilities.confirm_action(
+        result = agent_capabilities.confirm_action(
             module, action, payload, current_user=current_user, session=session
         )
+        if stored_run is not None:
+            stored_run.proposals = [
+                {**item, "executed": True, "execution_result": result}
+                if item.get("proposal_id") == proposal_id else item
+                for item in stored_run.proposals or []
+            ]
+            session.commit()
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

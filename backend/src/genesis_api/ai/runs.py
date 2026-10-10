@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.ai.conversations import prepare_conversation_run
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
@@ -33,7 +34,9 @@ SessionFactory = Callable[[], Session]
 class ChatStreamer(Protocol):
     """后台管理器依赖的最小流式服务协议，便于注入实现与测试替身。"""
 
-    def stream(self, request: AiChatRequest, *, thread_id: str) -> AsyncIterator[str]:
+    def stream(
+        self, request: AiChatRequest, *, thread_id: str
+    ) -> AsyncIterator[str | AgentActionProposal]:
         """提供后台管理器所需的流式调用接口。
 
         Args:
@@ -41,7 +44,7 @@ class ChatStreamer(Protocol):
             thread_id: 本次执行对应的 checkpoint 线程标识。
 
         Returns:
-            逐段产出文本的异步迭代器；调用本身不要求等待整个回答完成。
+            产出正文片段或操作提议的异步迭代器；无需等待整个回答完成。
         """
         ...
 
@@ -136,6 +139,7 @@ def get_ai_chat_run_snapshot(
         content=run.content,
         sequence=run.sequence,
         error=run.error,
+        proposals=run.proposals or [],
         metrics=AiGenerationMetrics.model_validate(run.generation_metrics)
         if run.generation_metrics is not None else None,
     )
@@ -285,6 +289,9 @@ class AiChatRunManager:
                         raise
                     token_stream = cast(Any, streamer).stream(request)
                 async for token in token_stream:
+                    if isinstance(token, AgentActionProposal):
+                        await asyncio.to_thread(self._persist_proposal_sync, run_id, token)
+                        continue
                     if not isinstance(service_metrics, GenerationMetrics):
                         metrics.observe(None, token)
                     pending += token
@@ -331,6 +338,19 @@ class AiChatRunManager:
                     error=error,
                     metrics=metrics.snapshot(),
                 )
+
+    def _persist_proposal_sync(self, run_id: UUID, proposal: AgentActionProposal) -> None:
+        """保存可信工具提议并递增修订号，恢复重放时按提议 ID 去重。"""
+        with self._session_factory() as session:
+            run = session.get(AiChatRun, run_id)
+            if run is None:
+                return
+            proposals = run.proposals or []
+            if any(item.get("proposal_id") == str(proposal.proposal_id) for item in proposals):
+                return
+            run.proposals = [*proposals, proposal.model_dump(mode="json")]
+            run.sequence += 1
+            session.commit()
 
     async def _persist(
         self,

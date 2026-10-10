@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.ai.models import AiChatRunStatus
 
 AiSurface = Literal["blog", "studio", "toolbox", "media"]
@@ -57,6 +58,7 @@ class AiContext(BaseModel):
     current_post: dict[str, object] | None = None
     available_tools: list[dict[str, object]] | None = None
     write_policy: str | None = None
+    action_results: list[dict[str, object]] = Field(default_factory=list)
 
 
 class AiChatRequest(BaseModel):
@@ -124,6 +126,7 @@ class AiConversationMessage(BaseModel):
     status: AiChatRunStatus
     error: str | None = None
     metrics: AiGenerationMetrics | None = None
+    proposals: list[AgentActionProposal] = Field(default_factory=list)
 
 
 class AiConversationDetail(AiConversationSummary):
@@ -149,6 +152,7 @@ class AiChatRunSnapshot(BaseModel):
     sequence: int
     error: str | None = None
     metrics: AiGenerationMetrics | None = None
+    proposals: list[AgentActionProposal] = Field(default_factory=list)
 
 
 class AiError(BaseModel):

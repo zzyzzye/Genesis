@@ -21,6 +21,8 @@ class AgentActionProposal(BaseModel):
     requires_confirmation: Literal[True] = True
     expires_at: datetime
     proposal_token: str
+    executed: bool = False
+    execution_result: dict[str, object] | None = None
 
 
 class AgentActionConfirmation(BaseModel):

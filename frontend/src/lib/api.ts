@@ -342,6 +342,7 @@ export interface AiChatRunSnapshot {
   sequence: number
   error: string | null
   metrics?: AiGenerationMetrics | null
+  proposals?: AiActionProposal[]
 }
 
 export interface AiGenerationMetrics {
@@ -364,7 +365,7 @@ export interface AiConversation {
 }
 
 export interface AiConversationDetail extends AiConversation {
-  messages: (AiChatMessage & { run_id: string; status: AiChatRunStatus; error: string | null; metrics?: AiGenerationMetrics | null })[]
+  messages: (AiChatMessage & { run_id: string; status: AiChatRunStatus; error: string | null; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[] })[]
 }
 
 export function listAiConversations(token: string, offset = 0): Promise<AiConversation[]> {
@@ -388,6 +389,7 @@ export function renameAiConversation(token: string, id: string, title: string): 
 export type AiAction = 'create_draft' | 'update_post' | 'delete_post' | 'publish_post'
 
 export interface AiActionProposal {
+  executed?: boolean
   module: string
   type: 'pending_action'
   proposal_id: string
@@ -441,6 +443,7 @@ export async function streamAiChatRun(
     onSnapshot: (content: string, sequence: number) => void
     onToken: (content: string, sequence: number) => void
     onMetrics?: (metrics: AiGenerationMetrics | null) => void
+    onProposals?: (proposals: AiActionProposal[]) => void
   },
   signal?: AbortSignal,
 ): Promise<'completed' | 'disconnected'> {
@@ -477,9 +480,11 @@ export async function streamAiChatRun(
         message?: string
         sequence?: number
         metrics?: AiGenerationMetrics | null
+        proposals?: AiActionProposal[]
       }
       const sequence = payload.sequence ?? 0
       if ('metrics' in payload) handlers.onMetrics?.(payload.metrics ?? null)
+      if (payload.type === 'proposals') handlers.onProposals?.(payload.proposals ?? [])
       if (payload.type === 'snapshot') handlers.onSnapshot(payload.content ?? '', sequence)
       if (payload.type === 'token' && payload.content) handlers.onToken(payload.content, sequence)
       if (payload.type === 'error') {

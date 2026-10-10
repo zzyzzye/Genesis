@@ -18,6 +18,7 @@ from pydantic import SecretStr
 
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.context import agent_invocation_context
+from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.mimo import ChatMiMo
 from genesis_api.ai.schemas import AiChatRequest
@@ -265,11 +266,11 @@ class EmbeddedAgentRuntime:
     async def stream(
         self, request: AiChatRequest, settings: Settings, *, thread_id: str,
         metrics: GenerationMetrics | None = None,
-    ) -> AsyncIterator[str]:
-        """在独立用户身份上下文中执行 Agent 图并逐段产出文本。
+    ) -> AsyncIterator[str | AgentActionProposal]:
+        """在独立用户身份上下文中执行图，产出正文及待确认工具提议。
 
         恢复任务且存在 checkpoint 时从保存状态继续，不重复提交输入消息。
-        工具结果与非文本元数据不作为模型回答返回。
+        普通工具结果与非文本元数据不作为模型回答返回；签名提议单独转发。
 
         Args:
             request: 对话消息、页面上下文、模型选项及服务端设置的用户身份。
@@ -278,7 +279,7 @@ class EmbeddedAgentRuntime:
             metrics: 当前任务独立的统计回调；None 不采集用量。
 
         Yields:
-            模型消息中的非空文本片段。
+            模型消息中的非空文本片段，或业务工具返回的结构化待确认提议。
 
         Raises:
             RuntimeError: 缺少用户身份、模型名称、API Key，
@@ -317,13 +318,27 @@ class EmbeddedAgentRuntime:
                 # 已有 checkpoint 时不重复提交消息，交由 LangGraph 从保存状态继续。
                 graph_input = None
         with agent_invocation_context(request.actor_id, request.actor_role, module):
-            async for message, _metadata in graph.astream(
+            async for mode, event in graph.astream(
                 graph_input,
                 config=config,
-                stream_mode="messages",
+                stream_mode=["messages", "updates"],
                 # 使用框架同步持久化策略，执行状态保存交给 checkpointer 管理。
                 durability="sync",
             ):
+                if mode == "updates":
+                    for update in event.values():
+                        if not isinstance(update, dict):
+                            continue
+                        for message in update.get("messages", []):
+                            if getattr(message, "type", None) != "tool":
+                                continue
+                            try:
+                                proposal = AgentActionProposal.model_validate_json(message.content)
+                            except (ValueError, TypeError):
+                                continue
+                            yield proposal
+                    continue
+                message, _metadata = event
                 for text in _message_text(message):
                     if metrics is not None:
                         metrics.observe(message, text)

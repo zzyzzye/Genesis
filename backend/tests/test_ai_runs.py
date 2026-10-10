@@ -13,6 +13,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus
 from genesis_api.ai.runs import (
     AiChatRunManager,
@@ -59,6 +60,40 @@ def build_session_factory() -> sessionmaker[Session]:
     )
     Base.metadata.create_all(engine)
     return sessionmaker[Session](bind=engine, expire_on_commit=False)
+
+
+@pytest.mark.anyio
+async def test_proposals_persist_separately_and_deduplicate() -> None:
+    """无正文的工具提议也能保存并去重，令牌不进入正文。"""
+    factory = build_session_factory()
+    user_id = uuid4()
+    request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="创建草稿")])
+    with factory() as session:
+        session.add(User(
+            id=user_id, handle="proposal-owner", display_name="Owner", role=UserRole.OWNER,
+        ))
+        session.commit()
+        run = create_ai_chat_run(session, user_id=user_id, request=request, settings=Settings())
+    proposal = AgentActionProposal(
+        proposal_id=uuid4(), module="blog", action="create_draft", payload={"title": "草稿"},
+        summary="创建草稿", expires_at="2099-01-01T00:00:00Z", proposal_token="test-proposal",
+    )
+
+    class ProposalService:
+        async def stream(self, *_: object, **__: object) -> AsyncIterator[AgentActionProposal]:
+            yield proposal
+            yield proposal
+
+    manager = AiChatRunManager(factory, lambda _: ProposalService())
+    manager._semaphore = asyncio.Semaphore(1)
+    await manager._generate(run.id, request, Settings())
+    with factory() as session:
+        snapshot = get_ai_chat_run_snapshot(session, run_id=run.id, user_id=user_id)
+        assert snapshot is not None
+        assert snapshot.content == ""
+        assert snapshot.proposals == [proposal]
+        assert snapshot.sequence == 1
+        assert snapshot.status is AiChatRunStatus.COMPLETED
 
 
 @pytest.mark.anyio
@@ -398,6 +433,10 @@ async def test_stream_response_replays_snapshot_before_live_delta(
 ) -> None:
     run_id = uuid4()
     user_id = uuid4()
+    proposal = AgentActionProposal(
+        proposal_id=uuid4(), module="blog", action="create_draft", payload={},
+        summary="创建草稿", expires_at="2099-01-01T00:00:00Z", proposal_token="test-proposal",
+    )
     snapshots = iter(
         [
             AiChatRunSnapshot(
@@ -405,12 +444,14 @@ async def test_stream_response_replays_snapshot_before_live_delta(
                 status=AiChatRunStatus.RUNNING,
                 content="刷新前已生成",
                 sequence=1,
+                proposals=[proposal],
             ),
             AiChatRunSnapshot(
                 id=run_id,
                 status=AiChatRunStatus.COMPLETED,
                 content="刷新前已生成，刷新后继续",
                 sequence=2,
+                proposals=[proposal],
             ),
         ]
     )
@@ -435,6 +476,8 @@ async def test_stream_response_replays_snapshot_before_live_delta(
     assert '"type": "token"' in body
     assert '"content": "，刷新后继续"' in body
     assert '"type": "done"' in body
+    assert body.count('"type": "proposals"') == 1
+    assert '"proposal_token": "test-proposal"' in body
 
 
 def test_extract_stream_text_supports_langgraph_message_shapes() -> None:

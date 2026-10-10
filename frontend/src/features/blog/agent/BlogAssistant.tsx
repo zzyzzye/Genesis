@@ -50,7 +50,7 @@ import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from '../
 import { getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
 
 type AssistantTiming = { startedAt: number; firstTokenAt?: number; completedAt?: number }
-type AssistantMessage = { role: 'assistant' | 'user'; content: string; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null }
+type AssistantMessage = { role: 'assistant' | 'user'; content: string; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; executedProposals?: string[] }
 type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string; status: 'draft' | 'published' }
 type AssistantPageContext = { route: string; section: string; pageType: 'overview' | 'posts_list' | 'post_editor' | 'post_preview' | 'section' }
 type ActiveAssistantRun = { id: string; assistantMessageIndex: number }
@@ -98,7 +98,7 @@ function readAssistantSession(key = assistantSessionKey): AssistantSession {
     ) ? activeCandidate as ActiveAssistantRun : null
     const restoredMessages = activeRun
       ? normalizedMessages
-      : normalizedMessages.filter((message) => message.content.trim().length > 0)
+      : normalizedMessages.filter((message) => message.content.trim().length > 0 || message.proposals?.length)
     return {
       isOpen: value.isOpen === true,
       messages: restoredMessages.length ? restoredMessages : initialAssistantMessages(),
@@ -164,15 +164,16 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
   </div>
 })
 
-const MarkdownMessage = memo(function MarkdownMessage({ content, timing, metrics, index, onConfirm, confirming, streaming, onProgress }: { content: string; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void }) {
-  const action = streaming ? null : parsePendingAction(content)
+const MarkdownMessage = memo(function MarkdownMessage({ content, timing, metrics, proposals, executedProposals, index, onConfirm, confirming, streaming, onProgress }: AssistantMessage & { index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void }) {
+  const legacyAction = streaming ? null : parsePendingAction(content)
+  const actions = proposals?.length ? proposals : legacyAction ? [legacyAction] : []
   return <div className="studio-assistant__response">
     <div className="studio-assistant__markdown">{streaming ? <TypewriterText content={content} onProgress={onProgress} /> : <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>}</div>
     <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} />
-    {action && onConfirm && <div className="studio-assistant__action-card">
-      <strong>待确认操作</strong><span>{action.action}</span>
-      <button type="button" disabled={confirming} onClick={() => { void onConfirm(index, action) }}>{confirming ? '执行中…' : '确认执行'}</button>
-    </div>}
+    {actions.map((action) => <div className="studio-assistant__action-card" key={action.proposal_id}>
+      <strong>{action.executed || executedProposals?.includes(action.proposal_id) ? '已执行' : '待确认操作'}</strong><span>{typeof action.payload.title === 'string' ? action.payload.title : action.summary}</span>
+      <button type="button" disabled={streaming || confirming || action.executed || executedProposals?.includes(action.proposal_id)} onClick={() => { void onConfirm(index, action) }}>{action.executed || executedProposals?.includes(action.proposal_id) ? '已完成' : confirming ? '执行中…' : '确认执行'}</button>
+    </div>)}
   </div>
 })
 
@@ -187,7 +188,7 @@ function updateAssistantMessage(
   ))
 }
 
-export function BlogAssistant({ page, editor, userId }: { page: AssistantPageContext; editor: AssistantEditorContext | null; userId?: string }) {
+export function BlogAssistant({ page, editor, userId, onExecuted }: { page: AssistantPageContext; editor: AssistantEditorContext | null; userId?: string; onExecuted?: () => void }) {
   const reducedMotion = useReducedMotion()
   const transition = { duration: reducedMotion ? 0 : motionTiming.assistant, ease: motionTiming.assistantEase }
   const storageKey = userId ? `${assistantSessionKey}:${userId}` : assistantSessionKey
@@ -330,7 +331,7 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
       setConversation(result)
       const restored: AssistantMessage[] = [
         ...initialAssistantMessages(),
-        ...result.messages.map(({ role, content, metrics }) => ({ role, content, metrics })),
+        ...result.messages.map(({ role, content, metrics, proposals }) => ({ role, content, metrics, proposals })),
       ]
       setMessages(restored)
       const runningIndex = result.messages.findIndex((message) => message.role === 'assistant' && (message.status === 'pending' || message.status === 'running'))
@@ -488,6 +489,11 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
       while (!cancelled) {
         try {
           const result = await streamAiChatRun(token!, run.id, {
+            onProposals: (proposals) => {
+              if (cancelled || selection !== selectionVersion.current) return
+              setMessages((current) => current.map((message, index) => index === run.assistantMessageIndex
+                ? { ...message, proposals } : message))
+            },
             onMetrics: (metrics) => {
               if (cancelled || selection !== selectionVersion.current) return
               setMessages((current) => current.map((message, index) => index === run.assistantMessageIndex
@@ -504,7 +510,7 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
               .map((message, index) => index === run.assistantMessageIndex && message.timing
                 ? { ...message, timing: { ...message.timing, firstTokenAt, completedAt } }
                 : message)
-              .filter((message) => message.content.trim().length > 0))
+              .filter((message) => message.content.trim().length > 0 || message.proposals?.length))
             setActiveRun((current) => current?.id === run.id ? null : current)
             setStreamStatus(null)
             setError(null)
@@ -515,7 +521,7 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
           if (cancelled || (caught instanceof DOMException && caught.name === 'AbortError')) return
           if (caught instanceof AiChatRunTerminalError) {
             flush()
-            setMessages((current) => current.filter((message) => message.content.trim().length > 0))
+            setMessages((current) => current.filter((message) => message.content.trim().length > 0 || message.proposals?.length))
             setError(caught.message)
             setActiveRun((current) => current?.id === run.id ? null : current)
             setStreamStatus(null)
@@ -568,9 +574,10 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
       setError('当前对话已达到 40 条消息上限，请新建对话后继续。')
       return
     }
-    const assistantMessageIndex = nextMessages.length
+    const retainedMessages = messages.filter((message) => message.content.trim().length > 0 || message.proposals?.length)
+    const assistantMessageIndex = retainedMessages.length + 1
     shouldStickToBottomRef.current = true
-    setMessages([...nextMessages, { role: 'assistant', content: '', timing: { startedAt: Date.now() } }])
+    setMessages([...retainedMessages, { role: 'user', content }, { role: 'assistant', content: '', timing: { startedAt: Date.now() } }])
     setDraft('')
     setError(null)
     setStreamStatus('正在创建生成任务…')
@@ -638,7 +645,7 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
             timing: message.timing ? { ...message.timing, completedAt } : undefined,
           }
         : message)
-      .filter((message) => message.content.trim().length > 0))
+      .filter((message) => message.content.trim().length > 0 || message.proposals?.length))
     setActiveRun(null)
     setStreamStatus(null)
     setError(null)
@@ -652,11 +659,13 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
     if (!token) return
     const selection = selectionVersion.current
     setConfirmingAction(messageIndex)
+    setError(null)
     try {
       await confirmAiAction(token, action.proposal_token)
+      onExecuted?.()
       if (selection !== selectionVersion.current) return
       setMessages((current) => current.map((message, index) => index === messageIndex
-        ? { ...message, content: `${message.content}\n\n✅ 已确认并执行：${action.action}` }
+        ? { ...message, executedProposals: [...(message.executedProposals ?? []), action.proposal_id], content: `${message.content}\n\n已确认并执行。` }
         : message))
     } catch (caught) {
       if (selection !== selectionVersion.current) return
@@ -664,7 +673,7 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
     } finally {
       if (selection === selectionVersion.current) setConfirmingAction(null)
     }
-  }, [])
+  }, [onExecuted])
 
   return (
     <AnimatePresence initial={false}>
@@ -725,7 +734,7 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
               {messages.map((message, index) => (
                 <motion.div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${conversationId ?? 'new'}-${message.role}-${index}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={transition}>
                   {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
-                  {message.role === 'assistant' ? <MarkdownMessage content={message.content} timing={message.timing} metrics={message.metrics} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} /> : <p>{message.content}</p>}
+                  {message.role === 'assistant' ? <MarkdownMessage {...message} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} /> : <p>{message.content}</p>}
                 </motion.div>
               ))}
             </div>

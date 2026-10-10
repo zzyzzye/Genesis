@@ -16,7 +16,7 @@ from sqlalchemy.pool import StaticPool
 
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.contracts import AgentActionConfirmation
-from genesis_api.ai.models import AiChatRunStatus
+from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
 from genesis_api.ai.schemas import (
     AiChatRequest,
     AiChatRunCreated,
@@ -140,6 +140,57 @@ def test_media_surface_proposes_confirmed_canvas_plans() -> None:
     assert capability.tools == []
     assert "canvas-plan" in capability.prompt
     assert "应用到画布" in capability.prompt
+
+
+def test_confirmed_proposal_is_saved_and_cannot_be_executed_again() -> None:
+    """确认真实落库后保存执行回执，重新读取与重复确认不再生成第二篇草稿。"""
+    factory = session_factory()
+    settings = Settings(agent_action_secret=SecretStr("x" * 32))
+    proposal_id = str(uuid4())
+    with factory() as session:
+        owner = User(handle="receipt-owner", display_name="Owner", role=UserRole.OWNER)
+        session.add(owner)
+        session.commit()
+        conversation = AiConversation(user_id=owner.id)
+        session.add(conversation)
+        session.commit()
+        payload = {
+            "title": "确认草稿", "excerpt": "摘要",
+            "content_markdown": "正文", "slug": "receipt-draft",
+        }
+        token = encode({
+            "proposal_id": proposal_id, "actor_id": str(owner.id), "module": "blog",
+            "action": "create_draft", "payload": payload,
+            "exp": datetime.now(UTC) + timedelta(minutes=10),
+        }, settings.agent_action_secret.get_secret_value(), algorithm="HS256")
+        run = AiChatRun(
+            user_id=owner.id, surface="studio", provider="mimo", content="请确认执行",
+            conversation_id=conversation.id,
+            proposals=[{"proposal_id": proposal_id, "executed": False}],
+        )
+        session.add(run)
+        session.commit()
+        result = ai_route.confirm_agent_action(
+            AgentActionConfirmation(proposal_token=token), owner, session, settings,
+        )
+        session.refresh(run)
+        assert run.proposals is not None
+        assert run.proposals[0]["executed"] is True
+        assert run.proposals[0]["execution_result"] == result
+        prepared = ai_route._prepare_request(
+            AiChatRequest(
+                surface="studio", conversation_id=conversation.id,
+                messages=[AiMessage(role="user", content="写入了吗")],
+            ), current_user=owner, current_user_role=owner.role, session=session,
+        )
+        assert prepared.context is not None
+        assert prepared.context.action_results == [result]
+        with pytest.raises(HTTPException) as repeated:
+            ai_route.confirm_agent_action(
+                AgentActionConfirmation(proposal_token=token), owner, session, settings,
+            )
+        assert repeated.value.status_code == 409
+        assert len(session.scalars(select(BlogPost)).all()) == 1
 
 
 def test_confirm_agent_action_validates_signed_proposals() -> None:

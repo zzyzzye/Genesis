@@ -43,6 +43,7 @@ def conversation_detail(session: Session, conversation: AiConversation) -> AiCon
         messages.append(AiConversationMessage(
             role="assistant", content=run.content, run_id=run.id,
             status=run.status, error=run.error,
+            proposals=run.proposals or [],
             metrics=AiGenerationMetrics.model_validate(run.generation_metrics)
             if run.generation_metrics is not None else None,
         ))

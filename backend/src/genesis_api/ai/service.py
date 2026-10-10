@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.runtime import EmbeddedAgentRuntime, embedded_agent_runtime
 from genesis_api.ai.schemas import AiChatRequest
@@ -35,15 +36,15 @@ class AgentService:
 
     async def stream(
         self, request: AiChatRequest, *, thread_id: str
-    ) -> AsyncIterator[str]:
-        """逐段转发运行时产出的模型回答文本。
+    ) -> AsyncIterator[str | AgentActionProposal]:
+        """转发运行时产出的正文片段与结构化操作提议。
 
         Args:
             request: 对话消息、页面上下文、模型选项及服务端设置的用户身份。
             thread_id: checkpoint 的任务标识，用于隔离与恢复执行状态。
 
         Yields:
-            运行时产出的模型文本片段，不在此重新拼接或缓存。
+            模型文本片段或可信工具提议，不在此重新拼接或缓存。
 
         Raises:
             RuntimeError: 运行时未初始化，或缺少身份、模型配置，
