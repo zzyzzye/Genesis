@@ -136,7 +136,7 @@ describe('助手失败后的继续对话', () => {
       created_at: '2026-10-10T00:00:00Z', updated_at: '2026-10-10T00:00:00Z',
       messages: [
         { role: 'user', content: '历史问题', run_id: 'saved-run', status: 'completed', error: null },
-        { role: 'assistant', content: '历史回答', run_id: 'saved-run', status: 'completed', error: null, metrics: { output_tokens: 120, token_source: 'actual', output_seconds: 3, tokens_per_second: 40, first_token_seconds: 1, total_seconds: 4 } },
+        { role: 'assistant', content: '历史回答', run_id: 'saved-run', status: 'completed', error: null, metrics: { output_tokens: 120, token_source: 'actual', output_seconds: 3.004, tokens_per_second: 39.9467, first_token_seconds: 1, total_seconds: 4.1 } },
       ],
     })
     vi.mocked(renameAiConversation).mockResolvedValue({
@@ -147,7 +147,9 @@ describe('助手失败后的继续对话', () => {
     fireEvent.click(screen.getByRole('button', { name: '聊天历史' }))
     fireEvent.click(await screen.findByRole('button', { name: /已保存的博客规划/ }))
     expect(await screen.findByText('历史回答')).toBeInTheDocument()
-    expect(screen.getByText('120 tokens（实测） · 40.0 tokens/s（实测）')).toBeInTheDocument()
+    expect(screen.getByText('输出 3.00 秒')).toBeInTheDocument()
+    expect(screen.getByText('120 tokens · 40.0 tokens/s')).toBeInTheDocument()
+    expect(screen.queryByText(/实测/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '重命名' }))
     fireEvent.change(screen.getByRole('textbox', { name: '对话标题' }), { target: { value: '我的写作计划' } })
     fireEvent.click(screen.getByRole('button', { name: '保存' }))

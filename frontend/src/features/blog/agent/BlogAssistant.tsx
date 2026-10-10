@@ -118,12 +118,15 @@ function parsePendingAction(content: string): AiActionProposal | null {
   } catch { return null }
 }
 
+function displaySeconds(seconds: number) {
+  return Math.round(Math.max(0, seconds) * 100) / 100
+}
+
 function formatDuration(milliseconds: number) {
-  const seconds = Math.max(0, milliseconds) / 1000
-  if (seconds < 10) return `${seconds.toFixed(1)} 秒`
-  if (seconds < 60) return `${Math.round(seconds)} 秒`
+  const seconds = displaySeconds(milliseconds / 1000)
+  if (seconds < 60) return `${seconds.toFixed(2)} 秒`
   const minutes = Math.floor(seconds / 60)
-  return `${minutes} 分 ${Math.round(seconds % 60)} 秒`
+  return `${minutes} 分 ${(seconds % 60).toFixed(2)} 秒`
 }
 
 const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming, showMetrics }: { timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; streaming: boolean; showMetrics: boolean }) {
@@ -137,10 +140,12 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
   const end = timing?.completedAt ?? now
   const firstToken = timing?.firstTokenAt
   const source = metrics?.token_source ?? 'unavailable'
-  const speed = metrics?.tokens_per_second
   const count = metrics?.output_tokens
-  const label = source === 'actual' ? '实测' : source === 'estimated' ? '估算' : '不可用'
-  return <div className="studio-assistant__timing" aria-label="生成耗时">
+  const seconds = metrics?.output_seconds == null ? null : displaySeconds(metrics.output_seconds)
+  // 用界面同精度的输出时长计算，避免用户手算时与隐藏精度的结果不一致。
+  const speed = metrics?.tokens_per_second != null && count != null && seconds !== null && seconds > 0 ? count / seconds : null
+  const suffix = source === 'estimated' ? '（估算）' : ''
+  return <div className="studio-assistant__timing" aria-label="生成耗时" title="首字是开始执行到首次正文输出的耗时；输出是最后一次正文调用的首末片段耗时；总计还包含工具调用与收尾处理，因此不一定等于前两项之和。">
     {metrics ? <>
       <span>首字 {metrics.first_token_seconds === null ? '等待中' : formatDuration(metrics.first_token_seconds * 1000)}</span>
       <span>输出 {metrics.output_seconds === null ? '等待中' : formatDuration(metrics.output_seconds * 1000)}</span>
@@ -150,9 +155,9 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
       <span>输出 {firstToken ? formatDuration(end - firstToken) : '等待中'}</span>
       <span>总计 {formatDuration(end - timing.startedAt)}</span>
     </>}
-    {showMetrics && <span className="studio-assistant__speed" title="统计最后一次有正文输出的模型调用。真实用量来自供应商，扣除明确报告的推理 token；可能包含该调用的工具参数。速度按服务端首个至末个正文片段的用时计算。缺少真实用量时按字符估算，单片段或缺少耗时时速度不可用。">
-      {count !== null && count !== undefined ? `${count.toLocaleString('zh-CN')} tokens（${label}） · ` : ''}
-      {speed !== null && speed !== undefined && Number.isFinite(speed) ? `${speed.toFixed(1)} tokens/s（${label}）` : `tokens/s ${streaming ? '等待统计' : '不可用'}`}
+    {showMetrics && <span className="studio-assistant__speed" title="输出速度 = 输出 token 数 ÷ 界面显示的输出时长（两位小数）。统计最后一次有正文输出的模型调用，用量来自供应商并扣除明确报告的推理 token，可能包含该调用的工具参数。缺少真实用量时按字符估算；单片段或缺少耗时时速度不可用。">
+      {count !== null && count !== undefined ? `${count.toLocaleString('zh-CN')} tokens${suffix} · ` : ''}
+      {speed !== null && Number.isFinite(speed) ? `${speed.toFixed(1)} tokens/s${suffix}` : `tokens/s ${streaming ? '等待统计' : '不可用'}`}
     </span>}
   </div>
 })
