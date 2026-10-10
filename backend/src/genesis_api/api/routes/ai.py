@@ -214,6 +214,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                         "run_id": str(snapshot.id),
                         "content": snapshot.content,
                         "sequence": snapshot.sequence,
+                        "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
                     },
                     event_id=snapshot.sequence,
                 )
@@ -226,6 +227,8 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                                 "type": "token",
                                 "content": delta,
                                 "sequence": snapshot.sequence,
+                                "metrics": snapshot.metrics.model_dump()
+                                if snapshot.metrics else None,
                             },
                             event_id=snapshot.sequence,
                         )
@@ -237,6 +240,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                             "run_id": str(snapshot.id),
                             "content": snapshot.content,
                             "sequence": snapshot.sequence,
+                            "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
                         },
                         event_id=snapshot.sequence,
                     )
@@ -246,7 +250,8 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
 
             if snapshot.status is AiChatRunStatus.COMPLETED:
                 yield _encode_event(
-                    {"type": "done", "sequence": snapshot.sequence},
+                    {"type": "done", "sequence": snapshot.sequence,
+                     "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None},
                     event_id=snapshot.sequence,
                 )
                 return
@@ -255,6 +260,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                     {
                         "type": "error",
                         "message": snapshot.error or "AI 生成失败",
+                        "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
                         "sequence": snapshot.sequence,
                     },
                     event_id=snapshot.sequence,

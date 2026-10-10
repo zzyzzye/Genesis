@@ -121,7 +121,8 @@
 .studio-assistant__context-chip strong { font-weight: 400; }
 .studio-assistant__model-empty { padding: 12px 8px; font-size: 12px; color: var(--assistant-muted); }
 .studio-assistant__composer-status, .studio-assistant__request-error { margin: 8px 0 0; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
-.studio-assistant__composer-status { color: var(--assistant-muted); }
+.studio-assistant__composer-status { height: 1.6em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--assistant-muted); }
+.studio-assistant__speed { flex-basis: 100%; min-height: 1.6em; }
 .studio-assistant__request-error { color: #a3443b; }
 .studio-assistant__action-card { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border-radius: 8px; background: var(--assistant-surface); font-size: 12px; }
 .studio-assistant__action-card strong { font-weight: 550; }
@@ -186,4 +187,12 @@
   .studio-assistant.is-expanded .studio-assistant__history { display: none; }
   .studio-assistant.is-expanded .studio-assistant__workspace.is-history > .studio-assistant__history { display: flex; flex: 1; }
   .studio-assistant.is-expanded .studio-assistant__workspace.is-history > .studio-assistant__chat { display: none; }
+}
+/* 横屏或放大页面时收紧固定区域，为消息保留可滚动空间。 */
+@media (max-height: 480px) {
+  .studio-assistant.is-open .studio-assistant__header { padding-block: 8px; }
+  .studio-assistant__identity div > span { display: none; }
+  .studio-assistant__conversation-heading { min-height: 30px; padding-bottom: 4px; }
+  .studio-assistant__composer { padding-block: 8px; }
+  .studio-assistant__composer textarea, .studio-assistant__composer textarea:focus { height: 32px; min-height: 32px; }
 }

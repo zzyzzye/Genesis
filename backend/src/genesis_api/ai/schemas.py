@@ -104,6 +104,17 @@ class AiConversationRename(BaseModel):
     title: str = Field(min_length=1, max_length=80)
 
 
+class AiGenerationMetrics(BaseModel):
+    """最后一次可见正文模型调用的输出统计，不包含自动标题调用。"""
+
+    output_tokens: int | None = None
+    token_source: Literal["actual", "estimated", "unavailable"] = "unavailable"
+    output_seconds: float | None = None
+    tokens_per_second: float | None = None
+    first_token_seconds: float | None = None
+    total_seconds: float = 0
+
+
 class AiConversationMessage(BaseModel):
     """由生成任务构建的展示消息，包含任务状态供浏览器恢复订阅。"""
 
@@ -112,6 +123,7 @@ class AiConversationMessage(BaseModel):
     run_id: UUID
     status: AiChatRunStatus
     error: str | None = None
+    metrics: AiGenerationMetrics | None = None
 
 
 class AiConversationDetail(AiConversationSummary):
@@ -136,6 +148,7 @@ class AiChatRunSnapshot(BaseModel):
     content: str
     sequence: int
     error: str | None = None
+    metrics: AiGenerationMetrics | None = None
 
 
 class AiError(BaseModel):

@@ -41,13 +41,14 @@ import {
   type AiProvider,
   type AvailableModel,
   type AiConversation,
+  type AiGenerationMetrics,
 } from '../../../lib/api'
 import { AgentModelPicker } from '../../agent/AgentModelPicker'
 import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from '../../agent/useReasoningEffort'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
 
 type AssistantTiming = { startedAt: number; firstTokenAt?: number; completedAt?: number }
-type AssistantMessage = { role: 'assistant' | 'user'; content: string; timing?: AssistantTiming }
+type AssistantMessage = { role: 'assistant' | 'user'; content: string; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null }
 type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string; status: 'draft' | 'published' }
 type AssistantPageContext = { route: string; section: string; pageType: 'overview' | 'posts_list' | 'post_editor' | 'post_preview' | 'section' }
 type ActiveAssistantRun = { id: string; assistantMessageIndex: number }
@@ -125,28 +126,42 @@ function formatDuration(milliseconds: number) {
   return `${minutes} 分 ${Math.round(seconds % 60)} 秒`
 }
 
-const ResponseTiming = memo(function ResponseTiming({ timing, streaming }: { timing?: AssistantTiming; streaming: boolean }) {
+const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming, showMetrics }: { timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; streaming: boolean; showMetrics: boolean }) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!streaming || !timing) return
     const timer = window.setInterval(() => setNow(Date.now()), 100)
     return () => window.clearInterval(timer)
   }, [streaming, timing])
-  if (!timing) return null
-  const end = timing.completedAt ?? now
-  const firstToken = timing.firstTokenAt
+  if (!timing && !showMetrics) return null
+  const end = timing?.completedAt ?? now
+  const firstToken = timing?.firstTokenAt
+  const source = metrics?.token_source ?? 'unavailable'
+  const speed = metrics?.tokens_per_second
+  const count = metrics?.output_tokens
+  const label = source === 'actual' ? '实测' : source === 'estimated' ? '估算' : '不可用'
   return <div className="studio-assistant__timing" aria-label="生成耗时">
-    <span>思考 {formatDuration((firstToken ?? end) - timing.startedAt)}</span>
-    <span>输出 {firstToken ? formatDuration(end - firstToken) : '等待中'}</span>
-    <span>总计 {formatDuration(end - timing.startedAt)}</span>
+    {metrics ? <>
+      <span>首字 {metrics.first_token_seconds === null ? '等待中' : formatDuration(metrics.first_token_seconds * 1000)}</span>
+      <span>输出 {metrics.output_seconds === null ? '等待中' : formatDuration(metrics.output_seconds * 1000)}</span>
+      <span>总计 {formatDuration(metrics.total_seconds * 1000)}</span>
+    </> : timing && <>
+      <span>首字 {formatDuration((firstToken ?? end) - timing.startedAt)}</span>
+      <span>输出 {firstToken ? formatDuration(end - firstToken) : '等待中'}</span>
+      <span>总计 {formatDuration(end - timing.startedAt)}</span>
+    </>}
+    {showMetrics && <span className="studio-assistant__speed" title="统计最后一次有正文输出的模型调用。真实用量来自供应商，扣除明确报告的推理 token；可能包含该调用的工具参数。速度按服务端首个至末个正文片段的用时计算。缺少真实用量时按字符估算，单片段或缺少耗时时速度不可用。">
+      {count !== null && count !== undefined ? `${count.toLocaleString('zh-CN')} tokens（${label}） · ` : ''}
+      {speed !== null && speed !== undefined && Number.isFinite(speed) ? `${speed.toFixed(1)} tokens/s（${label}）` : `tokens/s ${streaming ? '等待统计' : '不可用'}`}
+    </span>}
   </div>
 })
 
-const MarkdownMessage = memo(function MarkdownMessage({ content, timing, index, onConfirm, confirming, streaming, onProgress }: { content: string; timing?: AssistantTiming; index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void }) {
+const MarkdownMessage = memo(function MarkdownMessage({ content, timing, metrics, index, onConfirm, confirming, streaming, onProgress }: { content: string; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void }) {
   const action = streaming ? null : parsePendingAction(content)
   return <div className="studio-assistant__response">
     <div className="studio-assistant__markdown">{streaming ? <TypewriterText content={content} onProgress={onProgress} /> : <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>}</div>
-    <ResponseTiming timing={timing} streaming={streaming} />
+    <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} />
     {action && onConfirm && <div className="studio-assistant__action-card">
       <strong>待确认操作</strong><span>{action.action}</span>
       <button type="button" disabled={confirming} onClick={() => { void onConfirm(index, action) }}>{confirming ? '执行中…' : '确认执行'}</button>
@@ -299,7 +314,7 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
       setConversation(result)
       const restored: AssistantMessage[] = [
         ...initialAssistantMessages(),
-        ...result.messages.map(({ role, content }) => ({ role, content })),
+        ...result.messages.map(({ role, content, metrics }) => ({ role, content, metrics })),
       ]
       setMessages(restored)
       const runningIndex = result.messages.findIndex((message) => message.role === 'assistant' && (message.status === 'pending' || message.status === 'running'))
@@ -457,6 +472,11 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
       while (!cancelled) {
         try {
           const result = await streamAiChatRun(token!, run.id, {
+            onMetrics: (metrics) => {
+              if (cancelled || selection !== selectionVersion.current) return
+              setMessages((current) => current.map((message, index) => index === run.assistantMessageIndex
+                ? { ...message, metrics } : message))
+            },
             onSnapshot: (content) => { received = content; activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }; markFirstToken(content); queue(); setStreamStatus('正在生成…') },
             onToken: (content) => { received += content; activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }; markFirstToken(content); queue() },
           }, controller.signal)
@@ -687,7 +707,7 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
               {messages.map((message, index) => (
                 <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={`${message.role}-${index}`}>
                   {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
-                  {message.role === 'assistant' ? <MarkdownMessage content={message.content} timing={message.timing} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} /> : <p>{message.content}</p>}
+                  {message.role === 'assistant' ? <MarkdownMessage content={message.content} timing={message.timing} metrics={message.metrics} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} /> : <p>{message.content}</p>}
                 </div>
               ))}
             </div>
@@ -756,7 +776,7 @@ export function BlogAssistant({ page, editor, userId }: { page: AssistantPageCon
                 ? <button className="studio-assistant__stop" type="button" aria-label="停止生成" onClick={stopGeneration}><StudioIcon name="stop" /></button>
                 : <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>}
             </div>
-            {!error && (isBusy || streamStatus) && <p className="studio-assistant__composer-status" role="status">{streamStatus ?? '正在生成…'}</p>}
+            <p className="studio-assistant__composer-status" role="status">{!error && (isBusy || streamStatus) ? (streamStatus ?? '正在生成…') : ''}</p>
             {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
           </form>
           </div>

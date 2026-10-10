@@ -75,6 +75,7 @@ class AiChatRun(Base):
     # 内容批次的修订序号，不是 token 数；恢复时也会递增以通知客户端重置快照。
     sequence: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    generation_metrics: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

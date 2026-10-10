@@ -18,6 +18,7 @@ from pydantic import SecretStr
 
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.context import agent_invocation_context
+from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.mimo import ChatMiMo
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
@@ -187,6 +188,8 @@ class EmbeddedAgentRuntime:
             # 向传输客户端注入原生 profile，DeepAgents 也使用同一份框架能力信息。
             "profile": profile,
         }
+        if adapter_provider == "openai":
+            kwargs["stream_usage"] = True
         # 推理模型可能不接受 temperature；显式档位交由框架映射供应商参数。
         if profile.get("temperature") is not False and reasoning_effort is None:
             kwargs["temperature"] = settings.text_temperature
@@ -203,6 +206,7 @@ class EmbeddedAgentRuntime:
                 profile=profile,
                 max_completion_tokens=output_budget,
                 use_responses_api=False,
+                stream_usage=True,
             )
         if is_compatible_gateway:
             normalized_base_url = base_url.rstrip("/")
@@ -258,7 +262,8 @@ class EmbeddedAgentRuntime:
         return self._graphs[key]
 
     async def stream(
-        self, request: AiChatRequest, settings: Settings, *, thread_id: str
+        self, request: AiChatRequest, settings: Settings, *, thread_id: str,
+        metrics: GenerationMetrics | None = None,
     ) -> AsyncIterator[str]:
         """在独立用户身份上下文中执行 Agent 图并逐段产出文本。
 
@@ -269,6 +274,7 @@ class EmbeddedAgentRuntime:
             request: 对话消息、页面上下文、模型选项及服务端设置的用户身份。
             settings: 提供默认模型配置与业务能力配置。
             thread_id: checkpoint 的任务标识，用于隔离与恢复执行状态。
+            metrics: 当前任务独立的统计回调；None 不采集用量。
 
         Yields:
             模型消息中的非空文本片段。
@@ -300,6 +306,8 @@ class EmbeddedAgentRuntime:
             *[message.model_dump() for message in request.messages],
         ]
         config = RunnableConfig(configurable={"thread_id": thread_id})
+        if metrics is not None:
+            config["callbacks"] = [metrics]
         # 图缓存不包含对话状态；thread_id 用于区分各次任务的 checkpoint。
         graph_input: dict[str, object] | None = {"messages": messages}
         if request.resume_from_checkpoint and self._checkpointer is not None:
@@ -316,6 +324,8 @@ class EmbeddedAgentRuntime:
                 durability="sync",
             ):
                 for text in _message_text(message):
+                    if metrics is not None:
+                        metrics.observe(message, text)
                     yield text
 
     async def generate_title(self, request: AiChatRequest, settings: Settings) -> str:

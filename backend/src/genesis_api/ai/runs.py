@@ -13,9 +13,15 @@ from fastapi import HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.ai.conversations import prepare_conversation_run
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
-from genesis_api.ai.schemas import AiChatRequest, AiChatRunCreated, AiChatRunSnapshot
+from genesis_api.ai.schemas import (
+    AiChatRequest,
+    AiChatRunCreated,
+    AiChatRunSnapshot,
+    AiGenerationMetrics,
+)
 from genesis_api.ai.service import AgentService
 from genesis_api.core.config import Settings
 from genesis_api.database.session import SessionLocal
@@ -130,6 +136,8 @@ def get_ai_chat_run_snapshot(
         content=run.content,
         sequence=run.sequence,
         error=run.error,
+        metrics=AiGenerationMetrics.model_validate(run.generation_metrics)
+        if run.generation_metrics is not None else None,
     )
 
 
@@ -261,8 +269,12 @@ class AiChatRunManager:
             await self._persist(run_id, status=AiChatRunStatus.RUNNING)
             pending = ""
             last_flush = asyncio.get_running_loop().time()
+            metrics = GenerationMetrics()
             try:
                 streamer = self._chat_service_factory(settings)
+                service_metrics = getattr(streamer, "metrics", None)
+                if isinstance(service_metrics, GenerationMetrics):
+                    metrics = service_metrics
                 try:
                     token_stream = streamer.stream(
                         request, thread_id=str(request.conversation_id or run_id)
@@ -273,6 +285,8 @@ class AiChatRunManager:
                         raise
                     token_stream = cast(Any, streamer).stream(request)
                 async for token in token_stream:
+                    if not isinstance(service_metrics, GenerationMetrics):
+                        metrics.observe(None, token)
                     pending += token
                     # 按长度或间隔批量写入快照，避免每个文本片段都产生数据库提交。
                     now = asyncio.get_running_loop().time()
@@ -280,19 +294,22 @@ class AiChatRunManager:
                         len(pending) >= self._flush_size
                         or now - last_flush >= self._flush_interval
                     ):
-                        await self._persist(run_id, append_content=pending)
+                        await self._persist(
+                            run_id, append_content=pending, metrics=metrics.snapshot(),
+                        )
                         pending = ""
                         last_flush = now
                 await self._persist(
                     run_id,
                     append_content=pending,
                     status=AiChatRunStatus.COMPLETED,
+                    metrics=metrics.snapshot(),
                 )
                 if request.conversation_id is not None:
                     self._start_title(request, settings)
             except asyncio.CancelledError:
-                # 未提交的 pending 文本不会在此补写；恢复依靠 checkpoint 而非内存缓冲。
-                # 保留 running 状态，由下次启动恢复；用户取消则由 cancel 写入失败终态。
+                # 保留已到达的正文与统计；用户取消后的终态仍由 cancel 保存。
+                await self._persist(run_id, append_content=pending, metrics=metrics.snapshot())
                 raise
             except RuntimeError as exc:
                 await self._persist(
@@ -300,6 +317,7 @@ class AiChatRunManager:
                     append_content=pending,
                     status=AiChatRunStatus.FAILED,
                     error=str(exc),
+                    metrics=metrics.snapshot(),
                 )
             except Exception as exc:
                 logger.exception("AI 后台生成任务失败：run_id=%s", run_id)
@@ -311,6 +329,7 @@ class AiChatRunManager:
                     append_content=pending,
                     status=AiChatRunStatus.FAILED,
                     error=error,
+                    metrics=metrics.snapshot(),
                 )
 
     async def _persist(
@@ -320,6 +339,7 @@ class AiChatRunManager:
         append_content: str = "",
         status: AiChatRunStatus | None = None,
         error: str | None = None,
+        metrics: AiGenerationMetrics | None = None,
     ) -> None:
         """将快照写入交给工作线程，避免同步数据库提交阻塞事件循环。
 
@@ -335,6 +355,7 @@ class AiChatRunManager:
             append_content,
             status,
             error,
+            metrics,
         )
 
     def _start_title(self, request: AiChatRequest, settings: Settings) -> None:
@@ -394,6 +415,7 @@ class AiChatRunManager:
         append_content: str,
         status: AiChatRunStatus | None,
         error: str | None,
+        metrics: AiGenerationMetrics | None = None,
     ) -> None:
         """在独立事务中追加文本并更新状态，任务已不存在时直接返回。
 
@@ -417,6 +439,8 @@ class AiChatRunManager:
                     run.completed_at = datetime.now(UTC)
             if error is not None:
                 run.error = error
+            if metrics is not None:
+                run.generation_metrics = metrics.model_dump(mode="json")
             session.commit()
 
     def _recover_interrupted_runs_sync(self) -> list[tuple[UUID, AiChatRequest]]:
@@ -449,6 +473,7 @@ class AiChatRunManager:
                 run.sequence += 1
                 run.error = None
                 run.completed_at = None
+                run.generation_metrics = None
                 recovered.append(
                     (run.id, request.model_copy(update={"resume_from_checkpoint": True}))
                 )

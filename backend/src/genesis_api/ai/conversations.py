@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
-from genesis_api.ai.schemas import AiConversationDetail, AiConversationMessage
+from genesis_api.ai.schemas import AiConversationDetail, AiConversationMessage, AiGenerationMetrics
 
 
 def owned_conversation(session: Session, user_id: UUID, conversation_id: UUID) -> AiConversation:
@@ -43,6 +43,8 @@ def conversation_detail(session: Session, conversation: AiConversation) -> AiCon
         messages.append(AiConversationMessage(
             role="assistant", content=run.content, run_id=run.id,
             status=run.status, error=run.error,
+            metrics=AiGenerationMetrics.model_validate(run.generation_metrics)
+            if run.generation_metrics is not None else None,
         ))
     return AiConversationDetail(
         id=conversation.id, title=conversation.title, title_source=conversation.title_source,

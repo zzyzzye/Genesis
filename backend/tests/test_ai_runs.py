@@ -116,6 +116,9 @@ async def test_background_run_persists_output_without_stream_subscriber() -> Non
     assert snapshot.status is AiChatRunStatus.COMPLETED
     assert snapshot.content == "断点续传"
     assert snapshot.sequence == 2
+    assert snapshot.metrics is not None
+    assert snapshot.metrics.token_source == "estimated"
+    assert snapshot.metrics.output_tokens == 4
     await manager.shutdown()
 
 

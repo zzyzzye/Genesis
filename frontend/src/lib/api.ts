@@ -341,6 +341,16 @@ export interface AiChatRunSnapshot {
   content: string
   sequence: number
   error: string | null
+  metrics?: AiGenerationMetrics | null
+}
+
+export interface AiGenerationMetrics {
+  output_tokens: number | null
+  token_source: 'actual' | 'estimated' | 'unavailable'
+  output_seconds: number | null
+  tokens_per_second: number | null
+  first_token_seconds: number | null
+  total_seconds: number
 }
 
 export class AiChatRunTerminalError extends Error {}
@@ -354,7 +364,7 @@ export interface AiConversation {
 }
 
 export interface AiConversationDetail extends AiConversation {
-  messages: (AiChatMessage & { run_id: string; status: AiChatRunStatus; error: string | null })[]
+  messages: (AiChatMessage & { run_id: string; status: AiChatRunStatus; error: string | null; metrics?: AiGenerationMetrics | null })[]
 }
 
 export function listAiConversations(token: string, offset = 0): Promise<AiConversation[]> {
@@ -430,6 +440,7 @@ export async function streamAiChatRun(
   handlers: {
     onSnapshot: (content: string, sequence: number) => void
     onToken: (content: string, sequence: number) => void
+    onMetrics?: (metrics: AiGenerationMetrics | null) => void
   },
   signal?: AbortSignal,
 ): Promise<'completed' | 'disconnected'> {
@@ -465,8 +476,10 @@ export async function streamAiChatRun(
         content?: string
         message?: string
         sequence?: number
+        metrics?: AiGenerationMetrics | null
       }
       const sequence = payload.sequence ?? 0
+      if ('metrics' in payload) handlers.onMetrics?.(payload.metrics ?? null)
       if (payload.type === 'snapshot') handlers.onSnapshot(payload.content ?? '', sequence)
       if (payload.type === 'token' && payload.content) handlers.onToken(payload.content, sequence)
       if (payload.type === 'error') {

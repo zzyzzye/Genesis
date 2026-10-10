@@ -15,7 +15,7 @@ describe('AI 可恢复流', () => {
       'id: 4',
       'data: {"type":"token","content":"完成","sequence":4}',
       '',
-      'data: {"type":"done","sequence":4}',
+      'data: {"type":"done","sequence":4,"metrics":{"output_tokens":20,"token_source":"actual","output_seconds":2,"tokens_per_second":10,"first_token_seconds":1,"total_seconds":3}}',
       '',
     ].join('\n'), {
       status: 200,
@@ -23,13 +23,16 @@ describe('AI 可恢复流', () => {
     }))
 
     let content = ''
+    const onMetrics = vi.fn()
     const result = await streamAiChatRun('test-token', 'run-id', {
       onSnapshot: (snapshot) => { content = snapshot },
       onToken: (token) => { content += token },
+      onMetrics,
     })
 
     expect(result).toBe('completed')
     expect(content).toBe('已经生成完成')
+    expect(onMetrics).toHaveBeenCalledWith(expect.objectContaining({ token_source: 'actual', tokens_per_second: 10 }))
   })
   it('展示 FastAPI 的请求校验详情', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({

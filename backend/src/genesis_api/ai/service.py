@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.runtime import EmbeddedAgentRuntime, embedded_agent_runtime
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
@@ -30,6 +31,7 @@ class AgentService:
         """
         self.settings = settings
         self.runtime = runtime
+        self.metrics = GenerationMetrics()
 
     async def stream(
         self, request: AiChatRequest, *, thread_id: str
@@ -49,7 +51,9 @@ class AgentService:
             ValueError: 供应商、业务模块不受支持，或模型客户端配置无效。
         """
         # 服务层只传递请求和线程标识，图创建与模型协议适配统一由 runtime 负责。
-        async for text in self.runtime.stream(request, self.settings, thread_id=thread_id):
+        async for text in self.runtime.stream(
+            request, self.settings, thread_id=thread_id, metrics=self.metrics,
+        ):
             yield text
 
     async def generate_title(self, request: AiChatRequest) -> str:
