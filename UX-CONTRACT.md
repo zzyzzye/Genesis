@@ -19,6 +19,7 @@
 | 博客分类/标签选择 | TaxonomyPicker | TaxonomyPicker.tsx、blog/schemas.py | 直接展示原生按钮组；分类单选、标签多选，不使用弹出式 combobox | 直接选择、创建并选入、输入法、数量上限与窄屏 |
 | 博客分类/标签管理 | TaxonomyWorkspace、TaxonomyEditor | TaxonomyWorkspace.tsx、admin_blog.py | 搜索/新增共用输入，名称块和分类列表；原生 dialog 管理改名和删除 | 模态焦点、取消恢复、失败重试、使用中禁止删除 |
 | 博客写作 Form / CRUD | blogEditor.ts、Studio 的 Dashboard | blog/schemas.py、admin_blog.py | 草稿允许缺少正文；公开发布校验完整性，发布与更新公开内容均先检查确认 | 草稿保存、首次发布、更新发布、失败重试、版本冲突 |
+| 博客链接 Form / CRUD | LinksWorkspace、useModalDialog、BlogWorkflowDialog | blog/links.py、admin_blog.py、BlogLinks.tsx | 默认隐藏；明确勾选公开；更新与删除携带版本，复用 OwnerDependency | 增删改、筛选分页、失败重试、并发冲突、模态焦点、窄屏与公开边界 |
 | 博客流程 Dialog / Feedback | BlogWorkflowDialog、useModalDialog、写作页状态区 | Studio.tsx、writing.css | 单层原生 dialog；状态明确区分标签页暂存与站点保存 | Escape、Tab、焦点恢复、窄屏与长内容 |
 | Scrollbar | 画布编辑器样式 | CanvasNodes.css、MediaPage.css | 参数展开时节点内部滚动，保留预览；深色原生媒体控件 | 桌面与窄屏截图 |
 | Toast | 既有页内状态区域 | ProjectCanvas.tsx | 保存冲突与上传失败持续显示，错误不依赖瞬时通知 | 上传重试、保存失败与冲突测试 |
@@ -62,6 +63,14 @@
 - 本地恢复使用 sessionStorage，按用户 ID 和文章 ID 隔离，只存文章编辑数据，不存凭据；仅当前标签页可恢复，记录 7 天后不再使用，关闭标签页由浏览器清除。输入变化立即暂存；返回时由作者选择恢复或丢弃，不静默覆盖服务器版本。存储不可用时明确提示并保留内存输入。保存、删除成功清除对应记录。
 - 保存已有文章携带 `expected_updated_at`，服务端锁定文章并检查版本；冲突返回 409，保留当前输入供核对。作者可获取站点最新版本，对照后保留当前内容继续编辑，或明确采用站点版本并丢弃本地修改；核对本身不写入站点。接口字段可选以兼容既有 agent 工具，旧调用仍沿用既有策略；未宣称全系统所有写入都有版本防护。
 - 发布时间和文章权限仍以既有博客 API 为准；本轮不改变分类/标签流程和影音恢复规则。
+
+## 博客站点链接
+
+`/blog/studio/links` 管理名称、完整 HTTP(S) 地址、可选说明、0–9999 排序值和公开状态。服务端去除首尾空白，名称 1–80 字符、说明最多 240 字符、地址最多 2048 字符且不得含账号或密码。默认隐藏，仅作者能读取后台列表；公开接口只返回可见项的 ID、名称、地址、说明，数量不包含隐藏项。排序值升序，相同时按名称与 ID 排序。
+
+管理列表每页 20 项，搜索防抖 300ms，输入法组合期间不查询。`q`、`visibility`、`page` 留在 URL，筛选重置到第一页，删除后自动校正越界页；失败保留筛选并提供重试。公开页每次加载 12 项，可继续加载，失败与文章区隔离，空列表不显示空标题；外链新标签页打开并使用 noopener/noreferrer。
+
+新增与编辑使用原生 dialog，先聚焦名称，Tab 在可用控件间循环；取消后恢复触发器焦点，保存或删除成功后待列表刷新完成再聚焦搜索框。取消或 Escape 遇到未保存修改时在同一 dialog 中确认，默认聚焦「继续编辑」；继续编辑保留输入。工作台导航、浏览器返回与退出登录复用 Dashboard 的唯一 useBlocker，刷新/关闭使用 beforeunload。保存中禁用操作并防止重复提交；失败保留输入与具体错误。版本冲突时取消编辑、刷新列表后核对最新值。删除使用 BlogWorkflowDialog 说明不可恢复，先聚焦取消；失败可重试，成功移除公开展示，不影响目标网站或文章。PUT 与 DELETE 必须携带带时区的 expected_updated_at，服务端行锁和版本校验不允许覆盖过期版本。
 
 ## Agent 思考强度
 

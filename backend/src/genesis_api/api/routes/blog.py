@@ -5,12 +5,24 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from genesis_api.blog.links import BlogLinkList, BlogLinkPublic, list_links
 from genesis_api.blog.schemas import BlogPostDetail, BlogPostListResponse, BlogPostPreview
 from genesis_api.blog.service import get_published_post, list_published_posts
 from genesis_api.database.session import get_session
 
 router = APIRouter(prefix="/blog", tags=["博客"])
 SessionDependency = Annotated[Session, Depends(get_session)]
+
+
+@router.get("/links", response_model=BlogLinkList)
+def get_blog_links(
+    session: SessionDependency,
+    limit: Annotated[int, Query(ge=1, le=50)] = 12,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> BlogLinkList:
+    """分页返回作者明确设为公开的链接，隐藏项不进入计数。"""
+    items, total = list_links(session, limit=limit, offset=offset, visible=True)
+    return BlogLinkList(items=[BlogLinkPublic.model_validate(item) for item in items], total=total)
 
 
 @router.get("/posts", response_model=BlogPostListResponse)

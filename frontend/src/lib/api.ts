@@ -17,6 +17,33 @@ export interface BlogCategory {
   slug: string
 }
 
+export interface BlogLinkPublic { id: string; name: string; url: string; description: string }
+export interface BlogLinkWrite { name: string; url: string; description: string; sort_order: number; is_visible: boolean }
+export interface BlogLink extends BlogLinkPublic { sort_order: number; is_visible: boolean; updated_at: string }
+export interface BlogLinksResponse<T = BlogLink> { items: T[]; total: number }
+
+export function getPublicBlogLinks(offset = 0, signal?: AbortSignal): Promise<BlogLinksResponse<BlogLinkPublic>> {
+  return request(`/blog/links?limit=12&offset=${offset}`, { signal })
+}
+
+export function getAdminBlogLinks(token: string, query: string, page: number, visibility: string, signal?: AbortSignal): Promise<BlogLinksResponse> {
+  const params = new URLSearchParams({ limit: '20', offset: String((page - 1) * 20), q: query })
+  if (visibility !== 'all') params.set('visible', String(visibility === 'public'))
+  return request(`/admin/blog/links?${params}`, { headers: authHeaders(token), signal })
+}
+
+export function saveAdminBlogLink(token: string, data: BlogLinkWrite, previous: BlogLink | null): Promise<BlogLink> {
+  return request(`/admin/blog/links${previous ? '/' + encodeURIComponent(previous.id) : ''}`, {
+    method: previous ? 'PUT' : 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...data, ...(previous ? { expected_updated_at: previous.updated_at } : {}) }),
+  })
+}
+
+export function deleteAdminBlogLink(token: string, item: BlogLink): Promise<void> {
+  const params = new URLSearchParams({ expected_updated_at: item.updated_at })
+  return request(`/admin/blog/links/${encodeURIComponent(item.id)}?${params}`, { method: 'DELETE', headers: authHeaders(token) })
+}
+
 export interface BlogPostPreview {
   id: string
   slug: string

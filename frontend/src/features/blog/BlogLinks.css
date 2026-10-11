@@ -1,0 +1,12 @@
+.blog-public-links { margin: 4rem var(--blog-page-gutter); padding-block: 2rem; }
+.blog-public-links header > span { color: #706960; font-size: .7rem; letter-spacing: .14em; }
+.blog-public-links h2 { margin: .5rem 0; font: 1.8rem Georgia, "Noto Serif SC", serif; }
+.blog-public-links header p, .blog-public-links [role="status"], .blog-public-links [role="alert"] { color: #706960; font-size: .85rem; }
+.blog-public-links ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem 2rem; padding: 0; list-style: none; }
+.blog-public-links a { display: block; min-height: 44px; padding: .75rem 0; color: inherit; text-decoration: none; outline: 0; box-shadow: none; overflow-wrap: anywhere; }
+.blog-public-links a > span { font-size: 1rem; }
+.blog-public-links a small { display: block; margin-top: .5rem; color: #706960; line-height: 1.7; }
+.blog-public-links a:hover, .blog-public-links a:focus-visible { background: rgb(39 35 31 / 5%); }
+.blog-public-links button { min-height: 44px; padding: .5rem 1rem; border: 0; border-radius: 6px; background: rgb(39 35 31 / 5%); color: inherit; font: inherit; outline: 0; box-shadow: none; cursor: pointer; }
+.blog-public-links button:hover, .blog-public-links button:focus-visible { background: rgb(39 35 31 / 9%); }
+@media (max-width: 680px) { .blog-public-links ul { grid-template-columns: 1fr; gap: .5rem; } }

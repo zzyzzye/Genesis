@@ -67,6 +67,7 @@ async def client(database_session: Session) -> AsyncGenerator[AsyncClient, None]
     Yields:
         不监听网络端口的 HTTP 客户端；正常结束时清理应用依赖覆盖。
     """
+
     def override_get_session() -> Generator[Session, None, None]:
         """复用 fixture 会话，关闭动作由外层 fixture 负责。"""
         yield database_session
@@ -405,7 +406,16 @@ async def test_member_cannot_access_blog_management(
 
     assert login_response.status_code == 200
     assert response.status_code == 403
-    for kind in ("tags", "categories"):
+    member_headers = {"Authorization": f"Bearer {token}"}
+    assert (await client.get("/api/v1/admin/blog/links", headers=member_headers)).status_code == 403
+    assert (
+        await client.post(
+            "/api/v1/admin/blog/links",
+            headers=member_headers,
+            json={"name": "越权", "url": "https://example.com"},
+        )
+    ).status_code == 403
+    for kind in ("tags", "categories", "links"):
         path = f"/api/v1/admin/blog/{kind}/00000000-0000-0000-0000-000000000000"
         headers = {"Authorization": f"Bearer {token}"}
         assert (
@@ -643,3 +653,93 @@ def test_agent_slug_conflicts_rollback_without_changing_articles(
     )
     assert isinstance(result, dict) and result["status"] == "updated"
     assert target.excerpt == "成功更新摘要"
+
+
+@pytest.mark.anyio
+async def test_links_crud_public_boundary_and_versions(
+    client: AsyncClient, database_session: Session
+) -> None:
+    """验证隐藏默认值、公开字段、稳定排序、筛选和版本冲突。"""
+    add_blog_content(database_session)
+    token = await authenticate_owner(client, database_session)
+    headers = {"Authorization": f"Bearer {token}"}
+    base = "/api/v1/admin/blog/links"
+    assert (await client.get(base)).status_code == 401
+    first = await client.post(
+        base, headers=headers, json={"name": "  隐藏链接  ", "url": "https://example.com/private"}
+    )
+    assert first.status_code == 201
+    hidden = first.json()
+    assert hidden["name"] == "隐藏链接"
+    assert hidden["is_visible"] is False
+    assert (await client.get("/api/v1/blog/links")).json() == {"items": [], "total": 0}
+    data = {"name": "公开 % 链接", "url": "https://example.com", "is_visible": True}
+    created = await client.post(base, headers=headers, json={**data, "sort_order": 20})
+    assert created.status_code == 201
+    public = created.json()
+    path = f"{base}/{public['id']}"
+    updated = await client.put(
+        path, headers=headers, json={**data, "expected_updated_at": public["updated_at"]}
+    )
+    assert updated.status_code == 200
+    current = updated.json()
+    assert current["updated_at"] != public["updated_at"]
+    stale = {**data, "expected_updated_at": public["updated_at"]}
+    assert (await client.put(path, headers=headers, json=stale)).status_code == 409
+    assert (
+        await client.delete(
+            path, headers=headers, params={"expected_updated_at": public["updated_at"]}
+        )
+    ).status_code == 409
+    visible = (await client.get("/api/v1/blog/links")).json()
+    assert visible["total"] == 1
+    assert set(visible["items"][0]) == {"id", "name", "url", "description"}
+    assert visible["items"][0]["id"] == current["id"]
+    listing = (await client.get(base, headers=headers, params={"visible": "false"})).json()
+    assert listing["total"] == 1 and listing["items"][0]["id"] == hidden["id"]
+    assert (await client.get(base, headers=headers, params={"q": "%"})).json()["total"] == 1
+    assert (await client.get(base, headers=headers, params={"q": "_"})).json()["total"] == 0
+    second = await client.post(
+        base, headers=headers, json={**data, "name": "先显示", "sort_order": 0}
+    )
+    assert second.status_code == 201
+    all_public = (await client.get("/api/v1/blog/links")).json()
+    assert [item["name"] for item in all_public["items"]] == ["先显示", "公开 % 链接"]
+    page = (await client.get("/api/v1/blog/links", params={"limit": 1, "offset": 1})).json()
+    assert page["total"] == 2 and page["items"][0]["id"] == current["id"]
+    assert (
+        await client.delete(
+            path, headers=headers, params={"expected_updated_at": current["updated_at"]}
+        )
+    ).status_code == 204
+    assert (await client.put(path, headers=headers, json=stale)).status_code == 404
+    assert (await client.get("/api/v1/blog/links")).json()["total"] == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"url": "javascript:alert(1)"},
+        {"url": "ftp://example.com"},
+        {"url": "https://user:password@example.com"},
+        {"name": "   "},
+        {"name": "字" * 81},
+        {"description": "字" * 241},
+        {"sort_order": -1},
+        {"sort_order": 10000},
+        {"sort_order": 1.5},
+    ],
+)
+async def test_links_reject_invalid_fields(
+    client: AsyncClient, database_session: Session, changes: dict[str, object]
+) -> None:
+    """无效输入不会写入；URL 仅接受不含凭据的 HTTP(S) 地址。"""
+    add_blog_content(database_session)
+    token = await authenticate_owner(client, database_session)
+    response = await client.post(
+        "/api/v1/admin/blog/links",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"name": "测试链接", "url": "https://example.com", **changes},
+    )
+    assert response.status_code == 422

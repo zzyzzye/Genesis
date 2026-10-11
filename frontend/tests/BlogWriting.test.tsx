@@ -19,6 +19,7 @@ function setup(path: string, postList: unknown[] = []) {
     let data: unknown = []
     if (url.endsWith('/auth/me')) data = author
     if (url.endsWith('/admin/blog/posts')) data = postList
+    if (url.includes('/admin/blog/links?')) data = { items: [], total: 0 }
     if (init?.method === 'PUT' || init?.method === 'POST') {
       const payload = JSON.parse(typeof init.body === 'string' ? init.body : '{}') as Record<string, unknown>
       data = { ...savedPost, ...payload, updated_at: '2026-10-08T00:00:00Z' }
@@ -30,6 +31,21 @@ function setup(path: string, postList: unknown[] = []) {
 
 describe('可靠博客写作流程', () => {
   afterEach(() => { window.history.pushState({}, '', '/'); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks() })
+
+  it('链接未保存时拦截工作台导航，继续编辑保留内容，放弃后只显示目标页', async () => {
+    setup('/blog/studio/links')
+    fireEvent.click(await screen.findByRole('button', { name: '新增链接' }))
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: '待保存链接' } })
+    fireEvent.click(screen.getByRole('button', { name: '文章' }))
+    expect(await screen.findByRole('dialog', { name: '放弃未保存的链接？' })).toBeInTheDocument()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '继续编辑' }))
+    expect(screen.getByLabelText('名称')).toHaveValue('待保存链接')
+    fireEvent.click(screen.getByRole('button', { name: '文章' }))
+    fireEvent.click(screen.getByRole('button', { name: '放弃修改' }))
+    expect(await screen.findByRole('heading', { name: '文章管理' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
 
   it('未保存的新文章可预览、返回编辑，并在离开时确认', async () => {
     setup('/blog/studio/posts/new/edit')

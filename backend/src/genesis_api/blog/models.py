@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
 
@@ -49,6 +49,22 @@ blog_post_tags = Table(
         primary_key=True,
     ),
 )
+
+
+class BlogLink(Base):
+    """由站点作者维护的链接；默认隐藏，显式启用后才对外展示。"""
+
+    __tablename__ = "blog_links"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(80))
+    url: Mapped[str] = mapped_column(String(2048))
+    description: Mapped[str] = mapped_column(String(240), default="")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_visible: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
 
 class BlogTag(Base):

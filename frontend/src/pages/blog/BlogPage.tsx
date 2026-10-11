@@ -3,6 +3,7 @@ import './BlogPage.css'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArticleMarkdown } from '../../features/blog/ArticleMarkdown'
+import { BlogLinks } from '../../features/blog/BlogLinks'
 
 import { getBlogPost, getBlogPosts, type BlogPostDetail, type BlogPostPreview, type BlogTag } from '../../lib/api'
 
@@ -277,6 +278,7 @@ function PublicBlog() {
             </section>
           </>
         )}
+        <BlogLinks />
       </main>
 
       <footer className="blog-footer">

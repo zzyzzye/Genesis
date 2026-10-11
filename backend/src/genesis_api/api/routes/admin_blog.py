@@ -4,15 +4,26 @@
 """
 
 from datetime import UTC
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from pydantic import AwareDatetime
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from genesis_api.api.dependencies import OwnerDependency, SessionDependency
-from genesis_api.blog.models import BlogCategory, BlogPost, BlogTag
+from genesis_api.blog.links import (
+    BlogLinkAdminList,
+    BlogLinkRead,
+    BlogLinkUpdate,
+    BlogLinkWrite,
+    apply_link,
+    list_links,
+    locked_link,
+)
+from genesis_api.blog.models import BlogCategory, BlogLink, BlogPost, BlogTag
 from genesis_api.blog.schemas import (
     BlogCategoryRead,
     BlogCategoryWrite,
@@ -30,6 +41,61 @@ from genesis_api.blog.service import (
 )
 
 router = APIRouter(prefix="/admin/blog", tags=["博客管理"])
+
+
+@router.get("/links", response_model=BlogLinkAdminList)
+def get_admin_links(
+    session: SessionDependency,
+    _: OwnerDependency,
+    limit: Annotated[int, Query(ge=1, le=50)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    q: Annotated[str, Query(max_length=200)] = "",
+    visible: bool | None = None,
+) -> BlogLinkAdminList:
+    """分页读取作者链接，支持文字与可见状态筛选。"""
+    items, total = list_links(session, limit=limit, offset=offset, query=q, visible=visible)
+    return BlogLinkAdminList(
+        items=[BlogLinkRead.model_validate(item) for item in items], total=total
+    )
+
+
+@router.post("/links", response_model=BlogLinkRead, status_code=201)
+def create_admin_link(
+    data: BlogLinkWrite, session: SessionDependency, _: OwnerDependency
+) -> BlogLinkRead:
+    """创建链接；未明确勾选公开时仅作者可见。"""
+    item = BlogLink()
+    apply_link(item, data)
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return BlogLinkRead.model_validate(item)
+
+
+@router.put("/links/{link_id}", response_model=BlogLinkRead)
+def update_admin_link(
+    link_id: UUID, data: BlogLinkUpdate, session: SessionDependency, _: OwnerDependency
+) -> BlogLinkRead:
+    """校验版本后更新链接，保留稳定 ID。"""
+    item = locked_link(session, link_id, data.expected_updated_at)
+    apply_link(item, data)
+    session.commit()
+    session.refresh(item)
+    return BlogLinkRead.model_validate(item)
+
+
+@router.delete("/links/{link_id}", status_code=204)
+def delete_admin_link(
+    link_id: UUID,
+    expected_updated_at: AwareDatetime,
+    session: SessionDependency,
+    _: OwnerDependency,
+) -> Response:
+    """校验版本后删除链接；不影响文章及目标网站。"""
+    item = locked_link(session, link_id, expected_updated_at)
+    session.delete(item)
+    session.commit()
+    return Response(status_code=204)
 
 
 def save_taxonomy(session: Session, item: BlogTag | BlogCategory, name: str, slug: str) -> None:

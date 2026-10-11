@@ -57,6 +57,7 @@ import { BlogAssistant } from './features/blog/agent/BlogAssistant'
 import { StudioOverview } from './studio/StudioOverview'
 import { PostsIndex } from './studio/PostsIndex'
 import { TaxonomyWorkspace } from './studio/TaxonomyWorkspace'
+import { LinksWorkspace } from './studio/LinksWorkspace'
 import { TaxonomyPicker } from './studio/TaxonomyPicker'
 import { createTaxonomy, type ArticleTaxonomyActions, type TaxonomyKind } from './studio/taxonomy'
 import { useModalDialog } from './studio/useModalDialog'
@@ -758,6 +759,8 @@ function Dashboard({
   const [publication, setPublication] = useState<EditorState | null>(null)
   const [deleteRequested, setDeleteRequested] = useState(false)
   const [logoutRequested, setLogoutRequested] = useState(false)
+  const [linkDirty, setLinkDirty] = useState(false)
+  const [linkPending, setLinkPending] = useState(false)
   const [hasVersionConflict, setHasVersionConflict] = useState(false)
   const [comparison, setComparison] = useState<BlogPostAdmin | null>(null)
   const mutationLock = useRef(false)
@@ -771,6 +774,7 @@ function Dashboard({
   const hasUnsavedChanges = resource !== null && JSON.stringify(activeEditor) !== JSON.stringify(baseline)
   const blocker = useBlocker(({ nextLocation }) => {
     if (bypassNavigation.current) return false
+    if (activeSection === 'links' && (linkDirty || linkPending)) return nextLocation.pathname !== location.pathname
     if (mutationLock.current) return true
     if (!hasUnsavedChanges) return false
     const target = getStudioRoute(nextLocation.pathname)
@@ -794,11 +798,11 @@ function Dashboard({
   }, [resource, postId, selectedPost, user.id])
 
   useEffect(() => {
-    if (!hasUnsavedChanges) return
+    if (!hasUnsavedChanges && !linkDirty && !linkPending) return
     const warnBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
     window.addEventListener('beforeunload', warnBeforeUnload)
     return () => window.removeEventListener('beforeunload', warnBeforeUnload)
-  }, [hasUnsavedChanges])
+  }, [hasUnsavedChanges, linkDirty, linkPending])
 
   useEffect(() => {
     document.title = activeSection === 'posts' && resource !== null
@@ -965,7 +969,7 @@ function Dashboard({
 
   return (
     <div className="studio-app-shell">
-      <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={() => { if (hasUnsavedChanges) setLogoutRequested(true); else onLogout() }} user={user} />
+      <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={() => { if (hasUnsavedChanges || linkDirty || linkPending) setLogoutRequested(true); else onLogout() }} user={user} />
 
       <AnimatePresence initial={false} mode="wait">
       <StudioWorkspaceTransition key={location.pathname}>
@@ -1021,7 +1025,8 @@ function Dashboard({
             usage={Object.fromEntries((activeSection === 'categories' ? categoryOptions : tagOptions).map((item) => [item.id, managedPosts.filter((post) => activeSection === 'categories' ? post.category?.id === item.id : post.tags.some((tag) => tag.id === item.id)).length]))}
             onChanged={(saved, previous) => taxonomyChanged(activeSection, saved, previous)}
           />}
-          {activeSection !== 'overview' && activeSection !== 'posts' && activeSection !== 'categories' && activeSection !== 'tags' && <SectionPlaceholder section={activeSection} />}
+          {activeSection === 'links' && <LinksWorkspace token={token} onDirtyChange={setLinkDirty} onPendingChange={setLinkPending} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
+          {activeSection !== 'overview' && activeSection !== 'posts' && activeSection !== 'categories' && activeSection !== 'tags' && activeSection !== 'links' && <SectionPlaceholder section={activeSection} />}
         </main>
       </StudioWorkspaceTransition>
       </AnimatePresence>
@@ -1043,7 +1048,7 @@ function Dashboard({
           <button type="button" onClick={() => reconcileVersion(false)}>采用站点版本，丢弃当前修改</button>
         </div>
       </BlogWorkflowDialog>}
-      {(blocker.state === 'blocked' || logoutRequested) && <BlogWorkflowDialog title={isSaving ? '正在保存文章' : '还有未保存的内容'} description={isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel="离开写作页" busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
+      {(blocker.state === 'blocked' || logoutRequested) && !(activeSection === 'links' && (linkDirty || linkPending)) && <BlogWorkflowDialog title={activeSection === 'links' ? '离开链接管理' : isSaving ? '正在保存文章' : '还有未保存的内容'} description={activeSection === 'links' ? '链接操作已完成，可以继续离开页面。' : isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel={activeSection === 'links' ? '继续离开' : '离开写作页'} busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
       <BlogAssistant
         userId={user.id}
         onExecuted={() => {
