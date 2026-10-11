@@ -1,0 +1,39 @@
+.blog-attachments > header { align-items: flex-start; margin-bottom: 12px; }
+.blog-attachments__toolbar, .blog-attachments__tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.blog-attachments__toolbar { justify-content: flex-end; }
+.blog-attachments__toolbar button { white-space: nowrap; }
+.blog-attachments__help { margin: 0 0 24px; color: var(--studio-muted); font-size: 12px; }
+.blog-attachments__breadcrumbs, .blog-attachments__picker nav { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-bottom: 16px; }
+.blog-attachments__breadcrumbs button, .blog-attachments__picker nav button { min-width: 0; max-width: 100%; background: transparent; text-align: left; overflow-wrap: anywhere; }
+.blog-attachments__breadcrumbs button > span { margin-right: 12px; color: var(--studio-muted); }
+.blog-attachments__breadcrumbs [aria-current] { color: var(--studio-muted); }
+.blog-attachments__tools { justify-content: space-between; }
+.blog-attachments .blog-links__content > ul > li { gap: 16px; padding-block: 14px; }
+.blog-attachments__item { display: flex; align-items: flex-start; gap: 12px; flex: 1; min-width: 0; }
+.blog-attachments__item > svg { flex-shrink: 0; margin-top: 10px; color: var(--studio-muted); }
+.blog-attachments__item > div { min-width: 0; }
+.blog-attachments__item strong { display: block; padding-block: 8px; font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
+.blog-attachments__item small { display: block; color: var(--studio-muted); font-size: 12px; }
+.blog-attachments__item .blog-attachments__folder { min-width: 0; padding: 8px 0; background: transparent; text-align: left; font-weight: 550; overflow-wrap: anywhere; }
+.blog-attachments .blog-links__actions { flex-wrap: wrap; justify-content: flex-end; gap: 0; max-width: 58%; }
+.blog-attachments .blog-links__actions button { padding-inline: 8px; font-size: 12px; }
+.blog-attachments__queue { margin: 20px 0 28px; padding: 16px 0; }
+.blog-attachments__queue header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.blog-attachments__queue h3 { margin: 0; font-size: 13px; font-weight: 550; }
+.blog-attachments__queue header > div { display: flex; gap: 6px; }
+.blog-attachments__queue ul, .blog-attachments__picker ul { padding: 0; margin: 12px 0 0; list-style: none; }
+.blog-attachments__queue li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-block: 12px; }
+.blog-attachments__queue li > div:first-child { flex: 1; min-width: 0; }
+.blog-attachments__queue li > div:last-child { display: flex; flex-shrink: 0; gap: 4px; }
+.blog-attachments__queue strong, .blog-attachments__queue small, .blog-attachments__queue span { display: block; overflow-wrap: anywhere; }
+.blog-attachments__queue strong { font-weight: 500; }
+.blog-attachments__queue small, .blog-attachments__queue span { margin-top: 4px; color: var(--studio-muted); font-size: 12px; }
+.blog-attachments__queue p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.blog-attachments__queue progress { display: block; width: min(100%, 400px); height: 4px; margin-top: 12px; border: 0; accent-color: var(--studio-ink); }
+.blog-attachments__picker { min-height: 220px; }
+.blog-attachments__picker li button { display: flex; gap: 8px; align-items: center; width: 100%; min-width: 0; background: transparent; text-align: left; overflow-wrap: anywhere; }
+.blog-attachments__picker-pages { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.blog-attachments__copy { width: 100%; padding: 12px 0; border: 0; outline: 0; box-shadow: none; background: transparent; color: var(--studio-ink); font: inherit; }
+.blog-attachments__copy:focus { border: 0; outline: 0; box-shadow: none; background: transparent; }
+@media (max-width: 900px) { .blog-attachments > header { flex-direction: column; } .blog-attachments__toolbar { justify-content: flex-start; } .blog-attachments .blog-links__content > ul > li { display: block; } .blog-attachments .blog-links__actions { max-width: 100%; margin-top: 8px; } }
+@media (max-width: 480px) { .blog-attachments__tools { align-items: stretch; } .blog-attachments__tools .blog-links__search { width: 100%; } .blog-attachments__queue header { align-items: flex-start; flex-direction: column; } .blog-attachments__queue li { flex-wrap: wrap; } .blog-attachments__queue li > div:first-child { flex-basis: 100%; } .blog-attachments .blog-links__actions, .blog-attachments__queue li > div:last-child { padding-right: 52px; } }

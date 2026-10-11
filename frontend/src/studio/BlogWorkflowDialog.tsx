@@ -2,7 +2,7 @@ import { useRef, type ReactNode } from 'react'
 import { useModalDialog } from './useModalDialog'
 import './BlogWorkflowDialog.css'
 
-export function BlogWorkflowDialog({ title, description, children, confirmLabel, onConfirm, onCancel, busy = false, error }: {
+export function BlogWorkflowDialog({ title, description, children, confirmLabel, onConfirm, onCancel, busy = false, confirmDisabled = false, error }: {
   title: string
   description: string
   children?: ReactNode
@@ -10,6 +10,7 @@ export function BlogWorkflowDialog({ title, description, children, confirmLabel,
   onConfirm: () => void
   onCancel: () => void
   busy?: boolean
+  confirmDisabled?: boolean
   error?: string | null
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null)
@@ -21,7 +22,7 @@ export function BlogWorkflowDialog({ title, description, children, confirmLabel,
     {error && <p className="blog-workflow-dialog__error" role="alert">{error}</p>}
     <footer>
       <button ref={cancelRef} type="button" disabled={busy} onClick={onCancel}>取消</button>
-      <button className="blog-workflow-dialog__confirm" type="button" disabled={busy} onClick={onConfirm}>{confirmLabel}</button>
+      <button className="blog-workflow-dialog__confirm" type="button" disabled={busy || confirmDisabled} onClick={onConfirm}>{confirmLabel}</button>
     </footer>
   </dialog>
 }

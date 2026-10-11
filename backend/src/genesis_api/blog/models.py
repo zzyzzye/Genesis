@@ -7,22 +7,56 @@ from enum import StrEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     String,
     Table,
     Text,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from genesis_api.database.base import Base
 from genesis_api.identity.models import User
+
+
+class BlogAttachment(Base):
+    """附件目录为逻辑树，文件路径只使用 UUID，默认不对外公开。"""
+
+    __tablename__ = "blog_attachments"
+    __table_args__ = (
+        Index("uq_blog_attachment_child", "owner_id", "parent_id", "name", unique=True),
+        Index(
+            "uq_blog_attachment_root",
+            "owner_id",
+            "name",
+            unique=True,
+            postgresql_where=text("parent_id IS NULL"),
+            sqlite_where=text("parent_id IS NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    owner_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="RESTRICT"))
+    parent_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("blog_attachments.id", ondelete="RESTRICT"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    kind: Mapped[str] = mapped_column(String(6))
+    mime_type: Mapped[str] = mapped_column(String(255), default="application/octet-stream")
+    size: Mapped[int] = mapped_column(BigInteger, default=0)
+    sha256: Mapped[str | None] = mapped_column(String(64))
+    is_public: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class BlogPostStatus(StrEnum):

@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import delete, func, select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
+from genesis_api.core.uploads import copy_upload
 from genesis_api.media import service
 from genesis_api.media.models import MediaAsset, MediaProject, ProjectAsset
 from genesis_api.media.schemas import (
@@ -350,17 +351,10 @@ def upload_asset(
     service.STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
     # 服务端 UUID 决定文件路径，上传文件名只作为展示元数据，不参与路径拼接。
     path = service.STORAGE_ROOT / str(asset_id)
-    size = 0
+    written = False
     try:
-        with path.open("xb") as destination:
-            # 分块复制并累计实际大小，不把整个文件载入内存或只信任上传声明。
-            while chunk := file.file.read(1024 * 1024):
-                size += len(chunk)
-                if size > service.MAX_UPLOAD_BYTES:
-                    raise HTTPException(413, "单个文件不能超过 200 MiB")
-                destination.write(chunk)
-        if size == 0:
-            raise HTTPException(422, "文件不能为空")
+        size, _ = copy_upload(file, path, service.MAX_UPLOAD_BYTES)
+        written = True
         asset = MediaAsset(
             id=asset_id,
             owner_id=user.id,
@@ -379,7 +373,8 @@ def upload_asset(
     except Exception:
         # 文件写入与数据库提交不能组成原子事务，失败时回滚并清理本次文件。
         session.rollback()
-        path.unlink(missing_ok=True)
+        if written:
+            path.unlink(missing_ok=True)
         raise
 
 

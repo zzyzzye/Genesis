@@ -20,6 +20,7 @@ function setup(path: string, postList: unknown[] = []) {
     if (url.endsWith('/auth/me')) data = author
     if (url.endsWith('/admin/blog/posts')) data = postList
     if (url.includes('/admin/blog/links?')) data = { items: [], total: 0 }
+    if (url.includes('/admin/blog/attachments?')) data = { items: [], total: 0, breadcrumbs: [], max_upload_bytes: 200 * 1024 * 1024 }
     if (init?.method === 'PUT' || init?.method === 'POST') {
       const payload = JSON.parse(typeof init.body === 'string' ? init.body : '{}') as Record<string, unknown>
       data = { ...savedPost, ...payload, updated_at: '2026-10-08T00:00:00Z' }
@@ -31,6 +32,33 @@ function setup(path: string, postList: unknown[] = []) {
 
 describe('可靠博客写作流程', () => {
   afterEach(() => { window.history.pushState({}, '', '/'); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks() })
+
+  it('附件表单复用唯一导航拦截，继续编辑保留名称，放弃后只显示目标页', async () => {
+    setup('/blog/studio/attachments')
+    await screen.findByText('这个文件夹还是空的')
+    fireEvent.click(screen.getByRole('button', { name: '新建文件夹' }))
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: '未保存文件夹' } })
+    fireEvent.click(screen.getByRole('button', { name: '文章' }))
+    expect(await screen.findByRole('dialog', { name: '放弃未保存的修改？' })).toBeInTheDocument()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '继续编辑' }))
+    expect(screen.getByLabelText('名称')).toHaveValue('未保存文件夹')
+    fireEvent.click(screen.getByRole('button', { name: '文章' }))
+    fireEvent.click(screen.getByRole('button', { name: '放弃修改' }))
+    expect(await screen.findByRole('heading', { name: '文章管理' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('附件表单未保存时，切换目录查询也先确认', async () => {
+    setup('/blog/studio/attachments?folder=target-folder')
+    await screen.findByText('这个文件夹还是空的')
+    fireEvent.click(screen.getByRole('button', { name: '新建文件夹' }))
+    fireEvent.change(screen.getByLabelText('名称'), { target: { value: '保留目标位置' } })
+    fireEvent.click(screen.getByRole('button', { name: '全部附件' }))
+    expect(await screen.findByRole('dialog', { name: '放弃未保存的修改？' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '继续编辑' }))
+    expect(screen.getByLabelText('名称')).toHaveValue('保留目标位置')
+  })
 
   it('链接未保存时拦截工作台导航，继续编辑保留内容，放弃后只显示目标页', async () => {
     setup('/blog/studio/links')

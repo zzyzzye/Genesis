@@ -16,6 +16,7 @@ import { StudioOverview } from './studio/StudioOverview'
 import { PostsIndex } from './studio/PostsIndex'
 import { TaxonomyWorkspace } from './studio/TaxonomyWorkspace'
 import { LinksWorkspace } from './studio/LinksWorkspace'
+import { AttachmentsWorkspace } from './studio/AttachmentsWorkspace'
 import { CommentsWorkspace } from './studio/CommentsWorkspace'
 import { PagesWorkspace } from './studio/PagesWorkspace'
 import { usePagesWorkspace } from './studio/usePagesWorkspace'
@@ -286,6 +287,7 @@ function Dashboard({
   const [logoutRequested, setLogoutRequested] = useState(false)
   const [linkDirty, setLinkDirty] = useState(false)
   const [linkPending, setLinkPending] = useState(false)
+  const [attachmentFormDirty, setAttachmentFormDirty] = useState(false)
   const [hasVersionConflict, setHasVersionConflict] = useState(false)
   const [comparison, setComparison] = useState<BlogPostAdmin | null>(null)
   const mutationLock = useRef(false)
@@ -305,7 +307,8 @@ function Dashboard({
       return targetResource !== pages.resource
     }
     if (bypassNavigation.current) return false
-    if ((activeSection === 'links' || activeSection === 'comments') && (linkDirty || linkPending)) return nextLocation.pathname !== location.pathname
+    if (activeSection === 'attachments' && attachmentFormDirty) return nextLocation.pathname !== location.pathname || nextLocation.search !== location.search
+    if ((activeSection === 'links' || activeSection === 'comments' || activeSection === 'attachments') && (linkDirty || linkPending)) return nextLocation.pathname !== location.pathname
     if (mutationLock.current) return true
     if (!hasUnsavedChanges) return false
     const target = getStudioRoute(nextLocation.pathname)
@@ -559,9 +562,10 @@ function Dashboard({
             onChanged={(saved, previous) => taxonomyChanged(activeSection, saved, previous)}
           />}
           {activeSection === 'links' && <LinksWorkspace token={token} onDirtyChange={setLinkDirty} onPendingChange={setLinkPending} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
+          {activeSection === 'attachments' && <AttachmentsWorkspace token={token} onFormChange={setAttachmentFormDirty} onDirtyChange={setLinkDirty} onPendingChange={setLinkPending} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
           {activeSection === 'comments' && <CommentsWorkspace token={token} onPendingChange={setLinkPending} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
           {activeSection === 'pages' && <PagesWorkspace token={token} controller={pages} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
-          {activeSection !== 'overview' && activeSection !== 'posts' && activeSection !== 'categories' && activeSection !== 'tags' && activeSection !== 'links' && activeSection !== 'comments' && activeSection !== 'pages' && <SectionPlaceholder section={activeSection} />}
+          {activeSection !== 'overview' && activeSection !== 'posts' && activeSection !== 'categories' && activeSection !== 'tags' && activeSection !== 'links' && activeSection !== 'comments' && activeSection !== 'pages' && activeSection !== 'attachments' && <SectionPlaceholder section={activeSection} />}
         </main>
       </StudioWorkspaceTransition>
       </AnimatePresence>
@@ -583,7 +587,7 @@ function Dashboard({
           <button type="button" onClick={() => reconcileVersion(false)}>采用站点版本，丢弃当前修改</button>
         </div>
       </BlogWorkflowDialog>}
-      {activeSection !== 'pages' && activeSection !== 'comments' && (blocker.state === 'blocked' || logoutRequested) && !(activeSection === 'links' && (linkDirty || linkPending)) && <BlogWorkflowDialog title={activeSection === 'links' ? '离开链接管理' : isSaving ? '正在保存文章' : '还有未保存的内容'} description={activeSection === 'links' ? '链接操作已完成，可以继续离开页面。' : isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel={activeSection === 'links' ? '继续离开' : '离开写作页'} busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
+      {activeSection !== 'pages' && activeSection !== 'comments' && activeSection !== 'attachments' && (blocker.state === 'blocked' || logoutRequested) && !(activeSection === 'links' && (linkDirty || linkPending)) && <BlogWorkflowDialog title={activeSection === 'links' ? '离开链接管理' : isSaving ? '正在保存文章' : '还有未保存的内容'} description={activeSection === 'links' ? '链接操作已完成，可以继续离开页面。' : isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel={activeSection === 'links' ? '继续离开' : '离开写作页'} busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
       <BlogAssistant
         userId={user.id}
         onExecuted={() => {
