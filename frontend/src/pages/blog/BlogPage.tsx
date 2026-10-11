@@ -123,10 +123,7 @@ function PublicBlog() {
           <span aria-hidden="true">←</span> Genesis
         </Link>
         <Link className="blog-wordmark" to="/blog" onClick={closeArticle}>Genesis Journal</Link>
-        <nav className="blog-masthead-actions" aria-label="博客导航">
-          <Link className="blog-account-link" to="/blog/studio">写作台 <span aria-hidden="true">↗</span></Link>
-          <Link className="blog-account-link" to="/account" aria-label="打开账户">账户 <span aria-hidden="true">↗</span></Link>
-        </nav>
+        <Link className="blog-account-link" to="/account" aria-label="打开账户">账户 <span aria-hidden="true">↗</span></Link>
       </header>
 
       <main>
