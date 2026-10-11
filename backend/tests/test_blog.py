@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -14,7 +15,7 @@ from sqlalchemy.pool import StaticPool
 from genesis_api.api.routes.blog import router
 from genesis_api.blog.agent import actions as blog_actions
 from genesis_api.blog.agent.actions import confirm_blog_action
-from genesis_api.blog.models import BlogPost, BlogPostStatus, BlogTag
+from genesis_api.blog.models import BlogComment, BlogPost, BlogPostStatus, BlogTag
 from genesis_api.core.config import Settings
 from genesis_api.database import seed
 from genesis_api.database.base import Base
@@ -743,3 +744,161 @@ async def test_links_reject_invalid_fields(
         json={"name": "测试链接", "url": "https://example.com", **changes},
     )
     assert response.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_comment_submission_moderation_and_public_boundary(
+    client: AsyncClient, database_session: Session
+) -> None:
+    """读者提交先待审核；只有作者可审核，公开数据不暴露账号或审核元数据。"""
+    add_blog_content(database_session)
+    owner_token = await authenticate_owner(client, database_session)
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    registered = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "handle": "comment-reader",
+            "display_name": "评论读者",
+            "password": "test-comment-password",
+        },
+    )
+    assert registered.status_code == 201
+    logged_in = await client.post(
+        "/api/v1/auth/login",
+        data={"username": "comment-reader", "password": "test-comment-password"},
+    )
+    assert logged_in.status_code == 200
+    reader_headers = {"Authorization": f"Bearer {logged_in.json()['access_token']}"}
+    url = "/api/v1/blog/posts/published-featured/comments"
+    data = {"content": "  纯文本 <script>自检</script> %  ", "submission_id": str(uuid4())}
+    assert (await client.post(url, json=data)).status_code == 401
+    first = await client.post(url, headers=reader_headers, json=data)
+    assert first.status_code == 201 and first.json()["state"] == "pending"
+    receipt = first.json()
+    assert set(receipt) == {"id", "state"}
+    assert (await client.post(url, headers=reader_headers, json=data)).json() == receipt
+    assert len(list(database_session.scalars(select(BlogComment)))) == 1
+    assert (await client.get(url)).json() == {"items": [], "total": 0}
+    assert (
+        await client.post(
+            url,
+            headers=reader_headers,
+            json={
+                **data,
+                "content": "修改后复用标识",
+            },
+        )
+    ).status_code == 409
+    for content in ("   ", "字" * 2001):
+        assert (
+            await client.post(
+                url,
+                headers=reader_headers,
+                json={
+                    "content": content,
+                    "submission_id": str(uuid4()),
+                },
+            )
+        ).status_code == 422
+    assert (
+        await client.post(
+            url,
+            headers=reader_headers,
+            json={
+                **data,
+                "state": "public",
+            },
+        )
+    ).status_code == 422
+    base = "/api/v1/admin/blog/comments"
+    assert (await client.get(base, headers=reader_headers)).status_code == 403
+    row = (await client.get(base, headers=owner_headers, params={"q": "%"})).json()["items"][0]
+    path = f"{base}/{row['id']}"
+    mutation = {"state": "public", "expected_updated_at": row["updated_at"]}
+    assert (await client.put(path, headers=reader_headers, json=mutation)).status_code == 403
+    assert (
+        await client.delete(
+            path,
+            headers=reader_headers,
+            params={
+                "expected_updated_at": row["updated_at"],
+            },
+        )
+    ).status_code == 403
+    approved = await client.put(path, headers=owner_headers, json=mutation)
+    assert approved.status_code == 200
+    public = (await client.get(url)).json()
+    assert public["total"] == 1
+    assert set(public["items"][0]) == {"id", "content", "author_name", "created_at"}
+    assert public["items"][0]["content"] == data["content"].strip()
+    assert (await client.put(path, headers=owner_headers, json=mutation)).status_code == 409
+    assert (
+        await client.delete(
+            path,
+            headers=owner_headers,
+            params={
+                "expected_updated_at": row["updated_at"],
+            },
+        )
+    ).status_code == 409
+    hidden = await client.put(
+        path,
+        headers=owner_headers,
+        json={
+            "state": "hidden",
+            "expected_updated_at": approved.json()["updated_at"],
+        },
+    )
+    assert hidden.status_code == 200
+    assert (await client.get(url)).json()["total"] == 0
+    listing = (
+        await client.get(
+            base,
+            headers=owner_headers,
+            params={
+                "state": "hidden",
+                "limit": 1,
+                "offset": 1,
+            },
+        )
+    ).json()
+    assert listing == {"items": [], "total": 1}
+    assert (
+        await client.delete(
+            path,
+            headers=owner_headers,
+            params={
+                "expected_updated_at": hidden.json()["updated_at"],
+            },
+        )
+    ).status_code == 204
+    assert (await client.put(path, headers=owner_headers, json=mutation)).status_code == 404
+    assert (await client.get(url)).json()["total"] == 0
+
+
+@pytest.mark.anyio
+async def test_comment_drafts_rate_limits_and_unpublishing(
+    client: AsyncClient, database_session: Session
+) -> None:
+    """草稿不可读写评论，限频不影响幂等重试，文章撤回后评论也不可读取。"""
+    add_blog_content(database_session)
+    token = await authenticate_owner(client, database_session)
+    headers = {"Authorization": f"Bearer {token}"}
+    draft = database_session.scalar(select(BlogPost).where(BlogPost.status == BlogPostStatus.DRAFT))
+    assert draft is not None
+    draft_url = f"/api/v1/blog/posts/{draft.slug}/comments"
+    data = {"content": "测试评论", "submission_id": str(uuid4())}
+    assert (await client.get(draft_url)).status_code == 404
+    assert (await client.post(draft_url, headers=headers, json=data)).status_code == 404
+    url = "/api/v1/blog/posts/published-featured/comments"
+    for _ in range(5):
+        data = {"content": "测试评论", "submission_id": str(uuid4())}
+        assert (await client.post(url, headers=headers, json=data)).status_code == 201
+    assert (await client.post(url, headers=headers, json=data)).status_code == 201
+    limited = await client.post(url, headers=headers, json={**data, "submission_id": str(uuid4())})
+    assert limited.status_code == 429 and limited.headers["Retry-After"] == "60"
+    post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "published-featured"))
+    assert post is not None
+    post.status = BlogPostStatus.DRAFT
+    database_session.commit()
+    assert (await client.get(url)).status_code == 404

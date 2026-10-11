@@ -229,7 +229,7 @@ export function Account() {
       .then((user) => {
         if (user.role === 'owner') storeAuthToken(token, studioAuthTokenKey)
         setState({ status: 'ready', user, feedback: null })
-        if (returnTo && /^\/media(?:\/|$)/.test(returnTo)) void navigate(returnTo, { replace: true })
+        if (returnTo && (/^\/media(?:\/|$)/.test(returnTo) || /^\/articles\/[a-z0-9-]+(?:#comments)?$/.test(returnTo))) void navigate(returnTo, { replace: true })
       })
       .catch(() => {
         clearStoredAuthToken()

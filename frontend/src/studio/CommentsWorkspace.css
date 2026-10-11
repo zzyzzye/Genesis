@@ -1,0 +1,10 @@
+.blog-comments-workspace .blog-links__filters { flex-wrap: wrap; }
+.blog-comments-workspace .blog-links__content li { display: block; padding: 20px 0; }
+.blog-comment__meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; }
+.blog-comment__meta strong { font-weight: 550; }
+.blog-comment__meta time, .blog-comment__meta > span { color: var(--studio-muted); font-size: 12px; }
+.blog-comment__body { margin: 12px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+.blog-comment__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.blog-comment__footer > a { padding: 8px 0; color: var(--studio-text); text-decoration: none; outline: 0; box-shadow: none; overflow-wrap: anywhere; }
+.blog-comment__footer > a:hover, .blog-comment__footer > a:focus-visible { background: var(--studio-hover); }
+.blog-workflow-dialog blockquote { margin: 16px 0; max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }

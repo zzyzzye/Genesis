@@ -63,7 +63,7 @@ export function StudioNavigation({
               <button className={activeSection === item.id ? 'studio-nav-item is-active' : 'studio-nav-item'} aria-current={activeSection === item.id ? 'page' : undefined} key={item.id} type="button" onClick={() => onChange(item.id)}>
                 <StudioIcon name={item.icon} />
                 <span>{item.label}</span>
-                {!['posts', 'categories', 'tags', 'links'].includes(item.id) && <em>筹备</em>}
+                {!['posts', 'categories', 'tags', 'links', 'comments'].includes(item.id) && <em>筹备</em>}
               </button>
             ))}
           </div>

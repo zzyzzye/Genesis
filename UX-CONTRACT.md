@@ -20,6 +20,7 @@
 | 博客分类/标签管理 | TaxonomyWorkspace、TaxonomyEditor | TaxonomyWorkspace.tsx、admin_blog.py | 搜索/新增共用输入，名称块和分类列表；原生 dialog 管理改名和删除 | 模态焦点、取消恢复、失败重试、使用中禁止删除 |
 | 博客写作 Form / CRUD | blogEditor.ts、Studio 的 Dashboard | blog/schemas.py、admin_blog.py | 草稿允许缺少正文；公开发布校验完整性，发布与更新公开内容均先检查确认 | 草稿保存、首次发布、更新发布、失败重试、版本冲突 |
 | 博客链接 Form / CRUD | LinksWorkspace、useModalDialog、BlogWorkflowDialog | blog/links.py、admin_blog.py、BlogLinks.tsx | 默认隐藏；明确勾选公开；更新与删除携带版本，复用 OwnerDependency | 增删改、筛选分页、失败重试、并发冲突、模态焦点、窄屏与公开边界 |
+| 博客评论 Form / CRUD | ArticleComments、CommentsWorkspace、BlogWorkflowDialog | blog/comments.py、api/routes/blog_comments.py | 登录提交待审核，作者公开/隐藏/删除；公开查询同时校验文章状态；审核与删除校验版本 | 提交重试、频率限制、权限、过滤分页、并发冲突、离开提醒、模态焦点与窄屏 |
 | 博客流程 Dialog / Feedback | BlogWorkflowDialog、useModalDialog、写作页状态区 | Studio.tsx、writing.css | 单层原生 dialog；状态明确区分标签页暂存与站点保存 | Escape、Tab、焦点恢复、窄屏与长内容 |
 | Scrollbar | 画布编辑器样式 | CanvasNodes.css、MediaPage.css | 参数展开时节点内部滚动，保留预览；深色原生媒体控件 | 桌面与窄屏截图 |
 | Toast | 既有页内状态区域 | ProjectCanvas.tsx | 保存冲突与上传失败持续显示，错误不依赖瞬时通知 | 上传重试、保存失败与冲突测试 |
@@ -72,6 +73,14 @@
 
 新增与编辑使用原生 dialog，先聚焦名称，Tab 在可用控件间循环；取消后恢复触发器焦点，保存或删除成功后待列表刷新完成再聚焦搜索框。取消或 Escape 遇到未保存修改时在同一 dialog 中确认，默认聚焦「继续编辑」；继续编辑保留输入。工作台导航、浏览器返回与退出登录复用 Dashboard 的唯一 useBlocker，刷新/关闭使用 beforeunload。保存中禁用操作并防止重复提交；失败保留输入与具体错误。版本冲突时取消编辑、刷新列表后核对最新值。删除使用 BlogWorkflowDialog 说明不可恢复，先聚焦取消；失败可重试，成功移除公开展示，不影响目标网站或文章。PUT 与 DELETE 必须携带带时区的 expected_updated_at，服务端行锁和版本校验不允许覆盖过期版本。
 
+## 博客文章讨论与审核
+
+文章下方展示公开评论与登录入口；登录后仅允许对已发布文章提交 1–2000 字纯文本，去除首尾空白。所有新评论默认待审核，客户端不能指定身份或审核状态；公开列表与数量只包含已发布文章的公开评论，公开字段只有评论 ID、昵称、正文与时间。撤回文章发布后，其评论不再公开展示，作者后台仍可审核。
+
+表单明确说明审核流程与公开字段，错误在输入处显示并保留内容。同步锁防止重复点击，同一内容的网络重试沿用提交 UUID，服务端串行检查并返回已有回执；每位读者每分钟最多新增五条，重复回执不占新增额度。输入仅保留在当前页面内存，离开前通过共享原生 dialog 确认，默认取消，刷新/关闭使用 beforeunload；提交中等待结果再离开。登录过期时用新标签页重新登录以保留原页输入，回到原页后同步登录态。账户 returnTo 仅额外接受内部文章路径及 #comments，文章加载完成后定位讨论区，不接受外部地址。
+
+`/blog/studio/comments` 仅作者可访问评论数据与审核操作，支持正文、昵称、文章标题搜索及待审核/公开/隐藏筛选。每页 20 条，搜索防抖 300ms，输入法组合期间不查询，q/state/page 保存在 URL；公开页每次加载 20 条并可继续加载。空态、无结果、读取失败与提交失败分别提示，不影响文章阅读。公开、隐藏和永久删除均先确认，默认聚焦取消；失败保留确认与错误，成功刷新后焦点回到搜索框。PUT/DELETE 必须携带带时区的 expected_updated_at，行锁与版本校验阻止过期修改；冲突时关闭确认、刷新列表后核对。审核只改状态，不改写正文或身份；删除评论不删除文章或账户。
+
 ## Agent 思考强度
 
 博客与影音复用 `AgentModelPicker`、`ReasoningEffortControl` 和 `useReasoningEffort`。供应商切换清空搜索，搜索按展示名与 ID 过滤，Enter 不提交对话。选择模型后菜单保持展开，可继续选择思考模式或强度；点击外部或 Escape 才关闭，Escape 恢复触发器焦点。加载、无模型和无结果分别显示状态。思考强度使用原生 select，提供默认与模型实际支持的档位，由浏览器管理展开和键盘选择；默认选项清除显式强度。无档位时只显示默认说明，加载或生成期间禁用调节。每个模型独立记忆，能力失效的档位不发送；调整设置不发起模型请求。 思考模式与强度独立展示：MiMo 提供默认、开启、关闭；强度仍仅依据框架档位。每个模型独立记忆开关，未知能力不发送开关；生成或加载期间禁用。MiMo 不展示虚构强度档位。
@@ -79,3 +88,5 @@
 ## 验证边界
 
 工程检查通过并不代表全站设计审计通过。既有账户、博客和工作台的审计问题应独立修复；静态工具不理解 CSS 提供的 textarea resize 规则与 pointer/keyboard resize 按钮时，以运行时代码和浏览器证据复核。
+
+2026-10-11 评论流程验收覆盖 1440×900 与 390×844：待审核提交、公开/隐藏/删除、访客登录入口、空态与无结果、提交失败保留输入、提交期间阻止离开、Escape 取消与 Tab 模态焦点、锚点定位及输入聚焦样式。临时评论已清理。严格静态审计从 19 项变为 20 项，新增项为 ArticleComments 的 textarea resize 检测；其规则位于同名 CSS，浏览器计算值为 resize:none、边框 0、outline:none、box-shadow:none，作为误报复核，未宣称全站审计通过。DESIGN 检查无错误，保留七项既有警告。

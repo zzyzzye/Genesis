@@ -1,4 +1,8 @@
 .blog-page {
+  --blog-paper: #f7f3ea;
+  --blog-ink: #27231f;
+  --blog-muted: #706960;
+  --blog-hover: rgb(39 35 31 / 5%);
   --blog-page-gutter: clamp(1rem, 4vw, 4rem);
   min-height: 100vh;
   overflow: hidden;

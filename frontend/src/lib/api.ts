@@ -17,6 +17,28 @@ export interface BlogCategory {
   slug: string
 }
 
+export type BlogCommentState = 'pending' | 'public' | 'hidden'
+export interface BlogComment { id: string; content: string; author_name: string; created_at: string }
+export interface BlogCommentAdmin extends BlogComment { post_title: string; post_slug: string; post_status: 'draft' | 'published'; state: BlogCommentState; updated_at: string }
+export interface BlogCommentsPage<T = BlogComment> { items: T[]; total: number }
+export function getBlogComments(slug: string, offset: number, signal?: AbortSignal): Promise<BlogCommentsPage> {
+  return request(`/blog/posts/${encodeURIComponent(slug)}/comments?limit=20&offset=${offset}`, { signal })
+}
+export function submitBlogComment(slug: string, token: string, content: string, submissionId: string): Promise<{ id: string; state: BlogCommentState }> {
+  return request(`/blog/posts/${encodeURIComponent(slug)}/comments`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ content, submission_id: submissionId }) })
+}
+export function getAdminBlogComments(token: string, query: string, state: string, page: number, signal?: AbortSignal): Promise<BlogCommentsPage<BlogCommentAdmin>> {
+  const params = new URLSearchParams({ q: query, limit: '20', offset: String((page - 1) * 20) })
+  if (state !== 'all') params.set('state', state)
+  return request(`/admin/blog/comments?${params}`, { headers: authHeaders(token), signal })
+}
+export function moderateBlogComment(token: string, item: BlogCommentAdmin, state: BlogCommentState | 'delete'): Promise<BlogCommentAdmin | void> {
+  const url = `/admin/blog/comments/${encodeURIComponent(item.id)}`
+  return state === 'delete'
+    ? request(url + '?' + new URLSearchParams({ expected_updated_at: item.updated_at }).toString(), { method: 'DELETE', headers: authHeaders(token) })
+    : request(url, { method: 'PUT', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ state, expected_updated_at: item.updated_at }) })
+}
+
 export interface BlogLinkPublic { id: string; name: string; url: string; description: string }
 export interface BlogLinkWrite { name: string; url: string; description: string; sort_order: number; is_visible: boolean }
 export interface BlogLink extends BlogLinkPublic { sort_order: number; is_visible: boolean; updated_at: string }

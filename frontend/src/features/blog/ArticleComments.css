@@ -1,0 +1,17 @@
+.article-comments { --studio-paper: var(--blog-paper); --studio-ink: var(--blog-ink); --studio-soft: var(--blog-hover); --studio-editor-hover: var(--blog-hover); --studio-accent: var(--blog-muted); --studio-ui: Inter, "PingFang SC", sans-serif; margin-top: 4rem; color: var(--blog-ink); }
+.article-comments header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.article-comments h2 { font: 1.6rem Georgia, "Noto Serif SC", serif; }
+.article-comments h2 span { margin-left: 8px; font: .8rem sans-serif; color: #706960; }
+.article-comments button, .article-comments a { display: inline-block; min-height: 40px; box-sizing: border-box; padding: 8px 12px; border: 0; border-radius: 6px; outline: 0; box-shadow: none; background: rgb(39 35 31 / 5%); color: inherit; font: inherit; font-size: .85rem; text-decoration: none; cursor: pointer; }
+.article-comments button:hover:not(:disabled), .article-comments button:focus-visible, .article-comments a:hover, .article-comments a:focus-visible { background: rgb(39 35 31 / 9%); }
+.article-comments button:disabled { opacity: .5; cursor: not-allowed; }
+.article-comments__list { min-height: 100px; }
+.article-comments ol { padding: 0; list-style: none; }
+.article-comments li { padding: 20px 0; }
+.article-comments li > div { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; }
+.article-comments time, .article-comments form p { color: #706960; font-size: .8rem; line-height: 1.8; }
+.article-comments li p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+.article-comments label { display: block; margin: 20px 0 8px; }
+.article-comments textarea, .article-comments textarea:focus { display: block; box-sizing: border-box; width: 100%; min-height: 140px; padding: 12px 0; border: 0; outline: 0; box-shadow: none; background: transparent; color: inherit; font: inherit; line-height: 1.8; resize: none; }
+.article-comments #comment-error, .article-comments form [role="status"] { min-height: 24px; }
+.article-comments form button[type="submit"] { min-width: 100px; }

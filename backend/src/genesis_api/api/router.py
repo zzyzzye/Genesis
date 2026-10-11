@@ -7,6 +7,7 @@ from genesis_api.api.routes import (
     ai,
     auth,
     blog,
+    blog_comments,
     health,
     llm,
     media,
@@ -19,6 +20,8 @@ api_router = APIRouter()
 api_router.include_router(health.router, tags=["platform"])
 api_router.include_router(auth.router)
 api_router.include_router(blog.router)
+api_router.include_router(blog_comments.public_router)
+api_router.include_router(blog_comments.admin_router)
 api_router.include_router(admin_blog.router)
 api_router.include_router(llm.router)
 api_router.include_router(ai.router)

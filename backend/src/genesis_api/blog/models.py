@@ -32,6 +32,39 @@ class BlogPostStatus(StrEnum):
     PUBLISHED = "published"
 
 
+class BlogCommentState(StrEnum):
+    """评论先待审核，只有作者公开且文章已发布时才展示。"""
+
+    PENDING = "pending"
+    PUBLIC = "public"
+    HIDDEN = "hidden"
+
+
+class BlogComment(Base):
+    """登录读者提交的纯文本评论，提交标识防止网络重试重复写入。"""
+
+    __tablename__ = "blog_comments"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    submission_id: Mapped[UUID] = mapped_column(Uuid, unique=True)
+    post_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("blog_posts.id", ondelete="CASCADE"), index=True
+    )
+    author_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT"), index=True
+    )
+    content: Mapped[str] = mapped_column(String(2000))
+    state: Mapped[BlogCommentState] = mapped_column(
+        Enum(BlogCommentState, native_enum=False, values_callable=lambda e: [v.value for v in e]),
+        default=BlogCommentState.PENDING,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    author: Mapped[User] = relationship()
+    post: Mapped[BlogPost] = relationship()
+
+
 # 联合主键避免同一文章重复关联标签；删除任一端只级联清理关联记录。
 blog_post_tags = Table(
     "blog_post_tags",

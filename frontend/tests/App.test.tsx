@@ -81,7 +81,7 @@ describe('App', () => {
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('owner-token')
   })
 
-  it('展示博客文章并可打开详情', async () => {
+  it.each(['/blog', '/articles/start-with-one-module#comments'])('从 %s 展示博客文章，保留评论区锚点', async (path) => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url =
         typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
@@ -104,21 +104,47 @@ describe('App', () => {
           ),
         )
       }
+      if (url.includes('/blog/posts/start-with-one-module/comments?')) {
+        return Promise.resolve(new Response(JSON.stringify({ items: [], total: 0 }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      }
       return Promise.resolve(new Response(null, { status: 404 }))
     })
 
-    window.history.pushState({}, '', '/blog')
+    window.history.pushState({}, '', path)
     render(<App />)
 
-    expect(await screen.findByRole('heading', { name: '最近的文章' })).toBeInTheDocument()
-    expect(screen.getByText('2 篇记录')).toBeInTheDocument()
-    expect(screen.getByText('把个人网站当作长期使用的空间')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByLabelText('阅读 从一个完整模块开始'))
+    if (path === '/blog') {
+      expect(await screen.findByRole('heading', { name: '最近的文章' })).toBeInTheDocument()
+      expect(screen.getByText('2 篇记录')).toBeInTheDocument()
+      expect(screen.getByText('把个人网站当作长期使用的空间')).toBeInTheDocument()
+      fireEvent.click(screen.getByLabelText('阅读 从一个完整模块开始'))
+    }
 
     expect(await screen.findByText('一件事', { selector: 'strong' })).toBeInTheDocument()
     expect(screen.getByRole('list')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '返回文章列表' })).toBeInTheDocument()
+    expect(document.title).toBe('从一个完整模块开始 · Genesis')
+    if (path.endsWith('#comments')) {
+      expect(await screen.findByText('还没有公开评论，欢迎留下你的想法。')).toBeInTheDocument()
+      expect(window.location.hash).toBe('#comments')
+    }
+  })
+
+  it('账户登录态恢复后返回评论区', async () => {
+    window.localStorage.setItem('genesis-account-token', 'test-placeholder')
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const body = url.endsWith('/auth/me') ? { id: 'reader-1', handle: 'reader', display_name: '测试读者', bio: '', avatar_url: null, role: 'member' }
+        : url.endsWith('/blog/posts') ? posts
+        : url.endsWith('/blog/posts/start-with-one-module') ? { ...posts.items[0], content_markdown: '文章正文' }
+        : { items: [], total: 0 }
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    })
+    window.history.pushState({}, '', '/account?returnTo=%2Farticles%2Fstart-with-one-module%23comments')
+    render(<App />)
+    expect(await screen.findByRole('textbox', { name: '写下评论' })).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/articles/start-with-one-module')
+    expect(window.location.hash).toBe('#comments')
   })
 
   it.each([

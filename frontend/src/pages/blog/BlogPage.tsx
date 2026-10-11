@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArticleMarkdown } from '../../features/blog/ArticleMarkdown'
 import { BlogLinks } from '../../features/blog/BlogLinks'
+import { ArticleComments } from '../../features/blog/ArticleComments'
 
 import { getBlogPost, getBlogPosts, type BlogPostDetail, type BlogPostPreview, type BlogTag } from '../../lib/api'
 
@@ -48,6 +49,10 @@ function PublicBlog() {
   const articleRequest = useRef<AbortController | null>(null)
 
   useEffect(() => {
+    document.title = articleState.status === 'ready' ? `${articleState.post.title} · Genesis` : '博客 · Genesis'
+  }, [articleState])
+
+  useEffect(() => {
     const controller = new AbortController()
 
     void getBlogPosts(controller.signal)
@@ -79,7 +84,7 @@ function PublicBlog() {
   const regularPosts = visiblePosts.filter((post) => post.slug !== featuredPost?.slug)
 
   function openArticle(slug: string) {
-    void navigate(`/articles/${slug}`)
+    if (location.pathname !== `/articles/${slug}`) void navigate(`/articles/${slug}`)
     articleRequest.current?.abort()
     const controller = new AbortController()
     articleRequest.current = controller
@@ -101,7 +106,6 @@ function PublicBlog() {
   function closeArticle() {
     articleRequest.current?.abort()
     void navigate('/blog')
-    setArticleState({ status: 'idle' })
   }
 
   function retryPosts() {
@@ -110,8 +114,10 @@ function PublicBlog() {
   }
 
   useEffect(() => {
-    if (location.pathname.startsWith('/articles/') && slug !== undefined && articleState.status === 'idle') {
+    if (location.pathname.startsWith('/articles/') && slug !== undefined && (articleState.status === 'idle' || (articleState.status === 'ready' && articleState.post.slug !== slug))) {
       queueMicrotask(() => openArticle(slug))
+    } else if (!location.pathname.startsWith('/articles/') && articleState.status !== 'idle') {
+      queueMicrotask(() => setArticleState({ status: 'idle' }))
     }
     // URL 参数变化时同步打开对应文章。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,6 +150,7 @@ function PublicBlog() {
               </div>
             </div>
             <MarkdownContent content={articleState.post.content_markdown} />
+            <ArticleComments key={articleState.post.slug} slug={articleState.post.slug} />
 
           </article>
         ) : (
