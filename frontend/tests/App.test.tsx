@@ -255,7 +255,9 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /^文章$/ }))
 
     expect(window.location.pathname).toBe('/blog/studio/posts')
-    expect(screen.getByRole('heading', { name: '文章管理' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '仪表盘' }).closest('.studio-workspace')).toHaveAttribute('inert')
+    expect(await screen.findByRole('heading', { name: '文章管理' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '仪表盘' })).not.toBeInTheDocument()
     expect(screen.queryByText('一级')).not.toBeInTheDocument()
     expect(screen.queryByText('二级')).not.toBeInTheDocument()
     expect(screen.queryByText('三级')).not.toBeInTheDocument()

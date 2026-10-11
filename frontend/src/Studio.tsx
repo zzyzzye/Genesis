@@ -1,6 +1,6 @@
-import { type FormEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate } from 'react-router-dom'
-import { motion, useAnimationControls, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion, useAnimationControls, useIsPresent, useReducedMotion } from 'motion/react'
 import { pageTransition } from './lib/motion'
 import { ArticleMarkdown } from './features/blog/ArticleMarkdown'
 import { EditorView } from '@codemirror/view'
@@ -708,6 +708,31 @@ function getStudioRoute(pathname: string): {
   return { activeSection, postId, postView, isEditorOpen }
 }
 
+function StudioWorkspaceTransition({ pathname, children }: { pathname: string; children: ReactNode }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const animation = useAnimationControls()
+  const isPresent = useIsPresent()
+  const reducedMotion = useReducedMotion()
+
+  useLayoutEffect(() => {
+    // 退出中的分区保留原内容完成淡出，不再重播入场或接受操作。
+    if (!isPresent) return
+    animation.stop()
+    animation.set({ opacity: reducedMotion ? 1 : 0 })
+    if (!reducedMotion) void animation.start('enter')
+
+    const content = containerRef.current?.querySelector<HTMLElement>('.studio-content')
+    if (content) content.scrollTop = 0
+    const editorWorkspace = containerRef.current?.querySelector<HTMLElement>('.markdown-editor__workspace--mdx')
+    if (editorWorkspace) editorWorkspace.scrollTop = 0
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0
+  }, [pathname, reducedMotion, animation, isPresent])
+
+  return <motion.div ref={containerRef} className="studio-workspace" inert={!isPresent} initial={false} animate={animation} exit={reducedMotion ? undefined : 'exit'} variants={pageTransition}>
+    {children}
+  </motion.div>
+}
+
 function Dashboard({
   posts,
   tags,
@@ -725,9 +750,6 @@ function Dashboard({
 }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const contentRef = useRef<HTMLElement>(null)
-  const workspaceAnimation = useAnimationControls()
-  const reducedMotion = useReducedMotion()
   const { activeSection, postId, postView, isEditorOpen } = getStudioRoute(location.pathname)
   const [editor, setEditor] = useState<EditorState>(() => createEmptyEditor())
   const [managedPosts, setManagedPosts] = useState(posts)
@@ -795,20 +817,6 @@ function Dashboard({
     setLocalDraftSaved(writeBlogDraft(user.id, next))
     setFeedback(null)
   }
-
-  useLayoutEffect(() => {
-    // 只重播透明度过渡，保留编辑器实例、输入与未保存状态。
-    workspaceAnimation.stop()
-    workspaceAnimation.set({ opacity: reducedMotion ? 1 : 0 })
-    if (!reducedMotion) void workspaceAnimation.start('enter')
-  }, [location.pathname, reducedMotion, workspaceAnimation])
-
-  useLayoutEffect(() => {
-    if (contentRef.current) contentRef.current.scrollTop = 0
-    if (document.scrollingElement) document.scrollingElement.scrollTop = 0
-    const editorWorkspace = document.querySelector<HTMLElement>('.markdown-editor__workspace--mdx')
-    if (editorWorkspace) editorWorkspace.scrollTop = 0
-  }, [location.pathname])
 
   function selectSection(section: StudioSection) {
     void navigate(section === 'overview' ? studioBasePath : `${studioBasePath}/${section}`)
@@ -964,7 +972,8 @@ function Dashboard({
     <div className="studio-app-shell">
       <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={() => { if (hasUnsavedChanges) setLogoutRequested(true); else onLogout() }} user={user} />
 
-      <motion.div className="studio-workspace" initial={false} animate={workspaceAnimation} variants={pageTransition}>
+      <AnimatePresence initial={false} mode="wait">
+      <StudioWorkspaceTransition key={activeSection} pathname={location.pathname}>
         {!isEditorOpen && (
           <header className="studio-topbar">
             <div className="studio-topbar__title">
@@ -977,7 +986,7 @@ function Dashboard({
           </header>
         )}
 
-        <main ref={contentRef} className={activeSection === 'posts' ? 'studio-content studio-content--editor' : 'studio-content'}>
+        <main className={activeSection === 'posts' ? 'studio-content studio-content--editor' : 'studio-content'}>
           {activeSection === 'overview' && (
             <StudioOverview posts={managedPosts} onChange={selectSection} onCreatePost={createPost} onOpenPost={openPost} />
           )}
@@ -1019,7 +1028,8 @@ function Dashboard({
           />}
           {activeSection !== 'overview' && activeSection !== 'posts' && activeSection !== 'categories' && activeSection !== 'tags' && <SectionPlaceholder section={activeSection} />}
         </main>
-      </motion.div>
+      </StudioWorkspaceTransition>
+      </AnimatePresence>
       {publication && <BlogWorkflowDialog title={publication.status === 'published' ? '更新已发布文章' : '发布前检查'} description={publication.status === 'published' ? '确认后，站点上的文章将更新为当前内容。' : '确认后，这篇文章将公开显示在博客中。'} confirmLabel={publication.status === 'published' ? '确认更新发布' : '确认发布'} busy={isSaving} error={feedback} onCancel={() => setPublication(null)} onConfirm={() => { void savePost('published', publication).then((saved) => { if (saved) setPublication(null) }) }}>
         <dl>
           <div><dt>标题</dt><dd>{publication.title}</dd></div>
