@@ -114,7 +114,7 @@ Genesis 的创作画布像一张深色剪辑台：内容浮在安静的底面上
 
 ### Motion
 
-全局使用 `motion` 作为唯一的组件动效入口。系统之间切换（首页、博客、工具、影音、工作台、账户）只做 200ms 的淡入和 140ms 的淡出，不使用位移或缩放，以免画布、固定层和表单产生布局错觉。博客 Studio 的侧栏分区、文章列表、编辑与预览切换统一按 pathname 使用 `AnimatePresence` 的等待模式：保留旧视图完成 140ms 淡出，再挂载新视图并做 200ms 淡入，复用 `frontend/src/lib/motion.ts`；退出中的内容设为 inert，避免旧页面继续接受操作。侧栏与助手保持稳定；文章数据、未保存草稿和保存基线由外层 Dashboard 持有，视图重建不丢失输入。旧页面保持原滚动位置退场，新视图挂载后才复位滚动；查询参数变化不重播动效。其余同一系统内部导航保持即时。局部 CSS transition 只服务已有的悬停和按下反馈。交互不使用装饰性弹跳或持续动画；选中节点的低频耀斑是唯一例外，用于表达当前操作对象而非装饰。`MotionConfig` 遵从系统“减少动态效果”，同时全局 CSS 关闭平滑滚动和局部过渡；Studio 的减少动态效果模式直接呈现内容。
+全局使用 `motion` 作为唯一的组件动效入口。系统之间切换（首页、博客、工具、影音、工作台、账户）使用 200ms 淡入和 140ms 淡出。博客 Studio 按用户要求使用完整退场与入场：侧栏分区、文章和独立页面的列表、编辑、预览统一按 pathname 使用 `AnimatePresence` 等待模式，旧视图在 180ms 内向上移动 10px 并淡出，新视图从下方 16px 在 280ms 内进入并淡入，不缩放文字。动效由 `frontend/src/lib/motion.ts` 的 studioWorkspaceTransition 拥有；退出内容设为 inert。侧栏与助手保持稳定；编辑数据、未保存草稿和保存基线由外层持有，视图重建不丢失输入。旧页面保留滚动位置退场，新视图挂载后才复位滚动；查询参数变化不重播动效。其余同一系统内部导航保持即时。局部 CSS transition 只服务已有的悬停和按下反馈。交互不使用装饰性弹跳或持续动画；选中节点的低频耀斑是唯一例外，用于表达当前操作对象而非装饰。`MotionConfig` 遵从系统“减少动态效果”，同时全局 CSS 关闭平滑滚动和局部过渡；Studio 的减少动态效果模式直接呈现内容。
 
 ### Content and data visualization
 
@@ -173,6 +173,12 @@ Genesis 的创作画布像一张深色剪辑台：内容浮在安静的底面上
 写作页沿用白色纸面和中文衬线标题，不加入新的卡片层级。`studio/styles/shell.css` 拥有工作台基础令牌，`studio/styles/writing.css` 拥有写作状态样式与次级文字 `--studio-editor-muted: #73797f`、低对比悬停 `--studio-editor-hover: #e7eaec`；`BlogWorkflowDialog.css` 消费这些令牌。头部显示草稿/发布状态和保存位置，底部显示字数与阅读时间。工具按钮与目录无边框、描边和阴影；输入聚焦保持原视觉，按钮键盘聚焦采用低对比背景或文字变化。
 
 发布检查、删除和离开确认共用 `BlogWorkflowDialog`，复用 `useModalDialog` 管理模态焦点、Escape 和焦点恢复。弹窗为单层白色表面，最大宽 440px，窄屏保留 16px 两侧空间，长内容在弹窗内滚动；默认聚焦取消。恢复提示是横向文字与动作，不再叠加卡片。
+
+独立页面管理位于 `/blog/studio/pages`，由 `PagesWorkspace` 拥有列表与流程视图，列表复用 `posts.css` 的扁平搜索、状态筛选和分页。文章与页面共用 `studio/MarkdownEditor.tsx` 的 Markdown 编辑器、目录、预览和设置弹窗；页面变体隐藏分类、标签、封面与文章评论，保留地址、摘要和公开状态。`usePagesWorkspace` 的编辑状态位于工作区切换动画之外，列表、编辑与预览继续使用 Studio 的完整退场/入场过渡。已发布页面提供可发现的公开访问入口。
+
+共享代码编辑块由 `editor-content.css` 和 `genesisCodeBlockTheme` 拥有，使用单层工作台浅中性底面；外层、MDX 包装层和 CodeMirror 均无边框、描边或阴影，聚焦不改变表面。行号、文字光标与选择状态沿用工作台中性色，语言菜单与删除按钮仅用低对比背景反馈。
+
+公开页面目录 `/blog/pages` 与正文 `/blog/pages/:slug` 由 `pages/blog/PublicPages.tsx` 和 CSS 拥有，复用 `BlogPage.css` 的暖色纸面、页眉、衬线标题与边距令牌，正文复用 `ArticleMarkdown`。目录单层排列标题和摘要，窄屏保持单列，长标题与地址换行；读取状态预留空间，不增加卡片层级。博客页眉同时提供「页面」与「账户」入口。
 
 ### 博客分类与标签管理
 

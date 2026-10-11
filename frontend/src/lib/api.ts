@@ -17,6 +17,32 @@ export interface BlogCategory {
   slug: string
 }
 
+export interface BlogPagePreview { id: string; slug: string; title: string; excerpt: string }
+export interface BlogPagePublic extends BlogPagePreview { content_markdown: string; published_at: string | null }
+export interface BlogPageAdmin extends BlogPagePublic { status: BlogPostStatus; created_at: string; updated_at: string }
+export interface BlogPagesResponse<T = BlogPageAdmin> { items: T[]; total: number }
+export interface BlogPageWrite { slug: string; title: string; excerpt: string; content_markdown: string; status: BlogPostStatus }
+export function getPublicBlogPages(offset: number, signal?: AbortSignal): Promise<BlogPagesResponse<BlogPagePreview>> {
+  return request(`/blog/pages?limit=20&offset=${offset}`, { signal })
+}
+export function getPublicBlogPage(slug: string, signal?: AbortSignal): Promise<BlogPagePublic> {
+  return request(`/blog/pages/${encodeURIComponent(slug)}`, { signal })
+}
+export function getAdminBlogPages(token: string, query: string, status: string, page: number, signal?: AbortSignal): Promise<BlogPagesResponse> {
+  const params = new URLSearchParams({ q: query, limit: '20', offset: String((page - 1) * 20) })
+  if (status !== 'all') params.set('status', status)
+  return request(`/admin/blog/pages?${params}`, { headers: authHeaders(token), signal })
+}
+export function getAdminBlogPage(token: string, id: string, signal?: AbortSignal): Promise<BlogPageAdmin> {
+  return request(`/admin/blog/pages/${encodeURIComponent(id)}`, { headers: authHeaders(token), signal })
+}
+export function saveAdminBlogPage(token: string, data: BlogPageWrite, id: string | null, version: string | null, creationId: string): Promise<BlogPageAdmin> {
+  return request('/admin/blog/pages' + (id ? '/' + encodeURIComponent(id) : ''), { method: id ? 'PUT' : 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, ...(id ? { expected_updated_at: version } : { id: creationId }) }) })
+}
+export function deleteAdminBlogPage(token: string, id: string, version: string): Promise<void> {
+  return request(`/admin/blog/pages/${encodeURIComponent(id)}?${new URLSearchParams({ expected_updated_at: version })}`, { method: 'DELETE', headers: authHeaders(token) })
+}
+
 export type BlogCommentState = 'pending' | 'public' | 'hidden'
 export interface BlogComment { id: string; content: string; author_name: string; created_at: string }
 export interface BlogCommentAdmin extends BlogComment { post_title: string; post_slug: string; post_status: 'draft' | 'published'; state: BlogCommentState; updated_at: string }

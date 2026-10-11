@@ -34,6 +34,12 @@ make docker-down
 - 后端：http://localhost:8000
 - API 文档：http://localhost:8000/docs
 
+## 博客独立页面
+
+在 `/blog/studio/pages` 创建关于、站点说明和专题页面，支持 Markdown 编辑与预览、草稿保存、发布、撤回和删除。公开目录位于 `/blog/pages`，发布后的正文地址为 `/blog/pages/:slug`；草稿不会公开，也不会混入文章列表。
+
+已有环境更新代码后，使用现有后端容器执行 `docker compose exec -T backend uv run alembic upgrade head`，应用独立页面数据表迁移。
+
 ## 常用命令
 
 ```bash

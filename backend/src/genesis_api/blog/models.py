@@ -32,6 +32,26 @@ class BlogPostStatus(StrEnum):
     PUBLISHED = "published"
 
 
+class BlogPage(Base):
+    """独立页面与文章分表，公开地址及草稿互不干扰。"""
+
+    __tablename__ = "blog_pages"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    author_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="RESTRICT"))
+    slug: Mapped[str] = mapped_column(String(160), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    excerpt: Mapped[str] = mapped_column(String(500))
+    content_markdown: Mapped[str] = mapped_column(Text)
+    status: Mapped[BlogPostStatus] = mapped_column(
+        Enum(BlogPostStatus, native_enum=False, values_callable=lambda e: [v.value for v in e]),
+        index=True,
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class BlogCommentState(StrEnum):
     """评论先待审核，只有作者公开且文章已发布时才展示。"""
 

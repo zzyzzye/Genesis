@@ -29,6 +29,7 @@
 }
 
 .blog-account-link { display: inline-flex; justify-self: end; align-items: center; gap: .3rem; min-height: 44px; padding: 0 .4rem; white-space: nowrap; border-radius: .375rem; }
+.blog-masthead-links { display: flex; align-items: center; justify-self: end; gap: 12px; }
 .blog-wordmark { font-family: Georgia, "Noto Serif SC", serif; font-size: 1.25rem; font-style: italic; }
 .blog-masthead a { outline: 0; box-shadow: none; text-decoration: none; }
 .blog-masthead a:hover, .blog-masthead a:focus-visible { color: #27231f; background: rgb(39 35 31 / 5%); }

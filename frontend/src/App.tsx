@@ -6,6 +6,7 @@ import { Account } from './Account'
 import { Studio } from './Studio'
 import { Home } from './pages/home/Home'
 import { PublicBlog } from './pages/blog/BlogPage'
+import { PublicPages } from './pages/blog/PublicPages'
 import { MediaPage } from './pages/media/MediaPage'
 import { ToolboxPage } from './pages/toolbox/ToolboxPage'
 import { pageTransition } from './lib/motion'
@@ -49,6 +50,8 @@ export function AppRoutes() {
       <Routes location={location}>
         <Route path="/" element={<Home />} />
         <Route path="/blog/*" element={<PublicBlog />} />
+        <Route path="/blog/pages" element={<PublicPages />} />
+        <Route path="/blog/pages/:slug" element={<PublicPages />} />
         <Route path="/articles/:slug" element={<PublicBlog />} />
         <Route path="/toolbox/*" element={<ToolboxPage />} />
         <Route path="/tools/*" element={<LegacyToolboxRedirect />} />

@@ -1,0 +1,15 @@
+.blog-pages-back { display: inline-flex; align-items: center; min-height: 44px; margin-bottom: 48px; padding: 0 8px; border-radius: 6px; color: var(--blog-muted); font-size: .85rem; text-decoration: none; outline: 0; box-shadow: none; }
+.blog-pages-back:hover, .blog-pages-back:focus-visible { color: var(--blog-ink); background: var(--blog-hover); }
+.blog-pages-reader { min-height: 60vh; }
+.blog-pages-reader .reader-intro h1, .blog-pages-reader .reader-summary { overflow-wrap: anywhere; }
+.blog-pages-list { margin: 0; padding: 0; list-style: none; }
+.blog-pages-list li { padding: 24px 0; }
+.blog-pages-list a { display: block; padding: 12px; border-radius: 6px; color: var(--blog-ink); text-decoration: none; outline: 0; box-shadow: none; overflow-wrap: anywhere; }
+.blog-pages-list a:hover, .blog-pages-list a:focus-visible { background: var(--blog-hover); }
+.blog-pages-list h2 { margin: 0 0 12px; font: 1.5rem Georgia, "Noto Serif SC", serif; }
+.blog-pages-list h2 span { margin-left: 12px; font-size: 1rem; }
+.blog-pages-list p { margin: 0; color: var(--blog-muted); line-height: 1.8; }
+.blog-pages-feedback { min-height: 100px; padding: 24px 0; line-height: 1.8; }
+.blog-pages-feedback h2 { font: 1.6rem Georgia, "Noto Serif SC", serif; }
+.blog-pages-feedback button { min-height: 40px; padding: 8px 14px; border: 0; border-radius: 6px; outline: 0; box-shadow: none; background: var(--blog-hover); color: var(--blog-ink); font: inherit; cursor: pointer; }
+.blog-pages-feedback button:hover, .blog-pages-feedback button:focus-visible { color: var(--blog-muted); }

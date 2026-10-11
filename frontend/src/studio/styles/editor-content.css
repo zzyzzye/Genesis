@@ -43,15 +43,10 @@
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) {
   margin: 1.9rem 0;
   overflow: hidden;
-  border: 1px solid #d8e1ee;
-  border-radius: .65rem;
-  background: #fff;
-  box-shadow: 0 .8rem 1.8rem rgba(30, 41, 59, .08);
-  transition: border-color .16s ease, box-shadow .16s ease;
-}
-.genesis-mdx-content [data-lexical-decorator]:has(.cm-focused) {
-  border-color: #5b8def;
-  box-shadow: 0 0 0 2px rgba(91, 141, 239, .16), 0 .8rem 1.8rem rgba(30, 41, 59, .08);
+  border: 0;
+  border-radius: .4rem;
+  background: var(--studio-soft);
+  box-shadow: none;
 }
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div > div:first-child {
   display: flex;
@@ -60,14 +55,16 @@
   gap: .35rem;
   min-height: 2.65rem;
   padding: 0 .6rem 0 .9rem;
-  border-bottom: 1px solid #e8edf4;
-  background: #f8fafc;
+  border: 0;
+  background: transparent;
   color: var(--studio-text, #000);
 }
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) [role="combobox"],
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) button {
   min-height: 1.85rem;
-  border: 1px solid transparent;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
   border-radius: .38rem;
   background: transparent;
   color: var(--studio-text, #000);
@@ -79,10 +76,14 @@
   padding-inline: .55rem;
 }
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) [role="combobox"]:hover,
-.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) button:hover {
-  border-color: #d8e1ee;
-  background: #eef4ff;
-  color: #315eac;
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) button:hover,
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) [role="combobox"]:focus-visible,
+.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) button:focus-visible {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  background: var(--studio-editor-hover);
+  color: var(--studio-ink);
 }
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div > div:first-child {
   width: 100%;
@@ -154,6 +155,9 @@
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div {
   margin: 0 !important;
   padding: 0 !important;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
 }
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div > div:first-child {
   position: static !important;

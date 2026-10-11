@@ -22,6 +22,7 @@
 .studio-content-list__details { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; color: var(--studio-muted); font-size: 11px; }
 .studio-content-list__details em { color: var(--studio-accent); font-size: 11px; font-style: normal; }
 .studio-content-list__details time { font-variant-numeric: tabular-nums; }
+.studio-page-index .studio-content-list__details > span { min-width: 0; overflow-wrap: anywhere; }
 .studio-post-empty { display: grid; justify-items: center; gap: 12px; padding: 64px 20px; text-align: center; }
 .studio-post-empty > svg { width: 24px; height: 24px; color: var(--studio-muted); }
 .studio-post-empty strong { font-size: 14px; font-weight: 500; }

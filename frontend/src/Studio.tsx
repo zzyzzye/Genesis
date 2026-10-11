@@ -1,55 +1,13 @@
 import { type FormEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react'
-import { pageTransition } from './lib/motion'
-import { ArticleMarkdown } from './features/blog/ArticleMarkdown'
-import { EditorView } from '@codemirror/view'
-import {
-  BlockTypeSelect,
-  BoldItalicUnderlineToggles,
-  codeBlockPlugin,
-  codeMirrorPlugin,
-  CodeToggle,
-  CreateLink,
-  DiffSourceToggleWrapper,
-  diffSourcePlugin,
-  HighlightToggle,
-  headingsPlugin,
-  imagePlugin,
-  InsertAdmonition,
-  InsertCodeBlock,
-  InsertFrontmatter,
-  InsertImage,
-  InsertTable,
-  InsertThematicBreak,
-  linkDialogPlugin,
-  linkPlugin,
-  ListsToggle,
-  listsPlugin,
-  markdownShortcutPlugin,
-  MDXEditor,
-  quotePlugin,
-  Separator,
-  StrikeThroughSupSubToggles,
-  tablePlugin,
-  thematicBreakPlugin,
-  toolbarPlugin,
-  UndoRedo,
-  type Translation,
-  type MDXEditorMethods,
-} from '@mdxeditor/editor'
-import '@mdxeditor/editor/style.css'
+import { studioWorkspaceTransition } from './lib/motion'
 import './studio/styles/shell.css'
 import './studio/styles/login.css'
-import './studio/styles/editor.css'
-import './studio/styles/editor-content.css'
-import './studio/styles/editor-outline.css'
-import './studio/styles/article-settings.css'
-import './studio/styles/article-reader.css'
-import './studio/styles/writing.css'
 
 
 import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey } from './lib/auth'
+import { MarkdownEditor, ArticleReader } from './studio/MarkdownEditor'
 import { StudioIcon } from './studio/StudioIcon'
 import { StudioNavigation } from './studio/StudioNavigation'
 import type { StudioSection } from './studio/StudioNavigationModel'
@@ -59,9 +17,9 @@ import { PostsIndex } from './studio/PostsIndex'
 import { TaxonomyWorkspace } from './studio/TaxonomyWorkspace'
 import { LinksWorkspace } from './studio/LinksWorkspace'
 import { CommentsWorkspace } from './studio/CommentsWorkspace'
-import { TaxonomyPicker } from './studio/TaxonomyPicker'
+import { PagesWorkspace } from './studio/PagesWorkspace'
+import { usePagesWorkspace } from './studio/usePagesWorkspace'
 import { createTaxonomy, type ArticleTaxonomyActions, type TaxonomyKind } from './studio/taxonomy'
-import { useModalDialog } from './studio/useModalDialog'
 import { BlogWorkflowDialog } from './studio/BlogWorkflowDialog'
 import { articleStats, clearBlogDraft, createEmptyEditor, readBlogDraft, toEditor, toPayload, writeBlogDraft, type BlogDraft, type EditorState } from './studio/blogEditor'
 
@@ -84,201 +42,6 @@ import {
   type BlogTag,
   type CurrentUser,
 } from './lib/api'
-
-const genesisCodeBlockTheme = EditorView.theme({
-  '&': {
-    backgroundColor: '#ffffff',
-    color: '#000',
-  },
-  '&.cm-focused': { outline: 'none' },
-  '.cm-scroller': {
-    fontFamily: '"Cascadia Code", "SFMono-Regular", Consolas, monospace',
-    fontSize: '.88rem',
-    lineHeight: '1.75',
-  },
-  '.cm-content': {
-    minHeight: '5rem',
-    padding: '.75rem 2rem .7rem 1.9rem',
-    caretColor: '#2563eb',
-  },
-  '.cm-line': { padding: '0 .45rem' },
-  '.cm-gutters': {
-    border: '0',
-    borderRight: '1px solid #e8edf4',
-    backgroundColor: '#ffffff',
-    color: '#000',
-  },
-  '.cm-gutterElement': {
-    padding: '0 .9rem 0 1rem',
-    fontSize: '.86rem',
-    fontWeight: '500',
-    fontVariantNumeric: 'tabular-nums',
-  },
-  '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'transparent' },
-  '.cm-activeLineGutter': { color: '#000' },
-  '.cm-selectionBackground': { backgroundColor: '#dbeafe !important' },
-  '.cm-cursor': { borderLeftColor: '#2563eb' },
-  '.cm-tooltip': {
-    border: '1px solid #d8e1ee',
-    borderRadius: '.4rem',
-    backgroundColor: '#ffffff',
-    color: '#000',
-    boxShadow: '0 .6rem 1.5rem rgba(15, 23, 42, .12)',
-  },
-}, { dark: false })
-const GenesisToolbar = () => (
-  <DiffSourceToggleWrapper>
-    <UndoRedo />
-    <Separator />
-    <BoldItalicUnderlineToggles />
-    <CodeToggle />
-    <HighlightToggle />
-    <Separator />
-    <StrikeThroughSupSubToggles />
-    <Separator />
-    <ListsToggle />
-    <Separator />
-    <BlockTypeSelect />
-    <Separator />
-    <CreateLink />
-    <InsertImage />
-    <Separator />
-    <InsertTable />
-    <InsertThematicBreak />
-    <Separator />
-    <InsertCodeBlock />
-    <InsertAdmonition />
-    <Separator />
-    <InsertFrontmatter />
-  </DiffSourceToggleWrapper>
-)
-type MarkdownOutlineItem = {
-  level: number
-  text: string
-}
-
-function getMarkdownOutline(markdown: string): MarkdownOutlineItem[] {
-  const lines = markdown.split('\n')
-  const headings: MarkdownOutlineItem[] = []
-  let isInsideCodeFence = false
-
-  for (const line of lines) {
-    if (/^\s*```/.test(line)) {
-      isInsideCodeFence = !isInsideCodeFence
-      continue
-    }
-    if (isInsideCodeFence) continue
-
-    const match = /^(#{1,3})\s+(.+?)\s*#*\s*$/.exec(line)
-    if (!match) continue
-
-    headings.push({
-      level: (match[1] ?? '').length,
-      text: (match[2] ?? '').replace(/[*_~]/g, '').trim(),
-    })
-  }
-
-  return headings
-}
-const mdxEditorChineseText: Record<string, string> = {
-  "admonitions.caution": "注意",
-  "admonitions.changeType": "选择提示类型",
-  "admonitions.danger": "警告",
-  "admonitions.info": "信息",
-  "admonitions.note": "说明",
-  "admonitions.placeholder": "提示类型",
-  "admonitions.tip": "提示",
-  "codeBlock.inlineLanguage": "语言",
-  "codeBlock.language": "代码块语言",
-  "codeBlock.selectLanguage": "选择代码语言",
-  "codeblock.delete": "删除代码块",
-  "createLink.cancelTooltip": "取消修改",
-  "createLink.saveTooltip": "设置链接",
-  "createLink.text": "链接文字",
-  "createLink.textTooltip": "链接显示的文字",
-  "createLink.title": "链接标题",
-  "createLink.titleTooltip": "鼠标悬停时显示的标题",
-  "createLink.url": "链接地址",
-  "createLink.urlPlaceholder": "选择或粘贴链接地址",
-  "dialog.close": "关闭对话框",
-  "dialogControls.cancel": "取消",
-  "dialogControls.save": "保存",
-  "frontmatterEditor.addEntry": "添加字段",
-  "frontmatterEditor.key": "字段名",
-  "frontmatterEditor.title": "编辑文档 Frontmatter",
-  "frontmatterEditor.value": "字段值",
-  "imageEditor.deleteImage": "删除图片",
-  "imageEditor.editImage": "编辑图片",
-  "linkPreview.copied": "已复制！",
-  "linkPreview.copyToClipboard": "复制到剪贴板",
-  "linkPreview.edit": "编辑链接",
-  "linkPreview.remove": "移除链接",
-  "table.alignCenter": "居中对齐",
-  "table.alignLeft": "左对齐",
-  "table.alignRight": "右对齐",
-  "table.columnMenu": "列菜单",
-  "table.deleteColumn": "删除此列",
-  "table.deleteRow": "删除此行",
-  "table.deleteTable": "删除表格",
-  "table.insertColumnLeft": "在左侧插入列",
-  "table.insertColumnRight": "在右侧插入列",
-  "table.insertRowAbove": "在上方插入行",
-  "table.insertRowBelow": "在下方插入行",
-  "table.rowMenu": "行菜单",
-  "table.textAlignment": "文本对齐",
-  "toolbar.admonition": "插入提示块",
-  "toolbar.blockTypeSelect.placeholder": "段落类型",
-  "toolbar.blockTypeSelect.selectBlockTypeTooltip": "选择段落类型",
-  "toolbar.blockTypes.heading": "标题 {{level}}",
-  "toolbar.blockTypes.paragraph": "正文段落",
-  "toolbar.blockTypes.quote": "引用",
-  "toolbar.bold": "粗体",
-  "toolbar.bulletedList": "无序列表",
-  "toolbar.checkList": "任务列表",
-  "toolbar.codeBlock": "插入代码块",
-  "toolbar.diffMode": "差异对比",
-  "toolbar.editFrontmatter": "编辑 Frontmatter",
-  "toolbar.highlight": "高亮",
-  "toolbar.image": "插入图片",
-  "toolbar.inlineCode": "行内代码",
-  "toolbar.insertFrontmatter": "插入 Frontmatter",
-  "toolbar.italic": "斜体",
-  "toolbar.link": "创建链接",
-  "toolbar.numberedList": "有序列表",
-  "toolbar.redo": "重做 {{shortcut}}",
-  "toolbar.removeBold": "取消粗体",
-  "toolbar.removeHighlight": "取消高亮",
-  "toolbar.removeInlineCode": "取消行内代码",
-  "toolbar.removeItalic": "取消斜体",
-  "toolbar.removeStrikethrough": "取消删除线",
-  "toolbar.removeSubscript": "取消下标",
-  "toolbar.removeSuperscript": "取消上标",
-  "toolbar.removeUnderline": "取消下划线",
-  "toolbar.richText": "富文本",
-  "toolbar.source": "源码模式",
-  "toolbar.strikethrough": "删除线",
-  "toolbar.subscript": "下标",
-  "toolbar.superscript": "上标",
-  "toolbar.table": "插入表格",
-  "toolbar.thematicBreak": "插入分隔线",
-  "toolbar.toggleGroup": "切换选项",
-  "toolbar.underline": "下划线",
-  "toolbar.undo": "撤销 {{shortcut}}",
-  "uploadImage.addViaUrlInstructions": "或通过链接添加图片：",
-  "uploadImage.addViaUrlInstructionsNoUpload": "通过链接添加图片：",
-  "uploadImage.alt": "替代文本：",
-  "uploadImage.autoCompletePlaceholder": "选择或粘贴图片链接",
-  "uploadImage.dialogTitle": "上传图片",
-  "uploadImage.height": "高度：",
-  "uploadImage.title": "标题：",
-  "uploadImage.uploadInstructions": "从设备上传图片：",
-  "uploadImage.width": "宽度：",
-}
-
-const mdxEditorChineseTranslation: Translation = (key, defaultValue, interpolations) => {
-  const template = mdxEditorChineseText[key] ?? defaultValue
-  return template.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(interpolations?.[name] ?? ''))
-}
 
 type StudioState =
   | { status: 'login'; error: string | null }
@@ -360,213 +123,6 @@ function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: str
   )
 }
 
-function PostSettingsModal({
-  categories,
-  editor,
-  feedback,
-  isSaving,
-  onChange,
-  onClose,
-  onDelete,
-  onSave,
-  tags,
-  onCreateTaxonomy,
-  onSelectTaxonomy,
-}: {
-  categories: BlogCategory[]
-  editor: EditorState
-  feedback: string | null
-  isSaving: boolean
-  onChange: (editor: EditorState) => void
-  onClose: () => void
-  onDelete: () => void
-  onSave: (status: BlogPostStatus) => void
-  tags: BlogTag[]
-} & ArticleTaxonomyActions) {
-  const dialogRef = useModalDialog()
-
-  return (
-    <dialog ref={dialogRef} className="markdown-settings-modal" aria-labelledby="markdown-settings-title" onCancel={(event) => { event.preventDefault(); if (!isSaving) onClose() }} onClick={(event) => { if (!isSaving && event.target === event.currentTarget) onClose() }}>
-      <section className="markdown-settings-modal__surface">
-        <header className="markdown-settings-modal__header">
-          <div>
-            <p className="eyebrow">ARTICLE SETTINGS</p>
-            <h2 id="markdown-settings-title">文章设置</h2>
-          </div>
-          <button className="markdown-settings-modal__close" disabled={isSaving} type="button" aria-label="关闭文章设置" onClick={onClose}><StudioIcon name="close" /></button>
-        </header>
-        <div className="markdown-settings-modal__body">
-          <div className="settings-taxonomy-grid">
-            <TaxonomyPicker kind="categories" items={categories} selected={editor.categoryId ? [editor.categoryId] : []} onSelect={(item) => onSelectTaxonomy('categories', item)} onCreate={(name) => onCreateTaxonomy('categories', name)} disabled={isSaving} />
-            <TaxonomyPicker kind="tags" items={tags} selected={tags.filter((tag) => editor.selectedTagSlugs.includes(tag.slug)).map((tag) => tag.id)} onSelect={(item) => onSelectTaxonomy('tags', item)} onCreate={(name) => onCreateTaxonomy('tags', name)} disabled={isSaving} />
-          </div>
-          <div className="settings-fields-grid">
-            <label className="settings-field" htmlFor="settings-slug">
-              文章地址
-              <input id="settings-slug" onChange={(event) => onChange({ ...editor, slug: event.currentTarget.value })} pattern="[a-z0-9]+(-[a-z0-9]+)*" required value={editor.slug} />
-            </label>
-            <label className="settings-field" htmlFor="settings-cover">
-              <span className="settings-field__heading"><span>封面链接</span><span className="settings-field__hint">可选</span></span>
-              <input id="settings-cover" onChange={(event) => onChange({ ...editor, coverImageUrl: event.currentTarget.value })} type="url" value={editor.coverImageUrl} />
-            </label>
-          </div>
-          <label className="settings-field" htmlFor="settings-excerpt">
-            <span className="settings-field__heading"><span>摘要</span><span className="settings-field__hint">留空时从正文生成</span></span>
-            <textarea id="settings-excerpt" style={{ resize: 'none' }} onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} maxLength={500} rows={3} value={editor.excerpt} />
-          </label>
-          {feedback && <p className="studio-form-error" role="alert">{feedback}</p>}
-        </div>
-        <footer className="markdown-settings-modal__footer">
-          <button className="text-button text-button--danger" disabled={!editor.id || isSaving} type="button" onClick={() => { onClose(); onDelete() }}>删除文章</button>
-          <div>
-            {editor.status === 'draft' && <button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存草稿</button>}
-            <button className="primary-button" disabled={isSaving} type="button" onClick={() => { onClose(); onSave('published') }}>{editor.status === 'published' ? '检查并更新发布' : '检查并发布'}</button>
-          </div>
-        </footer>
-      </section>
-    </dialog>
-  )
-}
-
-function MarkdownEditor({
-  categories,
-  editor,
-  feedback,
-  isSaving,
-  onBack,
-  onChange,
-  onDelete,
-  onPreview,
-  onSave,
-  tags,
-  onCreateTaxonomy,
-  onSelectTaxonomy,
-  saveState,
-  recovery,
-  onRestoreDraft,
-  onDiscardDraft,
-  onCompareVersion,
-  hasVersionConflict,
-}: {
-  categories: BlogCategory[]
-  editor: EditorState
-  feedback: string | null
-  isSaving: boolean
-  onBack: () => void
-  onChange: (editor: EditorState) => void
-  onDelete: () => void
-  onPreview: () => void
-  onSave: (status: BlogPostStatus) => void
-  tags: BlogTag[]
-  saveState: string
-  recovery: BlogDraft | null
-  onRestoreDraft: () => void
-  onDiscardDraft: () => void
-  onCompareVersion: () => void
-  hasVersionConflict: boolean
-} & ArticleTaxonomyActions) {
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const editorWorkspaceRef = useRef<HTMLDivElement>(null)
-  const markdownRef = useRef<MDXEditorMethods>(null)
-  const outlineItems = getMarkdownOutline(editor.contentMarkdown)
-  const [isOutlineExpanded, setIsOutlineExpanded] = useState(true)
-  const stats = articleStats(editor.contentMarkdown)
-
-  useEffect(() => {
-    if (markdownRef.current?.getMarkdown() !== editor.contentMarkdown) markdownRef.current?.setMarkdown(editor.contentMarkdown)
-  }, [editor.contentMarkdown])
-
-  return (
-    <section className="markdown-editor" aria-labelledby="markdown-editor-title">
-      <header className="markdown-editor__header">
-        <div className="markdown-editor__identity">
-          <button className="text-button" type="button" onClick={onBack}>← 返回文章列表</button>
-          <div className="markdown-editor__title-row">
-            <span className="markdown-editor__eyebrow">文章写作</span>
-            <span className={`post-status post-status--${editor.status}`}>{editor.status === 'published' ? '已发布' : '草稿'}</span>
-            <span className="markdown-editor__save-state" role="status">{saveState}</span>
-          </div>
-          <input aria-label="文章标题" className="markdown-editor__title" id="markdown-editor-title" disabled={isSaving || recovery !== null} maxLength={200} onChange={(event) => onChange({ ...editor, title: event.currentTarget.value })} placeholder="输入文章标题" value={editor.title} />
-        </div>
-        <div className="markdown-editor__actions">
-          <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" onClick={onPreview}><StudioIcon name="eye" /> 预览</button>
-          <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" aria-label="打开文章设置" onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" /> 设置</button>
-          {editor.status === 'draft' && <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('draft')}>保存草稿</button>}
-          <button className="primary-button" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('published')}>{editor.status === 'published' ? '更新发布' : '发布'}</button>
-        </div>
-      </header>
-      {feedback && <p className="markdown-editor__feedback" role="status">{feedback}</p>}
-      {hasVersionConflict && <div className="markdown-editor__recovery"><span>站点上的文章已经更新，请先核对两个版本。</span><button type="button" disabled={isSaving} onClick={onCompareVersion}>核对站点版本</button></div>}
-      {recovery && <div className="markdown-editor__recovery" role="status">
-        <span>发现本标签页未保存的内容{recovery.editor.updatedAt !== editor.updatedAt ? '，站点版本可能已更新，请核对后保存' : ''}。</span>
-        <button type="button" onClick={onRestoreDraft}>恢复内容</button>
-        <button type="button" onClick={onDiscardDraft}>丢弃本地内容</button>
-      </div>}
-      <div className="markdown-editor__workspace markdown-editor__workspace--mdx" ref={editorWorkspaceRef}>
-        <section className="markdown-editor__source markdown-editor__source--mdx" aria-label="Markdown 编辑区">
-          <MDXEditor
-            ref={markdownRef}
-            key={editor.id ?? 'new'}
-            className="genesis-mdx-editor"
-            contentEditableClassName="genesis-mdx-content"
-            markdown={editor.contentMarkdown}
-            placeholder="写下你的想法，或打开博客助手一起构思。"
-            readOnly={isSaving || recovery !== null}
-            onChange={(contentMarkdown) => onChange({ ...editor, contentMarkdown })}
-            translation={mdxEditorChineseTranslation}
-            plugins={[
-              headingsPlugin(),
-              listsPlugin(),
-              quotePlugin(),
-              thematicBreakPlugin(),
-              linkPlugin(),
-              linkDialogPlugin(),
-              tablePlugin(),
-              imagePlugin(),
-              codeBlockPlugin({ defaultCodeBlockLanguage: 'text' }),
-              codeMirrorPlugin({ codeBlockLanguages: { text: '纯文本', javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', json: 'JSON', bash: 'Bash', css: 'CSS', html: 'HTML' }, codeMirrorExtensions: [genesisCodeBlockTheme] }),
-              diffSourcePlugin({ viewMode: 'rich-text' }),
-              markdownShortcutPlugin(),
-              toolbarPlugin({ toolbarContents: () => <GenesisToolbar /> }),
-            ]}
-            spellCheck={false}
-          />
-        </section>
-        <aside className={`markdown-editor__outline markdown-editor__outline--mdx ${isOutlineExpanded ? 'markdown-editor__outline--expanded' : ''}`} aria-label="文章目录">
-          <button
-            aria-controls="markdown-editor-outline"
-            aria-expanded={isOutlineExpanded}
-            className="markdown-editor__outline-heading"
-            type="button"
-            onClick={() => setIsOutlineExpanded((isExpanded) => !isExpanded)}
-          >
-            <span>目录</span><small>{isOutlineExpanded ? `${outlineItems.length} 节 · 收起` : '展开'}</small>
-          </button>
-          {isOutlineExpanded && (outlineItems.length > 0 ? (
-            <nav aria-label="文章标题导航" id="markdown-editor-outline">
-              {outlineItems.map((item, index) => (
-                <button
-                  className={`markdown-editor__outline-item markdown-editor__outline-item--${item.level}`}
-                  key={`${item.text}-${index}`}
-                  type="button"
-                  onClick={() => {
-                    const headings = editorWorkspaceRef.current?.querySelectorAll('.genesis-mdx-content h1, .genesis-mdx-content h2, .genesis-mdx-content h3')
-                    headings?.[index]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }}
-                >
-                  {item.text}
-                </button>
-              ))}
-            </nav>
-          ) : <p className="markdown-editor__outline-empty" id="markdown-editor-outline">添加一级至三级标题后，会在这里显示目录。</p>)}
-        </aside>
-      </div>
-      <footer className="markdown-editor__writing-meta"><span>{stats.count.toLocaleString('zh-CN')} 字 · 预计阅读 {stats.minutes} 分钟</span><span>未保存内容仅保留在本标签页</span></footer>
-      {isSettingsOpen && <PostSettingsModal categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} />}
-    </section>
-  )
-}
-
 const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; description: string }> = {
   overview: { eyebrow: 'BLOG CONTROL CENTER', title: '仪表盘', description: '掌握内容状态并快速进入今天的工作。' },
   posts: { eyebrow: 'CONTENT / ARTICLES', title: '文章管理', description: '编辑、整理并发布长期内容。' },
@@ -582,39 +138,6 @@ const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; descr
   settings: { eyebrow: 'SYSTEM / SETTINGS', title: '系统设置', description: '配置博客系统的基础信息。' },
 }
 
-
-function ArticleReader({
-  editor,
-  onBack,
-  onEdit,
-}: {
-  editor: EditorState
-  onBack: () => void
-  onEdit: () => void
-}) {
-  return (
-    <section className="article-reader" aria-labelledby="article-reader-title">
-      <header className="article-reader__header">
-        <div className="article-reader__heading">
-          <button className="text-button article-reader__back" type="button" onClick={onBack}>← 返回文章列表</button>
-          <div className="article-reader__eyebrow">{editor.status === 'published' ? 'PUBLISHED ARTICLE' : 'DRAFT ARTICLE'}</div>
-          <h1 id="article-reader-title">{editor.title || '未命名文章'}</h1>
-          <p>{editor.excerpt || '还没有摘要，打开编辑设置补充文章信息。'}</p>
-          {editor.selectedTagSlugs.length > 0 && <div className="article-reader__meta"><span>{editor.selectedTagSlugs.join(' · ')}</span></div>}
-        </div>
-        <div className="article-reader__actions">
-          <span className={`post-status post-status--${editor.status}`}>
-            {editor.status === 'published' ? '已发布' : '草稿'}
-          </span>
-          <button className="primary-button" type="button" onClick={onEdit}>编辑文章</button>
-        </div>
-      </header>
-      <article className="article-reader__content article-content">
-        <ArticleMarkdown>{editor.contentMarkdown || '开始输入 Markdown 内容。'}</ArticleMarkdown>
-      </article>
-    </section>
-  )
-}
 
 function PostsWorkspace({
   categories,
@@ -716,7 +239,7 @@ function StudioWorkspaceTransition({ children }: { children: ReactNode }) {
   const reducedMotion = useReducedMotion()
 
   useLayoutEffect(() => {
-    // 新视图挂载后再复位滚动，退出中的页面保持原位置完成淡出。
+    // 新视图挂载后再复位滚动，退出中的页面保留滚动位置完成退场。
     if (!isPresent) return
     const content = containerRef.current?.querySelector<HTMLElement>('.studio-content')
     if (content) content.scrollTop = 0
@@ -725,7 +248,7 @@ function StudioWorkspaceTransition({ children }: { children: ReactNode }) {
     if (document.scrollingElement) document.scrollingElement.scrollTop = 0
   }, [isPresent])
 
-  return <motion.div ref={containerRef} className="studio-workspace" inert={!isPresent} initial={reducedMotion ? false : 'initial'} animate="enter" exit={reducedMotion ? undefined : 'exit'} variants={pageTransition}>
+  return <motion.div ref={containerRef} className="studio-workspace" inert={!isPresent} initial={reducedMotion ? false : 'initial'} animate="enter" exit={reducedMotion ? undefined : 'exit'} variants={studioWorkspaceTransition}>
     {children}
   </motion.div>
 }
@@ -748,6 +271,7 @@ function Dashboard({
   const location = useLocation()
   const navigate = useNavigate()
   const { activeSection, postId, postView, isEditorOpen } = getStudioRoute(location.pathname)
+  const pages = usePagesWorkspace(token, user.id)
   const [editor, setEditor] = useState<EditorState>(() => createEmptyEditor())
   const [managedPosts, setManagedPosts] = useState(posts)
   const [tagOptions, setTagOptions] = useState(tags)
@@ -774,6 +298,12 @@ function Dashboard({
   const resource = postView === 'preview' ? postId ?? 'new' : null
   const hasUnsavedChanges = resource !== null && JSON.stringify(activeEditor) !== JSON.stringify(baseline)
   const blocker = useBlocker(({ nextLocation }) => {
+    if (pages.bypassNavigation.current) return false
+    if (pages.active && (pages.dirty || pages.busy)) {
+      if (pages.busy) return true
+      const targetResource = nextLocation.pathname.startsWith('/blog/studio/pages/') ? nextLocation.pathname.slice('/blog/studio/pages/'.length).split('/')[0] : undefined
+      return targetResource !== pages.resource
+    }
     if (bypassNavigation.current) return false
     if ((activeSection === 'links' || activeSection === 'comments') && (linkDirty || linkPending)) return nextLocation.pathname !== location.pathname
     if (mutationLock.current) return true
@@ -799,17 +329,19 @@ function Dashboard({
   }, [resource, postId, selectedPost, user.id])
 
   useEffect(() => {
-    if (!hasUnsavedChanges && !linkDirty && !linkPending) return
+    if (!hasUnsavedChanges && !linkDirty && !linkPending && !pages.dirty && !pages.busy) return
     const warnBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
     window.addEventListener('beforeunload', warnBeforeUnload)
     return () => window.removeEventListener('beforeunload', warnBeforeUnload)
-  }, [hasUnsavedChanges, linkDirty, linkPending])
+  }, [hasUnsavedChanges, linkDirty, linkPending, pages.dirty, pages.busy])
 
   useEffect(() => {
-    document.title = activeSection === 'posts' && resource !== null
+    document.title = pages.active && pages.resource
+      ? `${pages.ready ? pages.editor.title || '新页面' : pages.loadError ? '页面未能打开' : '正在打开页面'} · ${pages.editing ? '写作' : '预览'} · Genesis`
+      : activeSection === 'posts' && resource !== null
       ? `${activeEditor.title || '新文章'} · ${isEditorOpen ? '写作' : '预览'} · Genesis`
       : `${sectionMeta[activeSection].title} · Genesis`
-  }, [activeSection, activeEditor.title, isEditorOpen, resource])
+  }, [activeSection, activeEditor.title, isEditorOpen, resource, pages.active, pages.resource, pages.ready, pages.editor.title, pages.loadError, pages.editing])
 
   function changeEditor(next: EditorState) {
     if (mutationLock.current || recovery) return
@@ -970,11 +502,11 @@ function Dashboard({
 
   return (
     <div className="studio-app-shell">
-      <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={() => { if (hasUnsavedChanges || linkDirty || linkPending) setLogoutRequested(true); else onLogout() }} user={user} />
+      <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={() => { if (hasUnsavedChanges || linkDirty || linkPending || pages.dirty || pages.busy) setLogoutRequested(true); else onLogout() }} user={user} />
 
       <AnimatePresence initial={false} mode="wait">
       <StudioWorkspaceTransition key={location.pathname}>
-        {!isEditorOpen && (
+        {!isEditorOpen && !(pages.active && pages.editing) && (
           <header className="studio-topbar">
             <div className="studio-topbar__title">
               <span className="studio-mobile-level">内容工作区</span>
@@ -986,7 +518,7 @@ function Dashboard({
           </header>
         )}
 
-        <main className={activeSection === 'posts' ? 'studio-content studio-content--editor' : 'studio-content'}>
+        <main className={activeSection === 'posts' || activeSection === 'pages' ? 'studio-content studio-content--editor' : 'studio-content'}>
           {activeSection === 'overview' && (
             <StudioOverview posts={managedPosts} onChange={selectSection} onCreatePost={createPost} onOpenPost={openPost} />
           )}
@@ -1028,7 +560,8 @@ function Dashboard({
           />}
           {activeSection === 'links' && <LinksWorkspace token={token} onDirtyChange={setLinkDirty} onPendingChange={setLinkPending} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
           {activeSection === 'comments' && <CommentsWorkspace token={token} onPendingChange={setLinkPending} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
-          {activeSection !== 'overview' && activeSection !== 'posts' && activeSection !== 'categories' && activeSection !== 'tags' && activeSection !== 'links' && activeSection !== 'comments' && <SectionPlaceholder section={activeSection} />}
+          {activeSection === 'pages' && <PagesWorkspace token={token} controller={pages} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
+          {activeSection !== 'overview' && activeSection !== 'posts' && activeSection !== 'categories' && activeSection !== 'tags' && activeSection !== 'links' && activeSection !== 'comments' && activeSection !== 'pages' && <SectionPlaceholder section={activeSection} />}
         </main>
       </StudioWorkspaceTransition>
       </AnimatePresence>
@@ -1050,7 +583,7 @@ function Dashboard({
           <button type="button" onClick={() => reconcileVersion(false)}>采用站点版本，丢弃当前修改</button>
         </div>
       </BlogWorkflowDialog>}
-      {activeSection !== 'comments' && (blocker.state === 'blocked' || logoutRequested) && !(activeSection === 'links' && (linkDirty || linkPending)) && <BlogWorkflowDialog title={activeSection === 'links' ? '离开链接管理' : isSaving ? '正在保存文章' : '还有未保存的内容'} description={activeSection === 'links' ? '链接操作已完成，可以继续离开页面。' : isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel={activeSection === 'links' ? '继续离开' : '离开写作页'} busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
+      {activeSection !== 'pages' && activeSection !== 'comments' && (blocker.state === 'blocked' || logoutRequested) && !(activeSection === 'links' && (linkDirty || linkPending)) && <BlogWorkflowDialog title={activeSection === 'links' ? '离开链接管理' : isSaving ? '正在保存文章' : '还有未保存的内容'} description={activeSection === 'links' ? '链接操作已完成，可以继续离开页面。' : isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel={activeSection === 'links' ? '继续离开' : '离开写作页'} busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
       <BlogAssistant
         userId={user.id}
         onExecuted={() => {

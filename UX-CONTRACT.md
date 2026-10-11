@@ -19,6 +19,7 @@
 | 博客分类/标签选择 | TaxonomyPicker | TaxonomyPicker.tsx、blog/schemas.py | 直接展示原生按钮组；分类单选、标签多选，不使用弹出式 combobox | 直接选择、创建并选入、输入法、数量上限与窄屏 |
 | 博客分类/标签管理 | TaxonomyWorkspace、TaxonomyEditor | TaxonomyWorkspace.tsx、admin_blog.py | 搜索/新增共用输入，名称块和分类列表；原生 dialog 管理改名和删除 | 模态焦点、取消恢复、失败重试、使用中禁止删除 |
 | 博客写作 Form / CRUD | blogEditor.ts、Studio 的 Dashboard | blog/schemas.py、admin_blog.py | 草稿允许缺少正文；公开发布校验完整性，发布与更新公开内容均先检查确认 | 草稿保存、首次发布、更新发布、失败重试、版本冲突 |
+| 博客独立页面 Form / CRUD | PagesWorkspace、usePagesWorkspace、共享 MarkdownEditor、BlogWorkflowDialog | blog/pages.py、api/routes/blog_pages.py | 独立草稿与公开目录；创建使用稳定 UUID，更新与删除必须核对版本；恢复与文章隔离 | 编辑预览保留、创建重试、发布/撤回/删除确认、公开边界、导航拦截、窄屏 |
 | 博客链接 Form / CRUD | LinksWorkspace、useModalDialog、BlogWorkflowDialog | blog/links.py、admin_blog.py、BlogLinks.tsx | 默认隐藏；明确勾选公开；更新与删除携带版本，复用 OwnerDependency | 增删改、筛选分页、失败重试、并发冲突、模态焦点、窄屏与公开边界 |
 | 博客评论 Form / CRUD | ArticleComments、CommentsWorkspace、BlogWorkflowDialog | blog/comments.py、api/routes/blog_comments.py | 登录提交待审核，作者公开/隐藏/删除；公开查询同时校验文章状态；审核与删除校验版本 | 提交重试、频率限制、权限、过滤分页、并发冲突、离开提醒、模态焦点与窄屏 |
 | 博客流程 Dialog / Feedback | BlogWorkflowDialog、useModalDialog、写作页状态区 | Studio.tsx、writing.css | 单层原生 dialog；状态明确区分标签页暂存与站点保存 | Escape、Tab、焦点恢复、窄屏与长内容 |
@@ -65,6 +66,16 @@
 - 保存已有文章携带 `expected_updated_at`，服务端锁定文章并检查版本；冲突返回 409，保留当前输入供核对。作者可获取站点最新版本，对照后保留当前内容继续编辑，或明确采用站点版本并丢弃本地修改；核对本身不写入站点。接口字段可选以兼容既有 agent 工具，旧调用仍沿用既有策略；未宣称全系统所有写入都有版本防护。
 - 发布时间和文章权限仍以既有博客 API 为准；本轮不改变分类/标签流程和影音恢复规则。
 
+## 博客独立页面
+
+页面使用独立的 `blog_pages` 表与 `/api/v1/admin/blog/pages` 接口，管理数据仅站点作者可访问，不混入文章、分类、标签、评论或文章 Agent 的编辑上下文。标题最多 200 字符，地址最多 160 字符，只允许小写字母、数字和连字符，摘要最多 500 字符，Markdown 正文最多 200000 字符。草稿允许空标题和正文；发布必须有标题和正文，空摘要可由共享编辑器从正文生成。后台每页 20 项，q/status/page 保存在 URL，搜索防抖 300ms 并避开输入法组合，返回列表保留查询，删除后校正越界页。公开目录每次加载 20 项，可继续加载，只返回已发布页面；草稿与不存在的公开地址均为 404。
+
+编辑、预览使用同一份输入，页面共享文章的 Markdown、代码块和设置能力。发布、更新发布、撤回与永久删除均先确认，默认聚焦取消；撤回会把当前修改保存为草稿并停止公开访问。失败保留输入和实际错误，可在原位置重试；保存期间禁止重复操作与离开。首次创建沿用客户端生成的 UUID，网络重试返回相同记录而不重复创建；若该 ID 已有不同内容，返回冲突供作者核对。PUT 与 DELETE 必须携带带时区的 expected_updated_at，服务端行锁检查版本，冲突时可核对站点正文并明确选择保留输入或采用站点版本。
+
+页面恢复复用 blogEditor 的 7 天标签页暂存规则，以用户、页面 ID 和 page 类型隔离；恢复前不覆盖站点内容，保存或删除后清除。页面流程复用 Dashboard 的唯一 useBlocker，同一页面编辑/预览切换不拦截，跨页面导航、退出登录与浏览器返回先提醒，卸载使用 beforeunload；不把标签页暂存描述成站点保存。发布后从编辑页可打开公开地址，目录与正文均提供返回入口。
+
+工作台分区与文章/页面的列表、编辑、预览统一使用 studioWorkspaceTransition 的顺序退场和入场位移。旧视图退场期间不可操作，输入状态由外层保留；减少动态效果时直接呈现最终位置与透明度。桌面及窄屏逐帧验收确认存在持续变化的 transform 和 opacity，最终恢复 transform:none；查询参数变化不重播工作区动画。
+
 ## 博客站点链接
 
 `/blog/studio/links` 管理名称、完整 HTTP(S) 地址、可选说明、0–9999 排序值和公开状态。服务端去除首尾空白，名称 1–80 字符、说明最多 240 字符、地址最多 2048 字符且不得含账号或密码。默认隐藏，仅作者能读取后台列表；公开接口只返回可见项的 ID、名称、地址、说明，数量不包含隐藏项。排序值升序，相同时按名称与 ID 排序。
@@ -90,3 +101,7 @@
 工程检查通过并不代表全站设计审计通过。既有账户、博客和工作台的审计问题应独立修复；静态工具不理解 CSS 提供的 textarea resize 规则与 pointer/keyboard resize 按钮时，以运行时代码和浏览器证据复核。
 
 2026-10-11 评论流程验收覆盖 1440×900 与 390×844：待审核提交、公开/隐藏/删除、访客登录入口、空态与无结果、提交失败保留输入、提交期间阻止离开、Escape 取消与 Tab 模态焦点、锚点定位及输入聚焦样式。临时评论已清理。严格静态审计从 19 项变为 20 项，新增项为 ArticleComments 的 textarea resize 检测；其规则位于同名 CSS，浏览器计算值为 resize:none、边框 0、outline:none、box-shadow:none，作为误报复核，未宣称全站审计通过。DESIGN 检查无错误，保留七项既有警告。
+
+2026-10-11 独立页面验收覆盖 1440×900 与 390×844：空列表、搜索无结果、加载失败重试、新建保存、Markdown 标题与代码块、编辑/预览切换、设置、发布与更新、撤回、删除取消与确认、公开目录/正文/空态/404、未保存离开与恢复、保存失败保留输入和重试、提交期间禁用及 Escape 拦截。临时页面已删除，文章编辑与设置完成回归。代码编辑块聚焦后逐层计算值均为边框 0、outline:none、box-shadow:none，桌面和窄屏无页面横向溢出。
+
+严格静态审计保持 20 项；原 Studio 的 textarea resize 检测随共享编辑器迁移到 MarkdownEditor，未新增规则问题，浏览器确认摘要 resize:none。DESIGN 检查仍为零错误、七项既有警告。前端全量 118 项测试、后端 127 项测试、ESLint、TypeScript 构建、Ruff check 与 mypy 通过；本次六个后端文件通过格式检查。全仓 Ruff format 检查另有 23 个既有未格式化文件，本次未混入批量格式化；前端构建保留既有大分块警告。上述结果不代表全站静态设计审计通过。
