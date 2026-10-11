@@ -200,8 +200,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
-export function getBlogPosts(signal?: AbortSignal): Promise<BlogPostListResponse> {
-  return request<BlogPostListResponse>('/blog/posts', { signal })
+export function getBlogPosts(signal?: AbortSignal, limit?: number): Promise<BlogPostListResponse> {
+  const query = limit === undefined ? '' : `?${new URLSearchParams({ limit: String(limit) })}`
+  return request<BlogPostListResponse>(`/blog/posts${query}`, { signal })
 }
 
 export function getBlogPost(slug: string, signal?: AbortSignal): Promise<BlogPostDetail> {
