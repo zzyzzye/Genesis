@@ -64,7 +64,7 @@ describe('App', () => {
     expect(screen.queryByRole('link', { name: /系统入口|Studio|工作台/ })).not.toBeInTheDocument()
   })
 
-  it('仅在 Owner 账户页提供工作台入口并同步登录态', async () => {
+  it('在 Owner 账户页提供写作台入口并同步登录态', async () => {
     window.localStorage.setItem('genesis-account-token', 'owner-token')
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       id: 'user-1',
@@ -77,7 +77,7 @@ describe('App', () => {
     window.history.pushState({}, '', '/account')
     render(<App />)
 
-    expect(await screen.findByRole('link', { name: /进入博客工作台/ })).toHaveAttribute('href', '/blog/studio')
+    expect(await screen.findByRole('link', { name: /进入写作台/ })).toHaveAttribute('href', '/blog/studio')
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('owner-token')
   })
 

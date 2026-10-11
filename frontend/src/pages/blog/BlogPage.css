@@ -24,9 +24,11 @@
   text-transform: uppercase;
 }
 
-.blog-account-link { justify-self: end; }
+.blog-masthead-actions { display: flex; justify-self: end; align-items: center; gap: .75rem; }
+.blog-masthead-actions a { display: inline-flex; align-items: center; gap: .3rem; min-height: 44px; padding: 0 .4rem; white-space: nowrap; border-radius: .375rem; }
 .blog-wordmark { font-family: Georgia, "Noto Serif SC", serif; font-size: 1.25rem; font-style: italic; }
-.blog-masthead a:focus-visible { outline: 3px solid rgb(182 85 50 / 35%); outline-offset: 4px; }
+.blog-masthead a { outline: 0; box-shadow: none; text-decoration: none; }
+.blog-masthead a:hover, .blog-masthead a:focus-visible { color: #27231f; background: rgb(39 35 31 / 5%); }
 
 .blog-page .intro {
   position: relative;

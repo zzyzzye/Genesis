@@ -390,5 +390,7 @@
 .account-pass .primary-button { border-color: #c96a42; background: #c96a42; color: #fffaf3; }
 .account-pass .primary-button:hover:not(:disabled) { border-color: #a95134; background: #a95134; }
 .account-pass__privacy { color: #8b8377; }
+.account-pass__studio { display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; margin-top: .75rem; padding: 0 .5rem; border-radius: .375rem; color: #687b80; font-size: .8rem; text-decoration: none; outline: 0; box-shadow: none; }
+.account-pass__studio:hover, .account-pass__studio:focus-visible { color: #30424a; background: rgb(48 66 74 / 5%); }
 .account-pass__brand:focus-visible,
 .account-pass__back:focus-visible { outline-color: rgb(201 106 66 / 45%); }

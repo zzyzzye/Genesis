@@ -145,6 +145,7 @@ function AccountForm({
             </button>
           </form>
           <p className="account-pass__privacy">仅使用必要的账户信息；不会公开你的登录资料。</p>
+          <Link className="account-pass__studio" to="/blog/studio">进入写作台 <span aria-hidden="true">→</span></Link>
         </div>
       </section>
     </main>
@@ -183,7 +184,7 @@ function Profile({ user, feedback, onLogout, onSave }: {
           <Link className="account-studio-entry" to="/blog/studio">
             <span>
               <small>OWNER WORKSPACE</small>
-              <strong>进入博客工作台</strong>
+              <strong>进入写作台</strong>
               <em>写作、整理与发布文章</em>
             </span>
             <span aria-hidden="true">→</span>
