@@ -28,3 +28,6 @@
 .article-code .tok-comment { color: #91979f; }
 .article-code .tok-function, .article-code .tok-typeName, .article-code .tok-className { color: #9ec9e8; }
 .article-code .tok-meta, .article-code .tok-operator, .article-code .tok-punctuation { color: #bfc5ce; }
+.article-content a.article-attachment-link { border: 0; outline: 0; box-shadow: none; text-decoration: none; overflow-wrap: anywhere; border-radius: 3px; }
+.article-content a.article-attachment-link svg { display: inline; margin-right: 5px; vertical-align: -.15em; }
+.article-content a.article-attachment-link:is(:hover, :focus-visible) { border: 0; outline: 0; box-shadow: none; text-decoration: none; background: rgb(128 128 128 / 8%); }

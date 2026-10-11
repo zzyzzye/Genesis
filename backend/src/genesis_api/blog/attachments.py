@@ -6,7 +6,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import HTTPException
-from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, computed_field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,35 @@ from genesis_api.blog.models import BlogAttachment
 
 STORAGE_ROOT = Path("/data/media/blog")
 MAX_DEPTH = 30
+
+
+def image_mime_type(item_id: UUID) -> str | None:
+    """按文件签名识别可内嵌的位图，不信任扩展名或上传声明的 MIME。
+
+    SVG、HTML 等主动内容只允许下载；位图仍由浏览器图片解码器校验。
+
+    Args:
+        item_id: 不随重命名或移动改变的文件标识。
+
+    Returns:
+        可内嵌的图片 MIME；未识别、缺失或不可读时返回 None。
+    """
+    try:
+        with (STORAGE_ROOT / str(item_id)).open("rb") as source:
+            header = source.read(32)
+    except OSError:
+        return None
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if header.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if header.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return "image/webp"
+    if header[4:8] == b"ftyp" and header[8:12] in (b"avif", b"avis"):
+        return "image/avif"
+    return None
 
 
 def valid_name(value: str) -> str:
@@ -60,6 +89,12 @@ class AttachmentRead(BaseModel):
     is_public: bool
     created_at: datetime
     updated_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def image_mime_type(self) -> str | None:
+        """仅文件返回服务端识别的图片类型，目录不触碰文件存储。"""
+        return image_mime_type(self.id) if self.kind == "file" else None
 
     @field_validator("created_at", "updated_at")
     @classmethod

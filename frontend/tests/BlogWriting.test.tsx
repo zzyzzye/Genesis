@@ -33,6 +33,21 @@ function setup(path: string, postList: unknown[] = []) {
 describe('可靠博客写作流程', () => {
   afterEach(() => { window.history.pushState({}, '', '/'); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks() })
 
+  it('空白文章打开附件选择也拦截导航，沿用唯一弹窗并可继续选择', async () => {
+    setup('/blog/studio/posts/new/edit')
+    fireEvent.click(await screen.findByRole('button', { name: '插入附件' }))
+    await screen.findByText('这个文件夹还没有附件')
+    fireEvent.click(screen.getByRole('button', { name: /返回文章列表/ }))
+    expect(await screen.findByRole('dialog', { name: '离开附件选择？' })).toBeInTheDocument()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '继续选择' }))
+    expect(screen.getByRole('dialog', { name: '插入附件' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /返回文章列表/ }))
+    fireEvent.click(screen.getByRole('button', { name: '确认离开' }))
+    await screen.findByRole('heading', { name: '文章管理' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
   it('附件表单复用唯一导航拦截，继续编辑保留名称，放弃后只显示目标页', async () => {
     setup('/blog/studio/attachments')
     await screen.findByText('这个文件夹还是空的')

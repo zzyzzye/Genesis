@@ -5,6 +5,7 @@ const admin = '/admin/blog/attachments'
 export interface Attachment {
   id: string; parent_id: string | null; name: string; kind: 'file' | 'folder'
   mime_type: string; size: number; is_public: boolean; created_at: string; updated_at: string
+  image_mime_type?: string | null
 }
 export interface AttachmentList { items: Attachment[]; breadcrumbs: Attachment[]; total: number; max_upload_bytes: number }
 
@@ -26,6 +27,9 @@ export async function listAttachments(token: string, folder: string | null, quer
 export async function createAttachmentFolder(token: string, id: string, name: string, parent: string | null): Promise<Attachment> {
   return result(await fetch(`${base}${admin}/folders`, { method: 'POST', headers: { ...headers(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name, parent_id: parent }) }))
 }
+export async function getAttachment(token: string, id: string): Promise<Attachment> {
+  return result(await fetch(`${base}${admin}/${id}`, { headers: headers(token) }))
+}
 export async function updateAttachment(token: string, item: Attachment, data: Pick<Attachment, 'name' | 'parent_id' | 'is_public'>): Promise<Attachment> {
   return result(await fetch(`${base}${admin}/${item.id}`, { method: 'PUT', headers: { ...headers(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, expected_updated_at: item.updated_at }) }))
 }
@@ -33,6 +37,11 @@ export async function deleteAttachment(token: string, item: Attachment): Promise
   return result(await fetch(`${base}${admin}/${item.id}?${new URLSearchParams({ expected_updated_at: item.updated_at })}`, { method: 'DELETE', headers: headers(token) }))
 }
 export function attachmentPublicUrl(item: Attachment) { return new URL(`${base}/blog/attachments/${item.id}/file`, window.location.origin).href }
+export function attachmentMarkdown(item: Attachment): string {
+  const label = item.name.replace(/[\\`*_[\]<>!{}|~&]/g, '\\$&')
+  const url = item.image_mime_type ? new URL(`${base}/blog/attachments/${item.id}/image`, window.location.origin).href : attachmentPublicUrl(item)
+  return `${item.image_mime_type ? '!' : ''}[${label}](${url})`
+}
 export async function downloadAttachment(token: string, item: Attachment): Promise<void> {
   const response = await fetch(`${base}${admin}/${item.id}/file`, { headers: headers(token) })
   if (!response.ok) { await result(response); return }

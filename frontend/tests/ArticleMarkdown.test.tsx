@@ -5,6 +5,13 @@ import { ArticleMarkdown } from '../src/features/blog/ArticleMarkdown'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
+it('正文附件以可下载链接显示，普通文章链接保持原语义', () => {
+  render(<ArticleMarkdown>{'[资料.zip](/api/v1/blog/attachments/12345678-1234-1234-1234-123456789abc/file)\n\n[普通链接](/blog)'}</ArticleMarkdown>)
+  expect(screen.getByRole('link', { name: '资料.zip' })).toHaveAttribute('download', '')
+  expect(screen.getByRole('link', { name: '资料.zip' })).toHaveClass('article-attachment-link')
+  expect(screen.getByRole('link', { name: '普通链接' })).not.toHaveAttribute('download')
+})
+
 it('按声明语言高亮，显示行号和语言，行内代码保持原样', async () => {
   const view = render(<ArticleMarkdown>{'行内 `print`\n\n```python\nimport sys\n\nprint("你好")\n```\n\n```bash\necho "hello"\n```'}</ArticleMarkdown>)
   expect(screen.getByText('Python')).toBeInTheDocument()

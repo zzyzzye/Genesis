@@ -48,6 +48,8 @@ import { TaxonomyPicker } from './TaxonomyPicker'
 import type { ArticleTaxonomyActions } from './taxonomy'
 import { useModalDialog } from './useModalDialog'
 import { articleStats, type BlogDraft, type EditorState } from './blogEditor'
+import { attachmentMarkdown, type Attachment } from '../lib/attachments'
+import { EditorAttachmentPicker, type EditorAttachmentAccess } from './EditorAttachmentPicker'
 
 const genesisCodeBlockTheme = EditorView.theme({
   '&': {
@@ -89,8 +91,8 @@ const genesisCodeBlockTheme = EditorView.theme({
     boxShadow: '0 .6rem 1.5rem rgba(15, 23, 42, .12)',
   },
 }, { dark: false })
-const GenesisToolbar = () => (
-  <DiffSourceToggleWrapper>
+const GenesisToolbar = ({ onAttachment, disabled }: { onAttachment?: () => void; disabled: boolean }) => (
+  <DiffSourceToggleWrapper SourceToolbar={<>{onAttachment && <button type="button" className="editor-attachment-trigger" disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={onAttachment}><StudioIcon name="attachment" />插入附件</button>}</>}>
     <UndoRedo />
     <Separator />
     <BoldItalicUnderlineToggles />
@@ -105,6 +107,7 @@ const GenesisToolbar = () => (
     <Separator />
     <CreateLink />
     <InsertImage />
+    {onAttachment && <button type="button" className="editor-attachment-trigger" disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={onAttachment}><StudioIcon name="attachment" />插入附件</button>}
     <Separator />
     <InsertTable />
     <InsertThematicBreak />
@@ -319,6 +322,7 @@ function PostSettingsModal({
 }
 
 export function MarkdownEditor({
+  attachmentAccess,
   kind = 'post',
   onUnpublish,
   categories,
@@ -341,6 +345,7 @@ export function MarkdownEditor({
   hasVersionConflict,
 }: {
   kind?: 'post' | 'page'
+  attachmentAccess?: EditorAttachmentAccess
   onUnpublish?: () => void
   categories: BlogCategory[]
   editor: EditorState
@@ -360,12 +365,47 @@ export function MarkdownEditor({
   hasVersionConflict: boolean
 } & Partial<ArticleTaxonomyActions>) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isAttachmentOpen, setIsAttachmentOpen] = useState(false)
+  const sourceInsertion = useRef<{ view: EditorView; from: number; to: number } | null>(null)
   const editorWorkspaceRef = useRef<HTMLDivElement>(null)
   const markdownRef = useRef<MDXEditorMethods>(null)
   const outlineItems = getMarkdownOutline(editor.contentMarkdown)
   const [isOutlineExpanded, setIsOutlineExpanded] = useState(true)
   const stats = articleStats(editor.contentMarkdown)
   const label = kind === 'page' ? '页面' : '文章'
+  const onAttachmentOpenChange = attachmentAccess?.onOpenChange
+
+  useEffect(() => {
+    onAttachmentOpenChange?.(isAttachmentOpen)
+    return () => onAttachmentOpenChange?.(false)
+  }, [isAttachmentOpen, onAttachmentOpenChange])
+
+  function openAttachments() {
+    const source = editorWorkspaceRef.current?.querySelector<HTMLElement>('.mdxeditor-source-editor .cm-editor')
+    const view = source ? EditorView.findFromDOM(source) : null
+    sourceInsertion.current = view ? { view, from: view.state.selection.main.from, to: view.state.selection.main.to } : null
+    setIsAttachmentOpen(true)
+  }
+  function closeAttachments() {
+    setIsAttachmentOpen(false)
+    // 工具栏可能随编辑器重绘，查找当前入口，避免恢复到已卸载的按钮。
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const trigger = editorWorkspaceRef.current?.querySelector<HTMLButtonElement>('.editor-attachment-trigger')
+      if (trigger?.isConnected && !trigger.closest('[inert]')) trigger.focus()
+    }))
+  }
+  function insertAttachment(item: Attachment) {
+    const markdown = attachmentMarkdown(item)
+    const source = sourceInsertion.current
+    setIsAttachmentOpen(false)
+    // 模态关闭并恢复焦点后，使用编辑器原生事务保留光标与撤销历史。
+    requestAnimationFrame(() => {
+      if (source?.view.dom.isConnected) {
+        source.view.dispatch({ changes: { from: source.from, to: source.to, insert: markdown }, selection: { anchor: source.from + markdown.length } })
+        source.view.focus()
+      } else markdownRef.current?.focus(() => markdownRef.current?.insertMarkdown(markdown), { preventScroll: true })
+    })
+  }
 
   useEffect(() => {
     if (markdownRef.current?.getMarkdown() !== editor.contentMarkdown) markdownRef.current?.setMarkdown(editor.contentMarkdown)
@@ -423,7 +463,7 @@ export function MarkdownEditor({
               codeMirrorPlugin({ codeBlockLanguages: { text: '纯文本', javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', json: 'JSON', bash: 'Bash', css: 'CSS', html: 'HTML' }, codeMirrorExtensions: [genesisCodeBlockTheme] }),
               diffSourcePlugin({ viewMode: 'rich-text' }),
               markdownShortcutPlugin(),
-              toolbarPlugin({ toolbarContents: () => <GenesisToolbar /> }),
+              toolbarPlugin({ toolbarContents: () => <GenesisToolbar onAttachment={attachmentAccess ? openAttachments : undefined} disabled={isSaving || recovery !== null} /> }),
             ]}
             spellCheck={false}
           />
@@ -458,6 +498,7 @@ export function MarkdownEditor({
         </aside>
       </div>
       <footer className="markdown-editor__writing-meta"><span>{stats.count.toLocaleString('zh-CN')} 字 · 预计阅读 {stats.minutes} 分钟</span><span>未保存内容仅保留在本标签页</span></footer>
+      {isAttachmentOpen && attachmentAccess && <EditorAttachmentPicker access={attachmentAccess} onClose={closeAttachments} onInsert={insertAttachment} />}
       {isSettingsOpen && <PostSettingsModal kind={kind} onUnpublish={onUnpublish} categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} />}
     </section>
   )

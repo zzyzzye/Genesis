@@ -310,3 +310,25 @@ def public_file(item_id: UUID, session: SessionDependency) -> FileResponse:
     if item is None:
         raise HTTPException(404, "附件不存在或尚未公开")
     return file_response(item)
+
+
+@public_router.get("/{item_id}/image")
+def public_image(item_id: UUID, session: SessionDependency) -> FileResponse:
+    """已公开位图以图片类型内嵌；其他文件继续使用强制下载入口。"""
+    item = session.scalar(
+        select(BlogAttachment).where(
+            BlogAttachment.id == item_id,
+            BlogAttachment.is_public.is_(True),
+            BlogAttachment.kind == "file",
+        )
+    )
+    if item is None:
+        raise HTTPException(404, "附件不存在或尚未公开")
+    response = file_response(item)
+    mime = storage.image_mime_type(item.id)
+    if mime is None:
+        raise HTTPException(415, "此文件不能内嵌为图片，请使用下载链接")
+    response.media_type = mime
+    response.headers["content-type"] = mime
+    response.headers["content-disposition"] = "inline"
+    return response

@@ -17,6 +17,7 @@ import { PostsIndex } from './studio/PostsIndex'
 import { TaxonomyWorkspace } from './studio/TaxonomyWorkspace'
 import { LinksWorkspace } from './studio/LinksWorkspace'
 import { AttachmentsWorkspace } from './studio/AttachmentsWorkspace'
+import type { EditorAttachmentAccess } from './studio/EditorAttachmentPicker'
 import { CommentsWorkspace } from './studio/CommentsWorkspace'
 import { PagesWorkspace } from './studio/PagesWorkspace'
 import { usePagesWorkspace } from './studio/usePagesWorkspace'
@@ -141,6 +142,7 @@ const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; descr
 
 
 function PostsWorkspace({
+  attachmentAccess,
   categories,
   editor,
   feedback,
@@ -166,6 +168,7 @@ function PostsWorkspace({
   onCompareVersion,
   hasVersionConflict,
 }: {
+  attachmentAccess: EditorAttachmentAccess
   categories: BlogCategory[]
   editor: EditorState
   feedback: string | null
@@ -194,7 +197,7 @@ function PostsWorkspace({
   }
 
   if (isEditorOpen) {
-    return <MarkdownEditor categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} saveState={saveState} recovery={recovery} onRestoreDraft={onRestoreDraft} onDiscardDraft={onDiscardDraft} onCompareVersion={onCompareVersion} hasVersionConflict={hasVersionConflict} />
+    return <MarkdownEditor attachmentAccess={attachmentAccess} categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} saveState={saveState} recovery={recovery} onRestoreDraft={onRestoreDraft} onDiscardDraft={onDiscardDraft} onCompareVersion={onCompareVersion} hasVersionConflict={hasVersionConflict} />
   }
 
   return <ArticleReader editor={editor} onBack={onBack} onEdit={onEdit} />
@@ -288,6 +291,7 @@ function Dashboard({
   const [linkDirty, setLinkDirty] = useState(false)
   const [linkPending, setLinkPending] = useState(false)
   const [attachmentFormDirty, setAttachmentFormDirty] = useState(false)
+  const [editorAttachmentOpen, setEditorAttachmentOpen] = useState(false)
   const [hasVersionConflict, setHasVersionConflict] = useState(false)
   const [comparison, setComparison] = useState<BlogPostAdmin | null>(null)
   const mutationLock = useRef(false)
@@ -300,6 +304,7 @@ function Dashboard({
   const resource = postView === 'preview' ? postId ?? 'new' : null
   const hasUnsavedChanges = resource !== null && JSON.stringify(activeEditor) !== JSON.stringify(baseline)
   const blocker = useBlocker(({ nextLocation }) => {
+    if (editorAttachmentOpen) return true
     if (pages.bypassNavigation.current) return false
     if (pages.active && (pages.dirty || pages.busy)) {
       if (pages.busy) return true
@@ -332,11 +337,11 @@ function Dashboard({
   }, [resource, postId, selectedPost, user.id])
 
   useEffect(() => {
-    if (!hasUnsavedChanges && !linkDirty && !linkPending && !pages.dirty && !pages.busy) return
+    if (!hasUnsavedChanges && !linkDirty && !linkPending && !pages.dirty && !pages.busy && !editorAttachmentOpen) return
     const warnBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
     window.addEventListener('beforeunload', warnBeforeUnload)
     return () => window.removeEventListener('beforeunload', warnBeforeUnload)
-  }, [hasUnsavedChanges, linkDirty, linkPending, pages.dirty, pages.busy])
+  }, [hasUnsavedChanges, linkDirty, linkPending, pages.dirty, pages.busy, editorAttachmentOpen])
 
   useEffect(() => {
     document.title = pages.active && pages.resource
@@ -503,9 +508,15 @@ function Dashboard({
     return saved
   }
 
+  const attachmentAccess: EditorAttachmentAccess = { token, onOpenChange: setEditorAttachmentOpen, navigation: {
+    blocked: blocker.state === 'blocked' || logoutRequested,
+    onCancel: () => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) },
+    onConfirm: () => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) },
+  } }
+
   return (
     <div className="studio-app-shell">
-      <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={() => { if (hasUnsavedChanges || linkDirty || linkPending || pages.dirty || pages.busy) setLogoutRequested(true); else onLogout() }} user={user} />
+      <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={() => { if (hasUnsavedChanges || linkDirty || linkPending || pages.dirty || pages.busy || editorAttachmentOpen) setLogoutRequested(true); else onLogout() }} user={user} />
 
       <AnimatePresence initial={false} mode="wait">
       <StudioWorkspaceTransition key={location.pathname}>
@@ -527,6 +538,7 @@ function Dashboard({
           )}
           {activeSection === 'posts' && (
             <PostsWorkspace
+              attachmentAccess={attachmentAccess}
               onCreateTaxonomy={createArticleTaxonomy}
               onSelectTaxonomy={selectArticleTaxonomy}
               categories={categoryOptions}
@@ -564,7 +576,7 @@ function Dashboard({
           {activeSection === 'links' && <LinksWorkspace token={token} onDirtyChange={setLinkDirty} onPendingChange={setLinkPending} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
           {activeSection === 'attachments' && <AttachmentsWorkspace token={token} onFormChange={setAttachmentFormDirty} onDirtyChange={setLinkDirty} onPendingChange={setLinkPending} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
           {activeSection === 'comments' && <CommentsWorkspace token={token} onPendingChange={setLinkPending} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
-          {activeSection === 'pages' && <PagesWorkspace token={token} controller={pages} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
+          {activeSection === 'pages' && <PagesWorkspace attachmentAccess={attachmentAccess} attachmentOpen={editorAttachmentOpen} token={token} controller={pages} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
           {activeSection !== 'overview' && activeSection !== 'posts' && activeSection !== 'categories' && activeSection !== 'tags' && activeSection !== 'links' && activeSection !== 'comments' && activeSection !== 'pages' && activeSection !== 'attachments' && <SectionPlaceholder section={activeSection} />}
         </main>
       </StudioWorkspaceTransition>
@@ -587,7 +599,7 @@ function Dashboard({
           <button type="button" onClick={() => reconcileVersion(false)}>采用站点版本，丢弃当前修改</button>
         </div>
       </BlogWorkflowDialog>}
-      {activeSection !== 'pages' && activeSection !== 'comments' && activeSection !== 'attachments' && (blocker.state === 'blocked' || logoutRequested) && !(activeSection === 'links' && (linkDirty || linkPending)) && <BlogWorkflowDialog title={activeSection === 'links' ? '离开链接管理' : isSaving ? '正在保存文章' : '还有未保存的内容'} description={activeSection === 'links' ? '链接操作已完成，可以继续离开页面。' : isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel={activeSection === 'links' ? '继续离开' : '离开写作页'} busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
+      {!editorAttachmentOpen && activeSection !== 'pages' && activeSection !== 'comments' && activeSection !== 'attachments' && (blocker.state === 'blocked' || logoutRequested) && !(activeSection === 'links' && (linkDirty || linkPending)) && <BlogWorkflowDialog title={activeSection === 'links' ? '离开链接管理' : isSaving ? '正在保存文章' : '还有未保存的内容'} description={activeSection === 'links' ? '链接操作已完成，可以继续离开页面。' : isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel={activeSection === 'links' ? '继续离开' : '离开写作页'} busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
       <BlogAssistant
         userId={user.id}
         onExecuted={() => {

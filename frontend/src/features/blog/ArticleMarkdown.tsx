@@ -2,7 +2,7 @@ import { isValidElement, useEffect, useId, useRef, useState, type CSSProperties,
 import { LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { classHighlighter, highlightTree } from '@lezer/highlight'
-import { Check, ChevronDown, ChevronUp, Copy } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Copy, Paperclip } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -103,5 +103,8 @@ function CodePre({ children }: { children?: ReactNode }) {
 }
 
 export function ArticleMarkdown({ children }: { children: string }) {
-  return <Markdown remarkPlugins={[remarkGfm]} components={{ pre: CodePre }}>{children}</Markdown>
+  return <Markdown remarkPlugins={[remarkGfm]} components={{ pre: CodePre, a: ({ href, title, children: label }) => {
+    const attachment = /\/blog\/attachments\/[0-9a-f-]{36}\/file(?:[?#]|$)/i.test(href ?? '')
+    return <a href={href} title={title} className={attachment ? 'article-attachment-link' : undefined} download={attachment ? '' : undefined}>{attachment && <Paperclip size={16} aria-hidden="true" />}{label}</a>
+  } }}>{children}</Markdown>
 }

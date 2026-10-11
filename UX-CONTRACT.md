@@ -24,6 +24,7 @@
 | 博客评论 Form / CRUD | ArticleComments、CommentsWorkspace、BlogWorkflowDialog | blog/comments.py、api/routes/blog_comments.py | 登录提交待审核，作者公开/隐藏/删除；公开查询同时校验文章状态；审核与删除校验版本 | 提交重试、频率限制、权限、过滤分页、并发冲突、离开提醒、模态焦点与窄屏 |
 | 博客流程 Dialog / Feedback | BlogWorkflowDialog、useModalDialog、写作页状态区 | Studio.tsx、writing.css | 单层原生 dialog；状态明确区分标签页暂存与站点保存 | Escape、Tab、焦点恢复、窄屏与长内容 |
 | 博客附件 / 文件夹 / 上传 | AttachmentsWorkspace、useModalDialog、BlogWorkflowDialog | blog/attachments.py、api/routes/blog_attachments.py、core/uploads.py | 任意类型与空文件；逐文件上传保留相对目录；默认私有，逐文件确认公开；版本校验、稳定上传 UUID 与摘要核对 | 目录创建/移动/改名/删除、循环与同名拒绝、大小上限、失败重试、停止、权限、桌面与窄屏 |
+| 正文插入附件 | MarkdownEditor、EditorAttachmentPicker、useModalDialog、Studio 唯一 blocker | lib/attachments.ts、blog/attachments.py、api/routes/blog_attachments.py | 文章与独立页面共用；富文本/源码原生事务；单选已有文件或上传后选中；私有文件确认公开；位图内嵌，其余下载 | 光标、撤销、权限重取、失败保留、重试 UUID、文件夹搜索分页、单模态导航保护、桌面与窄屏 |
 | Scrollbar | 画布编辑器样式 | CanvasNodes.css、MediaPage.css | 参数展开时节点内部滚动，保留预览；深色原生媒体控件 | 桌面与窄屏截图 |
 | Toast | 既有页内状态区域 | ProjectCanvas.tsx | 保存冲突与上传失败持续显示，错误不依赖瞬时通知 | 上传重试、保存失败与冲突测试 |
 
@@ -95,6 +96,14 @@
 
 ## 博客附件与文件夹
 
+正文工具栏「插入附件」同时供文章与独立页面使用。文件夹点击进入，面包屑标明当前位置；搜索限定当前目录，每页 20 项，切换目录/搜索返回第一页，删除导致页码越界时回到末页。单选文件可跨搜索保留，底部始终显示已选名称；文件夹不可插入。直接上传接受任意文件，单文件上限沿用 200 MiB，上传到当前目录，成功后选中而不自动插入或公开。停止与失败保留 File 和稳定 UUID，重试核对服务端结果，关闭不会删除已经落盘的文件。
+
+私有文件插入前在同一模态明确说明「立即公开，即使正文为草稿」，默认聚焦返回选择。插入前读取最新名称与公开状态；已公开文件若被其他标签页撤回，必须重新确认。公开失败保留选择，不插入失效链接。PNG/JPEG/GIF/WebP/AVIF 依据服务端文件签名走 `/image`，内嵌响应为图片 MIME + inline + nosniff + no-store + CSP sandbox；SVG、HTML、未知类型只走强制下载 `/file`。不存在、未公开、撤回后均不能匿名读取；非位图进入图片入口返回 415。文件名转义后插入，保留显示名称，不被解析为 HTML/MDX。
+
+选择器打开时，空白正文也必须拦截路由离开与关闭标签页。浏览器返回、确认离开、进行中提示均复用同一模态；上传中只能等待或停止，停止后才允许确认离开。富文本调用 MDXEditor 原生插入，源码模式调用 CodeMirror 事务，位置与撤销历史必须真实浏览器验证。取消恢复触发入口焦点，插入恢复正文编辑焦点；保留原有文章列表、编辑、预览的完整工作区动效。
+
+正文下载附件在 ArticleMarkdown 统一渲染为带回形针的原生下载链接，不用下划线、边框或焦点环；悬停与聚焦仅显示低对比背景，长文件名允许换行。普通正文链接继续使用既有样式。
+
 管理入口 `/blog/studio/attachments` 仅作者可用。新建文件夹、重命名与目标目录选择沿用 LinksWorkspace 的表单表面和 useModalDialog；删除、公开和撤回使用 BlogWorkflowDialog，默认聚焦取消。附件权限沿用既有影音素材与隐藏链接的私有默认值，不把上传等同于公开。文件夹不能整体公开；公开链接只按 UUID 下载单个文件，任意类型强制 attachment + octet-stream + nosniff + CSP sandbox，撤回后新请求返回 404。
 
 当前目录按名称搜索，每页 20 条，文件夹优先，folder/q/page 保存在 URL。移动目标以同一分页 API 逐层浏览，不一次装入全库；服务器串行目录变更，防止同名覆盖、自身与子树循环，最多 30 层。更新与删除必须携带带时区的 expected_updated_at。非空文件夹不能直接删除。
@@ -120,3 +129,7 @@
 2026-10-11 附件验收覆盖 1440×900 与 390×844：空目录、搜索无结果、列表读取失败与重试、新建文件夹、任意扩展名与空文件、真实多文件队列、原生整文件夹选择与子目录保留、重命名、逐层选择移动目标、私有下载、公开确认与撤回、停止后重试、进行中阻止离开及停止后可离开、删除取消与确认、Escape、Tab 模态焦点、脏表单恢复。聚焦输入的计算值为边框 0、outline:none、box-shadow:none、透明底色；窄屏操作为助手启动器预留右侧空间，无横向溢出。验收文件、目录已全部删除。
 
 前端全量 130 项测试、后端 141 项测试（覆盖率 94.20%）、ESLint、TypeScript、构建、Ruff check、mypy 通过，八个变更后端文件通过格式检查。附件迁移已在现有容器应用，单独比较附件表与模型为零差异；全仓 alembic check 仍报告框架管理的既有 checkpoint 表及 users/blog 分类、标签、文章的既有唯一约束差异，本次未按自动差异删除或修改它们。DESIGN 检查零错误、七项既有警告；严格静态设计审计维持原有 20 项，附件模块无新增发现，构建保留既有大分块警告。
+
+2026-10-11 正文附件集成验收复用既有 Compose 服务，覆盖 1440×900 与 390×844：空态、目录导航和目录内上传、已有图片与其他文件选择、公开前确认与取消、列表错误/无结果/重试、上传失败重试、进行中返回拦截/停止后重试、单模态保护、富文本与源码中间光标插入及撤销、取消入口焦点与插入正文焦点、文章保存重开/预览/公开页实际图片加载和下载、独立页面共用编辑器。搜索聚焦为边框 0、outline:none、box-shadow:none、透明背景；正文下载链接无下划线和边框，键盘 Enter 可下载，窄屏无横向溢出。验收文章、文件和文件夹均清理。
+
+本轮检查：`docker compose exec -T frontend npm run lint`、`npm run build`（含 TypeScript）、`npm run test:run` 通过，前端 139 项测试；`docker compose exec -T backend uv run ruff check .`、`uv run mypy src`、三个变更 Python 文件的 `ruff format --check`、`uv run pytest -q` 通过，后端 150 项测试、覆盖率 94.27%。全量首次遇到既有 AI 运行器测试的 SQLite refresh 失败，单项及再次全量均通过，未改动无关运行器。DESIGN lint 零错误、七项既有警告；strict 设计审计仍为既有 20 项，本轮组件没有新增发现；构建仍有既有大分块警告。

@@ -1,0 +1,36 @@
+.editor-attachment-picker { width: min(680px, calc(100vw - 32px)); padding: 24px; animation: attachment-picker-enter .22s ease-out; }
+.editor-attachment-picker header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.editor-attachment-picker h2 { margin-bottom: 4px; }
+.editor-attachment-picker p { overflow-wrap: anywhere; }
+.editor-attachment-picker header p { margin: 0 0 20px; }
+.editor-attachment-picker svg { width: 18px; height: 18px; flex: 0 0 auto; }
+.editor-attachment-picker button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.editor-attachment-picker__tools { display: flex; align-items: center; gap: 12px; }
+.editor-attachment-picker__tools .blog-links__search { display: flex; flex: 1; min-width: 0; margin: 0; }
+.blog-link-editor.editor-attachment-picker input[hidden] { display: none; }
+.editor-attachment-picker__tools > button { white-space: nowrap; }
+.editor-attachment-picker__path { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-block: 12px; }
+.editor-attachment-picker__path > span { display: contents; }
+.editor-attachment-picker__path button { max-width: 100%; padding: 6px 8px; overflow-wrap: anywhere; background: transparent; }
+.editor-attachment-picker__list { min-height: 200px; max-height: 38dvh; overflow: auto; }
+.editor-attachment-picker__list ul { margin: 0; padding: 0; list-style: none; }
+.editor-attachment-picker__list li > button { display: grid; grid-template-columns: 20px minmax(0, 1fr) 20px; gap: 12px; width: 100%; padding: 10px; background: transparent; text-align: left; }
+.editor-attachment-picker__list li > button[aria-pressed="true"] { background: var(--studio-soft); }
+.editor-attachment-picker__list strong, .editor-attachment-picker__list small { display: block; overflow-wrap: anywhere; }
+.editor-attachment-picker__list strong { font-weight: 550; }
+.editor-attachment-picker__list small { margin-top: 3px; color: var(--studio-muted); }
+.editor-attachment-picker__empty { display: grid; justify-items: center; align-content: center; min-height: 200px; gap: 12px; text-align: center; }
+.editor-attachment-picker__empty p { margin: 0; }
+.editor-attachment-picker__pagination { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 12px; }
+.editor-attachment-picker__upload { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; overflow-wrap: anywhere; }
+.editor-attachment-picker__upload strong { flex-basis: 100%; }
+.editor-attachment-picker__upload progress { width: 140px; height: 6px; accent-color: var(--studio-ink); }
+.editor-attachment-picker__selection { flex: 1; min-width: 0; align-self: center; overflow-wrap: anywhere; color: var(--studio-muted); }
+.editor-attachment-picker footer { flex-wrap: wrap; align-items: center; }
+.editor-attachment-picker__review { overflow-wrap: anywhere; }
+.genesis-mdx-editor .editor-attachment-trigger { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 3px 8px; border: 0; outline: 0; box-shadow: none; border-radius: 4px; background: transparent; color: var(--studio-ink); font: inherit; cursor: pointer; }
+.genesis-mdx-editor .editor-attachment-trigger:hover, .genesis-mdx-editor .editor-attachment-trigger:focus-visible { background: var(--studio-soft); }
+.editor-attachment-trigger svg { width: 16px; height: 16px; }
+@keyframes attachment-picker-enter { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (max-width: 680px) { .editor-attachment-picker { padding: 18px; } .editor-attachment-picker__tools { flex-wrap: wrap; } .editor-attachment-picker__tools .blog-links__search { flex-basis: 100%; } .editor-attachment-picker__selection { flex-basis: 100%; } .editor-attachment-picker footer { gap: 8px; } }
+@media (prefers-reduced-motion: reduce) { .editor-attachment-picker { animation: none; } }

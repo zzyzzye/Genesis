@@ -1,5 +1,6 @@
 """验证任意文件、目录树、重试、权限和安全下载的完整生命周期。"""
 
+from base64 import b64decode
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import Any
@@ -54,6 +55,73 @@ async def attachment_client(
 
 
 ADMIN = "/admin/blog/attachments"
+
+PNG = b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII="
+)
+
+
+@pytest.mark.anyio
+async def test_inline_image_keeps_download_and_visibility_contract(
+    attachment_client: tuple[AsyncClient, FastAPI, Session, User],
+) -> None:
+    """真实 PNG 即使声明为二进制也可内嵌，下载端点与撤回权限不变。"""
+    c, _, _, _ = attachment_client
+    item = (await upload(c, "真实图片.bin", PNG)).json()
+    assert item["image_mime_type"] == "image/png"
+    image_url = f"/blog/attachments/{item['id']}/image"
+    assert (await c.get(image_url)).status_code == 404
+    public = (await c.put(f"{ADMIN}/{item['id']}", json=update_data(item, is_public=True))).json()
+    image = await c.get(image_url)
+    assert image.content == PNG
+    assert image.headers["content-type"] == "image/png"
+    assert image.headers["content-disposition"] == "inline"
+    assert image.headers["cache-control"] == "private, no-store"
+    assert image.headers["x-content-type-options"] == "nosniff"
+    assert "sandbox" in image.headers["content-security-policy"]
+    partial = await c.get(image_url, headers={"Range": "bytes=0-7"})
+    assert partial.status_code == 206 and partial.content == PNG[:8]
+    download = await c.get(f"/blog/attachments/{item['id']}/file")
+    assert download.headers["content-type"] == "application/octet-stream"
+    assert download.headers["content-disposition"].startswith("attachment;")
+    await c.put(f"{ADMIN}/{item['id']}", json=update_data(public, is_public=False))
+    assert (await c.get(image_url)).status_code == 404
+    assert (await c.get(f"/blog/attachments/{uuid4()}/image")).status_code == 404
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("content", [b"<html>hello</html>", b"<svg onload='alert(1)'/>", b""])
+async def test_image_endpoint_rejects_declared_image_active_content(
+    attachment_client: tuple[AsyncClient, FastAPI, Session, User], content: bytes
+) -> None:
+    """扩展名和客户端 MIME 都不能让 HTML、SVG 或空文件进入图片通道。"""
+    c, _, _, _ = attachment_client
+    item = (await upload(c, "伪装图片.png", content, mime="image/png")).json()
+    assert item["image_mime_type"] is None
+    await c.put(f"{ADMIN}/{item['id']}", json=update_data(item, is_public=True))
+    assert (await c.get(f"/blog/attachments/{item['id']}/image")).status_code == 415
+    assert (await c.get(f"/blog/attachments/{item['id']}/file")).content == content
+
+
+@pytest.mark.parametrize(
+    ("header", "mime"),
+    [
+        (b"\xff\xd8\xff\xe0", "image/jpeg"),
+        (b"GIF89a", "image/gif"),
+        (b"GIF87a", "image/gif"),
+        (b"RIFF\x10\x00\x00\x00WEBP", "image/webp"),
+        (b"\x00\x00\x00\x20ftypavif", "image/avif"),
+    ],
+)
+def test_image_signature_types(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, header: bytes, mime: str
+) -> None:
+    """覆盖位图格式识别，损坏内容最终由浏览器图片解码器拒绝。"""
+    monkeypatch.setattr(storage, "STORAGE_ROOT", tmp_path)
+    identifier = uuid4()
+    (tmp_path / str(identifier)).write_bytes(header)
+    assert storage.image_mime_type(identifier) == mime
+    assert storage.image_mime_type(uuid4()) is None
 
 
 async def folder(client: AsyncClient, name: str, parent: str | None = None) -> dict[str, Any]:
