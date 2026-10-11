@@ -12,6 +12,8 @@
 .blog-attachments__item { display: flex; align-items: flex-start; gap: 12px; flex: 1; min-width: 0; }
 .blog-attachments__item > svg { flex-shrink: 0; margin-top: 10px; color: var(--studio-muted); }
 .blog-attachments__item > div { min-width: 0; }
+.blog-attachments__item .blog-attachments__thumbnail-button { flex-shrink: 0; padding: 0; background: transparent; }
+.blog-attachments__item .blog-attachments__filename { display: block; max-width: 100%; padding: 6px 0; background: transparent; font-size: 13px; font-weight: 550; text-align: left; overflow-wrap: anywhere; }
 .blog-attachments__item strong { display: block; padding-block: 8px; font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
 .blog-attachments__item small { display: block; color: var(--studio-muted); font-size: 12px; }
 .blog-attachments__item .blog-attachments__folder { min-width: 0; padding: 8px 0; background: transparent; text-align: left; font-weight: 550; overflow-wrap: anywhere; }

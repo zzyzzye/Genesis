@@ -7,6 +7,7 @@ export interface Attachment {
   id: string; parent_id: string | null; name: string; kind: 'file' | 'folder'
   mime_type: string; size: number; is_public: boolean; created_at: string; updated_at: string
   image_mime_type?: string | null
+  preview_mime_type?: string | null
 }
 export interface AttachmentList { items: Attachment[]; breadcrumbs: Attachment[]; total: number; max_upload_bytes: number }
 
@@ -51,6 +52,12 @@ export async function downloadAttachment(token: string, item: Attachment): Promi
   const anchor = document.createElement('a')
   anchor.href = url; anchor.download = item.name; anchor.click()
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+}
+
+export async function fetchAttachmentPreview(token: string, item: Attachment, signal: AbortSignal): Promise<{ blob: Blob; truncated: boolean }> {
+  const response = await fetch(`${base}${admin}/${item.id}/preview`, { headers: headers(token), signal })
+  if (!response.ok) { await result(response, token); throw new Error('预览不可用') }
+  return { blob: await response.blob(), truncated: response.headers.get('X-Preview-Truncated') === 'true' }
 }
 
 export function uploadAttachment(token: string, id: string, file: File, parent: string | null, path: string, onProgress: (percent: number) => void, signal: AbortSignal): Promise<Attachment> {

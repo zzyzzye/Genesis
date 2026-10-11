@@ -14,8 +14,14 @@
 .editor-attachment-picker__path button { max-width: 100%; padding: 6px 8px; overflow-wrap: anywhere; background: transparent; }
 .editor-attachment-picker__list { min-height: 200px; max-height: 38dvh; overflow: auto; }
 .editor-attachment-picker__list ul { margin: 0; padding: 0; list-style: none; }
-.editor-attachment-picker__list li > button { display: grid; grid-template-columns: 20px minmax(0, 1fr) 20px; gap: 12px; width: 100%; padding: 10px; background: transparent; text-align: left; }
-.editor-attachment-picker__list li > button[aria-pressed="true"] { background: var(--studio-soft); }
+.editor-attachment-picker__row { display: flex; align-items: center; gap: 4px; }
+.editor-attachment-picker__row > button:first-child { display: grid; grid-template-columns: 52px minmax(0, 1fr) 20px; gap: 12px; flex: 1; min-width: 0; padding: 10px; background: transparent; text-align: left; }
+.editor-attachment-picker__row > button[aria-pressed="true"] { background: var(--studio-soft); }
+.editor-attachment-picker__row .editor-attachment-picker__preview-trigger { flex-shrink: 0; padding: 8px; background: transparent; }
+.editor-attachment-picker__preview h3 { margin: 12px 0 4px; overflow-wrap: anywhere; font-size: 15px; font-weight: 550; }
+.editor-attachment-picker__preview { animation: attachment-preview-enter .22s ease-out; }
+.editor-attachment-picker__preview .attachment-preview-stage > img, .editor-attachment-picker__preview .attachment-preview-stage > video, .editor-attachment-picker__preview .attachment-preview-stage > pre { max-height: 42dvh; }
+.editor-attachment-picker__preview .attachment-preview-stage > iframe { height: 42dvh; }
 .editor-attachment-picker__list strong, .editor-attachment-picker__list small { display: block; overflow-wrap: anywhere; }
 .editor-attachment-picker__list strong { font-weight: 550; }
 .editor-attachment-picker__list small { margin-top: 3px; color: var(--studio-muted); }
@@ -33,4 +39,4 @@
 .editor-attachment-trigger svg { width: 16px; height: 16px; }
 @keyframes attachment-picker-enter { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (max-width: 680px) { .editor-attachment-picker { padding: 18px; } .editor-attachment-picker__tools { flex-wrap: wrap; } .editor-attachment-picker__tools .blog-links__search { flex-basis: 100%; } .editor-attachment-picker__selection { flex-basis: 100%; } .editor-attachment-picker footer { gap: 8px; } }
-@media (prefers-reduced-motion: reduce) { .editor-attachment-picker { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .editor-attachment-picker, .editor-attachment-picker__preview { animation: none; } }

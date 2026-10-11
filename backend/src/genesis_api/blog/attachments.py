@@ -1,5 +1,6 @@
 """附件的输入契约、逻辑目录和存储边界。"""
 
+import codecs
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
@@ -14,6 +15,8 @@ from genesis_api.blog.models import BlogAttachment
 
 STORAGE_ROOT = Path("/data/media/blog")
 MAX_DEPTH = 30
+MAX_PREVIEW_BYTES = 64 * 1024 * 1024
+MAX_TEXT_PREVIEW_BYTES = 256 * 1024
 
 
 def image_mime_type(item_id: UUID) -> str | None:
@@ -57,6 +60,42 @@ def valid_name(value: str) -> str:
     return value
 
 
+def preview_mime_type(item_id: UUID) -> str | None:
+    """根据内容识别浏览器可预览格式，主动内容只能以纯文本展示。"""
+    image = image_mime_type(item_id)
+    if image:
+        return image
+    try:
+        with (STORAGE_ROOT / str(item_id)).open("rb") as source:
+            header = source.read(4096)
+    except OSError:
+        return None
+    if header.startswith(b"%PDF-"):
+        return "application/pdf"
+    if header[:4] == b"RIFF" and header[8:12] == b"WAVE":
+        return "audio/wav"
+    if header.startswith(b"fLaC"):
+        return "audio/flac"
+    if header.startswith(b"OggS"):
+        return "audio/ogg"
+    if header.startswith(b"ID3") or (
+        len(header) >= 2 and header[0] == 0xFF and header[1] & 0xE0 == 0xE0
+    ):
+        return "audio/mpeg"
+    if header[4:8] == b"ftyp":
+        return "audio/mp4" if header[8:12] in (b"M4A ", b"M4B ") else "video/mp4"
+    if header.startswith(b"\x1aE\xdf\xa3") and b"webm" in header:
+        return "video/webm"
+    # 样本末尾可能截断 UTF-8 字符，只忽略末尾的不完整编码。
+    try:
+        text = codecs.getincrementaldecoder("utf-8-sig")().decode(header, final=False)
+    except UnicodeDecodeError:
+        return None
+    if any(ord(char) < 32 and char not in "\t\n\r\f" for char in text):
+        return None
+    return "text/plain"
+
+
 class FolderCreate(BaseModel):
     """稳定创建标识允许网络失败后安全重试。"""
 
@@ -95,6 +134,12 @@ class AttachmentRead(BaseModel):
     def image_mime_type(self) -> str | None:
         """仅文件返回服务端识别的图片类型，目录不触碰文件存储。"""
         return image_mime_type(self.id) if self.kind == "file" else None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def preview_mime_type(self) -> str | None:
+        """文件内容决定预览能力，不根据可重命名的扩展名推断。"""
+        return preview_mime_type(self.id) if self.kind == "file" else None
 
     @field_validator("created_at", "updated_at")
     @classmethod

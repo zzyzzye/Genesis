@@ -62,6 +62,77 @@ PNG = b64decode(
 
 
 @pytest.mark.anyio
+async def test_private_previews_do_not_publish_files(
+    attachment_client: tuple[AsyncClient, FastAPI, Session, User],
+) -> None:
+    """私有图片允许作者预览与范围读取，匿名和其他作者仍不可访问。"""
+    c, app, session, _ = attachment_client
+    item = (await upload(c, "缩略图.bin", PNG)).json()
+    url = f"{ADMIN}/{item['id']}/preview"
+    assert item["preview_mime_type"] == "image/png"
+    response = await c.get(url)
+    assert response.content == PNG
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["content-disposition"] == "inline"
+    assert response.headers["cache-control"] == "private, no-store"
+    assert (await c.get(url, headers={"Range": "bytes=0-7"})).content == PNG[:8]
+    assert (await c.get(f"/blog/attachments/{item['id']}/image")).status_code == 404
+    other = User(handle="preview-other", display_name="其他作者", role=UserRole.OWNER)
+    session.add(other)
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: other
+    assert (await c.get(url)).status_code == 404
+    app.dependency_overrides.pop(get_current_user)
+    assert (await c.get(url)).status_code == 401
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("content", "mime"),
+    [
+        (b"%PDF-1.4\npreview", "application/pdf"),
+        (b"RIFF\x00\x00\x00\x00WAVE", "audio/wav"),
+        (b"ID3\x00\x00", "audio/mpeg"),
+        (b"\x00\x00\x00\x18ftypisom", "video/mp4"),
+        (b"<svg onload='alert(1)'/>", "text/plain; charset=utf-8"),
+        (b"<html><script>alert(1)</script></html>", "text/plain; charset=utf-8"),
+        (b"", "text/plain; charset=utf-8"),
+    ],
+)
+async def test_preview_uses_content_and_renders_active_files_as_text(
+    attachment_client: tuple[AsyncClient, FastAPI, Session, User], content: bytes, mime: str
+) -> None:
+    """类型由签名决定，HTML/SVG 即使伪装图片也只能以纯文本预览。"""
+    c, _, _, _ = attachment_client
+    item = (await upload(c, "伪装.png", content, mime="image/png")).json()
+    response = await c.get(f"{ADMIN}/{item['id']}/preview")
+    assert response.status_code == 200 and response.content == content
+    assert response.headers["content-type"] == mime
+    assert len(response.headers.get_list("content-type")) == 1
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+@pytest.mark.anyio
+async def test_preview_limits_and_binary_fallback(
+    attachment_client: tuple[AsyncClient, FastAPI, Session, User],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """文本有界截取且不切坏 UTF-8，过大媒体与未知二进制可下载但不能预览。"""
+    c, _, _, _ = attachment_client
+    monkeypatch.setattr(storage, "MAX_TEXT_PREVIEW_BYTES", 4)
+    text = (await upload(c, "内容.txt", "中文文本".encode())).json()
+    response = await c.get(f"{ADMIN}/{text['id']}/preview")
+    assert response.text == "中" and response.headers["x-preview-truncated"] == "true"
+    binary = (await upload(c, "未知.zip", b"PK\x03\x04\x00\x00")).json()
+    assert binary["preview_mime_type"] is None
+    assert (await c.get(f"{ADMIN}/{binary['id']}/preview")).status_code == 415
+    assert (await c.get(f"{ADMIN}/{binary['id']}/file")).status_code == 200
+    monkeypatch.setattr(storage, "MAX_PREVIEW_BYTES", 1)
+    image = (await upload(c, "大图.png", PNG)).json()
+    assert (await c.get(f"{ADMIN}/{image['id']}/preview")).status_code == 413
+
+
+@pytest.mark.anyio
 async def test_inline_image_keeps_download_and_visibility_contract(
     attachment_client: tuple[AsyncClient, FastAPI, Session, User],
 ) -> None:

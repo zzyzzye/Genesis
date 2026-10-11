@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { attachmentPublicUrl, createAttachmentFolder, deleteAttachment, downloadAttachment, listAttachments, updateAttachment, uploadAttachment, type Attachment, type AttachmentList } from '../lib/attachments'
 import { BlogWorkflowDialog } from './BlogWorkflowDialog'
+import { AttachmentPreviewDialog, AttachmentThumbnail } from './AttachmentPreview'
 import { StudioIcon } from './StudioIcon'
 import { useModalDialog } from './useModalDialog'
 import './LinksWorkspace.css'
@@ -107,6 +108,7 @@ export function AttachmentsWorkspace({ token, onDirtyChange, onPendingChange, on
   const [queueVisible, setQueueVisible] = useState(10)
   const [busyFile, setBusyFile] = useState<string | null>(null)
   const [copy, setCopy] = useState<Attachment | null>(null)
+  const [preview, setPreview] = useState<Attachment | null>(null)
   const active = useRef<AbortController | null>(null)
   const mutating = useRef(false)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -175,7 +177,7 @@ export function AttachmentsWorkspace({ token, onDirtyChange, onPendingChange, on
     if (busyFile) return
     setBusyFile(item.id); setNotice('正在准备下载「' + item.name + '」…')
     try { await downloadAttachment(token, item); setNotice('已开始下载「' + item.name + '」。') }
-    catch (reason) { setNotice(message(reason)) }
+    catch (reason) { const failure = message(reason); setNotice(failure); return failure }
     finally { setBusyFile(null) }
   }
   async function copyUrl(item: Attachment) {
@@ -201,8 +203,8 @@ export function AttachmentsWorkspace({ token, onDirtyChange, onPendingChange, on
     </section>}
     <div className="blog-links__content" aria-busy={loading}>
       {loading ? <p role="status">正在加载附件…</p> : error ? <div role="alert"><p>{error}</p><button type="button" onClick={() => setReload((value) => value + 1)}>重新加载</button>{parent && <button type="button" onClick={() => navigateFolder(null)}>返回全部附件</button>}</div> : !data?.items.length ? <div className="blog-links__empty"><StudioIcon name="folder" /><h3>{query ? '没有匹配的附件' : '这个文件夹还是空的'}</h3><p>{query ? '换一个搜索词，或清空搜索。' : '上传文件、整个文件夹，或先新建文件夹整理内容。'}</p>{query && <button type="button" onClick={() => updateParams({ q: '', page: '1' })}>清空搜索</button>}</div> : <ul aria-label="附件列表">{data.items.map((item) => <li key={item.id}>
-        <div className="blog-attachments__item"><StudioIcon name={item.kind === 'folder' ? 'folder' : 'attachment'} /><div>{item.kind === 'folder' ? <button type="button" className="blog-attachments__folder" onClick={() => navigateFolder(item.id)}>{item.name}</button> : <strong>{item.name}</strong>}<small>{item.kind === 'folder' ? '文件夹' : `${fileSize(item.size)} · ${item.is_public ? '公开链接可访问' : '私有'}`}</small></div></div>
-        <div className="blog-links__actions">{item.kind === 'file' && <><button type="button" disabled={Boolean(busyFile)} onClick={() => void download(item)} aria-label={'下载：' + item.name}>{busyFile === item.id ? '准备中…' : '下载'}</button>{item.is_public && <button type="button" onClick={() => void copyUrl(item)} aria-label={'复制链接：' + item.name}>复制链接</button>}<button type="button" onClick={() => { setAction({ item, type: 'visibility' }); setActionError('') }} aria-label={(item.is_public ? '撤回公开：' : '公开：') + item.name}>{item.is_public ? '撤回公开' : '公开'}</button></>}
+        <div className="blog-attachments__item">{item.kind === 'file' ? <button className="blog-attachments__thumbnail-button" type="button" aria-label={'查看预览：' + item.name} aria-haspopup="dialog" onClick={() => setPreview(item)}><AttachmentThumbnail item={item} token={token} /></button> : <AttachmentThumbnail item={item} token={token} />}<div>{item.kind === 'folder' ? <button type="button" className="blog-attachments__folder" onClick={() => navigateFolder(item.id)}>{item.name}</button> : <button className="blog-attachments__filename" type="button" aria-haspopup="dialog" onClick={() => setPreview(item)}>{item.name}</button>}<small>{item.kind === 'folder' ? '文件夹' : `${fileSize(item.size)} · ${item.is_public ? '公开链接可访问' : '私有'}`}</small></div></div>
+        <div className="blog-links__actions">{item.kind === 'file' && <><button type="button" aria-label={'预览：' + item.name} aria-haspopup="dialog" onClick={() => setPreview(item)}>预览</button><button type="button" disabled={Boolean(busyFile)} onClick={() => void download(item)} aria-label={'下载：' + item.name}>{busyFile === item.id ? '准备中…' : '下载'}</button>{item.is_public && <button type="button" onClick={() => void copyUrl(item)} aria-label={'复制链接：' + item.name}>复制链接</button>}<button type="button" onClick={() => { setAction({ item, type: 'visibility' }); setActionError('') }} aria-label={(item.is_public ? '撤回公开：' : '公开：') + item.name}>{item.is_public ? '撤回公开' : '公开'}</button></>}
           <button type="button" aria-haspopup="dialog" aria-label={'重命名：' + item.name} onClick={() => setEditor({ mode: 'rename', item })}>重命名</button><button type="button" aria-haspopup="dialog" aria-label={'移动：' + item.name} onClick={() => setEditor({ mode: 'move', item })}>移动</button><button type="button" aria-label={'删除：' + item.name} onClick={() => { setAction({ item, type: 'delete' }); setActionError('') }}>删除</button>
         </div>
       </li>)}</ul>}
@@ -212,5 +214,6 @@ export function AttachmentsWorkspace({ token, onDirtyChange, onPendingChange, on
     {action && <BlogWorkflowDialog title={action.type === 'delete' ? '删除附件' : action.item.is_public ? '撤回公开链接' : '公开文件'} description={action.type === 'delete' ? `永久删除「${action.item.name}」后无法恢复，公开链接也会失效。文件夹仅能在清空内容后删除。` : action.item.is_public ? `撤回「${action.item.name}」后，文章或其他位置使用的下载链接也会失效。` : `公开「${action.item.name}」后，任何拿到链接的人都能下载文件。请先确认文件适合公开。`} confirmLabel={action.type === 'delete' ? '确认删除' : action.item.is_public ? '撤回公开' : '确认公开'} busy={mutation} error={actionError} onCancel={() => setAction(null)} onConfirm={() => void applyAction()} />}
     {navigationBlocked && !editor && !action && !copy && <BlogWorkflowDialog title="离开附件管理？" description={uploadBusy || mutation || busyFile ? '操作仍在进行。可取消此提醒，停止上传或等待操作完成后再离开。' : '未完成的上传只保留在当前页面，离开后需重新选择文件。已保存的文件会保留，已停止等待的上传可能仍在服务端完成。'} confirmLabel="离开附件管理" confirmDisabled={uploadBusy || mutation || Boolean(busyFile)} onCancel={onCancelNavigation} onConfirm={onConfirmNavigation} />}
     {copy && <BlogWorkflowDialog title="公开下载链接" description="浏览器未允许自动复制，可以选中下面的地址手动复制。" confirmLabel="完成" onCancel={() => setCopy(null)} onConfirm={() => setCopy(null)}><input className="blog-attachments__copy" aria-label="公开下载链接" readOnly value={attachmentPublicUrl(copy)} onFocus={(event) => event.target.select()} /></BlogWorkflowDialog>}
+    {preview && !navigationBlocked && <AttachmentPreviewDialog item={preview} token={token} onClose={() => setPreview(null)} onDownload={() => download(preview)} downloading={Boolean(busyFile)} />}
   </section>
 }

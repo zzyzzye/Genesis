@@ -1,5 +1,6 @@
 """作者附件管理与显式公开后的安全文件读取。"""
 
+import codecs
 import logging
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -295,6 +296,56 @@ def file_response(item: BlogAttachment) -> FileResponse:
 def private_file(item_id: UUID, session: SessionDependency, owner: OwnerDependency) -> FileResponse:
     """只有附件所有者能下载私有内容。"""
     return file_response(storage.find(session, owner.id, item_id))
+
+
+@admin_router.get("/{item_id}/preview")
+def private_preview(item_id: UUID, session: SessionDependency, owner: OwnerDependency) -> Response:
+    """作者私有预览；限制资源大小，文本截取且永不作为 HTML 执行。
+
+    Args:
+        item_id: 当前作者拥有的附件标识。
+        session: 请求作用域数据库会话。
+        owner: 已通过鉴权的站点作者。
+
+    Returns:
+        有界纯文本或浏览器可解码的媒体响应，保持私有且禁止缓存。
+
+    Raises:
+        HTTPException: 文件缺失、格式不支持或媒体超过 64 MiB。
+    """
+    item = storage.find(session, owner.id, item_id)
+    response = file_response(item)
+    mime = storage.preview_mime_type(item.id)
+    if mime is None:
+        raise HTTPException(415, "此格式暂不支持在线预览，请下载后打开")
+    if mime == "text/plain":
+        with (storage.STORAGE_ROOT / str(item.id)).open("rb") as source:
+            sample = source.read(storage.MAX_TEXT_PREVIEW_BYTES + 1)
+        truncated = len(sample) > storage.MAX_TEXT_PREVIEW_BYTES
+        try:
+            text = codecs.getincrementaldecoder("utf-8-sig")().decode(
+                sample[: storage.MAX_TEXT_PREVIEW_BYTES], final=not truncated
+            )
+        except UnicodeDecodeError:
+            raise HTTPException(415, "文件不是有效的 UTF-8 文本，请下载后打开") from None
+        if any(ord(char) < 32 and char not in "\t\n\r\f" for char in text):
+            raise HTTPException(415, "文件包含二进制内容，请下载后打开")
+        return Response(
+            text,
+            media_type="text/plain",
+            headers={
+                **dict(response.headers),
+                "content-type": "text/plain; charset=utf-8",
+                "content-disposition": "inline",
+                "x-preview-truncated": str(truncated).lower(),
+            },
+        )
+    if item.size > storage.MAX_PREVIEW_BYTES:
+        raise HTTPException(413, "文件超过 64 MiB，请下载后打开")
+    response.media_type = mime
+    response.headers["content-type"] = mime
+    response.headers["content-disposition"] = "inline"
+    return response
 
 
 @public_router.get("/{item_id}/file")

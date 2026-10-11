@@ -1,10 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EditorAttachmentPicker } from '../src/studio/EditorAttachmentPicker'
-import { attachmentMarkdown, getAttachment, listAttachments, updateAttachment, uploadAttachment, type Attachment } from '../src/lib/attachments'
+import { attachmentMarkdown, fetchAttachmentPreview, getAttachment, listAttachments, updateAttachment, uploadAttachment, type Attachment } from '../src/lib/attachments'
 import { ArticleMarkdown } from '../src/features/blog/ArticleMarkdown'
 
-vi.mock('../src/lib/attachments', async original => ({ ...await original<typeof import('../src/lib/attachments')>(), getAttachment: vi.fn(), listAttachments: vi.fn(), updateAttachment: vi.fn(), uploadAttachment: vi.fn() }))
+vi.mock('../src/lib/attachments', async original => ({ ...await original<typeof import('../src/lib/attachments')>(), fetchAttachmentPreview: vi.fn(), getAttachment: vi.fn(), listAttachments: vi.fn(), updateAttachment: vi.fn(), uploadAttachment: vi.fn() }))
 const file: Attachment = { id: 'file-1', parent_id: null, name: '资料[下载]_<说明>{记录}~~ &copy;.zip', kind: 'file', mime_type: 'image/png', image_mime_type: null, size: 10, is_public: false, created_at: '2026-10-11T00:00:00Z', updated_at: '2026-10-11T00:00:00Z' }
 const folder: Attachment = { ...file, id: 'folder-1', name: '图片', kind: 'folder' }
 const listing = { items: [folder, file], breadcrumbs: [], total: 2, max_upload_bytes: 200 * 1024 * 1024 }
@@ -17,6 +17,22 @@ beforeEach(() => { vi.mocked(listAttachments).mockResolvedValue(listing); vi.moc
 afterEach(() => { cleanup(); vi.resetAllMocks() })
 
 describe('编辑器附件选择', () => {
+  it('预览使用同一弹窗，返回保留选中项，插入仍需确认公开', async () => {
+    const textFile = { ...file, preview_mime_type: 'text/plain' }
+    vi.mocked(listAttachments).mockResolvedValue({ ...listing, items: [textFile] })
+    vi.mocked(fetchAttachmentPreview).mockResolvedValue({ blob: { type: 'text/plain', text: () => Promise.resolve('附件预览正文') } as Blob, truncated: false })
+    mount()
+    fireEvent.click(await screen.findByRole('button', { name: '预览：' + file.name }))
+    expect(await screen.findByText('附件预览正文')).toBeInTheDocument()
+    expect(screen.getAllByRole('dialog')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: '← 返回附件列表' })).toHaveFocus()
+    fireEvent(screen.getByRole('dialog'), new Event('cancel', { bubbles: true, cancelable: true }))
+    expect(screen.getByRole('button', { name: /资料/, pressed: true })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('button', { name: '预览：' + file.name })).toHaveFocus())
+    fireEvent.click(screen.getByRole('button', { name: '插入正文' }))
+    expect(screen.getByRole('button', { name: '确认公开并插入' })).toBeInTheDocument()
+    expect(updateAttachment).not.toHaveBeenCalled()
+  })
   it('服务端识别图片，文件名作为纯文本显示，其他文件生成下载链接', () => {
     const view = render(<ArticleMarkdown>{attachmentMarkdown(file)}</ArticleMarkdown>)
     expect(screen.getByRole('link', { name: file.name })).toHaveAttribute('href', expect.stringContaining('/file'))
@@ -27,12 +43,12 @@ describe('编辑器附件选择', () => {
 
   it('选择私有附件先确认公开，取消保留选择，确认成功只插入一次', async () => {
     const view = mount()
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp('资料') }))
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp('资料'), pressed: false }))
     fireEvent.click(screen.getByRole('button', { name: '插入正文' }))
     expect(screen.getByRole('dialog', { name: '公开附件并插入' })).toHaveTextContent('即使文章仍是草稿')
     expect(updateAttachment).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '返回选择' }))
-    expect(screen.getByRole('button', { name: new RegExp('资料') })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: new RegExp('资料'), pressed: true })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: '插入正文' }))
     const confirm = screen.getByRole('button', { name: '确认公开并插入' }); fireEvent.click(confirm); fireEvent.click(confirm)
     await waitFor(() => expect(view.onInsert).toHaveBeenCalledTimes(1))
@@ -42,7 +58,7 @@ describe('编辑器附件选择', () => {
   it('插入前重取权限，另一标签页撤回后重新确认；读取失败保留选择', async () => {
     vi.mocked(listAttachments).mockResolvedValue({ ...listing, items: [{ ...file, is_public: true }] })
     const view = mount()
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp('资料') }))
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp('资料'), pressed: false }))
     vi.mocked(getAttachment).mockRejectedValueOnce(new Error('附件已删除'))
     fireEvent.click(screen.getByRole('button', { name: '插入正文' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('附件已删除')
@@ -92,7 +108,7 @@ describe('编辑器附件选择', () => {
     await waitFor(() => expect(listAttachments).toHaveBeenLastCalledWith('test-placeholder', null, '', 2, expect.any(AbortSignal)))
     fireEvent.click(await screen.findByRole('button', { name: /^图片/ }))
     await waitFor(() => expect(listAttachments).toHaveBeenLastCalledWith('test-placeholder', 'folder-1', '', 1, expect.any(AbortSignal)))
-    fireEvent.click(await screen.findByRole('button', { name: /资料/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /资料/, pressed: false }))
     fireEvent.click(screen.getByRole('button', { name: '插入正文' }))
     vi.mocked(updateAttachment).mockRejectedValueOnce(new Error('附件已更新，请刷新后重试'))
     fireEvent.click(screen.getByRole('button', { name: '确认公开并插入' }))
