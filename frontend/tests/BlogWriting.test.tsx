@@ -11,11 +11,12 @@ const savedPost = {
   created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z',
 }
 
-function setup(path: string, postList: unknown[] = []) {
+function setup(path: string, postList: unknown[] = [], expiredTags = false) {
   localStorage.setItem('genesis-studio-token', 'writing-test-token')
   window.history.pushState({}, '', path)
   const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    if (expiredTags && url.endsWith('/admin/blog/tags')) return Promise.resolve(new Response('{"detail":"登录已过期"}', { status: 401 }))
     let data: unknown = []
     if (url.endsWith('/auth/me')) data = author
     if (url.endsWith('/admin/blog/posts')) data = postList
@@ -32,6 +33,26 @@ function setup(path: string, postList: unknown[] = []) {
 
 describe('可靠博客写作流程', () => {
   afterEach(() => { window.history.pushState({}, '', '/'); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks() })
+
+  it('附件读取 401 自动显示登录页与原因，开发环境也不会悄悄跳过提示', async () => {
+    const { fetchMock } = setup('/blog/studio/attachments')
+    await screen.findByText('这个文件夹还是空的')
+    fetchMock.mockResolvedValue(new Response('{"detail":"登录已过期"}', { status: 401 }))
+    fireEvent.click(screen.getByRole('button', { name: '刷新列表' }))
+    expect(await screen.findByRole('heading', { name: '进入写作台' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('登录已过期，请重新登录')
+    expect(screen.queryByRole('button', { name: '上传文件' })).not.toBeInTheDocument()
+    expect(localStorage.getItem('genesis-studio-token')).toBeNull()
+    expect(fetchMock.mock.calls.some(([input]) => (typeof input === 'string' ? input : input instanceof URL ? input.href : input.url).includes('/auth/dev-login'))).toBe(false)
+    expect(window.location.pathname).toBe('/blog/studio/attachments')
+  })
+
+  it('初始化的可选标签接口失效时，其他接口成功也不会把登录页覆盖回工作台', async () => {
+    setup('/blog/studio/posts', [], true)
+    expect(await screen.findByRole('heading', { name: '进入写作台' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('登录已过期')
+    expect(screen.queryByRole('heading', { name: '文章管理' })).not.toBeInTheDocument()
+  })
 
   it('空白文章打开附件选择也拦截导航，沿用唯一弹窗并可继续选择', async () => {
     setup('/blog/studio/posts/new/edit')

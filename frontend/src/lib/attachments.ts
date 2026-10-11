@@ -1,4 +1,5 @@
 import { ApiError } from './api'
+import { handleStudioUnauthorized } from './auth'
 
 const base = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 const admin = '/admin/blog/attachments'
@@ -9,7 +10,8 @@ export interface Attachment {
 }
 export interface AttachmentList { items: Attachment[]; breadcrumbs: Attachment[]; total: number; max_upload_bytes: number }
 
-async function result<T>(response: Response): Promise<T> {
+async function result<T>(response: Response, token: string): Promise<T> {
+  handleStudioUnauthorized(response.status, headers(token))
   if (!response.ok) {
     const data: unknown = await response.json().catch(() => null)
     const detail = data && typeof data === 'object' && 'detail' in data && typeof data.detail === 'string' ? data.detail : '请检查输入并重试'
@@ -22,19 +24,19 @@ export async function listAttachments(token: string, folder: string | null, quer
   const params = new URLSearchParams({ q: query, limit: '20', offset: String((page - 1) * 20) })
   if (folder) params.set('folder_id', folder)
   if (foldersOnly) params.set('kind', 'folder')
-  return result(await fetch(`${base}${admin}?${params}`, { headers: headers(token), signal }))
+  return result(await fetch(`${base}${admin}?${params}`, { headers: headers(token), signal }), token)
 }
 export async function createAttachmentFolder(token: string, id: string, name: string, parent: string | null): Promise<Attachment> {
-  return result(await fetch(`${base}${admin}/folders`, { method: 'POST', headers: { ...headers(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name, parent_id: parent }) }))
+  return result(await fetch(`${base}${admin}/folders`, { method: 'POST', headers: { ...headers(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ id, name, parent_id: parent }) }), token)
 }
 export async function getAttachment(token: string, id: string): Promise<Attachment> {
-  return result(await fetch(`${base}${admin}/${id}`, { headers: headers(token) }))
+  return result(await fetch(`${base}${admin}/${id}`, { headers: headers(token) }), token)
 }
 export async function updateAttachment(token: string, item: Attachment, data: Pick<Attachment, 'name' | 'parent_id' | 'is_public'>): Promise<Attachment> {
-  return result(await fetch(`${base}${admin}/${item.id}`, { method: 'PUT', headers: { ...headers(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, expected_updated_at: item.updated_at }) }))
+  return result(await fetch(`${base}${admin}/${item.id}`, { method: 'PUT', headers: { ...headers(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, expected_updated_at: item.updated_at }) }), token)
 }
 export async function deleteAttachment(token: string, item: Attachment): Promise<void> {
-  return result(await fetch(`${base}${admin}/${item.id}?${new URLSearchParams({ expected_updated_at: item.updated_at })}`, { method: 'DELETE', headers: headers(token) }))
+  return result(await fetch(`${base}${admin}/${item.id}?${new URLSearchParams({ expected_updated_at: item.updated_at })}`, { method: 'DELETE', headers: headers(token) }), token)
 }
 export function attachmentPublicUrl(item: Attachment) { return new URL(`${base}/blog/attachments/${item.id}/file`, window.location.origin).href }
 export function attachmentMarkdown(item: Attachment): string {
@@ -44,7 +46,7 @@ export function attachmentMarkdown(item: Attachment): string {
 }
 export async function downloadAttachment(token: string, item: Attachment): Promise<void> {
   const response = await fetch(`${base}${admin}/${item.id}/file`, { headers: headers(token) })
-  if (!response.ok) { await result(response); return }
+  if (!response.ok) { await result(response, token); return }
   const url = URL.createObjectURL(await response.blob())
   const anchor = document.createElement('a')
   anchor.href = url; anchor.download = item.name; anchor.click()
@@ -62,6 +64,7 @@ export function uploadAttachment(token: string, id: string, file: File, parent: 
     xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(Math.min(100, Math.round(event.loaded / event.total * 100))) }
     xhr.onload = () => {
       cleanup()
+      handleStudioUnauthorized(xhr.status, headers(token))
       let data: unknown
       try { data = JSON.parse(xhr.responseText) } catch { reject(new Error('上传回执无法解析，请重试核对结果。')); return }
       if (xhr.status >= 200 && xhr.status < 300) resolve(data as Attachment)

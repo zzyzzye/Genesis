@@ -6,7 +6,7 @@ import './studio/styles/shell.css'
 import './studio/styles/login.css'
 
 
-import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey } from './lib/auth'
+import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey, studioSessionExpiredEvent } from './lib/auth'
 import { MarkdownEditor, ArticleReader } from './studio/MarkdownEditor'
 import { StudioIcon } from './studio/StudioIcon'
 import { StudioNavigation } from './studio/StudioNavigation'
@@ -51,7 +51,7 @@ type StudioState =
   | { status: 'ready'; user: CurrentUser; posts: BlogPostAdmin[]; tags: BlogTag[]; categories: BlogCategory[] }
   | { status: 'error' }
 
-function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: string) => void; error: string | null }) {
+function LoginForm({ onLogin, onDevelopmentLogin, error }: { onLogin: (handle: string, password: string) => void; onDevelopmentLogin?: () => void; error: string | null }) {
   const [handle, setHandle] = useState('genesis')
   const [password, setPassword] = useState('')
 
@@ -118,6 +118,7 @@ function LoginForm({ onLogin, error }: { onLogin: (handle: string, password: str
               进入写作台 <StudioIcon name="arrow-right" />
             </button>
           </form>
+          {onDevelopmentLogin && <button className="studio-development-login" type="button" onClick={onDevelopmentLogin}>开发环境快捷登录</button>}
           <p className="studio-login-security">受保护的作者入口 · 登录后可管理文章与草稿</p>
         </div>
       </section>
@@ -634,6 +635,7 @@ function Dashboard({
 }
 
 export function Studio() {
+  const sessionExpired = useRef(false)
   const [token, setToken] = useState<string | null>(() => getStoredAuthToken(studioAuthTokenKey))
   const [state, setState] = useState<StudioState>(() =>
     getStoredAuthToken(studioAuthTokenKey) === null && !import.meta.env.DEV
@@ -642,8 +644,22 @@ export function Studio() {
   )
 
   useEffect(() => {
+    function expireSession() {
+      sessionExpired.current = true
+      setToken(null)
+      setState({ status: 'login', error: '登录已过期，请重新登录。文章草稿可在本标签页恢复，未完成的上传需要重新选择文件。' })
+    }
+    window.addEventListener(studioSessionExpiredEvent, expireSession)
+    return () => window.removeEventListener(studioSessionExpiredEvent, expireSession)
+  }, [])
+
+  useEffect(() => {
+    if (state.status === 'login') document.title = '作者登录 · Genesis'
+  }, [state.status])
+
+  useEffect(() => {
     if (token === null) {
-      if (!import.meta.env.DEV) return
+      if (!import.meta.env.DEV || sessionExpired.current) return
       let cancelled = false
       void developmentLogin()
         .then((data) => {
@@ -665,15 +681,20 @@ export function Studio() {
       getAdminBlogCategories(token).catch(() => []),
     ])
       .then(([user, posts, tags, categories]) => {
-        if (!cancelled) {
+        if (!cancelled && !sessionExpired.current) {
           setState({ status: 'ready', user, posts, tags, categories })
         }
       })
-      .catch(() => {
+      .catch((reason) => {
         if (!cancelled) {
+          if (!(reason instanceof ApiError) || (reason.status !== 401 && reason.status !== 403)) {
+            setState({ status: 'error' })
+            return
+          }
+          sessionExpired.current = true
           clearStoredAuthToken(studioAuthTokenKey)
           setToken(null)
-          setState({ status: 'login', error: '登录状态无效，请重新登录。' })
+          setState({ status: 'login', error: reason.status === 403 ? '当前账户没有作者权限，请使用作者账号登录。' : '登录已过期，请重新登录。' })
         }
       })
 
@@ -686,13 +707,24 @@ export function Studio() {
     setState({ status: 'loading' })
     void login(handle, password)
       .then((data) => {
+        sessionExpired.current = false
         storeAuthToken(data.access_token, studioAuthTokenKey)
         setToken(data.access_token)
       })
       .catch(() => setState({ status: 'login', error: '账号或密码错误。' }))
   }
 
+  function handleDevelopmentLogin() {
+    setState({ status: 'loading' })
+    void developmentLogin().then(data => {
+      sessionExpired.current = false
+      storeAuthToken(data.access_token, studioAuthTokenKey)
+      setToken(data.access_token)
+    }).catch(() => setState({ status: 'login', error: '开发环境快捷登录失败，请重试或手动登录。' }))
+  }
+
   function handleLogout() {
+    sessionExpired.current = true
     clearStoredAuthToken(studioAuthTokenKey)
     setToken(null)
     setState({ status: 'login', error: null })
@@ -707,8 +739,8 @@ export function Studio() {
   }
 
   if (state.status === 'login') {
-    return <LoginForm error={state.error} onLogin={handleLogin} />
+    return <LoginForm error={state.error} onLogin={handleLogin} onDevelopmentLogin={import.meta.env.DEV ? handleDevelopmentLogin : undefined} />
   }
 
-  return <main className="studio-loading">页面状态异常，请刷新后重试。</main>
+  return <main className="studio-loading">工作台暂时无法加载，请刷新后重试。</main>
 }

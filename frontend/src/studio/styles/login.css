@@ -174,12 +174,10 @@
   width: 100%;
   padding: 0.85rem 0;
   border: 0;
-  border-bottom: 1px solid #cfc8be;
   outline: 0;
   background: transparent;
   color: var(--studio-text, #000);
   font-size: 1rem;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .studio-login input::placeholder {
@@ -187,13 +185,33 @@
 }
 
 .studio-login input:focus {
-  border-color: #d65738;
-  box-shadow: 0 2px 0 #d65738;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
+.studio-login button,
+.studio-login button:focus-visible,
 .studio-back-link:focus-visible {
-  outline: 3px solid rgb(214 87 56 / 42%);
-  outline-offset: 3px;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+
+.studio-development-login {
+  margin-top: 16px;
+  padding: 8px 0;
+  color: var(--studio-text, #000);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.studio-development-login:hover,
+.studio-development-login:focus-visible {
+  color: var(--studio-muted, #666);
 }
 
 .studio-login-security {

@@ -1,3 +1,5 @@
+import { handleStudioUnauthorized } from './auth'
+
 export interface BlogAuthor {
   id: string
   handle: string
@@ -188,6 +190,7 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, init)
+  handleStudioUnauthorized(response.status, init?.headers)
   if (!response.ok) {
     const error: unknown = await response.json().catch((): null => null)
     const detail = formatApiErrorDetail(error)
@@ -326,6 +329,7 @@ export async function deleteAdminBlogPost(token: string, id: string): Promise<vo
     method: 'DELETE',
     headers: authHeaders(token),
   })
+  handleStudioUnauthorized(response.status, authHeaders(token))
   if (!response.ok) {
     const error: unknown = await response.json().catch((): null => null)
     const detail = formatApiErrorDetail(error)
@@ -526,6 +530,7 @@ export async function streamAiChatRun(
     headers: authHeaders(token),
     signal,
   })
+  handleStudioUnauthorized(response.status, authHeaders(token))
   if (!response.ok || !response.body) {
     throw new AiChatRunTerminalError(`AI 续传失败：HTTP ${response.status}`)
   }
