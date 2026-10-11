@@ -127,7 +127,7 @@ describe('App', () => {
     expect(await screen.findByText('一件事', { selector: 'strong' })).toBeInTheDocument()
     expect(screen.getByRole('list')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '返回文章列表' })).toBeInTheDocument()
-    expect(document.title).toBe('从一个完整模块开始 · Genesis')
+    await waitFor(() => expect(document.title).toBe('从一个完整模块开始 · Genesis'))
     if (path.endsWith('#comments')) {
       expect(await screen.findByText('还没有公开评论，欢迎留下你的想法。')).toBeInTheDocument()
       expect(window.location.hash).toBe('#comments')
@@ -149,6 +149,33 @@ describe('App', () => {
     expect(await screen.findByRole('textbox', { name: '写下评论' })).toBeInTheDocument()
     expect(window.location.pathname).toBe('/articles/start-with-one-module')
     expect(window.location.hash).toBe('#comments')
+  })
+
+  it('文章加载与失败保持阅读页，重试成功后可返回列表', async () => {
+    let articleAttempts = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.endsWith('/blog/posts/start-with-one-module')) {
+        articleAttempts += 1
+        if (articleAttempts === 1) return Promise.reject(new Error('内容服务暂时不可用'))
+        return Promise.resolve(new Response(JSON.stringify({ ...posts.items[0], tags: [], excerpt: '', content_markdown: '重试后显示的正文。' }), { status: 200 }))
+      }
+      return Promise.resolve(new Response(JSON.stringify(url.endsWith('/blog/posts') ? posts : { items: [], total: 0 }), { status: 200 }))
+    })
+    window.history.pushState({}, '', '/articles/start-with-one-module')
+    render(<App />)
+
+    expect(screen.getByText('正在打开文章…')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '最近的文章' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '文章暂时无法打开' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '最近的文章' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重新加载文章' }))
+    expect(await screen.findByText('重试后显示的正文。')).toBeInTheDocument()
+    expect(screen.queryByLabelText('文章标签')).not.toBeInTheDocument()
+    await waitFor(() => expect(document.title).toBe('从一个完整模块开始 · Genesis'))
+    fireEvent.click(screen.getByRole('button', { name: '返回文章列表' }))
+    expect(await screen.findByRole('heading', { name: '最近的文章' })).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/blog')
   })
 
   it.each([

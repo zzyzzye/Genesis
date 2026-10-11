@@ -35,7 +35,14 @@ function MarkdownContent({ content }: { content: string }) {
 }
 
 function TagList({ tags }: { tags: BlogTag[] }) {
+  if (tags.length === 0) return null
   return <div className="tag-list" aria-label="文章标签">{tags.map((tag) => <span className="tag" key={tag.id}>{tag.name}</span>)}</div>
+}
+
+function ArticleTitle({ title }: { title: string }) {
+  // 长标题优先按冒号分成主题与说明，避免窄屏留下孤立的尾字。
+  const parts = title.length > 28 ? /^(.{8,32}?[：:])\s*(.+)$/u.exec(title) : null
+  return <h1>{parts ? <><span>{parts[1]}</span><span>{parts[2]}</span></> : title}</h1>
 }
 
 function PublicBlog() {
@@ -47,6 +54,8 @@ function PublicBlog() {
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const articleRequest = useRef<AbortController | null>(null)
+  const isArticle = location.pathname.startsWith('/articles/')
+  const currentArticle = articleState.status === 'ready' && articleState.post.slug === slug ? articleState.post : null
 
   useEffect(() => {
     document.title = articleState.status === 'ready' ? `${articleState.post.title} · Genesis` : '博客 · Genesis'
@@ -124,7 +133,7 @@ function PublicBlog() {
   }, [location.pathname, slug])
 
   return (
-    <div className="blog-page" id="top">
+    <div className={`blog-page${isArticle ? ' blog-page--article' : ''}`} id="top">
       <header className="blog-masthead">
         <Link className="blog-home-link" to="/" aria-label="返回 Genesis 首页">
           <span aria-hidden="true">←</span> Genesis
@@ -134,24 +143,35 @@ function PublicBlog() {
       </header>
 
       <main>
-        {articleState.status === 'ready' ? (
+        {isArticle ? (
           <article className="reader-shell">
             <button className="back-button" type="button" onClick={closeArticle}>
               <span aria-hidden="true">←</span> 返回文章列表
             </button>
-            <div className="reader-intro">
-              <TagList tags={articleState.post.tags} />
-              <h1>{articleState.post.title}</h1>
-              <p className="reader-summary">{articleState.post.excerpt}</p>
-              <div className="article-meta">
-                <span>{articleState.post.author.display_name}</span>
-                <span>{formatDate(articleState.post.published_at)}</span>
-                <span>{articleState.post.read_time_minutes} 分钟阅读</span>
+            {currentArticle ? (
+              <>
+                <header className="reader-intro">
+                  <TagList tags={currentArticle.tags} />
+                  <ArticleTitle title={currentArticle.title} />
+                  {currentArticle.excerpt && <p className="reader-summary">{currentArticle.excerpt}</p>}
+                  <div className="article-meta">
+                    <span>{currentArticle.author.display_name}</span>
+                    <time dateTime={currentArticle.published_at}>{formatDate(currentArticle.published_at)}</time>
+                    <span>{currentArticle.read_time_minutes} 分钟阅读</span>
+                  </div>
+                </header>
+                <MarkdownContent content={currentArticle.content_markdown} />
+                <ArticleComments key={currentArticle.slug} slug={currentArticle.slug} />
+              </>
+            ) : (
+              <div className="reader-feedback" aria-busy={articleState.status !== 'error'}>
+                {articleState.status === 'error' ? <>
+                  <h1>文章暂时无法打开</h1>
+                  <p role="alert">文章可能尚未公开，或内容服务暂时不可用。</p>
+                  <button type="button" onClick={() => { if (slug) openArticle(slug) }}>重新加载文章</button>
+                </> : <p role="status">正在打开文章…</p>}
               </div>
-            </div>
-            <MarkdownContent content={articleState.post.content_markdown} />
-            <ArticleComments key={articleState.post.slug} slug={articleState.post.slug} />
-
+            )}
           </article>
         ) : (
           <>
@@ -188,17 +208,6 @@ function PublicBlog() {
                 </div>
                 {blogState.status === 'ready' && <span>{blogState.total} 篇记录</span>}
               </div>
-
-              {articleState.status === 'loading' && (
-                <p className="inline-message" role="status">
-                  正在打开文章…
-                </p>
-              )}
-              {articleState.status === 'error' && (
-                <p className="inline-message inline-message--error" role="alert">
-                  文章暂时无法打开，请稍后再试。
-                </p>
-              )}
 
               {blogState.status === 'loading' && (
                 <div className="loading-grid" aria-label="正在加载文章">
