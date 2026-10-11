@@ -266,8 +266,9 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /从一个完整模块开始/ }))
 
     expect(window.location.pathname).toBe('/blog/studio/posts/post-1/edit')
+    expect(screen.getByRole('region', { name: '文章列表' }).closest('.studio-workspace')).toHaveAttribute('inert')
+    expect(await screen.findByRole('region', { name: 'Markdown 编辑区' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: '文章列表' })).not.toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Markdown 编辑区' })).toBeInTheDocument()
     expect(document.querySelector('.studio-topbar')).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: '文章标题' })).toHaveValue('从一个完整模块开始')
     fireEvent.click(screen.getByRole('button', { name: '打开文章设置' }))
@@ -282,7 +283,7 @@ describe('App', () => {
     expect(screen.queryByRole('dialog', { name: '文章设置' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '预览' }))
     expect(window.location.pathname).toBe('/blog/studio/posts/post-1')
-    expect(screen.getByRole('region', { name: '从一个完整模块开始' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: '从一个完整模块开始' })).toBeInTheDocument()
 
     expect(window.localStorage.getItem('genesis-studio-token')).toBe('test-token')
     view.unmount()

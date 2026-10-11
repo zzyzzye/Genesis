@@ -1,6 +1,6 @@
 import { type FormEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useBlocker, useLocation, useNavigate } from 'react-router-dom'
-import { AnimatePresence, motion, useAnimationControls, useIsPresent, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react'
 import { pageTransition } from './lib/motion'
 import { ArticleMarkdown } from './features/blog/ArticleMarkdown'
 import { EditorView } from '@codemirror/view'
@@ -708,27 +708,22 @@ function getStudioRoute(pathname: string): {
   return { activeSection, postId, postView, isEditorOpen }
 }
 
-function StudioWorkspaceTransition({ pathname, children }: { pathname: string; children: ReactNode }) {
+function StudioWorkspaceTransition({ children }: { children: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const animation = useAnimationControls()
   const isPresent = useIsPresent()
   const reducedMotion = useReducedMotion()
 
   useLayoutEffect(() => {
-    // 退出中的分区保留原内容完成淡出，不再重播入场或接受操作。
+    // 新视图挂载后再复位滚动，退出中的页面保持原位置完成淡出。
     if (!isPresent) return
-    animation.stop()
-    animation.set({ opacity: reducedMotion ? 1 : 0 })
-    if (!reducedMotion) void animation.start('enter')
-
     const content = containerRef.current?.querySelector<HTMLElement>('.studio-content')
     if (content) content.scrollTop = 0
     const editorWorkspace = containerRef.current?.querySelector<HTMLElement>('.markdown-editor__workspace--mdx')
     if (editorWorkspace) editorWorkspace.scrollTop = 0
     if (document.scrollingElement) document.scrollingElement.scrollTop = 0
-  }, [pathname, reducedMotion, animation, isPresent])
+  }, [isPresent])
 
-  return <motion.div ref={containerRef} className="studio-workspace" inert={!isPresent} initial={false} animate={animation} exit={reducedMotion ? undefined : 'exit'} variants={pageTransition}>
+  return <motion.div ref={containerRef} className="studio-workspace" inert={!isPresent} initial={reducedMotion ? false : 'initial'} animate="enter" exit={reducedMotion ? undefined : 'exit'} variants={pageTransition}>
     {children}
   </motion.div>
 }
@@ -973,7 +968,7 @@ function Dashboard({
       <StudioNavigation activeSection={activeSection} onChange={selectSection} onLogout={() => { if (hasUnsavedChanges) setLogoutRequested(true); else onLogout() }} user={user} />
 
       <AnimatePresence initial={false} mode="wait">
-      <StudioWorkspaceTransition key={activeSection} pathname={location.pathname}>
+      <StudioWorkspaceTransition key={location.pathname}>
         {!isEditorOpen && (
           <header className="studio-topbar">
             <div className="studio-topbar__title">
