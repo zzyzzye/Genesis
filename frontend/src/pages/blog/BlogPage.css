@@ -1,6 +1,8 @@
 .blog-page {
   --blog-paper: #f7f3ea;
   --blog-guide-paper: #eee8de;
+  --blog-guide-heading-paper: #ead9c5;
+  --blog-guide-heading-hover: #efdfcc;
   --blog-guide-muted: #665f55;
   --blog-guide-accent: #934c2b;
   --blog-ink: #27231f;
