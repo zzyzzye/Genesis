@@ -3,19 +3,47 @@ import { BookOpenText, ChevronDown } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { getBlogArticleGuide, type BlogArticleGuide } from '../../lib/api'
 import { motionTiming } from '../../lib/motion'
+import { TypewriterText } from '../../studio/TypewriterText'
 import './ArticleGuide.css'
 
 type GuideState = { status: 'idle' | 'loading' | 'error' } | { status: 'loaded'; data: BlogArticleGuide }
+const noProgress = () => undefined
+
+function GuideContent({ data, playing, onFinish }: { data: BlogArticleGuide; playing: boolean; onFinish: () => void }) {
+  const [step, setStep] = useState(0)
+  function line(text: string, index: number) {
+    if (!playing || index < step) return text
+    return <TypewriterText key={index} inline content={text} charactersPerSecond={90} onProgress={noProgress} onComplete={() => {
+      if (index === data.key_points.length) onFinish()
+      else setStep(index + 1)
+    }} />
+  }
+  return <div className="article-guide__result" aria-busy={playing}>
+    <ul aria-label="文章关键要点">{data.key_points.map((point, index) => (!playing || index <= step) && <li key={index}>{line(point, index)}</li>)}</ul>
+    {(!playing || step >= data.key_points.length) && <p className="article-guide__focus"><span>阅读重点</span>{line(data.reading_focus, data.key_points.length)}</p>}
+    <div className="article-guide__footer">
+      <p className="article-guide__note">由 AI 根据本文整理，内容以原文为准。</p>
+      {playing && <button className="article-guide__skip" type="button" onClick={onFinish}>显示全部</button>}
+    </div>
+  </div>
+}
 
 export function ArticleGuide({ slug, revision }: { slug: string; revision?: string }) {
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<GuideState>({ status: 'idle' })
   const [retry, setRetry] = useState(0)
+  const [playing, setPlaying] = useState(false)
   const loaded = useRef(false)
   const contentRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(0)
   const panelId = useId()
   const reducedMotion = useReducedMotion()
+
+  useEffect(() => {
+    if (!reducedMotion) return
+    const timer = window.setTimeout(() => setPlaying(false), 0)
+    return () => window.clearTimeout(timer)
+  }, [reducedMotion])
 
   useEffect(() => {
     const content = contentRef.current
@@ -38,6 +66,7 @@ export function ArticleGuide({ slug, revision }: { slug: string; revision?: stri
       void getBlogArticleGuide(slug, revision, controller.signal).then((data) => {
         if (controller.signal.aborted) return
         loaded.current = true
+        setPlaying(data.status === 'ready' && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
         setState({ status: 'loaded', data })
       }).catch(() => { if (!controller.signal.aborted) setState({ status: 'error' }) })
         .finally(() => window.clearTimeout(deadline))
@@ -51,8 +80,12 @@ export function ArticleGuide({ slug, revision }: { slug: string; revision?: stri
   }
 
   const data = state.status === 'loaded' ? state.data : null
+  function toggle() {
+    if (open) setPlaying(false)
+    setOpen((value) => !value)
+  }
   return <section className="article-guide" aria-label="AI 导读">
-    <button className="article-guide__trigger" type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)}>
+    <button className="article-guide__trigger" type="button" aria-expanded={open} aria-controls={panelId} onClick={toggle}>
       <BookOpenText size={17} aria-hidden="true" />
       <span className="article-guide__heading"><span className="article-guide__title">AI 导读</span><span className="article-guide__caption">文章要点 · 阅读建议</span></span>
       <span className="article-guide__action">{open ? '收起' : '展开要点'}<ChevronDown size={14} aria-hidden="true" /></span>
@@ -66,11 +99,7 @@ export function ArticleGuide({ slug, revision }: { slug: string; revision?: stri
             {data?.status === 'pending' && <div><p role="status">导读正在准备，稍后可以重新查看。</p><button type="button" onClick={reload}>重新查看导读</button></div>}
             {data?.status === 'unavailable' && <p>这篇文章暂时没有导读，可以直接阅读正文。</p>}
             {data?.status === 'outdated' && <p>文章已更新，刷新页面后可查看对应版本的导读。</p>}
-            {data?.status === 'ready' && <>
-              <ul aria-label="文章关键要点">{data.key_points.map((point, index) => <li key={index}>{point}</li>)}</ul>
-              <p className="article-guide__focus"><span>阅读重点</span>{data.reading_focus}</p>
-              <p className="article-guide__note">由 AI 根据本文整理，内容以原文为准。</p>
-            </>}
+            {data?.status === 'ready' && <GuideContent data={data} playing={playing && !reducedMotion} onFinish={() => setPlaying(false)} />}
           </div>
         </motion.div>}
       </AnimatePresence>

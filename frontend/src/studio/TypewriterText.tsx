@@ -1,20 +1,27 @@
 import { memo, useEffect, useRef } from 'react'
 
-/** 流式阶段只追加文本节点，避免逐字解析 Markdown 或重绘整个会话。 */
-export const TypewriterText = memo(function TypewriterText({ content, onProgress }: {
+/** 逐字呈现只追加文本节点，避免逐字解析 Markdown 或重绘整个会话。 */
+export const TypewriterText = memo(function TypewriterText({ content, onProgress, onComplete, inline = false, charactersPerSecond }: {
   content: string
   onProgress: () => void
+  onComplete?: () => void
+  inline?: boolean
+  charactersPerSecond?: number
 }) {
   const element = useRef<HTMLSpanElement>(null)
   const target = useRef('')
   const progress = useRef(onProgress)
+  const complete = useRef(onComplete)
+  const speed = useRef(charactersPerSecond)
   const wake = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     target.current = content
     progress.current = onProgress
+    complete.current = onComplete
+    speed.current = charactersPerSecond
     wake.current?.()
-  }, [content, onProgress])
+  }, [content, onProgress, onComplete, charactersPerSecond])
 
   useEffect(() => {
     const host = element.current
@@ -26,6 +33,7 @@ export const TypewriterText = memo(function TypewriterText({ content, onProgress
     let lastPaint = 0
     let offset = 0
     let previous = ''
+    let completedFor = ''
 
     function paint(now: number) {
       frame = null
@@ -33,6 +41,7 @@ export const TypewriterText = memo(function TypewriterText({ content, onProgress
       if (next !== previous && !next.startsWith(previous)) {
         text.data = ''
         offset = 0
+        completedFor = ''
       }
       previous = next
       const elapsed = lastPaint ? Math.min(now - lastPaint, 100) : 32
@@ -42,7 +51,9 @@ export const TypewriterText = memo(function TypewriterText({ content, onProgress
       }
       lastPaint = now
       // 大块数据到达时自适应加速追赶；不拆开 UTF-16 代理对。
-      const count = reducedMotion ? next.length : Math.max(1, Math.ceil(elapsed * .08), Math.ceil((next.length - offset) / 8))
+      const count = reducedMotion ? next.length : speed.current
+        ? Math.max(1, Math.ceil(elapsed * speed.current / 1000))
+        : Math.max(1, Math.ceil(elapsed * .08), Math.ceil((next.length - offset) / 8))
       let end = Math.min(next.length, offset + count)
       const last = next.charCodeAt(end - 1)
       if (end < next.length && last >= 0xd800 && last <= 0xdbff) end += 1
@@ -52,6 +63,10 @@ export const TypewriterText = memo(function TypewriterText({ content, onProgress
         progress.current()
       }
       if (offset < next.length) frame = requestAnimationFrame(paint)
+      else if (next && completedFor !== next) {
+        completedFor = next
+        complete.current?.()
+      }
     }
 
     wake.current = () => { if (frame === null) frame = requestAnimationFrame(paint) }
@@ -61,6 +76,10 @@ export const TypewriterText = memo(function TypewriterText({ content, onProgress
       wake.current = null
     }
   }, [])
+
+  if (inline) return <span className="typewriter-inline" aria-busy="true">
+    <span ref={element} /><span className="typewriter-inline__cursor" aria-hidden="true" />
+  </span>
 
   return <div className="studio-assistant__stream-text" aria-busy="true">
     <span ref={element} />
