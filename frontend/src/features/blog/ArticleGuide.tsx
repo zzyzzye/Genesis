@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { ChevronDown, List } from 'lucide-react'
+import { BookOpenText, ChevronDown } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { getBlogArticleGuide, type BlogArticleGuide } from '../../lib/api'
 import { motionTiming } from '../../lib/motion'
@@ -53,7 +53,8 @@ export function ArticleGuide({ slug, revision }: { slug: string; revision?: stri
   const data = state.status === 'loaded' ? state.data : null
   return <section className="article-guide" aria-label="AI 导读">
     <button className="article-guide__trigger" type="button" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)}>
-      <List size={16} aria-hidden="true" /><span>AI 导读</span>
+      <BookOpenText size={17} aria-hidden="true" />
+      <span className="article-guide__heading"><span className="article-guide__title">AI 导读</span><span className="article-guide__caption">文章要点 · 阅读建议</span></span>
       <span className="article-guide__action">{open ? '收起' : '展开要点'}<ChevronDown size={14} aria-hidden="true" /></span>
     </button>
     <div id={panelId} aria-hidden={!open} inert={!open}>
@@ -68,7 +69,7 @@ export function ArticleGuide({ slug, revision }: { slug: string; revision?: stri
             {data?.status === 'ready' && <>
               <ul aria-label="文章关键要点">{data.key_points.map((point, index) => <li key={index}>{point}</li>)}</ul>
               <p className="article-guide__focus"><span>阅读重点</span>{data.reading_focus}</p>
-              <p className="article-guide__note">根据本文生成，供阅读参考。</p>
+              <p className="article-guide__note">由 AI 根据本文整理，内容以原文为准。</p>
             </>}
           </div>
         </motion.div>}

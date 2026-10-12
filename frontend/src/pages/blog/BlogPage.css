@@ -1,5 +1,7 @@
 .blog-page {
   --blog-paper: #f7f3ea;
+  --blog-guide-paper: #eee8de;
+  --blog-guide-muted: #665f55;
   --blog-ink: #27231f;
   --blog-muted: #706960;
   --blog-hover: rgb(39 35 31 / 5%);
