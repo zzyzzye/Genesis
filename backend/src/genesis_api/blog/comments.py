@@ -1,5 +1,6 @@
 """评论的数据契约与查询，身份及事务由路由编排。"""
 
+import re
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -22,6 +23,19 @@ class CommentWrite(BaseModel):
     model_config = {"extra": "forbid"}
     content: str = Field(min_length=1, max_length=2000)
     submission_id: UUID
+    qq: str | None = Field(default=None, max_length=64)
+    show_region: bool = False
+
+    @field_validator("qq")
+    @classmethod
+    def normalize_qq(cls, value: str | None) -> str | None:
+        """只接受 QQ 号或数字 QQ 邮箱，不把邮箱别名当成 QQ 号。"""
+        if value is None or not value.strip():
+            return None
+        match = re.fullmatch(r"([1-9][0-9]{4,10})(?:@qq\.com)?", value.strip(), re.IGNORECASE)
+        if match is None:
+            raise ValueError("请填写 5–11 位 QQ 号或数字 QQ 邮箱，例如 QQ号@qq.com")
+        return match.group(1)
 
     @field_validator("content", mode="before")
     @classmethod
@@ -37,6 +51,10 @@ class CommentPublic(BaseModel):
     content: str
     author_name: str
     created_at: datetime
+    avatar_url: str | None = None
+    region: str | None = None
+    browser: str | None = None
+    operating_system: str | None = None
 
 
 class CommentAdmin(CommentPublic):
@@ -84,6 +102,12 @@ def public_comment(item: BlogComment) -> CommentPublic:
         content=item.content,
         author_name=item.author.display_name,
         created_at=utc(item.created_at),
+        avatar_url=(
+            f"/api/v1/blog/comments/{item.id}/avatar" if item.qq_number else item.author.avatar_url
+        ),
+        region=item.region,
+        browser=item.browser,
+        operating_system=item.operating_system,
     )
 
 

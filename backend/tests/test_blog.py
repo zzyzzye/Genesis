@@ -748,7 +748,7 @@ async def test_links_reject_invalid_fields(
 
 @pytest.mark.anyio
 async def test_comment_submission_moderation_and_public_boundary(
-    client: AsyncClient, database_session: Session
+    client: AsyncClient, database_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """读者提交先待审核；只有作者可审核，公开数据不暴露账号或审核元数据。"""
     add_blog_content(database_session)
@@ -770,11 +770,22 @@ async def test_comment_submission_moderation_and_public_boundary(
     assert logged_in.status_code == 200
     reader_headers = {"Authorization": f"Bearer {logged_in.json()['access_token']}"}
     url = "/api/v1/blog/posts/published-featured/comments"
-    data = {"content": "  纯文本 <script>自检</script> %  ", "submission_id": str(uuid4())}
+    monkeypatch.setattr("genesis_api.api.routes.blog_comments.lookup_region", lambda host: "浙江省")
+    monkeypatch.setattr(
+        "genesis_api.api.routes.blog_comments.qq_avatar", lambda number: (b"image", "image/png")
+    )
+    data = {
+        "content": "  纯文本 <script>自检</script> %  ",
+        "submission_id": str(uuid4()),
+        "qq": "12345@qq.com",
+        "show_region": True,
+    }
     assert (await client.post(url, json=data)).status_code == 401
     first = await client.post(url, headers=reader_headers, json=data)
     assert first.status_code == 201 and first.json()["state"] == "pending"
     receipt = first.json()
+    avatar_url = f"/api/v1/blog/comments/{receipt['id']}/avatar"
+    assert (await client.get(avatar_url)).status_code == 404
     assert set(receipt) == {"id", "state"}
     assert (await client.post(url, headers=reader_headers, json=data)).json() == receipt
     assert len(list(database_session.scalars(select(BlogComment)))) == 1
@@ -829,8 +840,25 @@ async def test_comment_submission_moderation_and_public_boundary(
     assert approved.status_code == 200
     public = (await client.get(url)).json()
     assert public["total"] == 1
-    assert set(public["items"][0]) == {"id", "content", "author_name", "created_at"}
-    assert public["items"][0]["content"] == data["content"].strip()
+    assert set(public["items"][0]) == {
+        "id",
+        "content",
+        "author_name",
+        "created_at",
+        "avatar_url",
+        "region",
+        "browser",
+        "operating_system",
+    }
+    assert public["items"][0]["content"] == str(data["content"]).strip()
+    assert public["items"][0]["region"] == "浙江省"
+    assert public["items"][0]["avatar_url"] == avatar_url
+    assert "12345" not in str(public)
+    avatar = await client.get(avatar_url)
+    assert avatar.status_code == 200 and avatar.content == b"image"
+    assert avatar.headers["X-Content-Type-Options"] == "nosniff"
+    monkeypatch.setattr("genesis_api.api.routes.blog_comments.qq_avatar", lambda number: None)
+    assert (await client.get(avatar_url)).status_code == 502
     assert (await client.put(path, headers=owner_headers, json=mutation)).status_code == 409
     assert (
         await client.delete(
@@ -850,6 +878,7 @@ async def test_comment_submission_moderation_and_public_boundary(
         },
     )
     assert hidden.status_code == 200
+    assert (await client.get(avatar_url)).status_code == 404
     assert (await client.get(url)).json()["total"] == 0
     listing = (
         await client.get(

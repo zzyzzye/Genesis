@@ -4,6 +4,7 @@ import { BlogWorkflowDialog } from '../../studio/BlogWorkflowDialog'
 import { ApiError, getBlogComments, submitBlogComment, type BlogComment } from '../../lib/api'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
 import './ArticleComments.css'
+import { CommentAvatar, CommentSource } from './CommentSource'
 
 const readToken = () => getStoredAuthToken() ?? getStoredAuthToken(studioAuthTokenKey)
 const date = (value: string) => new Date(value).toLocaleString('zh-CN')
@@ -18,16 +19,20 @@ export function ArticleComments({ slug }: { slug: string }) {
   const [offset, setOffset] = useState(0)
   const [token, setToken] = useState(readToken)
   const [content, setContent] = useState('')
+  const [qq, setQq] = useState('')
+  const [showRegion, setShowRegion] = useState(false)
+  const [qqError, setQqError] = useState(false)
+  const qqInput = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
   const [expired, setExpired] = useState(false)
   const input = useRef<HTMLTextAreaElement>(null)
   const pending = useRef(false)
-  const attempt = useRef<{ content: string; id: string } | null>(null)
+  const attempt = useRef<{ signature: string; id: string } | null>(null)
   const mounted = useRef(true)
   const anchored = useRef(false)
-  const dirty = Boolean(content.trim())
+  const dirty = Boolean(content.trim() || qq.trim() || showRegion)
   const blocker = useBlocker(({ currentLocation, nextLocation }) => (dirty || pending.current) && currentLocation.pathname !== nextLocation.pathname)
   const returnTo = '/account?returnTo=' + encodeURIComponent('/articles/' + slug + '#comments')
 
@@ -67,16 +72,20 @@ export function ArticleComments({ slug }: { slug: string }) {
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (pending.current) return
+    setQqError(false)
     const body = content.trim()
     if (!body || body.length > 2000) { setError('请填写 1–2000 字的评论。'); input.current?.focus(); return }
+    const qqValue = qq.trim()
+    if (qqValue && !/^[1-9][0-9]{4,10}(?:@qq\.com)?$/i.test(qqValue)) { setQqError(true); setError('请填写 5–11 位 QQ 号或数字 QQ 邮箱；英文别名无法匹配头像。'); qqInput.current?.focus(); return }
     const currentToken = readToken()
     if (!currentToken) { setExpired(true); setError('请先登录，当前输入会保留在此页面。'); return }
-    if (attempt.current?.content !== body) attempt.current = { content: body, id: crypto.randomUUID() }
+    const signature = JSON.stringify([body, qqValue.toLowerCase(), showRegion])
+    if (attempt.current?.signature !== signature) attempt.current = { signature, id: crypto.randomUUID() }
     pending.current = true; setBusy(true); setError(''); setFeedback('')
     try {
-      const receipt = await submitBlogComment(slug, currentToken, body, attempt.current.id)
+      const receipt = await submitBlogComment(slug, currentToken, body, attempt.current.id, qqValue, showRegion)
       if (!mounted.current) return
-      setContent(''); attempt.current = null; setExpired(false)
+      setContent(''); setQq(''); setShowRegion(false); attempt.current = null; setExpired(false)
       setFeedback(receipt.state === 'public' ? '评论已提交并公开。' : receipt.state === 'hidden' ? '这条评论已提交，目前未公开。' : '评论已提交，审核通过后会显示。')
       setOffset(0); setRefresh((value) => value + 1); input.current?.focus()
     } catch (reason) {
@@ -89,15 +98,20 @@ export function ArticleComments({ slug }: { slug: string }) {
   return <section className="article-comments" id="comments" aria-labelledby="article-comments-title">
     <header><h2 id="article-comments-title">文章讨论 <span>{total}</span></h2><button type="button" disabled={loading} onClick={() => { setOffset(0); setRefresh((value) => value + 1) }}>刷新评论</button></header>
     <div className="article-comments__list" aria-busy={loading}>
-      {items.length > 0 && <ol aria-label="公开评论">{items.map((item) => <li key={item.id}><div><strong>{item.author_name}</strong><time dateTime={item.created_at}>{date(item.created_at)}</time></div><p>{item.content}</p></li>)}</ol>}
+      {items.length > 0 && <ol aria-label="公开评论">{items.map((item) => <li key={item.id}><CommentAvatar item={item} /><div className="article-comments__entry"><div className="article-comments__meta"><strong>{item.author_name}</strong><time dateTime={item.created_at}>{date(item.created_at)}</time></div><CommentSource item={item} /><p>{item.content}</p></div></li>)}</ol>}
       {loading && <p role="status">正在加载评论…</p>}
       {loadError && <p role="alert">评论暂时未能加载。<button type="button" onClick={() => setRefresh((value) => value + 1)}>重试加载评论</button></p>}
       {!loading && !loadError && items.length === 0 && <p>还没有公开评论，欢迎留下你的想法。</p>}
       {!loading && !loadError && items.length < total && <button type="button" onClick={() => setOffset(offset + 20)}>查看更多评论</button>}
     </div>
     {token ? <form noValidate onSubmit={(event) => void submit(event)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault() }}>
-      <label htmlFor="comment-content">写下评论</label><textarea id="comment-content" ref={input} placeholder="这篇文章带给你什么想法？" rows={5} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); setError('') }} aria-describedby="comment-help comment-error" aria-invalid={Boolean(error)} />
-      <p id="comment-help">提交后先由作者审核。公开时只展示你的昵称、评论正文和时间，请勿填写私人信息。{content.length}/2000</p>
+      <label htmlFor="comment-qq">QQ 号或数字 QQ 邮箱 <span className="article-comments__optional">选填 · 用于评论头像</span></label>
+      <input id="comment-qq" ref={qqInput} type="text" autoComplete="off" maxLength={64} placeholder="QQ 号或 QQ号@qq.com" value={qq} disabled={busy} onChange={(event) => { setQq(event.target.value); setQqError(false); setError('') }} aria-invalid={qqError} aria-describedby="comment-qq-help comment-error" />
+      <p id="comment-qq-help">留空使用账户头像。QQ 信息仅用于获取头像，不代表 QQ 身份认证；英文邮箱别名无法匹配。</p>
+      <label htmlFor="comment-content">写下评论</label><textarea id="comment-content" ref={input} placeholder="这篇文章带给你什么想法？" rows={5} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); setError('') }} aria-describedby="comment-help comment-error" aria-invalid={Boolean(error) && !qqError} />
+      <label className="article-comments__region"><input type="checkbox" checked={showRegion} disabled={busy} onChange={(event) => setShowRegion(event.target.checked)} />显示粗粒度 IP 属地（可选）</label>
+      <p>勾选后，提交时会向 ipwho.is 发送 IP 查询省份或国家；不会保存或公开原始 IP，查询失败显示未知地区。</p>
+      <p id="comment-help">审核通过后展示昵称、头像、正文、时间及浏览器和系统名称。请勿在正文填写私人信息。{content.length}/2000</p>
       <p id="comment-error" role={error ? 'alert' : undefined}>{error}</p>
       {expired && <Link to={returnTo} target="_blank" rel="noopener noreferrer">重新登录（新标签页）</Link>}
       <button type="submit" disabled={busy}>{busy ? '提交中…' : '提交评论'}</button><p role="status">{feedback}</p>

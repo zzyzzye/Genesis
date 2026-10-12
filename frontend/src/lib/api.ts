@@ -46,14 +46,14 @@ export function deleteAdminBlogPage(token: string, id: string, version: string):
 }
 
 export type BlogCommentState = 'pending' | 'public' | 'hidden'
-export interface BlogComment { id: string; content: string; author_name: string; created_at: string }
+export interface BlogComment { id: string; content: string; author_name: string; created_at: string; avatar_url?: string | null; region?: string | null; browser?: string | null; operating_system?: string | null }
 export interface BlogCommentAdmin extends BlogComment { post_title: string; post_slug: string; post_status: 'draft' | 'published'; state: BlogCommentState; updated_at: string }
 export interface BlogCommentsPage<T = BlogComment> { items: T[]; total: number }
 export function getBlogComments(slug: string, offset: number, signal?: AbortSignal): Promise<BlogCommentsPage> {
   return request(`/blog/posts/${encodeURIComponent(slug)}/comments?limit=20&offset=${offset}`, { signal })
 }
-export function submitBlogComment(slug: string, token: string, content: string, submissionId: string): Promise<{ id: string; state: BlogCommentState }> {
-  return request(`/blog/posts/${encodeURIComponent(slug)}/comments`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ content, submission_id: submissionId }) })
+export function submitBlogComment(slug: string, token: string, content: string, submissionId: string, qq = '', showRegion = false): Promise<{ id: string; state: BlogCommentState }> {
+  return request(`/blog/posts/${encodeURIComponent(slug)}/comments`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ content, submission_id: submissionId, qq: qq.trim() || null, show_region: showRegion }) })
 }
 export function getAdminBlogComments(token: string, query: string, state: string, page: number, signal?: AbortSignal): Promise<BlogCommentsPage<BlogCommentAdmin>> {
   const params = new URLSearchParams({ q: query, limit: '20', offset: String((page - 1) * 20) })

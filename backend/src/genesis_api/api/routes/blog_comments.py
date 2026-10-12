@@ -4,12 +4,13 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import AwareDatetime
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from genesis_api.api.dependencies import CurrentUserDependency, OwnerDependency, SessionDependency
+from genesis_api.blog.comment_metadata import device_labels, lookup_region, qq_avatar
 from genesis_api.blog.comments import (
     CommentAdmin,
     CommentAdminPage,
@@ -52,7 +53,11 @@ def get_comments(
 
 @public_router.post("/posts/{slug}/comments", response_model=CommentReceipt, status_code=201)
 def submit_comment(
-    slug: str, data: CommentWrite, session: SessionDependency, user: CurrentUserDependency
+    slug: str,
+    data: CommentWrite,
+    request: Request,
+    session: SessionDependency,
+    user: CurrentUserDependency,
 ) -> CommentReceipt:
     """登录后提交待审核评论；同一提交标识重试不重复写入，每分钟最多五条。"""
     # 锁定读者行，串行检查该读者的提交标识及频率，避免并发绕过限制。
@@ -68,10 +73,11 @@ def submit_comment(
         select(BlogComment).where(BlogComment.submission_id == data.submission_id)
     )
     if previous is not None:
-        if (previous.author_id, previous.post_id, previous.content) != (
+        if (previous.author_id, previous.post_id, previous.content, previous.qq_number) != (
             user.id,
             post.id,
             data.content,
+            data.qq,
         ):
             raise HTTPException(409, "提交标识已使用，请重新提交")
         return CommentReceipt(id=previous.id, state=previous.state)
@@ -89,11 +95,20 @@ def submit_comment(
     )
     if recent >= 5:
         raise HTTPException(429, "提交过于频繁，请一分钟后重试", headers={"Retry-After": "60"})
+    browser, operating_system = device_labels(request.headers.get("user-agent", ""))
     item = BlogComment(
         submission_id=data.submission_id,
         author_id=user.id,
         post_id=post.id,
         content=data.content,
+        qq_number=data.qq,
+        browser=browser,
+        operating_system=operating_system,
+        region=(
+            lookup_region(request.client.host if request.client else None)
+            if data.show_region
+            else None
+        ),
         state=BlogCommentState.PENDING,
         created_at=now,
         updated_at=now,
@@ -105,6 +120,31 @@ def submit_comment(
         session.rollback()
         raise HTTPException(409, "提交标识已使用，请重新提交") from exc
     return CommentReceipt(id=item.id, state=item.state)
+
+
+@public_router.get("/comments/{item_id}/avatar")
+def get_comment_avatar(item_id: UUID, session: SessionDependency) -> Response:
+    """仅公开文章的公开评论可获取 QQ 头像，不向浏览器暴露 QQ 号。"""
+    item = session.scalar(
+        select(BlogComment)
+        .join(BlogComment.post)
+        .where(
+            BlogComment.id == item_id,
+            BlogComment.state == BlogCommentState.PUBLIC,
+            BlogPost.status == BlogPostStatus.PUBLISHED,
+        )
+    )
+    if item is None or item.qq_number is None:
+        raise HTTPException(404, "头像不存在或尚未公开")
+    avatar = qq_avatar(item.qq_number)
+    if avatar is None:
+        raise HTTPException(502, "头像暂时无法加载")
+    content, media_type = avatar
+    return Response(
+        content,
+        media_type=media_type,
+        headers={"Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @admin_router.get("", response_model=CommentAdminPage)

@@ -74,6 +74,42 @@ describe('文章评论', () => {
     expect(await screen.findByText('后一页')).toBeInTheDocument()
     expect(getBlogComments).toHaveBeenLastCalledWith('test-post', 20, expect.any(AbortSignal))
   })
+
+  it('QQ 输入校验保留正文；设备与头像失败均能降级显示', async () => {
+    reader()
+    vi.mocked(getBlogComments).mockResolvedValue({ items: [{ ...item, avatar_url: '/avatar-test', region: '浙江省', browser: 'Chrome', operating_system: 'Windows' }], total: 1 })
+    expect(await screen.findByText('浙江省')).toBeInTheDocument()
+    expect(screen.getByText('Chrome · Windows')).toBeInTheDocument()
+    const image = document.querySelector('.comment-avatar img')!
+    fireEvent.error(image)
+    expect(document.querySelector('.comment-avatar')).toHaveTextContent('测')
+    fireEvent.change(screen.getByRole('textbox', { name: '写下评论' }), { target: { value: '头像与来源测试' } })
+    const qq = screen.getByRole('textbox', { name: /QQ 号或数字 QQ 邮箱/ })
+    fireEvent.change(qq, { target: { value: 'alias@qq.com' } })
+    fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
+    expect(submitBlogComment).not.toHaveBeenCalled()
+    expect(qq).toHaveFocus()
+    fireEvent.change(qq, { target: { value: '12345@qq.com' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: /显示粗粒度 IP 属地/ }))
+    vi.mocked(submitBlogComment).mockResolvedValueOnce({ id: 'comment-1', state: 'pending' })
+    fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
+    expect(await screen.findByText('评论已提交，审核通过后会显示。')).toBeInTheDocument()
+    expect(submitBlogComment).toHaveBeenCalledWith('test-post', 'test-placeholder', '头像与来源测试', expect.any(String), '12345@qq.com', true)
+  })
+
+  it('修改 QQ 资料后重试会更换提交标识，地区查询默认关闭', async () => {
+    reader()
+    fireEvent.change(screen.getByRole('textbox', { name: '写下评论' }), { target: { value: '重试测试' } })
+    vi.mocked(submitBlogComment).mockRejectedValue(new Error('网络中断'))
+    fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
+    await screen.findByRole('alert')
+    fireEvent.change(screen.getByRole('textbox', { name: /QQ 号或数字 QQ 邮箱/ }), { target: { value: '12345' } })
+    fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
+    await screen.findByRole('alert')
+    const calls = vi.mocked(submitBlogComment).mock.calls
+    expect(calls[0]?.[3]).not.toBe(calls[1]?.[3])
+    expect(calls[1]?.[5]).toBe(false)
+  })
 })
 
 describe('评论审核', () => {

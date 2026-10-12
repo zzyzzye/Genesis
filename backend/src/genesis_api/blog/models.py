@@ -109,6 +109,10 @@ class BlogComment(Base):
         Uuid, ForeignKey("users.id", ondelete="RESTRICT"), index=True
     )
     content: Mapped[str] = mapped_column(String(2000))
+    qq_number: Mapped[str | None] = mapped_column(String(11), nullable=True)
+    region: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    browser: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    operating_system: Mapped[str | None] = mapped_column(String(100), nullable=True)
     state: Mapped[BlogCommentState] = mapped_column(
         Enum(BlogCommentState, native_enum=False, values_callable=lambda e: [v.value for v in e]),
         default=BlogCommentState.PENDING,

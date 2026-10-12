@@ -1,0 +1,4 @@
+.comment-avatar { display: inline-flex; width: 36px; height: 36px; flex: 0 0 36px; align-items: center; justify-content: center; overflow: hidden; border-radius: 50%; background: var(--blog-hover, var(--studio-soft)); color: inherit; vertical-align: middle; }
+.comment-avatar img { display: block; width: 36px; height: 36px; object-fit: cover; }
+.comment-avatar > span { font-size: 14px; }
+.comment-source { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; color: var(--blog-muted, var(--studio-muted)); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
