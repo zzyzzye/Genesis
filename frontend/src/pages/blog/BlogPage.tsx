@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArticleMarkdown } from '../../features/blog/ArticleMarkdown'
 import { BlogLinks } from '../../features/blog/BlogLinks'
 import { ArticleComments } from '../../features/blog/ArticleComments'
+import { ArticleGuide } from '../../features/blog/ArticleGuide'
 
 import { getBlogPost, getBlogPosts, type BlogPostDetail, type BlogPostPreview, type BlogTag } from '../../lib/api'
 
@@ -160,6 +161,7 @@ function PublicBlog() {
                     <span>{currentArticle.read_time_minutes} 分钟阅读</span>
                   </div>
                 </header>
+                <ArticleGuide key={`${currentArticle.id}:${currentArticle.content_revision ?? ''}`} slug={currentArticle.slug} revision={currentArticle.content_revision} />
                 <MarkdownContent content={currentArticle.content_markdown} />
                 <ArticleComments key={currentArticle.slug} slug={currentArticle.slug} />
               </>

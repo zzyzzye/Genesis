@@ -34,6 +34,12 @@ make docker-down
 - 后端：http://localhost:8000
 - API 文档：http://localhost:8000/docs
 
+## 文章 AI 导读
+
+公开文章的摘要与正文之间提供默认收起的「AI 导读」，展开查看三个要点和阅读重点。发布或更新文章后，后端复用站点默认文本模型生成当前版本的缓存；旧文章会逐批补齐，读者展开和重试只读取缓存。模型未配置、生成失败或正文超过 60,000 字符时仍可直接阅读正文，作者再次保存已发布文章可重试生成。
+
+更新环境先通过现有容器执行 `docker compose exec -T backend uv run alembic upgrade head`。缓存、版本隔离与恢复规则见 [文章导读说明](docs/article-guides.md)。
+
 ## 博客独立页面
 
 在 `/blog/studio/pages` 创建关于、站点说明和专题页面，支持 Markdown 编辑与预览、草稿保存、发布、撤回和删除。公开目录位于 `/blog/pages`，发布后的正文地址为 `/blog/pages/:slug`；草稿不会公开，也不会混入文章列表。

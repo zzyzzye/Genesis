@@ -7,6 +7,7 @@ from enum import StrEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     Column,
@@ -242,3 +243,21 @@ class BlogPost(Base):
         secondary=blog_post_tags,
         back_populates="posts",
     )
+    guide: Mapped[BlogArticleGuide | None] = relationship(
+        cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class BlogArticleGuide(Base):
+    """每篇文章只保留当前内容的导读，生成状态与文章在同一事务中更新。"""
+
+    __tablename__ = "blog_article_guides"
+
+    post_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("blog_posts.id", ondelete="CASCADE"), primary_key=True
+    )
+    revision: Mapped[str] = mapped_column(String(64))
+    state: Mapped[str] = mapped_column(String(12), default="pending", index=True)
+    payload: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

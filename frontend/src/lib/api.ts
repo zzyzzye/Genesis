@@ -110,6 +110,7 @@ export interface BlogPostPreview {
 
 export interface BlogPostDetail extends BlogPostPreview {
   content_markdown: string
+  content_revision?: string
 }
 
 export type BlogPostStatus = 'draft' | 'published'
@@ -207,6 +208,17 @@ export function getBlogPosts(signal?: AbortSignal, limit?: number): Promise<Blog
 
 export function getBlogPost(slug: string, signal?: AbortSignal): Promise<BlogPostDetail> {
   return request<BlogPostDetail>(`/blog/posts/${encodeURIComponent(slug)}`, { signal })
+}
+
+export interface BlogArticleGuide {
+  status: 'pending' | 'ready' | 'unavailable' | 'outdated'
+  key_points: string[]
+  reading_focus: string
+}
+
+export function getBlogArticleGuide(slug: string, revision?: string, signal?: AbortSignal): Promise<BlogArticleGuide> {
+  const query = revision ? `?${new URLSearchParams({ revision }).toString()}` : ''
+  return request(`/blog/posts/${encodeURIComponent(slug)}/guide${query}`, { signal })
 }
 
 function formatApiErrorDetail(error: unknown): string | null {

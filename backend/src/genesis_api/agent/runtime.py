@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 from urllib.parse import urlparse
 
 import httpx
@@ -14,7 +14,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from pydantic import SecretStr
+from pydantic import BaseModel, SecretStr
 
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.context import agent_invocation_context
@@ -28,6 +28,8 @@ from genesis_api.llm.capabilities import model_capabilities_for
 from genesis_api.llm.profiles import (
     transport_provider_for,
 )
+
+StructuredResult = TypeVar("StructuredResult", bound=BaseModel)
 
 
 class YyapiAsyncTransport(httpx.AsyncBaseTransport):
@@ -353,6 +355,49 @@ class EmbeddedAgentRuntime:
                     if metrics is not None:
                         metrics.observe(message, text)
                     yield text
+
+    async def generate_structured(
+        self,
+        settings: Settings,
+        *,
+        prompt: str,
+        content: str,
+        schema: type[StructuredResult],
+    ) -> StructuredResult:
+        """复用公共模型适配与 LangChain 结构化输出，不授予工具或会话权限。
+
+        Args:
+            settings: 沿用站点默认文本供应商与模型。
+            prompt: 业务模块提供的可信系统提示词。
+            content: 仅作为数据传递的业务正文。
+            schema: 由 LangChain/Pydantic 校验的结果契约。
+
+        Returns:
+            完整流结束后最后一份通过契约校验的结果。
+
+        Raises:
+            RuntimeError: 未配置模型，或模型没有返回完整结构化结果。
+        """
+        provider = settings.text_provider
+        _, _, model, _ = self._model_config(settings, provider)
+        if not model:
+            raise RuntimeError("未配置文本生成模型")
+        capabilities = model_capabilities_for(provider, model)
+        levels = capabilities.profile.get("reasoning_effort_levels") or []
+        effort = "low" if "low" in levels else None
+        thinking = "disabled" if "disabled" in (capabilities.thinking_modes or []) else None
+        client = self._build_model(settings, provider, model, effort, thinking)
+        result: StructuredResult | None = None
+        async for value in client.with_structured_output(schema).astream(
+            [
+                SystemMessage(content=prompt),
+                {"role": "user", "content": content},
+            ]
+        ):
+            result = schema.model_validate(value)
+        if result is None:
+            raise RuntimeError("模型未返回完整结构化结果")
+        return result
 
     async def generate_title(self, request: AiChatRequest, settings: Settings) -> str:
         """复用公共模型适配总结首条用户消息，不运行 Agent 或写入聊天状态。"""

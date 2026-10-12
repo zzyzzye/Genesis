@@ -75,6 +75,7 @@ class BlogPostDetail(BlogPostPreview):
     """公开文章详情，在摘要字段上补充 Markdown 正文。"""
 
     content_markdown: str
+    content_revision: str = ""
 
 
 class BlogPostListResponse(BaseModel):
