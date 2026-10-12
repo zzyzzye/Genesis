@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArticleMarkdown } from '../features/blog/ArticleMarkdown'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ArticleDocument, ArticleToc } from '../features/blog/ArticleToc'
+import { getArticleHeadings, type ArticleHeading } from '../features/blog/articleOutline'
 import { EditorView } from '@codemirror/view'
 import {
   BlockTypeSelect,
@@ -118,34 +119,6 @@ const GenesisToolbar = ({ onAttachment, disabled }: { onAttachment?: () => void;
     <InsertFrontmatter />
   </DiffSourceToggleWrapper>
 )
-type MarkdownOutlineItem = {
-  level: number
-  text: string
-}
-
-function getMarkdownOutline(markdown: string): MarkdownOutlineItem[] {
-  const lines = markdown.split('\n')
-  const headings: MarkdownOutlineItem[] = []
-  let isInsideCodeFence = false
-
-  for (const line of lines) {
-    if (/^\s*```/.test(line)) {
-      isInsideCodeFence = !isInsideCodeFence
-      continue
-    }
-    if (isInsideCodeFence) continue
-
-    const match = /^(#{1,3})\s+(.+?)\s*#*\s*$/.exec(line)
-    if (!match) continue
-
-    headings.push({
-      level: (match[1] ?? '').length,
-      text: (match[2] ?? '').replace(/[*_~]/g, '').trim(),
-    })
-  }
-
-  return headings
-}
 const mdxEditorChineseText: Record<string, string> = {
   "admonitions.caution": "注意",
   "admonitions.changeType": "选择提示类型",
@@ -369,11 +342,25 @@ export function MarkdownEditor({
   const sourceInsertion = useRef<{ view: EditorView; from: number; to: number } | null>(null)
   const editorWorkspaceRef = useRef<HTMLDivElement>(null)
   const markdownRef = useRef<MDXEditorMethods>(null)
-  const outlineItems = getMarkdownOutline(editor.contentMarkdown)
-  const [isOutlineExpanded, setIsOutlineExpanded] = useState(true)
+  const outlineItems = useMemo(() => getArticleHeadings(editor.contentMarkdown), [editor.contentMarkdown])
+  const [activeHeading, setActiveHeading] = useState('')
   const stats = articleStats(editor.contentMarkdown)
   const label = kind === 'page' ? '页面' : '文章'
   const onAttachmentOpenChange = attachmentAccess?.onOpenChange
+
+  function navigateHeading(item: ArticleHeading, index: number) {
+    setActiveHeading(item.id)
+    const source = editorWorkspaceRef.current?.querySelector<HTMLElement>('.mdxeditor-source-editor .cm-editor')
+    const view = source ? EditorView.findFromDOM(source) : null
+    if (view) {
+      const from = view.state.doc.line(Math.min(item.line, view.state.doc.lines)).from
+      view.dispatch({ selection: { anchor: from }, effects: EditorView.scrollIntoView(from, { y: 'start' }) })
+      view.focus()
+      return
+    }
+    const heading = editorWorkspaceRef.current?.querySelectorAll<HTMLElement>('.genesis-mdx-content :is(h1,h2,h3,h4,h5,h6)')[index]
+    heading?.scrollIntoView({ block: 'start' })
+  }
 
   useEffect(() => {
     onAttachmentOpenChange?.(isAttachmentOpen)
@@ -468,34 +455,7 @@ export function MarkdownEditor({
             spellCheck={false}
           />
         </section>
-        <aside className={`markdown-editor__outline markdown-editor__outline--mdx ${isOutlineExpanded ? 'markdown-editor__outline--expanded' : ''}`} aria-label={`${label}目录`}>
-          <button
-            aria-controls="markdown-editor-outline"
-            aria-expanded={isOutlineExpanded}
-            className="markdown-editor__outline-heading"
-            type="button"
-            onClick={() => setIsOutlineExpanded((isExpanded) => !isExpanded)}
-          >
-            <span>目录</span><small>{isOutlineExpanded ? `${outlineItems.length} 节 · 收起` : '展开'}</small>
-          </button>
-          {isOutlineExpanded && (outlineItems.length > 0 ? (
-            <nav aria-label={`${label}标题导航`} id="markdown-editor-outline">
-              {outlineItems.map((item, index) => (
-                <button
-                  className={`markdown-editor__outline-item markdown-editor__outline-item--${item.level}`}
-                  key={`${item.text}-${index}`}
-                  type="button"
-                  onClick={() => {
-                    const headings = editorWorkspaceRef.current?.querySelectorAll('.genesis-mdx-content h1, .genesis-mdx-content h2, .genesis-mdx-content h3')
-                    headings?.[index]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }}
-                >
-                  {item.text}
-                </button>
-              ))}
-            </nav>
-          ) : <p className="markdown-editor__outline-empty" id="markdown-editor-outline">添加一级至三级标题后，会在这里显示目录。</p>)}
-        </aside>
+        <div className="markdown-editor__toc"><ArticleToc items={outlineItems} activeId={activeHeading} label={`${label}目录`} onNavigate={navigateHeading} /></div>
       </div>
       <footer className="markdown-editor__writing-meta"><span>{stats.count.toLocaleString('zh-CN')} 字 · 预计阅读 {stats.minutes} 分钟</span><span>未保存内容仅保留在本标签页</span></footer>
       {isAttachmentOpen && attachmentAccess && <EditorAttachmentPicker access={attachmentAccess} onClose={closeAttachments} onInsert={insertAttachment} />}
@@ -533,9 +493,7 @@ export function ArticleReader({
           <button className="primary-button" type="button" onClick={onEdit}>编辑{label}</button>
         </div>
       </header>
-      <article className="article-reader__content article-content">
-        <ArticleMarkdown>{editor.contentMarkdown || '开始输入 Markdown 内容。'}</ArticleMarkdown>
-      </article>
+      <ArticleDocument className="article-reader__document" label={`${label}目录`} content={editor.contentMarkdown || '开始输入 Markdown 内容。'} />
     </section>
   )
 }

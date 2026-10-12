@@ -143,15 +143,6 @@
   min-height: 2.3rem !important;
   padding-block: .4rem .35rem !important;
 }
-@media (min-width: 1281px) {
-  .markdown-editor__source--mdx:has(.markdown-editor__outline--expanded) .genesis-mdx-content {
-    box-sizing: border-box;
-    width: min(54rem, calc(100% - 21rem));
-    max-width: none;
-    margin-left: clamp(2rem, 4vw, 5rem);
-    margin-right: auto;
-  }
-}
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div {
   margin: 0 !important;
   padding: 0 !important;

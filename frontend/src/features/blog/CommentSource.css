@@ -2,3 +2,5 @@
 .comment-avatar img { display: block; width: 36px; height: 36px; object-fit: cover; }
 .comment-avatar > span { font-size: 14px; }
 .comment-source { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; color: var(--blog-muted, var(--studio-muted)); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
+.comment-source > span { display: inline-flex; align-items: center; gap: 4px; }
+.comment-source svg { flex: none; opacity: .75; }

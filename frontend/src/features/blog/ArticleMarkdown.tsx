@@ -5,6 +5,7 @@ import { classHighlighter, highlightTree } from '@lezer/highlight'
 import { Check, ChevronDown, ChevronUp, Copy, Paperclip } from 'lucide-react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { remarkHeadingIds } from './articleOutline'
 
 import './ArticleMarkdown.css'
 
@@ -103,7 +104,7 @@ function CodePre({ children }: { children?: ReactNode }) {
 }
 
 export function ArticleMarkdown({ children }: { children: string }) {
-  return <Markdown remarkPlugins={[remarkGfm]} components={{ pre: CodePre, a: ({ href, title, children: label }) => {
+  return <Markdown remarkPlugins={[remarkGfm, remarkHeadingIds]} components={{ pre: CodePre, a: ({ href, title, children: label }) => {
     const attachment = /\/blog\/attachments\/[0-9a-f-]{36}\/file(?:[?#]|$)/i.test(href ?? '')
     return <a href={href} title={title} className={attachment ? 'article-attachment-link' : undefined} download={attachment ? '' : undefined}>{attachment && <Paperclip size={16} aria-hidden="true" />}{label}</a>
   } }}>{children}</Markdown>

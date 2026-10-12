@@ -97,6 +97,19 @@ describe('文章评论', () => {
     expect(submitBlogComment).toHaveBeenCalledWith('test-post', 'test-placeholder', '头像与来源测试', expect.any(String), '12345@qq.com', true)
   })
 
+  it('隐私说明默认收起，正文区域先于选填资料和评论列表', async () => {
+    const { container } = reader()
+    await screen.findByText('还没有公开评论，欢迎留下你的想法。')
+    const disclosure = container.querySelector('details')!
+    expect(disclosure).not.toHaveAttribute('open')
+    fireEvent.click(screen.getByText('头像与隐私说明', { exact: true }))
+    expect(disclosure).toHaveAttribute('open')
+    const body = screen.getByRole('textbox', { name: '写下评论' })
+    const qq = screen.getByRole('textbox', { name: /QQ 号或数字 QQ 邮箱/ })
+    expect(body.compareDocumentPosition(qq) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(container.querySelector('form')!.compareDocumentPosition(container.querySelector('.article-comments__list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('修改 QQ 资料后重试会更换提交标识，地区查询默认关闭', async () => {
     reader()
     fireEvent.change(screen.getByRole('textbox', { name: '写下评论' }), { target: { value: '重试测试' } })

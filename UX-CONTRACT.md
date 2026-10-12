@@ -4,6 +4,12 @@
 
 ## Canonical UI Map
 
+文章及独立页面的目录由 ArticleToc / ArticleDocument / articleOutline 统一拥有。阅读目录使用 React Router 管理章节锚点，支持深链接恢复与当前章节提示；编辑目录只移动富文本或源码位置，不修改数据。桌面右侧显示，窄屏在正文前提供默认收起的入口；无标题显示明确空态。
+
+本轮工程检查通过 ESLint、TypeScript/生产构建及前端 172 项测试。设计静态审计维持既有 20 项发现，未新增；构建保留既有大分块提示。
+
+2026-10-12 评论布局与内外目录验收复用 Compose 服务，覆盖 1440×900 与 390×844：公开目录跳转和返回、编辑目录展开收起、富文本及源码定位、后台预览、评论空态、来源内容、无历史来源、正文聚焦、隐私说明展开收起。截图确认无重叠和横向溢出；输入聚焦保持 border:0、outline:none、box-shadow:none、透明背景。正常评论列表使用响应替身，完成后撤销，没有改写真实评论或文章。
+
 博客工作台壳由 Studio、StudioNavigation 和 shell.css 统一拥有，复用既有内容滚动区；窄屏导航保留文字，可横向滚动。仪表盘仅显示真实文章与可用操作。文章列表由 PostsIndex 拥有，客户端对已加载数据进行标题/摘要/分类搜索与草稿/发布状态筛选，按更新时间倒序，每页最多 40 篇。查询、状态和页码保存为 URL 的 q/status/page；改变筛选回到第一页，清空搜索后焦点回到输入框。空数据与无匹配结果分别提供创建文章与清除筛选动作，不修改文章或发布流程。
 
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |

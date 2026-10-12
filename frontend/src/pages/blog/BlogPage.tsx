@@ -2,7 +2,7 @@ import './BlogPage.css'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArticleMarkdown } from '../../features/blog/ArticleMarkdown'
+import { ArticleDocument } from '../../features/blog/ArticleToc'
 import { BlogLinks } from '../../features/blog/BlogLinks'
 import { ArticleComments } from '../../features/blog/ArticleComments'
 import { ArticleGuide } from '../../features/blog/ArticleGuide'
@@ -32,7 +32,7 @@ function getTags(posts: BlogPostPreview[]): BlogTag[] {
 }
 
 function MarkdownContent({ content }: { content: string }) {
-  return <div className="article-content"><ArticleMarkdown>{content}</ArticleMarkdown></div>
+  return <ArticleDocument content={content} />
 }
 
 function TagList({ tags }: { tags: BlogTag[] }) {

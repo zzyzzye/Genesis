@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArticleMarkdown } from '../../features/blog/ArticleMarkdown'
+import { ArticleDocument } from '../../features/blog/ArticleToc'
 import { ApiError, getPublicBlogPage, getPublicBlogPages, type BlogPagePreview, type BlogPagePublic } from '../../lib/api'
 import './BlogPage.css'
 import './PublicPages.css'
@@ -28,7 +28,7 @@ function PageContent({ slug }: { slug?: string }) {
   return <main className="reader-shell blog-pages-reader">
     <Link className="blog-pages-back" to={slug ? '/blog/pages' : '/blog'}>← {slug ? '返回页面目录' : '返回文章列表'}</Link>
     {!slug && <header className="reader-intro"><p className="eyebrow">GENESIS / PAGES</p><h1>页面</h1><p className="reader-summary">关于、站点说明与专题内容。</p></header>}
-    {page && <article><header className="reader-intro"><h1>{page.title}</h1>{page.excerpt && <p className="reader-summary">{page.excerpt}</p>}</header><div className="article-content"><ArticleMarkdown>{page.content_markdown}</ArticleMarkdown></div></article>}
+    {page && <article><header className="reader-intro"><h1>{page.title}</h1>{page.excerpt && <p className="reader-summary">{page.excerpt}</p>}</header><ArticleDocument content={page.content_markdown} label="页面目录" /></article>}
     {!slug && items.length > 0 && <ul className="blog-pages-list" aria-label="公开页面">{items.map(item => <li key={item.id}><Link to={'/blog/pages/' + encodeURIComponent(item.slug)}><h2>{item.title} <span aria-hidden="true">↗</span></h2>{item.excerpt && <p>{item.excerpt}</p>}</Link></li>)}</ul>}
     <div className="blog-pages-feedback" aria-busy={loading}>
       {loading && <p role="status">正在加载页面…</p>}

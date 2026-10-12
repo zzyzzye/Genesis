@@ -23,9 +23,7 @@
 .markdown-editor__recovery button { padding: 6px 10px; border: 0; border-radius: 6px; outline: 0; box-shadow: none; background: var(--studio-editor-hover); color: var(--studio-ink); font: inherit; cursor: pointer; }
 .markdown-editor__recovery button:hover, .markdown-editor__recovery button:focus-visible { background: var(--studio-paper); }
 .markdown-editor__writing-meta { display: flex; flex-wrap: wrap; flex: 0 0 auto; justify-content: space-between; gap: 8px; padding: 10px 24px; background: var(--studio-paper); color: var(--studio-editor-muted); font-size: 12px; }
-.studio-workspace .markdown-editor__outline--mdx { border: 0; outline: 0; box-shadow: none; background: var(--studio-soft); }
-.markdown-editor__outline-heading, .markdown-editor__outline-item { border: 0; outline: 0; box-shadow: none; }
-.markdown-editor__outline-heading:focus-visible, .markdown-editor__outline-item:focus-visible { background: var(--studio-editor-hover); }
+.editor-attachment-trigger { flex-shrink: 0; white-space: nowrap; }
 .markdown-editor .mdxeditor-toolbar { border: 0; box-shadow: none; }
 .blog-version-comparison details { margin-top: 16px; }
 .blog-version-comparison summary { cursor: pointer; font-weight: 600; }

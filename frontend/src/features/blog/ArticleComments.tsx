@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBlocker, useLocation } from 'react-router-dom'
+import { ArrowUpRight, MessageSquare, RefreshCw } from 'lucide-react'
 import { BlogWorkflowDialog } from '../../studio/BlogWorkflowDialog'
 import { ApiError, getBlogComments, submitBlogComment, type BlogComment } from '../../lib/api'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
@@ -96,7 +97,23 @@ export function ArticleComments({ slug }: { slug: string }) {
   }
 
   return <section className="article-comments" id="comments" aria-labelledby="article-comments-title">
-    <header><h2 id="article-comments-title">文章讨论 <span>{total}</span></h2><button type="button" disabled={loading} onClick={() => { setOffset(0); setRefresh((value) => value + 1) }}>刷新评论</button></header>
+    <header><h2 id="article-comments-title"><MessageSquare size={18} aria-hidden="true" />文章讨论 <span>{total}</span></h2><button className="article-comments__refresh" type="button" disabled={loading} onClick={() => { setOffset(0); setRefresh((value) => value + 1) }}><RefreshCw size={14} aria-hidden="true" />刷新评论</button></header>
+    {token ? <form noValidate onSubmit={(event) => void submit(event)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault() }}>
+      <div className="article-comments__composer">
+        <label htmlFor="comment-content">写下评论</label><textarea id="comment-content" ref={input} placeholder="聊聊你的看法，让讨论从这里开始。" rows={4} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); if (!qqError) setError('') }} aria-describedby="comment-help comment-error" aria-invalid={Boolean(error) && !qqError} />
+        <div className="article-comments__composer-footer"><span id="comment-help">登录后参与 · 审核通过后公开</span><span>{content.length}<span className="article-comments__limit"> / 2000</span></span></div>
+      </div>
+      <div className="article-comments__options">
+        <div className="article-comments__avatar-option"><label htmlFor="comment-qq">QQ 号或数字 QQ 邮箱 <span className="article-comments__optional">选填 · 评论头像</span></label>
+          <input id="comment-qq" ref={qqInput} type="text" autoComplete="off" maxLength={64} placeholder="留空使用账户头像" value={qq} disabled={busy} onChange={(event) => { setQq(event.target.value); setQqError(false); setError('') }} aria-invalid={qqError} aria-describedby="comment-qq-help comment-error" />
+        </div>
+        <div className="article-comments__region-option"><label className="article-comments__region"><input type="checkbox" checked={showRegion} disabled={busy} onChange={(event) => setShowRegion(event.target.checked)} />显示粗粒度 IP 属地（可选）</label><small>仅省份或国家 · 查询服务 ipwho.is</small></div>
+      </div>
+      <details className="article-comments__privacy"><summary>头像与隐私说明</summary><p id="comment-qq-help">支持 QQ 号或数字 QQ 邮箱（QQ号@qq.com），英文别名无法匹配。QQ 信息仅用于头像，不代表身份认证，也不会进入公开接口。</p><p>勾选属地后，会向 ipwho.is 发送 IP 查询省份或国家；不保存或公开原始 IP。公开评论还会显示浏览器与系统名称，请勿在正文填写私人信息。</p></details>
+      <p id="comment-error" className="article-comments__error" role={error ? 'alert' : undefined}>{error}</p>
+      {expired && <Link to={returnTo} target="_blank" rel="noopener noreferrer">重新登录（新标签页）</Link>}
+      <div className="article-comments__submit-row"><p role="status">{feedback}</p><button type="submit" disabled={busy}>{busy ? '提交中…' : '提交评论'}<ArrowUpRight size={15} aria-hidden="true" /></button></div>
+    </form> : <p><Link to={returnTo}>登录后参与讨论 ↗</Link></p>}
     <div className="article-comments__list" aria-busy={loading}>
       {items.length > 0 && <ol aria-label="公开评论">{items.map((item) => <li key={item.id}><CommentAvatar item={item} /><div className="article-comments__entry"><div className="article-comments__meta"><strong>{item.author_name}</strong><time dateTime={item.created_at}>{date(item.created_at)}</time></div><CommentSource item={item} /><p>{item.content}</p></div></li>)}</ol>}
       {loading && <p role="status">正在加载评论…</p>}
@@ -104,18 +121,6 @@ export function ArticleComments({ slug }: { slug: string }) {
       {!loading && !loadError && items.length === 0 && <p>还没有公开评论，欢迎留下你的想法。</p>}
       {!loading && !loadError && items.length < total && <button type="button" onClick={() => setOffset(offset + 20)}>查看更多评论</button>}
     </div>
-    {token ? <form noValidate onSubmit={(event) => void submit(event)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault() }}>
-      <label htmlFor="comment-qq">QQ 号或数字 QQ 邮箱 <span className="article-comments__optional">选填 · 用于评论头像</span></label>
-      <input id="comment-qq" ref={qqInput} type="text" autoComplete="off" maxLength={64} placeholder="QQ 号或 QQ号@qq.com" value={qq} disabled={busy} onChange={(event) => { setQq(event.target.value); setQqError(false); setError('') }} aria-invalid={qqError} aria-describedby="comment-qq-help comment-error" />
-      <p id="comment-qq-help">留空使用账户头像。QQ 信息仅用于获取头像，不代表 QQ 身份认证；英文邮箱别名无法匹配。</p>
-      <label htmlFor="comment-content">写下评论</label><textarea id="comment-content" ref={input} placeholder="这篇文章带给你什么想法？" rows={5} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); setError('') }} aria-describedby="comment-help comment-error" aria-invalid={Boolean(error) && !qqError} />
-      <label className="article-comments__region"><input type="checkbox" checked={showRegion} disabled={busy} onChange={(event) => setShowRegion(event.target.checked)} />显示粗粒度 IP 属地（可选）</label>
-      <p>勾选后，提交时会向 ipwho.is 发送 IP 查询省份或国家；不会保存或公开原始 IP，查询失败显示未知地区。</p>
-      <p id="comment-help">审核通过后展示昵称、头像、正文、时间及浏览器和系统名称。请勿在正文填写私人信息。{content.length}/2000</p>
-      <p id="comment-error" role={error ? 'alert' : undefined}>{error}</p>
-      {expired && <Link to={returnTo} target="_blank" rel="noopener noreferrer">重新登录（新标签页）</Link>}
-      <button type="submit" disabled={busy}>{busy ? '提交中…' : '提交评论'}</button><p role="status">{feedback}</p>
-    </form> : <p><Link to={returnTo}>登录后参与讨论 ↗</Link></p>}
     {blocker.state === 'blocked' && <BlogWorkflowDialog title={busy ? '正在提交评论' : dirty ? '评论还未提交' : '离开文章'} description={busy ? '请等待提交结果，再离开文章。' : dirty ? '离开后当前输入会丢失；取消可以继续编辑。' : '评论已提交，可以继续离开文章。'} confirmLabel={dirty ? '放弃评论并离开' : '继续离开'} busy={busy} onCancel={() => blocker.reset()} onConfirm={() => blocker.proceed()} />}
   </section>
 }

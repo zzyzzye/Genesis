@@ -125,7 +125,7 @@ describe('App', () => {
     }
 
     expect(await screen.findByText('一件事', { selector: 'strong' })).toBeInTheDocument()
-    expect(screen.getByRole('list')).toBeInTheDocument()
+    expect(document.querySelector('.article-content ul')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '返回文章列表' })).toBeInTheDocument()
     await waitFor(() => expect(document.title).toBe('从一个完整模块开始 · Genesis'))
     if (path.endsWith('#comments')) {
