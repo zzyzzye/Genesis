@@ -17,9 +17,10 @@
 
 .blog-masthead {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   min-height: 5rem;
   align-items: center;
+  column-gap: 1rem;
   padding: 0 var(--blog-page-gutter);
   border-bottom: 1px solid #d8d0c4;
 }
@@ -33,9 +34,10 @@
   text-transform: uppercase;
 }
 
+.blog-home-link { display: inline-flex; justify-self: start; align-items: center; gap: .35rem; min-height: 44px; padding: 0 .4rem; white-space: nowrap; border-radius: .375rem; }
 .blog-account-link { display: inline-flex; justify-self: end; align-items: center; gap: .3rem; min-height: 44px; padding: 0 .4rem; white-space: nowrap; border-radius: .375rem; }
 .blog-masthead-links { display: flex; align-items: center; justify-self: end; gap: 12px; }
-.blog-wordmark { font-family: Georgia, "Noto Serif SC", serif; font-size: 1.25rem; font-style: italic; }
+.blog-wordmark { display: inline-flex; justify-self: center; align-items: center; min-height: 44px; padding-inline: .4rem; border-radius: .375rem; font-family: Georgia, "Noto Serif SC", serif; font-size: 1.25rem; font-style: italic; }
 .blog-masthead a { outline: 0; box-shadow: none; text-decoration: none; }
 .blog-masthead a:hover, .blog-masthead a:focus-visible { color: #27231f; background: rgb(39 35 31 / 5%); }
 
