@@ -92,8 +92,11 @@
 .article-reader__document .article-content :is(h1,h2) { font-size: 1.5rem; line-height: 1.5; letter-spacing: -.02em; }
 .article-reader__document .article-content :is(h3,h4,h5,h6) { font-size: 1.125rem; line-height: 1.6; }
 @media (min-width: 1101px) {
-  .article-reader__document { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 40px; align-items: start; }
-  .article-reader__document > .article-document__toc { grid-column: 2; grid-row: 1; position: sticky; top: 24px; }
+  .article-reader__header { padding-right: 284px; }
+  .article-reader__document { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 40px; align-items: start; }
+  .article-reader__document > .article-document__toc { grid-column: 2; grid-row: 1; }
+  .article-reader__document .article-toc { position: fixed; top: 160px; width: 220px; }
+  .article-reader__document .article-toc nav { max-height: calc(100dvh - 240px); }
   .article-reader__document > .article-content { grid-column: 1; grid-row: 1; }
 }
 .studio-editor-modal {
