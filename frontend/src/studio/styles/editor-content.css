@@ -110,7 +110,7 @@
 }
 @media (min-width: 681px) {
   .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
-    padding-inline: clamp(2rem, 3.5vw, 4.5rem);
+    padding-inline: 12px;
   }
 }
 .markdown-editor__source--mdx {
@@ -121,12 +121,15 @@
   .markdown-editor__source--mdx { overflow: visible; }
 }
 .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #bcc1c6 transparent;
+  flex-wrap: wrap;
+  gap: 6px 4px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
 }
-.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar::-webkit-scrollbar {
-  height: 6px;
+/* 保留编辑器原生工具组及键盘行为，空间不足时按组换行。 */
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar > * {
+  flex-shrink: 0;
 }
 .markdown-editor__source--mdx {
   position: relative;
