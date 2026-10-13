@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ChevronDown, List } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { motion, useReducedMotion } from 'motion/react'
+import { motionTiming } from '../../lib/motion'
 import { ArticleMarkdown } from './ArticleMarkdown'
 import { getArticleHeadings, type ArticleHeading } from './articleOutline'
 import './ArticleToc.css'
@@ -12,20 +14,38 @@ export function ArticleToc({ items, activeId, onNavigate, label = '文章目录'
   label?: string
 }) {
   const [expanded, setExpanded] = useState(() => !window.matchMedia?.('(max-width: 1100px)').matches)
+  const reducedMotion = useReducedMotion()
   const id = useId()
   const minLevel = items.length ? Math.min(...items.map(item => item.level)) : 1
   return <aside className="article-toc" aria-label={label}>
     <button className="article-toc__toggle" type="button" aria-expanded={expanded} aria-controls={id} onClick={() => setExpanded(value => !value)}>
       <span><List size={15} aria-hidden="true" />目录 <small>{items.length}</small></span><ChevronDown size={14} aria-hidden="true" className={expanded ? 'is-expanded' : undefined} />
     </button>
-    <div id={id} hidden={!expanded}>
+    <motion.div
+      id={id}
+      className="article-toc__content"
+      inert={!expanded}
+      aria-hidden={!expanded}
+      initial={false}
+      animate={{ height: expanded ? 'auto' : 0, opacity: expanded ? 1 : 0 }}
+      transition={reducedMotion ? { duration: 0 } : {
+        height: expanded ? { type: 'spring', stiffness: 260, damping: 18, mass: 0.8 } : { duration: 0.22, ease: motionTiming.ease },
+        opacity: { duration: expanded ? 0.18 : 0.12 },
+      }}
+    >
+      <motion.div
+        initial={false}
+        animate={{ y: expanded ? 0 : -10 }}
+        transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 18, mass: 0.8 }}
+      >
       {items.length ? <nav aria-label={`${label}导航`}><ol>{items.map((item, index) => <li key={item.id} style={{ '--toc-indent': `${Math.min(item.level - minLevel, 3) * 12}px` } as CSSProperties}>
         {onNavigate ? <button type="button" aria-current={activeId === item.id ? 'location' : undefined} onClick={() => onNavigate(item, index)}>{item.text}</button>
           : <Link to={`#${item.id}`} preventScrollReset aria-current={activeId === item.id ? 'location' : undefined} onClick={event => {
             if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) requestAnimationFrame(() => document.getElementById(item.id)?.scrollIntoView({ block: 'start' }))
           }}>{item.text}</Link>}
       </li>)}</ol></nav> : <p className="article-toc__empty">暂无章节标题</p>}
-    </div>
+      </motion.div>
+    </motion.div>
   </aside>
 }
 
