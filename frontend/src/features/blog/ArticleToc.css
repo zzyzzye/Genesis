@@ -1,6 +1,6 @@
 .article-document { position: relative; min-width: 0; }
 .article-document__toc { margin-bottom: 24px; }
-.article-toc { --article-toc-width: 260px; min-width: 0; color: var(--blog-ink, var(--studio-ink)); font-family: Inter, "PingFang SC", sans-serif; font-size: 14px; line-height: 1.7; }
+.article-toc { --article-toc-width: 320px; min-width: 0; color: var(--blog-ink, var(--studio-ink)); font-family: Inter, "PingFang SC", sans-serif; font-size: 14px; line-height: 1.7; }
 .article-toc button, .article-toc a { box-sizing: border-box; border: 0; outline: 0; box-shadow: none; border-radius: 4px; background: transparent; color: var(--blog-muted, var(--studio-muted)); font: inherit; text-decoration: none; cursor: pointer; }
 .article-toc button:hover, .article-toc button:focus-visible, .article-toc a:hover, .article-toc a:focus-visible, .article-toc [aria-current="location"] { background: var(--blog-hover, var(--studio-soft)); color: var(--blog-ink, var(--studio-ink)); }
 .article-toc .article-toc__toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 44px; padding: 8px; color: inherit; font-weight: 550; }
@@ -17,9 +17,9 @@
 @media (min-width: 1280px) {
   /* 阅读栏为目录预留独立宽度，固定目录不挤压或覆盖正文。 */
   .blog-page.blog-page--article .reader-shell,
-  .blog-page .blog-pages-reader:has(.article-document) { box-sizing: border-box; width: min(calc(100% - 3rem), 1068px); max-width: 1068px; padding-right: 300px; }
+  .blog-page .blog-pages-reader:has(.article-document) { box-sizing: border-box; width: min(calc(100% - 3rem), 1128px); max-width: 1128px; padding-right: 360px; }
   .blog-page--article .article-document__toc,
-  .blog-pages-reader .article-document__toc { position: absolute; top: 0; left: calc(100% + 40px); width: 260px; margin: 0; }
+  .blog-pages-reader .article-document__toc { position: absolute; top: 0; left: calc(100% + 40px); width: 320px; margin: 0; }
   .blog-page--article .article-toc,
   .blog-pages-reader .article-toc { position: fixed; top: 96px; width: var(--article-toc-width); }
   .blog-page--article .article-toc nav,
