@@ -67,5 +67,9 @@ def model_capabilities_for(provider: str, model: str) -> ModelCapabilities:
     return ModelCapabilities(
         profile=profile,
         thinking_modes=supplement.thinking_modes,
-        thinking_mode_default=supplement.thinking_mode_default,
+        # 官方默认仍记录在补充表；对外返回站点实际采用的默认策略。
+        thinking_mode_default=(
+            "disabled" if provider == "mimo" and "disabled" in (supplement.thinking_modes or [])
+            else supplement.thinking_mode_default
+        ),
     )

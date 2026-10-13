@@ -38,7 +38,7 @@ def test_unknown_models_stay_unknown_and_results_are_isolated() -> None:
     original = model_capabilities_for("openai", "gpt-5")
     original.profile["max_output_tokens"] = 1
     assert model_capabilities_for("openai", "gpt-5").profile["max_output_tokens"] != 1
-    assert model_capabilities_for("mimo", "mimo-v2.6-flash").thinking_mode_default == "enabled"
+    assert model_capabilities_for("mimo", "mimo-v2.6-flash").thinking_mode_default == "disabled"
 
 
 def test_supplement_rejects_typos_and_invalid_limits() -> None:

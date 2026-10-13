@@ -30,7 +30,7 @@ def test_thinking_switch_scope_is_limited_to_documented_mimo_models() -> None:
 
 @pytest.mark.parametrize("mode", [None, "enabled", "disabled"])
 def test_mimo_thinking_switch_uses_extra_body(mode: str | None) -> None:
-    """思考开关独立序列化，默认不发送，显式关闭时才使用配置温度。"""
+    """未指定时明确关闭思考，显式开启仍生效；关闭时使用配置温度。"""
     settings = Settings(text_mimo_api_key=SecretStr("test-placeholder"))
     model = EmbeddedAgentRuntime()._build_model(
         settings, "mimo", "mimo-v2.6-flash", thinking_mode=mode
@@ -38,15 +38,20 @@ def test_mimo_thinking_switch_uses_extra_body(mode: str | None) -> None:
     assert isinstance(model, ChatMiMo)
     payload = model._get_request_payload([HumanMessage("hi")])
     assert "reasoning_effort" not in payload
-    if mode:
-        assert payload["extra_body"] == {"thinking": {"type": mode}}
-    else:
-        assert not payload.get("extra_body")
-    assert ("temperature" in payload) == (mode == "disabled")
+    assert payload["extra_body"] == {"thinking": {"type": mode or "disabled"}}
+    assert ("temperature" in payload) == (mode != "enabled")
     with pytest.raises(RuntimeError, match="思考开关"):
         EmbeddedAgentRuntime()._build_model(
             settings, "mimo", "unknown", thinking_mode="enabled"
         )
+
+
+def test_unknown_mimo_model_does_not_receive_unverified_thinking_switch() -> None:
+    """未知模型不注入未经确认支持的思考参数。"""
+    settings = Settings(text_mimo_api_key=SecretStr("test-placeholder"))
+    model = EmbeddedAgentRuntime()._build_model(settings, "mimo", "unknown")
+    assert isinstance(model, ChatMiMo)
+    assert not model._get_request_payload([HumanMessage("hi")]).get("extra_body")
 
 
 def test_thinking_switch_survives_request_persistence_and_graph_cache(

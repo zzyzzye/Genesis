@@ -155,7 +155,7 @@ class EmbeddedAgentRuntime:
             provider: 项目供应商标识。
             model: 实际调用的模型名称。
             reasoning_effort: 思考强度；None 表示沿用模型默认设置。
-            thinking_mode: 思考开关；None 不发送开关参数，不等于关闭思考。
+            thinking_mode: 思考开关；None 时 MiMo 使用站点默认关闭，其他供应商沿用上游默认。
 
         Returns:
             供 DeepAgent 使用的聊天模型客户端。
@@ -172,6 +172,8 @@ class EmbeddedAgentRuntime:
         # 能力属于模型；兼容网关只改变请求协议，不改变档位与温度等模型约束。
         capabilities = model_capabilities_for(provider, model)
         profile = capabilities.profile
+        if provider == "mimo" and thinking_mode is None:
+            thinking_mode = capabilities.thinking_mode_default
         if thinking_mode is not None and thinking_mode not in (
             capabilities.thinking_modes or []
         ):
@@ -204,7 +206,7 @@ class EmbeddedAgentRuntime:
             return ChatMiMo(
                 model=model, api_key=api_key, base_url=base_url,
                 default_headers={"api-key": api_key.get_secret_value()},
-                # MiMo 默认开启思考；官方要求思考模式沿用推荐采样参数。
+                # 站点默认关闭思考；显式开启时沿用官方推荐采样参数。
                 temperature=kwargs.get("temperature") if thinking_mode == "disabled" else None,
                 reasoning_effort=reasoning_effort,
                 extra_body={"thinking": {"type": thinking_mode}} if thinking_mode else None,
