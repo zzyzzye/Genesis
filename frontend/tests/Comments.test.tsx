@@ -84,44 +84,42 @@ describe('文章评论', () => {
     fireEvent.error(image)
     expect(document.querySelector('.comment-avatar')).toHaveTextContent('测')
     fireEvent.change(screen.getByRole('textbox', { name: '写下评论' }), { target: { value: '头像与来源测试' } })
-    const qq = screen.getByRole('textbox', { name: /QQ 号或数字 QQ 邮箱/ })
+    const qq = screen.getByRole('textbox', { name: 'QQ 邮箱（选填）' })
     fireEvent.change(qq, { target: { value: 'alias@qq.com' } })
     fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
     expect(submitBlogComment).not.toHaveBeenCalled()
     expect(qq).toHaveFocus()
     fireEvent.change(qq, { target: { value: '12345@qq.com' } })
-    fireEvent.click(screen.getByRole('checkbox', { name: /显示粗粒度 IP 属地/ }))
     vi.mocked(submitBlogComment).mockResolvedValueOnce({ id: 'comment-1', state: 'pending' })
     fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
     expect(await screen.findByText('评论已提交，审核通过后会显示。')).toBeInTheDocument()
     expect(submitBlogComment).toHaveBeenCalledWith('test-post', 'test-placeholder', '头像与来源测试', expect.any(String), '12345@qq.com', true)
   })
 
-  it('隐私说明默认收起，正文区域先于选填资料和评论列表', async () => {
+  it('头像输入保留可访问名称与简短提示，正文区域先于资料和评论列表', async () => {
     const { container } = reader()
     await screen.findByText('还没有公开评论，欢迎留下你的想法。')
-    const disclosure = container.querySelector('details')!
-    expect(disclosure).not.toHaveAttribute('open')
-    fireEvent.click(screen.getByText('头像与隐私说明', { exact: true }))
-    expect(disclosure).toHaveAttribute('open')
     const body = screen.getByRole('textbox', { name: '写下评论' })
-    const qq = screen.getByRole('textbox', { name: /QQ 号或数字 QQ 邮箱/ })
+    const qq = screen.getByRole('textbox', { name: 'QQ 邮箱（选填）' })
+    expect(qq).toHaveAttribute('placeholder', '输入 QQ 邮箱自动获取头像')
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(body.compareDocumentPosition(qq) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(container.querySelector('form')!.compareDocumentPosition(container.querySelector('.article-comments__list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('修改 QQ 资料后重试会更换提交标识，地区查询默认关闭', async () => {
+  it('修改 QQ 资料后重试会更换提交标识，提交自动请求属地', async () => {
     reader()
     fireEvent.change(screen.getByRole('textbox', { name: '写下评论' }), { target: { value: '重试测试' } })
     vi.mocked(submitBlogComment).mockRejectedValue(new Error('网络中断'))
     fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
     await screen.findByRole('alert')
-    fireEvent.change(screen.getByRole('textbox', { name: /QQ 号或数字 QQ 邮箱/ }), { target: { value: '12345' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'QQ 邮箱（选填）' }), { target: { value: '12345' } })
     fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
     await screen.findByRole('alert')
     const calls = vi.mocked(submitBlogComment).mock.calls
     expect(calls[0]?.[3]).not.toBe(calls[1]?.[3])
-    expect(calls[1]?.[5]).toBe(false)
+    expect(calls[0]?.[5]).toBe(true)
+    expect(calls[1]?.[5]).toBe(true)
   })
 })
 

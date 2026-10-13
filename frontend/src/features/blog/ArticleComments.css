@@ -2,9 +2,9 @@
 .article-comments > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .article-comments h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-family: inherit; font-size: 1.125rem; font-weight: 600; line-height: 1.6; }
 .article-comments h2 span { margin-left: 4px; color: var(--blog-muted); font-size: .8rem; font-weight: 400; }
-.article-comments button, .article-comments a, .article-comments summary { box-sizing: border-box; border: 0; outline: 0; box-shadow: none; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-decoration: none; cursor: pointer; }
+.article-comments button, .article-comments a { box-sizing: border-box; border: 0; outline: 0; box-shadow: none; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-decoration: none; cursor: pointer; }
 .article-comments button, .article-comments a { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 8px 12px; font-size: .8rem; }
-.article-comments button:hover:not(:disabled), .article-comments button:focus-visible, .article-comments a:hover, .article-comments a:focus-visible, .article-comments summary:hover, .article-comments summary:focus-visible { background: var(--blog-hover); }
+.article-comments button:hover:not(:disabled), .article-comments button:focus-visible, .article-comments a:hover, .article-comments a:focus-visible { background: var(--blog-hover); }
 .article-comments button:disabled { opacity: .5; cursor: not-allowed; }
 .article-comments .article-comments__refresh { color: var(--blog-muted); }
 .article-comments form { display: flex; flex-direction: column; margin-bottom: 24px; }
@@ -13,22 +13,14 @@
 .article-comments textarea, .article-comments textarea:focus { display: block; box-sizing: border-box; width: 100%; height: 112px; min-height: 112px; margin-top: 8px; padding: 4px 0; border: 0; outline: 0; box-shadow: none; background: transparent; color: inherit; font: inherit; line-height: 1.8; resize: none; }
 .article-comments__composer-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--blog-muted); font-size: 11px; }
 .article-comments__limit { opacity: .7; }
-.article-comments__options { display: flex; align-items: center; gap: 24px; margin-top: 16px; }
-.article-comments__avatar-option { flex: 1; min-width: 0; }
-.article-comments__optional { margin-left: 6px; color: var(--blog-muted); font-size: 11px; font-weight: 400; }
 .article-comments input[type="text"], .article-comments input[type="text"]:focus { box-sizing: border-box; width: 100%; min-height: 40px; padding: 6px 0; border: 0; outline: 0; box-shadow: none; background: transparent; color: inherit; font: inherit; font-size: .85rem; }
-.article-comments__region-option { flex: none; }
-.article-comments label.article-comments__region { display: flex; align-items: center; gap: 8px; font-weight: 400; }
-.article-comments__region-option small { display: block; padding-left: 24px; color: var(--blog-muted); font-size: 11px; }
-.article-comments__region input { width: 15px; height: 15px; margin: 0; accent-color: var(--blog-muted); cursor: pointer; outline: 0; box-shadow: none; }
-.article-comments__privacy { color: var(--blog-muted); font-size: 12px; }
-.article-comments__privacy summary { width: fit-content; padding: 4px 6px; margin-left: -6px; }
-.article-comments__privacy p { margin: 8px 0; line-height: 1.8; }
 .article-comments__error { min-height: 20px; margin: 4px 0; font-size: .8rem; color: var(--blog-ink); }
-.article-comments__submit-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.article-comments__submit-row [role="status"] { flex: 1; min-width: 0; min-height: 20px; margin: 0; color: var(--blog-muted); font-size: 12px; }
+.article-comments__submit-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; }
+.article-comments__submit-row input { flex: 1; min-width: 0; }
+@media (max-width: 480px) { .article-comments__submit-row { flex-wrap: wrap; } .article-comments__submit-row input { flex-basis: 100%; } .article-comments__submit-row button { margin-left: auto; } }
+.article-comments__feedback { margin: 0; color: var(--blog-muted); font-size: 12px; }
 .article-comments .article-comments__submit-row button { flex: none; min-width: 108px; background: var(--blog-ink); color: var(--blog-paper); }
-.article-comments .article-comments__submit-row button:is(:hover, :focus-visible) { opacity: .85; }
+.article-comments .article-comments__submit-row button:is(:hover, :focus-visible):not(:disabled) { background: var(--blog-ink); opacity: .85; }
 .article-comments__list { min-height: 64px; }
 .article-comments__list > p { color: var(--blog-muted); font-size: .875rem; }
 .article-comments ol { margin: 0; padding: 0; list-style: none; }
@@ -39,7 +31,6 @@
 .article-comments time { color: var(--blog-muted); font-size: 11px; }
 .article-comments li p { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
 @media (max-width: 680px) {
-  .article-comments__options { align-items: stretch; flex-direction: column; gap: 8px; }
   .article-comments__composer { padding: 14px; }
   .article-comments__composer-footer { font-size: 10px; }
   .article-comments > header { gap: 8px; }
