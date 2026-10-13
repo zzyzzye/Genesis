@@ -29,12 +29,14 @@ function AccountForm({
   onModeChange,
   onLogin,
   onRegister,
+  focusLogin = false,
 }: {
   mode: 'login' | 'register'
   error: string | null
   onModeChange: (mode: 'login' | 'register') => void
   onLogin: (handle: string, password: string) => void
   onRegister: (handle: string, displayName: string, password: string) => void
+  focusLogin?: boolean
 }) {
   const [handle, setHandle] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -106,6 +108,7 @@ function AccountForm({
               <input
                 autoComplete="username"
                 id="account-handle"
+                autoFocus={focusLogin}
                 minLength={3}
                 onChange={(event) => setHandle(event.currentTarget.value)}
                 placeholder="3–50 位英文、数字、_ 或 -"
@@ -212,7 +215,7 @@ function Profile({ user, feedback, onLogout, onSave }: {
   )
 }
 
-export function Account() {
+export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentUser) => void } = {}) {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const returnTo = searchParams.get('returnTo')
@@ -224,19 +227,30 @@ export function Account() {
   )
 
   useEffect(() => {
-    if (token === null) return
+    const sync = () => setToken(getStoredAuthToken())
+    sync()
+  }, [])
+
+  useEffect(() => {
+    if (token === null || token !== getStoredAuthToken()) return
+    let active = true
     void getCurrentUser(token)
       .then((user) => {
+        if (!active) return
         if (user.role === 'owner') storeAuthToken(token, studioAuthTokenKey)
+        else clearStoredAuthToken(studioAuthTokenKey)
         setState({ status: 'ready', user, feedback: null })
-        if (returnTo && (/^\/media(?:\/|$)/.test(returnTo) || /^\/articles\/[a-z0-9-]+(?:#comments)?$/.test(returnTo))) void navigate(returnTo, { replace: true })
+        if (onAuthenticated) { onAuthenticated(user); return }
+        if (returnTo && (/^\/media(?:\/|$)/.test(returnTo) || /^\/blog\/studio(?:\/|$)/.test(returnTo) || /^\/articles\/[a-z0-9-]+(?:#comments)?$/.test(returnTo))) void navigate(returnTo, { replace: true })
       })
       .catch(() => {
+        if (!active) return
         clearStoredAuthToken()
         setToken(null)
         setState({ status: 'guest', mode: 'login', error: '登录状态已过期，请重新登录。' })
       })
-  }, [token, returnTo, navigate])
+    return () => { active = false }
+  }, [token, returnTo, navigate, onAuthenticated])
 
   function setLoggedInToken(accessToken: string) {
     storeAuthToken(accessToken)
@@ -281,5 +295,5 @@ export function Account() {
       />
     )
   }
-  return <AccountForm error={state.error} mode={state.mode} onLogin={handleLogin} onModeChange={(mode) => setState({ status: 'guest', mode, error: null })} onRegister={handleRegister} />
+  return <AccountForm focusLogin={Boolean(onAuthenticated)} error={state.error ?? (searchParams.get('reason') === 'expired' ? '登录已失效，请重新登录。' : null)} mode={state.mode} onLogin={handleLogin} onModeChange={(mode) => setState({ status: 'guest', mode, error: null })} onRegister={handleRegister} />
 }

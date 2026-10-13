@@ -1,11 +1,46 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { handleStudioUnauthorized, storeAuthToken, studioAuthTokenKey, studioSessionExpiredEvent } from '../src/lib/auth'
+import { accountAuthTokenKey, handleStudioUnauthorized, storeAuthToken, studioAuthTokenKey, studioSessionExpiredEvent } from '../src/lib/auth'
 import { getAdminBlogPosts, login } from '../src/lib/api'
 import { listAttachments, uploadAttachment } from '../src/lib/attachments'
+import { api, fileBlob, upload } from '../src/pages/media/api'
 
 afterEach(() => { localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
 describe('工作台会话失效', () => {
+  it.each(['列表', '文件', '上传'])('影音%s 使用同一失效流程', async (kind) => {
+    storeAuthToken('media-test-token')
+    const expired = vi.fn()
+    window.addEventListener(studioSessionExpiredEvent, expired)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 401 }))
+    class RejectedXHR {
+      status = 401
+      responseText = '{}'
+      upload = {}
+      onload?: () => void
+      open() {}
+      setRequestHeader() {}
+      send() { queueMicrotask(() => this.onload?.()) }
+    }
+    vi.stubGlobal('XMLHttpRequest', RejectedXHR)
+    try {
+      const request = kind === '列表' ? api('/projects') : kind === '文件' ? fileBlob({ id: 'test-asset', name: 'test', kind: 'image', mime_type: 'image/png', size: 1, in_library: true }) : upload('/assets', new File([], 'test.bin'), vi.fn())
+      await expect(request).rejects.toBeInstanceOf(Error)
+      expect(expired).toHaveBeenCalledTimes(1)
+      expect(localStorage.getItem(accountAuthTokenKey)).toBeNull()
+    } finally { window.removeEventListener(studioSessionExpiredEvent, expired) }
+  })
+  it('账户和工作台共享的失效凭据同时清理，只发出一次事件', () => {
+    storeAuthToken('shared-test-token')
+    storeAuthToken('shared-test-token', studioAuthTokenKey)
+    const expired = vi.fn()
+    window.addEventListener(studioSessionExpiredEvent, expired)
+    try {
+      handleStudioUnauthorized(401, { Authorization: 'Bearer shared-test-token' })
+      expect(localStorage.getItem(accountAuthTokenKey)).toBeNull()
+      expect(localStorage.getItem(studioAuthTokenKey)).toBeNull()
+      expect(expired).toHaveBeenCalledTimes(1)
+    } finally { window.removeEventListener(studioSessionExpiredEvent, expired) }
+  })
   it('只处理当前会话的 401，忽略旧会话、403、网络失败与未认证请求', () => {
     storeAuthToken('current-test-token', studioAuthTokenKey)
     const expired = vi.fn()

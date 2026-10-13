@@ -1,4 +1,4 @@
-import { handleStudioUnauthorized } from './auth'
+import { handleStudioUnauthorized, rememberSessionUser } from './auth'
 
 export interface BlogAuthor {
   id: string
@@ -277,8 +277,10 @@ export function registerAccount(data: RegistrationData): Promise<CurrentUser> {
   })
 }
 
-export function getCurrentUser(token: string): Promise<CurrentUser> {
-  return request<CurrentUser>('/auth/me', { headers: authHeaders(token) })
+export async function getCurrentUser(token: string): Promise<CurrentUser> {
+  const user = await request<CurrentUser>('/auth/me', { headers: authHeaders(token) })
+  rememberSessionUser(token, user.id)
+  return user
 }
 
 export function updateCurrentUser(token: string, data: ProfileUpdateData): Promise<CurrentUser> {

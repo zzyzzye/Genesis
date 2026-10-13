@@ -2,7 +2,7 @@ import './MediaPage.css'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { developmentLogin, getCurrentUser, type CurrentUser } from '../../lib/api'
-import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken } from '../../lib/auth'
+import { getStoredAuthToken, storeAuthToken } from '../../lib/auth'
 import { MediaHome } from './MediaHome'
 import { ProjectCanvas } from './ProjectCanvas'
 import { AccountAssetsPage, ProjectAssetsPage, ProjectOverviewPage } from './ProjectWorkspace'
@@ -29,19 +29,8 @@ export function MediaPage() {
           storeAuthToken(token)
         }
         if (!token) return
-        try {
-          const current = await getCurrentUser(token)
-          if (active) setUser(current)
-        } catch {
-          clearStoredAuthToken()
-          if (!import.meta.env.DEV) throw new Error('登录状态已过期，请重新登录。')
-          const login = await developmentLogin()
-          if (!active) return
-          token = login.access_token
-          storeAuthToken(token)
-          const current = await getCurrentUser(token)
-          if (active) setUser(current)
-        }
+        const current = await getCurrentUser(token)
+        if (active) setUser(current)
       } catch (reason) {
         if (active) {
           setUser(null)

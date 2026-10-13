@@ -3,7 +3,7 @@ import { Link, useBlocker, useLocation } from 'react-router-dom'
 import { ArrowUpRight, MessageSquare, RefreshCw } from 'lucide-react'
 import { BlogWorkflowDialog } from '../../studio/BlogWorkflowDialog'
 import { ApiError, getBlogComments, submitBlogComment, type BlogComment } from '../../lib/api'
-import { getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
+import { authTokenChangedEvent, getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
 import './ArticleComments.css'
 import { CommentAvatar, CommentSource } from './CommentSource'
 import { CommentAvatarPreview } from './CommentAvatarPreview'
@@ -40,8 +40,10 @@ export function ArticleComments({ slug }: { slug: string }) {
   useEffect(() => {
     mounted.current = true
     const sync = () => setToken(readToken())
+    sync()
+    window.addEventListener(authTokenChangedEvent, sync)
     window.addEventListener('storage', sync); window.addEventListener('focus', sync)
-    return () => { mounted.current = false; window.removeEventListener('storage', sync); window.removeEventListener('focus', sync) }
+    return () => { mounted.current = false; window.removeEventListener(authTokenChangedEvent, sync); window.removeEventListener('storage', sync); window.removeEventListener('focus', sync) }
   }, [])
   useEffect(() => {
     if (!dirty && !busy) return

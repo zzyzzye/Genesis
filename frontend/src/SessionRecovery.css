@@ -1,0 +1,2 @@
+.session-recovery-dialog { --studio-paper: #fffdf9; --studio-ink: #29251f; --studio-soft: #eeeae2; --studio-editor-hover: #e8e3da; --studio-ui: Inter, "PingFang SC", sans-serif; }
+.session-recovery-dialog footer button { min-height: 44px; }

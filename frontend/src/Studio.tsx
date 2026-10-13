@@ -6,7 +6,7 @@ import './studio/styles/shell.css'
 import './studio/styles/login.css'
 
 
-import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey, studioSessionExpiredEvent } from './lib/auth'
+import { authTokenChangedEvent, clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey, studioSessionExpiredEvent } from './lib/auth'
 import { MarkdownEditor, ArticleReader } from './studio/MarkdownEditor'
 import { StudioIcon } from './studio/StudioIcon'
 import { StudioNavigation } from './studio/StudioNavigation'
@@ -644,14 +644,21 @@ export function Studio() {
   )
 
   useEffect(() => {
-    function expireSession() {
+    function expireSession(event: Event) {
       sessionExpired.current = true
+      if (event.defaultPrevented) return
       setToken(null)
       setState({ status: 'login', error: '登录已过期，请重新登录。文章草稿可在本标签页恢复，未完成的上传需要重新选择文件。' })
     }
+    function syncSession() {
+      const current = getStoredAuthToken(studioAuthTokenKey)
+      if (current && current !== token) { sessionExpired.current = false; setToken(current) }
+    }
+    syncSession()
+    window.addEventListener(authTokenChangedEvent, syncSession)
     window.addEventListener(studioSessionExpiredEvent, expireSession)
-    return () => window.removeEventListener(studioSessionExpiredEvent, expireSession)
-  }, [])
+    return () => { window.removeEventListener(studioSessionExpiredEvent, expireSession); window.removeEventListener(authTokenChangedEvent, syncSession) }
+  }, [token])
 
   useEffect(() => {
     if (state.status === 'login') document.title = '作者登录 · Genesis'
@@ -673,6 +680,7 @@ export function Studio() {
       return () => { cancelled = true }
     }
 
+    if (getStoredAuthToken(studioAuthTokenKey) !== token) return
     let cancelled = false
     void Promise.all([
       getCurrentUser(token),
@@ -686,7 +694,7 @@ export function Studio() {
         }
       })
       .catch((reason) => {
-        if (!cancelled) {
+        if (!cancelled && getStoredAuthToken(studioAuthTokenKey) === token) {
           if (!(reason instanceof ApiError) || (reason.status !== 401 && reason.status !== 403)) {
             setState({ status: 'error' })
             return

@@ -1,4 +1,4 @@
-import { getStoredAuthToken } from '../../lib/auth'
+import { getStoredAuthToken, handleStudioUnauthorized } from '../../lib/auth'
 
 export type Asset = { id: string; name: string; kind: 'image' | 'video' | 'audio'; mime_type: string; size: number; in_library: boolean }
 export type Project = { id: string; name: string; version: number; updated_at: string }
@@ -16,7 +16,9 @@ export class MediaError extends Error {
   constructor(public status: number, message: string) { super(message) }
 }
 export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const response = await fetch(`${base}${path}`, { method, headers: { Authorization: `Bearer ${getStoredAuthToken() ?? ''}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
+  const headers = { Authorization: `Bearer ${getStoredAuthToken() ?? ''}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }
+  const response = await fetch(`${base}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined })
+  handleStudioUnauthorized(response.status, headers)
   if (!response.ok) {
     const data = await response.json().catch(() => null) as { detail?: unknown } | null
     throw new MediaError(response.status, typeof data?.detail === 'string' ? data.detail : `请求失败（${response.status}）`)
@@ -24,7 +26,9 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
 export async function fileBlob(asset: Asset): Promise<Blob> {
-  const response = await fetch(`${base}/assets/${asset.id}/file`, { headers: { Authorization: `Bearer ${getStoredAuthToken() ?? ''}` } })
+  const headers = { Authorization: `Bearer ${getStoredAuthToken() ?? ''}` }
+  const response = await fetch(`${base}/assets/${asset.id}/file`, { headers })
+  handleStudioUnauthorized(response.status, headers)
   if (!response.ok) throw new Error('素材读取失败，请重试')
   return response.blob()
 }
@@ -32,10 +36,12 @@ export function upload(path: string, file: File, progress: (value: number) => vo
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
     request.open('POST', `${base}${path}`)
-    request.setRequestHeader('Authorization', `Bearer ${getStoredAuthToken() ?? ''}`)
+    const authorization = `Bearer ${getStoredAuthToken() ?? ''}`
+    request.setRequestHeader('Authorization', authorization)
     request.upload.onprogress = (event) => { if (event.lengthComputable) progress(Math.round(event.loaded / event.total * 100)) }
     request.onerror = () => reject(new Error('网络中断，请重试上传'))
     request.onload = () => {
+      handleStudioUnauthorized(request.status, { Authorization: authorization })
       let data: Asset & { detail?: string }
       try { data = JSON.parse(request.responseText) as Asset & { detail?: string } } catch { reject(new Error('上传失败，请重试')); return }
       if (request.status >= 200 && request.status < 300) resolve(data)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createBrowserRouter, Navigate, Route, RouterProvider, Routes, useLocation } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes, useLocation, type Location } from 'react-router-dom'
 import { AnimatePresence, motion, MotionConfig, useReducedMotion } from 'motion/react'
 
 import { Account } from './Account'
@@ -10,6 +10,7 @@ import { PublicPages } from './pages/blog/PublicPages'
 import { MediaPage } from './pages/media/MediaPage'
 import { ToolboxPage } from './pages/toolbox/ToolboxPage'
 import { pageTransition } from './lib/motion'
+import { SessionRecovery } from './SessionRecovery'
 
 function LegacyStudioRedirect() {
   const location = useLocation()
@@ -35,7 +36,10 @@ function getRouteMotionKey(pathname: string) {
 }
 
 export function AppRoutes() {
-  const location = useLocation()
+  return <SessionRecovery>{(location) => <PageRoutes location={location} />}</SessionRecovery>
+}
+
+function PageRoutes({ location }: { location: Location }) {
   const reducedMotion = useReducedMotion()
 
   return <AnimatePresence initial={false} mode="wait">
