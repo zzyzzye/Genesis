@@ -29,14 +29,17 @@ export function ArticleToc({ items, activeId, onNavigate, label = '文章目录'
       initial={false}
       animate={{ height: expanded ? 'auto' : 0, opacity: expanded ? 1 : 0 }}
       transition={reducedMotion ? { duration: 0 } : {
-        height: expanded ? { type: 'spring', stiffness: 260, damping: 18, mass: 0.8 } : { duration: 0.22, ease: motionTiming.ease },
+        height: expanded ? { type: 'spring', stiffness: 300, damping: 14, mass: 0.8 } : { duration: 0.22, ease: motionTiming.ease },
         opacity: { duration: expanded ? 0.18 : 0.12 },
       }}
     >
       <motion.div
         initial={false}
-        animate={{ y: expanded ? 0 : -10 }}
-        transition={reducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 260, damping: 18, mass: 0.8 }}
+        style={{ transformOrigin: 'top center' }}
+        animate={{ y: expanded ? 0 : -28, scaleY: expanded ? 1 : 0.86 }}
+        transition={reducedMotion ? { duration: 0 } : expanded
+          ? { type: 'spring', stiffness: 300, damping: 11, mass: 0.8 }
+          : { duration: 0.22, ease: motionTiming.ease }}
       >
       {items.length ? <nav aria-label={`${label}导航`}><ol>{items.map((item, index) => <li key={item.id} style={{ '--toc-indent': `${Math.min(item.level - minLevel, 3) * 12}px` } as CSSProperties}>
         {onNavigate ? <button type="button" aria-current={activeId === item.id ? 'location' : undefined} onClick={() => onNavigate(item, index)}>{item.text}</button>
