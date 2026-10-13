@@ -14,6 +14,7 @@ from genesis_api.blog.comment_metadata import device_labels, lookup_region, qq_a
 from genesis_api.blog.comments import (
     CommentAdmin,
     CommentAdminPage,
+    CommentAvatarRequest,
     CommentModerate,
     CommentPage,
     CommentReceipt,
@@ -28,6 +29,20 @@ from genesis_api.identity.models import User
 
 public_router = APIRouter(prefix="/blog", tags=["博客评论"])
 admin_router = APIRouter(prefix="/admin/blog/comments", tags=["博客管理"])
+
+
+@public_router.post("/comments/avatar-preview")
+def preview_comment_avatar(data: CommentAvatarRequest, user: CurrentUserDependency) -> Response:
+    """为登录读者代理头像预览；QQ 仅放在请求体，不进入 URL 或持久化缓存。"""
+    avatar = qq_avatar(data.qq)
+    if avatar is None:
+        raise HTTPException(502, "头像暂时无法加载")
+    content, media_type = avatar
+    return Response(
+        content,
+        media_type=media_type,
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @public_router.get("/posts/{slug}/comments", response_model=CommentPage)

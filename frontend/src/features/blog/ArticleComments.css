@@ -10,7 +10,12 @@
 .article-comments form { display: flex; flex-direction: column; margin-bottom: 24px; }
 .article-comments__composer { overflow: hidden; border-radius: 8px; background: var(--blog-hover); }
 .article-comments__identity { display: flex; align-items: center; gap: 10px; padding: 6px 18px; background: var(--blog-hover); }
-.article-comments__identity > svg { flex: none; color: var(--blog-muted); }
+.article-comments .comment-avatar-preview { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 32px; width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: 50%; color: var(--blog-muted); }
+.comment-avatar-preview > span { display: inline-flex; }
+.comment-avatar-preview img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.comment-avatar-preview__loading { animation: comment-avatar-spin 1s linear infinite; }
+@keyframes comment-avatar-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .comment-avatar-preview__loading { animation: none; } }
 .article-comments__identity input { flex: 1; min-width: 0; }
 .article-comments__writing { padding: 16px 18px; }
 .article-comments textarea, .article-comments textarea:focus { display: block; box-sizing: border-box; width: 100%; height: 112px; min-height: 112px; margin: 0; padding: 0; border: 0; outline: 0; box-shadow: none; background: transparent; color: inherit; font: inherit; line-height: 1.8; resize: none; }

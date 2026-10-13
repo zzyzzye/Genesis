@@ -189,7 +189,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function requestResponse(path: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`${apiBaseUrl}${path}`, init)
   handleStudioUnauthorized(response.status, init?.headers)
   if (!response.ok) {
@@ -197,8 +197,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const detail = formatApiErrorDetail(error)
     throw new ApiError(response.status, detail)
   }
+  return response
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await requestResponse(path, init)
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
+}
+
+export async function previewCommentAvatar(token: string, qq: string, signal: AbortSignal): Promise<Blob> {
+  const response = await requestResponse('/blog/comments/avatar-preview', {
+    method: 'POST', signal, cache: 'no-store',
+    headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ qq }),
+  })
+  return response.blob()
 }
 
 export function getBlogPosts(signal?: AbortSignal, limit?: number): Promise<BlogPostListResponse> {

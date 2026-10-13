@@ -747,6 +747,37 @@ async def test_links_reject_invalid_fields(
 
 
 @pytest.mark.anyio
+async def test_comment_avatar_preview(
+    client: AsyncClient, database_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """预览须登录并校验 QQ，不写评论，响应不缓存；上游失败可重试。"""
+    add_blog_content(database_session)
+    calls: list[str] = []
+
+    def avatar(number: str) -> tuple[bytes, str]:
+        calls.append(number)
+        return b"image", "image/png"
+
+    monkeypatch.setattr("genesis_api.api.routes.blog_comments.qq_avatar", avatar)
+    url = "/api/v1/blog/comments/avatar-preview"
+    assert (await client.post(url, json={"qq": "12345@qq.com"})).status_code == 401
+    token = await authenticate_owner(client, database_session)
+    headers = {"Authorization": f"Bearer {token}"}
+    for value in ("", " ", "alias@qq.com", "1234", "12345@example.com"):
+        assert (await client.post(url, headers=headers, json={"qq": value})).status_code == 422
+    assert calls == []
+    response = await client.post(url, headers=headers, json={"qq": " 12345@QQ.com "})
+    assert response.status_code == 200 and response.content == b"image"
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert calls == ["12345"]
+    assert list(database_session.scalars(select(BlogComment))) == []
+    monkeypatch.setattr("genesis_api.api.routes.blog_comments.qq_avatar", lambda number: None)
+    assert (await client.post(url, headers=headers, json={"qq": "12345"})).status_code == 502
+
+
+@pytest.mark.anyio
 async def test_comment_submission_moderation_and_public_boundary(
     client: AsyncClient, database_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:

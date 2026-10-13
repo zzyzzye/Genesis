@@ -4,15 +4,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ArticleComments } from '../src/features/blog/ArticleComments'
 import { CommentsWorkspace } from '../src/studio/CommentsWorkspace'
 import { accountAuthTokenKey } from '../src/lib/auth'
-import { ApiError, getAdminBlogComments, getBlogComments, moderateBlogComment, submitBlogComment, type BlogCommentAdmin } from '../src/lib/api'
+import { ApiError, getAdminBlogComments, getBlogComments, moderateBlogComment, previewCommentAvatar, submitBlogComment, type BlogCommentAdmin } from '../src/lib/api'
 
 vi.mock('../src/lib/api', async (original) => ({
   ...await original<typeof import('../src/lib/api')>(),
-  getAdminBlogComments: vi.fn(), getBlogComments: vi.fn(), moderateBlogComment: vi.fn(), submitBlogComment: vi.fn(),
+  getAdminBlogComments: vi.fn(), getBlogComments: vi.fn(), moderateBlogComment: vi.fn(), submitBlogComment: vi.fn(), previewCommentAvatar: vi.fn(),
 }))
 const item: BlogCommentAdmin = { id: 'comment-1', author_name: '测试昵称', content: '<script>不会执行</script>\n保留换行', created_at: '2026-10-11T00:00:00Z', updated_at: '2026-10-11T00:00:00Z', state: 'pending', post_title: '测试文章', post_slug: 'test-post', post_status: 'published' }
 afterEach(() => { cleanup(); localStorage.clear(); vi.resetAllMocks() })
 function reader(loggedIn = true) {
+  vi.mocked(previewCommentAvatar).mockRejectedValue(new Error('测试头像不可用'))
   if (loggedIn) localStorage.setItem(accountAuthTokenKey, 'test-placeholder')
   vi.mocked(getBlogComments).mockResolvedValue({ items: [], total: 0 })
   const router = createMemoryRouter([{ path: '*', element: <><ArticleComments slug="test-post" /><Link to="/blog">离开测试文章</Link></> }], { initialEntries: ['/articles/test-post'] })

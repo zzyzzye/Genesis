@@ -44,6 +44,22 @@ class CommentWrite(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 
+class CommentAvatarRequest(BaseModel):
+    """输入时预览头像，沿用评论提交的 QQ 校验，不保存资料。"""
+
+    model_config = {"extra": "forbid"}
+    qq: str = Field(min_length=1, max_length=64)
+
+    @field_validator("qq")
+    @classmethod
+    def normalize_qq(cls, value: str) -> str:
+        """预览需要有效且非空的 QQ 号。"""
+        number = CommentWrite.normalize_qq(value)
+        if number is None:
+            raise ValueError("请输入 QQ 邮箱")
+        return number
+
+
 class CommentPublic(BaseModel):
     """公开字段不含用户标识、账号、联系方式或审核元数据。"""
 

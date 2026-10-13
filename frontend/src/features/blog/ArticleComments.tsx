@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBlocker, useLocation } from 'react-router-dom'
-import { ArrowUpRight, Mail, MessageSquare, RefreshCw } from 'lucide-react'
+import { ArrowUpRight, MessageSquare, RefreshCw } from 'lucide-react'
 import { BlogWorkflowDialog } from '../../studio/BlogWorkflowDialog'
 import { ApiError, getBlogComments, submitBlogComment, type BlogComment } from '../../lib/api'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
 import './ArticleComments.css'
 import { CommentAvatar, CommentSource } from './CommentSource'
+import { CommentAvatarPreview } from './CommentAvatarPreview'
 
 const readToken = () => getStoredAuthToken() ?? getStoredAuthToken(studioAuthTokenKey)
 const date = (value: string) => new Date(value).toLocaleString('zh-CN')
@@ -100,7 +101,7 @@ export function ArticleComments({ slug }: { slug: string }) {
     {token ? <form noValidate onSubmit={(event) => void submit(event)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault() }}>
       <div className="article-comments__composer">
         <div className="article-comments__identity">
-          <Mail size={17} aria-hidden="true" />
+          <CommentAvatarPreview qq={qq} token={token} />
           <input id="comment-qq" ref={qqInput} type="text" inputMode="email" autoComplete="off" maxLength={64} aria-label="QQ 邮箱（选填）" placeholder="输入 QQ 邮箱自动获取头像" value={qq} disabled={busy} onChange={(event) => { setQq(event.target.value); setQqError(false); setError('') }} aria-invalid={qqError} aria-describedby="comment-error" />
         </div>
         <div className="article-comments__writing">
