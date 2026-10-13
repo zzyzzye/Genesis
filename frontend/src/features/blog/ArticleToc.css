@@ -6,7 +6,7 @@
 .article-toc .article-toc__toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 44px; padding: 8px; color: inherit; font-weight: 550; }
 .article-toc__toggle > span { display: flex; align-items: center; gap: 8px; }
 .article-toc__toggle small { color: var(--blog-muted, var(--studio-muted)); font-weight: 400; }
-.article-toc__toggle > svg { transform: rotate(-90deg); transition: transform 520ms cubic-bezier(0.34, 1.9, 0.64, 1); }
+.article-toc__toggle > svg { transform: rotate(-90deg); transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1); }
 .article-toc__toggle > svg.is-expanded { transform: none; }
 .article-toc__content { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
