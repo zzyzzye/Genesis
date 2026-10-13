@@ -96,14 +96,14 @@ describe('文章评论', () => {
     expect(submitBlogComment).toHaveBeenCalledWith('test-post', 'test-placeholder', '头像与来源测试', expect.any(String), '12345@qq.com', true)
   })
 
-  it('头像输入保留可访问名称与简短提示，正文区域先于资料和评论列表', async () => {
+  it('邮箱资料先于正文且保留可访问名称，表单先于评论列表', async () => {
     const { container } = reader()
     await screen.findByText('还没有公开评论，欢迎留下你的想法。')
     const body = screen.getByRole('textbox', { name: '写下评论' })
     const qq = screen.getByRole('textbox', { name: 'QQ 邮箱（选填）' })
     expect(qq).toHaveAttribute('placeholder', '输入 QQ 邮箱自动获取头像')
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
-    expect(body.compareDocumentPosition(qq) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(qq.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(container.querySelector('form')!.compareDocumentPosition(container.querySelector('.article-comments__list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
