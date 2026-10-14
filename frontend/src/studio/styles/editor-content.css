@@ -121,15 +121,25 @@
   .markdown-editor__source--mdx { overflow: visible; }
 }
 .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
-  flex-wrap: wrap;
-  gap: 6px 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 12px;
   overflow: visible;
   border: 0;
   border-radius: 0;
 }
-/* 保留编辑器原生工具组及键盘行为，空间不足时按组换行。 */
-.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar > * {
-  flex-shrink: 0;
+/* 主行保留高频操作，扩展行按需显示；模式切换始终占右侧独立位置。 */
+.editor-tools-primary, .editor-tools-secondary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 4px; min-width: 0; }
+.editor-tools-primary { grid-column: 1; grid-row: 1; }
+.editor-tools-secondary { grid-column: 1 / -1; grid-row: 2; padding: 12px 0 4px; }
+.editor-tools-secondary[hidden] { display: none; }
+.editor-tools-primary > *, .editor-tools-secondary > * { flex-shrink: 0; }
+.markdown-editor .editor-tools-more { display: inline-flex; align-items: center; gap: 4px; padding: 5px 8px; border: 0; outline: 0; box-shadow: none; background: transparent; color: var(--studio-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.markdown-editor .editor-tools-more:hover, .markdown-editor .editor-tools-more:focus-visible, .markdown-editor .editor-tools-more[aria-expanded="true"] { background: var(--studio-editor-hover); color: var(--studio-ink); }
+.editor-tools-label { padding-inline: 4px; color: var(--studio-muted); font: 11px var(--studio-sans); }
+.markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar > div:last-child { grid-column: 2; grid-row: 1; align-self: start; position: static; }
+@media (max-width: 680px) {
+  .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar { gap: 0 4px; }
 }
 .markdown-editor__source--mdx {
   position: relative;
