@@ -105,9 +105,6 @@
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-focused) button[title="删除代码块"] {
   opacity: 1;
 }
-.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) .cm-content {
-  padding-inline: 3rem 2.85rem !important;
-}
 @media (min-width: 681px) {
   .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
     padding-inline: 12px;
@@ -149,10 +146,6 @@
   margin-top: .4rem;
   margin-bottom: .6rem;
 }
-.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) .cm-content {
-  min-height: 2.3rem !important;
-  padding-block: .4rem .35rem !important;
-}
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div {
   margin: 0 !important;
   padding: 0 !important;
@@ -162,10 +155,6 @@
 }
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) > div > div:first-child {
   position: static !important;
-}
-.genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) .cm-content {
-  padding-left: .75rem !important;
-  padding-right: 1rem !important;
 }
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) [role="combobox"] {
   width: fit-content !important;
