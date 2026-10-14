@@ -213,7 +213,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const [initialSession] = useState(() => readAssistantSession(storageKey))
   const [initialModel] = useState(() => readModelChoice(`${storageKey}:model-choice`))
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const [panelWidth, setPanelWidth] = useState(420)
+  const [panelWidth, setPanelWidth] = useState(380)
   const [resizing, setResizing] = useState(false)
   const resizeStart = useRef<{ x: number; width: number } | null>(null)
   const drafts = useRef<Record<string, string>>({})
@@ -714,7 +714,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   return (
     <AnimatePresence initial={false}>
     {isOpen ? <motion.div key="assistant" ref={rootRef} className={`studio-assistant is-open${expanded ? ' is-expanded' : ''}`}
-      initial={{ opacity: 0, '--assistant-motion-width': `${panelWidth}px` }} animate={{ opacity: 1, '--assistant-motion-width': expanded ? '960px' : `${panelWidth}px` }} exit={{ opacity: 0 }}
+      initial={{ opacity: 0, x: reducedMotion ? 0 : '100%', '--assistant-motion-width': `${panelWidth}px` }} animate={{ opacity: 1, x: 0, '--assistant-motion-width': expanded ? '960px' : `${panelWidth}px` }} exit={{ opacity: 0, x: reducedMotion ? 0 : '100%' }}
       transition={resizing ? { ...transition, duration: 0 } : transition}>
       {isOpen && !expanded && <button type="button" role="separator" aria-label="调整助手宽度" aria-orientation="vertical" aria-valuemin={340} aria-valuemax={600} aria-valuenow={panelWidth} className="studio-assistant__resize" title="拖动或用左右方向键调整宽度" onPointerDown={(event) => { setResizing(true); resizeStart.current = { x: event.clientX, width: panelWidth }; event.currentTarget.setPointerCapture(event.pointerId) }} onPointerMove={(event) => { const start = resizeStart.current; if (start) setPanelWidth(Math.max(340, Math.min(600, start.width + start.x - event.clientX))) }} onPointerUp={() => { setResizing(false); resizeStart.current = null }} onPointerCancel={() => { setResizing(false); resizeStart.current = null }} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setPanelWidth((width) => Math.max(340, Math.min(600, width + (event.key === 'ArrowLeft' ? 16 : -16)))) } }} />}
         <section className={`studio-assistant__panel${messages.length === 1 && !isBusy ? ' is-empty' : ''}`} aria-label="博客 AI 助手">

@@ -59,15 +59,7 @@ describe('可靠博客写作流程', () => {
 
   it('空白文章打开附件选择也拦截导航，沿用唯一弹窗并可继续选择', async () => {
     setup('/blog/studio/posts/new/edit')
-    const more = await screen.findByRole('button', { name: /更多/ })
-    expect(screen.queryByRole('button', { name: '插入附件' })).not.toBeInTheDocument()
-    fireEvent.click(more)
-    expect(more).toHaveAttribute('aria-expanded', 'true')
-    fireEvent.keyDown(screen.getByRole('button', { name: '插入附件' }), { key: 'Escape' })
-    expect(more).toHaveFocus()
-    expect(more).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(more)
-    fireEvent.click(screen.getByRole('button', { name: '插入附件' }))
+    fireEvent.click(await screen.findByRole('button', { name: '插入附件' }))
     await screen.findByText('这个文件夹还没有附件')
     fireEvent.click(screen.getByRole('button', { name: /返回文章列表/ }))
     expect(await screen.findByRole('dialog', { name: '离开附件选择？' })).toBeInTheDocument()

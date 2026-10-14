@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArticleDocument, ArticleToc } from '../features/blog/ArticleToc'
 import { getArticleHeadings, type ArticleHeading } from '../features/blog/articleOutline'
 import { EditorView } from '@codemirror/view'
@@ -93,8 +93,6 @@ const genesisCodeBlockTheme = EditorView.theme({
   },
 }, { dark: false })
 const GenesisToolbar = ({ onAttachment, disabled }: { onAttachment?: () => void; disabled: boolean }) => {
-  const [more, setMore] = useState(false)
-  const moreId = useId()
   return (
   <DiffSourceToggleWrapper SourceToolbar={<>{onAttachment && <button type="button" className="editor-attachment-trigger" disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={onAttachment}><StudioIcon name="attachment" />插入附件</button>}</>}>
     <div className="editor-tools-primary">
@@ -103,14 +101,8 @@ const GenesisToolbar = ({ onAttachment, disabled }: { onAttachment?: () => void;
       <BoldItalicUnderlineToggles />
       <ListsToggle />
       <CreateLink />
-      <button type="button" className="editor-tools-more" aria-expanded={more} aria-controls={moreId} disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={() => setMore(value => !value)}>更多 <span aria-hidden="true">{more ? '−' : '＋'}</span></button>
     </div>
-    <div className="editor-tools-secondary" id={moreId} hidden={!more} onKeyDown={event => {
-      if (event.key === 'Escape') {
-        setMore(false)
-        event.currentTarget.parentElement?.querySelector<HTMLButtonElement>('.editor-tools-more')?.focus()
-      }
-    }}>
+    <div className="editor-tools-secondary">
       <span className="editor-tools-label">格式</span>
       <CodeToggle /><HighlightToggle /><StrikeThroughSupSubToggles />
       <Separator />
