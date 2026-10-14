@@ -412,6 +412,7 @@ export function MarkdownEditor({
 
   return (
     <section className="markdown-editor" aria-labelledby="markdown-editor-title">
+      <div className="markdown-editor__main">
       <header className="markdown-editor__header">
         <div className="markdown-editor__identity">
           <button className="text-button" type="button" onClick={onBack}>← 返回{label}列表</button>
@@ -420,7 +421,7 @@ export function MarkdownEditor({
             <span className={`post-status post-status--${editor.status}`}>{editor.status === 'published' ? '已发布' : '草稿'}</span>
             <span className="markdown-editor__save-state" role="status">{saveState}</span>
           </div>
-          <input aria-label={`${label}标题`} className="markdown-editor__title" id="markdown-editor-title" disabled={isSaving || recovery !== null} maxLength={200} onChange={(event) => onChange({ ...editor, title: event.currentTarget.value })} placeholder={`输入${label}标题`} value={editor.title} />
+          <textarea aria-label={`${label}标题`} className="markdown-editor__title" id="markdown-editor-title" rows={1} style={{ resize: 'none' }} disabled={isSaving || recovery !== null} maxLength={200} onChange={(event) => onChange({ ...editor, title: event.currentTarget.value.replace(/\n/g, '') })} placeholder={`输入${label}标题`} value={editor.title} />
         </div>
         <div className="markdown-editor__actions">
           {kind === 'page' && editor.status === 'published' && <a className="page-public-link" href={'/blog/pages/' + encodeURIComponent(editor.slug)} target="_blank" rel="noopener noreferrer">查看公开页面 ↗</a>}
@@ -467,9 +468,10 @@ export function MarkdownEditor({
             spellCheck={false}
           />
         </section>
-        <div className="markdown-editor__toc"><ArticleToc items={outlineItems} activeId={activeHeading} label={`${label}目录`} onNavigate={navigateHeading} /></div>
       </div>
       <footer className="markdown-editor__writing-meta"><span>{stats.count.toLocaleString('zh-CN')} 字 · 预计阅读 {stats.minutes} 分钟</span><span>未保存内容仅保留在本标签页</span></footer>
+      </div>
+      <div className="markdown-editor__toc"><ArticleToc items={outlineItems} activeId={activeHeading} label={`${label}目录`} onNavigate={navigateHeading} /></div>
       {isAttachmentOpen && attachmentAccess && <EditorAttachmentPicker access={attachmentAccess} onClose={closeAttachments} onInsert={insertAttachment} />}
       {isSettingsOpen && <PostSettingsModal kind={kind} onUnpublish={onUnpublish} categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} />}
     </section>

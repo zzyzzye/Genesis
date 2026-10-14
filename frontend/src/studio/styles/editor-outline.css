@@ -1,12 +1,64 @@
-.markdown-editor .markdown-editor__workspace--mdx { display: grid; grid-template-columns: minmax(0, 1fr) 336px; gap: 24px; align-items: start; }
-.markdown-editor__toc { min-width: 0; padding: 16px 16px 0 0; }
-@media (min-width: 1101px) {
-  .markdown-editor__toc .article-toc { position: fixed; top: 190px; width: var(--article-toc-width); }
-  .markdown-editor__toc .article-toc nav { max-height: calc(100dvh - 270px); }
+/* 标题、工具栏与正文共用左列，目录独占右列。 */
+.markdown-editor {
+  --writing-toc-width: clamp(384px, 28vw, 464px);
+  --writing-padding: clamp(20px, 3vw, 48px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--writing-toc-width);
+  gap: 24px;
+  background: var(--studio-paper);
 }
-.genesis-mdx-content :is(h1,h2,h3,h4,h5,h6) { scroll-margin-top: 100px; }
+.markdown-editor__main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.markdown-editor .markdown-editor__workspace--mdx { display: block; }
+/* 沿用工作台隐藏滚动条外观的规则，避免正文比标题窄一个滚动条。 */
+.studio-app-shell .markdown-editor__workspace--mdx { scrollbar-width: none; scrollbar-color: var(--studio-scroll-thumb) transparent; }
+.studio-app-shell .markdown-editor__workspace--mdx::-webkit-scrollbar { display: none; }
+.markdown-editor .markdown-editor__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 16px;
+  padding-inline: var(--writing-padding);
+}
+.markdown-editor__identity { display: contents; }
+.markdown-editor__identity > .text-button { grid-column: 1; grid-row: 1; justify-self: start; }
+.markdown-editor__title-row { grid-column: 1; grid-row: 2; margin-top: 0; }
+.markdown-editor .markdown-editor__title {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 1.4em;
+  field-sizing: content;
+  resize: none;
+  overflow: hidden;
+}
+.markdown-editor .markdown-editor__actions { grid-column: 2; grid-row: 1 / 3; align-self: center; padding-top: 0; }
+.studio-workspace > .studio-content--editor .markdown-editor .genesis-mdx-content {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  padding-inline: var(--writing-padding);
+}
+.markdown-editor .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
+  margin-inline: var(--writing-padding);
+  padding-inline: 0;
+}
+.markdown-editor__toc { min-width: 0; padding: 24px 24px 0 0; }
+.markdown-editor__toc .article-toc { --article-toc-width: calc(var(--writing-toc-width) - 24px); }
+@media (min-width: 1101px) {
+  .markdown-editor__toc .article-toc { position: fixed; top: 24px; width: var(--article-toc-width); }
+  .markdown-editor__toc .article-toc nav { max-height: calc(100dvh - 112px); }
+}
+.genesis-mdx-content :is(h1,h2,h3,h4,h5,h6) { scroll-margin-top: 140px; }
 @media (max-width: 1100px) {
-  .markdown-editor .markdown-editor__workspace--mdx { display: flex; flex-direction: column; gap: 0; }
-  .markdown-editor__toc { position: static; order: -1; box-sizing: border-box; width: 100%; padding: 12px 16px; }
+  .markdown-editor { display: flex; flex-direction: column; gap: 0; }
+  .markdown-editor__main { display: contents; }
+  .markdown-editor__toc { position: static; order: 1; box-sizing: border-box; width: 100%; padding: 12px var(--writing-padding); }
+  .markdown-editor__workspace--mdx { order: 2; }
+  .markdown-editor__writing-meta { order: 3; }
   .markdown-editor__source--mdx { width: 100%; min-width: 0; }
+}
+@media (max-width: 680px) {
+  .markdown-editor { --writing-padding: 16px; }
+  .markdown-editor .markdown-editor__header { grid-template-columns: minmax(0, 1fr); }
+  .markdown-editor .markdown-editor__actions { grid-column: 1; grid-row: 4; justify-content: flex-start; }
 }
