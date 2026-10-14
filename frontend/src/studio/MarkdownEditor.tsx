@@ -81,7 +81,22 @@ const genesisCodeBlockTheme = EditorView.theme({
     fontVariantNumeric: 'tabular-nums',
   },
   '.cm-lineNumbers .cm-gutterElement': { padding: '0 4px 0 12px' },
-  '.cm-foldGutter .cm-gutterElement': { padding: '0 2px' },
+  '.cm-foldGutter .cm-gutterElement': {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 2px',
+  },
+  // 固定图标尺寸并按行高居中，避免文字箭头的字体基线造成偏移。
+  '.cm-foldGutter .cm-gutterElement span': {
+    display: 'block',
+    width: '10px',
+    height: '10px',
+    fontSize: '0',
+    backgroundColor: 'currentColor',
+    mask: 'url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 12 12%27%3E%3Cpath d=%27m4 2 4 4-4 4%27 fill=%27none%27 stroke=%27black%27 stroke-width=%271.4%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E") center / contain no-repeat',
+  },
+  '.cm-foldGutter span[title="Fold line"]': { transform: 'rotate(90deg)' },
   '.cm-activeLine, .cm-activeLineGutter': { backgroundColor: 'transparent' },
   '.cm-activeLineGutter': { color: 'var(--studio-editor-muted)' },
   '.cm-selectionBackground': { backgroundColor: 'var(--studio-editor-hover) !important' },
