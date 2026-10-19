@@ -35,6 +35,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 | --- | --- | --- | --- | --- |
 | 总首页 / 文章选读 | Home、HomeReading、React Router | Home.css、lib/api.ts、blog/service.py 的公开文章排序 | 三模块入口与账户始终可用；工具箱说明筹备中；最多三篇公开摘要，精选优先；失败可重试、离开取消读取 | 桌面首屏、手机导航、长标题、加载/空态/失败重试、键盘、返回标题、减少动态效果 |
+| 公开博客文章目录 | PublicBlog、React Router Link | BlogPage.tsx/CSS、公开文章 API | 紧凑介绍后直接展示单列文章；精选为行内标记，标签按钮声明选中状态；沿用既有读取与筛选范围；失败可重试，空数据与加载提供明确文字 | 1440px、390px 与 320px，正常内容、长标题、标签筛选、悬停与键盘打开、正文返回、隔离加载/空态/503 重试 |
 | 公开文章阅读 | BlogPage、ArticleMarkdown、ArticleComments | BlogPage.css 的 article 变体、ArticleComments.css、公开文章 API | 768px 阅读栏、28–40px 标题；加载与失败保持阅读壳，失败可重试；代码复用原组件；不修改正文数据 | 桌面与 390/320px、无标签摘要、长标题链接、表格宽图、加载失败重试、评论空态聚焦、代码展开收起 |
 | 公开文章 AI 导读 | ArticleGuide、公共结构化模型运行时 | ArticleGuide.tsx/CSS、blog/guide.py、blog/agent/guide.py | 默认收起；暖赭色 AI 标识；首次依次打字，可显示全部，重新展开直接全文；三个要点与阅读重点；按正文指纹只读缓存；等待生成手动查看，失败可重试；高度与透明度过渡，减少动态效果即时呈现 | 真实生成、逐字追加、跳过/中途收起、收起复用、网络超时与重试、空态/待生成/旧版本、键盘、390/320px、减少动态效果切换、慢请求高度过渡、缓存失效与迟到结果 |
 | 博客助手 / 非模态浮层 | BlogAssistant、既有对话与模型菜单状态 | BlogAssistant.tsx、BlogAssistant.css | 后台常驻，空态紧凑、对话展开；输入保持编辑，执行模式与确认沿用原协议 | 开关、聚焦、模型选择与 Escape、上下文环、长回复与代码块、生成与失败、窄屏 |

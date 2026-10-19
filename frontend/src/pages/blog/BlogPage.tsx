@@ -90,8 +90,6 @@ function PublicBlog() {
       activeTag === null ? posts : posts.filter((post) => post.tags.some((tag) => tag.slug === activeTag)),
     [activeTag, posts],
   )
-  const featuredPost = visiblePosts.find((post) => post.is_featured) ?? visiblePosts[0]
-  const regularPosts = visiblePosts.filter((post) => post.slug !== featuredPost?.slug)
 
   function openArticle(slug: string) {
     if (location.pathname !== `/articles/${slug}`) void navigate(`/articles/${slug}`)
@@ -134,7 +132,7 @@ function PublicBlog() {
   }, [location.pathname, slug])
 
   return (
-    <div className={`blog-page${isArticle ? ' blog-page--article' : ''}`} id="top">
+    <div className={`blog-page${isArticle ? ' blog-page--article' : ' blog-page--index'}`} id="top">
       <header className="blog-masthead">
         <Link className="blog-home-link" to="/" aria-label="返回 Genesis 首页">
           <span aria-hidden="true">←</span> Genesis
@@ -177,51 +175,25 @@ function PublicBlog() {
           </article>
         ) : (
           <>
-            <section className="intro" aria-labelledby="page-title">
-              <p className="eyebrow">PERSONAL KNOWLEDGE SPACE</p>
-              <h1 id="page-title">
-                把热爱、思考和<br />
-                <em>长期主义</em>放在同一个空间。
-              </h1>
-              <p className="intro-copy">
-                Genesis 是一个逐步生长的个人系统。现在从博客开始，沉淀值得反复回看的想法与创造。
-              </p>
-              <div className="progress-grid" aria-label="产品建设进度">
-                <div>
-                  <strong>01</strong>
-                  <span>博客正在构建</span>
-                </div>
-                <div>
-                  <strong>02</strong>
-                  <span>工具随后接入</span>
-                </div>
-                <div>
-                  <strong>03</strong>
-                  <span>影音最后展开</span>
-                </div>
-              </div>
-            </section>
+            <header className="blog-index-intro">
+              <h1>博客</h1>
+              <p>记录技术实践、产品思考与日常随笔。</p>
+            </header>
 
-            <section className="articles" id="articles" aria-labelledby="articles-title">
-              <div className="section-heading">
-                <div>
-                  <p className="eyebrow">WRITING</p>
-                  <h2 id="articles-title">最近的文章</h2>
-                </div>
-                {blogState.status === 'ready' && <span>{blogState.total} 篇记录</span>}
+            <section className="blog-index" id="articles" aria-labelledby="articles-title" aria-busy={blogState.status === 'loading'}>
+              <div className="blog-index-heading">
+                <h2 id="articles-title">最近的文章</h2>
+                {blogState.status === 'ready' && <span aria-live="polite">{activeTag ? `${visiblePosts.length} 篇匹配` : `${blogState.total} 篇记录`}</span>}
               </div>
 
               {blogState.status === 'loading' && (
-                <div className="loading-grid" aria-label="正在加载文章">
-                  <div />
-                  <div />
-                  <div />
-                </div>
+                <div className="blog-index-feedback" role="status">正在加载文章…</div>
               )}
 
               {blogState.status === 'error' && (
-                <div className="error-state" role="alert">
-                  <p>暂时无法连接到博客内容服务。</p>
+                <div className="blog-index-feedback" role="alert">
+                  <h3>文章暂时未能加载</h3>
+                  <p>内容服务暂时不可用，请重新加载。</p>
                   <button type="button" onClick={retryPosts}>
                     重新加载
                   </button>
@@ -234,6 +206,7 @@ function PublicBlog() {
                     <button
                       className={activeTag === null ? 'is-active' : ''}
                       type="button"
+                      aria-pressed={activeTag === null}
                       onClick={() => setActiveTag(null)}
                     >
                       全部
@@ -243,6 +216,7 @@ function PublicBlog() {
                         className={activeTag === tag.slug ? 'is-active' : ''}
                         key={tag.id}
                         type="button"
+                        aria-pressed={activeTag === tag.slug}
                         onClick={() => setActiveTag(tag.slug)}
                       >
                         {tag.name}
@@ -250,47 +224,32 @@ function PublicBlog() {
                     ))}
                   </div>
 
-                  {featuredPost && (
-                    <button
-                      className="featured-card"
-                      type="button"
-                      onClick={() => openArticle(featuredPost.slug)}
-                    >
-                      <span className="featured-index">精选 / 01</span>
-                      <div>
-                        <TagList tags={featuredPost.tags} />
-                        <h3>{featuredPost.title}</h3>
-                        <p>{featuredPost.excerpt}</p>
-                      </div>
-                      <span className="arrow" aria-label={`阅读 ${featuredPost.title}`}>
-                        ↗
-                      </span>
-                    </button>
-                  )}
-
-                  {regularPosts.length > 0 && (
-                    <div className="article-grid">
-                      {regularPosts.map((post) => (
-                        <button
-                          className="article-card"
-                          key={post.id}
-                          type="button"
-                          aria-label={`阅读 ${post.title}`}
-                          onClick={() => openArticle(post.slug)}
-                        >
-                          <TagList tags={post.tags} />
-                          <h3>{post.title}</h3>
-                          <p>{post.excerpt}</p>
-                          <footer>
-                            <span>{formatDate(post.published_at)}</span>
-                            <span>{post.read_time_minutes} min</span>
-                          </footer>
-                        </button>
+                  {visiblePosts.length > 0 && (
+                    <ul className="blog-article-list" aria-label="文章列表">
+                      {visiblePosts.map((post) => (
+                        <li key={post.id}>
+                          <Link
+                            className="blog-article-link"
+                            to={`/articles/${encodeURIComponent(post.slug)}`}
+                            aria-label={`阅读 ${post.title}`}
+                          >
+                            <div className="blog-article-date">
+                              <time dateTime={post.published_at}>{formatDate(post.published_at)}</time>
+                              <span>{post.read_time_minutes} 分钟阅读</span>
+                            </div>
+                            <div className="blog-article-copy">
+                              <div className="blog-article-title"><h3>{post.title}</h3>{post.is_featured && <span className="blog-article-featured">精选</span>}</div>
+                              {post.excerpt && <p>{post.excerpt}</p>}
+                              <TagList tags={post.tags} />
+                            </div>
+                            <span className="blog-article-arrow" aria-hidden="true">↗</span>
+                          </Link>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   )}
 
-                  {!featuredPost && <div className="empty-state">这个标签下还没有公开文章。</div>}
+                  {visiblePosts.length === 0 && <div className="blog-index-feedback"><h3>{activeTag ? '这个标签下还没有公开文章' : '还没有发布的文章'}</h3><p>{activeTag ? '切换到全部文章，看看其他记录。' : '之后再来看看新的记录。'}</p>{activeTag && <button type="button" onClick={() => setActiveTag(null)}>查看全部文章</button>}</div>}
                 </>
               )}
             </section>
@@ -300,8 +259,8 @@ function PublicBlog() {
       </main>
 
       <footer className="blog-footer">
-        <span>Genesis · 个人内容系统</span>
-        <span>Blog is the beginning.</span>
+        <span>Genesis Journal</span>
+        <a href="#top">回到顶部 ↑</a>
       </footer>
     </div>
   )
