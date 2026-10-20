@@ -39,7 +39,7 @@ export function BlogActionProposal({ action, executed, busy, disabled, targetPos
   const fields = action.action === 'update_post' ? Object.keys(changes).map((field) => ({ title: '标题', excerpt: '摘要', content_markdown: '正文', slug: '文章路径', status: '发布状态', tags: '标签', category_id: '分类', cover_image_url: '封面', is_featured: '精选', read_time_minutes: '阅读时长', published_at: '发布时间' }[field])).filter(Boolean) : []
 
   return <section className={`studio-assistant__action-card${executed ? ' is-executed' : ''}`} aria-label={labels.name}>
-    <div className="studio-assistant__action-heading"><Icon size={16} aria-hidden="true" /><span>{executed ? labels.done : labels.name}</span></div>
+    <div className="studio-assistant__action-heading"><Icon size={16} aria-hidden="true" /><span>{executed ? labels.done : labels.name}</span><span className="studio-assistant__action-state">{executed ? '执行结果' : '操作确认'}</span></div>
     {title && <h4 className="studio-assistant__action-title">{title}</h4>}
     <p className="studio-assistant__action-hint">{labels.hint}{fields.length ? ` · 修改${fields.join('、')}` : ''}</p>
     {excerpt && <p className="studio-assistant__action-excerpt">{excerpt}</p>}

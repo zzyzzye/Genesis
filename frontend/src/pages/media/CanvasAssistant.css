@@ -1,5 +1,5 @@
 /* 影音助手保留墨黑底，用细边界和阴影区分页面层次。 */
-.media-agent--styled { --reasoning-text:var(--agent-text); --reasoning-muted:var(--agent-muted); --reasoning-hover:var(--agent-hover); }
+.media-agent--styled { --reasoning-text:var(--agent-text); --reasoning-muted:var(--agent-muted); --reasoning-hover:var(--agent-hover); --assistant-paper:var(--agent-panel); --assistant-surface:var(--agent-surface); --assistant-hover:var(--agent-hover); --assistant-muted:var(--agent-muted); --assistant-accent:var(--agent-accent); --assistant-line:#36383b; }
 .media-agent--styled { --agent-panel:#111214; --agent-surface:#191a1c; --agent-hover:#222326; --agent-text:#e8e8e8; --agent-muted:#a3a3a3; --agent-accent:#c3d1c5; }
 .media-agent--styled .media-agent__panel { width:min(392px,calc(100vw - 32px)); height:min(620px,calc(100dvh - 120px)); background:var(--agent-panel); color:var(--agent-text); border:1px solid #36383b; box-shadow:0 8px 24px #0009,0 24px 64px #0008; border-radius:12px; animation:none; }
 .media-agent--styled .media-agent__panel.is-empty { height:auto; max-height:calc(100dvh - 120px); }
