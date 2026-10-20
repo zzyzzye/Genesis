@@ -28,6 +28,7 @@
     "react-router-dom": "^7.18.3",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
+    "stats.js": "^0.17.0",
     "unified": "^11.0.5"
   },
   "devDependencies": {
@@ -38,6 +39,7 @@
     "@types/node": "^26.4.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "@types/stats.js": "^0.17.4",
     "@vitejs/plugin-react": "^6.1.1",
     "eslint": "^10.9.1",
     "eslint-plugin-react-hooks": "^7.1.1",

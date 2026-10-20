@@ -1,0 +1,24 @@
+:root { --z-performance-monitor: 80; }
+
+.fps-monitor {
+  position: fixed;
+  z-index: var(--z-performance-monitor);
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  min-width: 80px;
+  min-height: 48px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #171717;
+  color: #fff;
+  font: 11px/1.5 Inter, "PingFang SC", sans-serif;
+  pointer-events: none;
+  user-select: none;
+  /* 保留库原生 FPS 图，将彩色调试面板统一为中性色。 */
+  filter: grayscale(1);
+}
+
+.fps-monitor[hidden] { display: none; }
+.fps-monitor canvas { display: block; }
+
+@media print { .fps-monitor { display: none; } }

@@ -13,6 +13,7 @@ import { pageTransition } from './lib/motion'
 import { SessionRecovery } from './SessionRecovery'
 import { CursorEffects } from './features/cursor/CursorEffects'
 import { CursorTrail } from './features/cursor/CursorTrail'
+import { FpsMonitor } from './features/performance/FpsMonitor'
 
 function LegacyStudioRedirect() {
   const location = useLocation()
@@ -80,6 +81,7 @@ export function App({ router: providedRouter }: { router?: ReturnType<typeof cre
     <MotionConfig reducedMotion="user">
       <CursorEffects />
       <CursorTrail />
+      <FpsMonitor />
       <RouterProvider router={router} />
     </MotionConfig>
   )

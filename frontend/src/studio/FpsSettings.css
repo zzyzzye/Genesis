@@ -1,0 +1,16 @@
+.fps-settings { margin-bottom: 32px; }
+.fps-settings__row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.fps-settings h2 { margin: 0 0 5px; color: var(--studio-ink); font-size: 13px; font-weight: 500; }
+.fps-settings p { margin: 0; color: var(--studio-muted); font-size: 12px; line-height: 1.7; }
+.fps-settings small { display: block; margin-top: 5px; color: var(--studio-muted); font-size: 11px; }
+.fps-settings__switch { display: flex; flex: none; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px; border: 0; border-radius: 8px; background: transparent; color: var(--studio-muted); font-size: 11px; cursor: pointer; outline: none; box-shadow: none; }
+.fps-settings__switch:hover, .fps-settings__switch:focus-visible { background: var(--studio-soft); color: var(--studio-ink); }
+.fps-settings__track { display: flex; align-items: center; width: 36px; height: 22px; padding: 3px; border-radius: 12px; background: var(--studio-hover); }
+.fps-settings__track > span { width: 16px; height: 16px; border-radius: 50%; background: var(--studio-paper); }
+.fps-settings__switch[aria-checked="true"] .fps-settings__track { justify-content: flex-end; background: var(--studio-ink); }
+.fps-settings .fps-settings__error { margin-top: 8px; color: var(--studio-ink); }
+
+@container (max-width: 440px) {
+  .fps-settings__row { align-items: flex-start; gap: 8px; }
+  .fps-settings__switch { flex-direction: column-reverse; gap: 2px; padding: 4px; }
+}
