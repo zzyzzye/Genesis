@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, MousePointer2, MoveUpRight } from 'lucide-react'
+import { Check, Feather, MousePointer2, MoveUpRight, Sparkles, Flame } from 'lucide-react'
 import { cursorThemes, saveCursorTheme, useCursorTheme } from '../features/cursor/preferences'
 import './SystemSettings.css'
 
@@ -13,7 +13,7 @@ export function SystemSettings() {
     <div className="cursor-settings__layout">
       <div className="cursor-settings__options" aria-label="选择光标主题">
         {cursorThemes.map(item => <button type="button" className="cursor-settings__option" aria-pressed={selected === item.id} key={item.id} onClick={() => setError(!saveCursorTheme(item.id))}>
-          <span className={`cursor-settings__mark cursor-settings__mark--${item.id}`} aria-hidden="true">{item.id === 'system' ? <MousePointer2 /> : <i />}</span>
+          <span className={`cursor-settings__mark cursor-settings__mark--${item.id}`} aria-hidden="true">{item.id === 'system' ? <MousePointer2 /> : item.id === 'quill' ? <Feather /> : item.id === 'starlight' ? <Sparkles /> : item.id === 'dragon' ? <Flame /> : <i />}</span>
           <span><strong>{item.name}</strong><small>{item.signature}</small></span>
           {selected === item.id && <Check size={16} aria-label="已选择" />}
         </button>)}

@@ -6,6 +6,16 @@ import { cursorPreferenceKey, readCursorTheme } from '../src/features/cursor/pre
 afterEach(() => { cleanup(); localStorage.removeItem(cursorPreferenceKey); vi.restoreAllMocks() })
 
 describe('光标外观偏好', () => {
+  it.each([['魔法羽毛笔', 'quill'], ['星灵', 'starlight'], ['游龙', 'dragon']])('奇幻主题 %s 可保存与恢复', (name, id) => {
+    const { unmount } = render(<SystemSettings />)
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(name) }))
+    expect(readCursorTheme()).toBe(id)
+    expect(screen.getByRole('status')).toHaveTextContent(`当前：${name}`)
+    unmount()
+    render(<SystemSettings />)
+    expect(screen.getByRole('button', { name: new RegExp(name) })).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('默认使用原生光标，未知存储值安全回退', () => {
     localStorage.setItem(cursorPreferenceKey, 'unknown')
     expect(readCursorTheme()).toBe('system')

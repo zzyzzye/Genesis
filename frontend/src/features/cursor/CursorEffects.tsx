@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useCursorTheme } from './preferences'
+import { drawFantasyCursor, isFantasyTheme } from './fantasy'
 import './CursorEffects.css'
 
 type Sample = { x: number; y: number; born: number }
@@ -27,6 +28,7 @@ export function CursorEffects() {
     let pulse = 0, pulseX = 0, pulseY = 0
     let magnetX = 0, magnetY = 0
     let samples: Sample[] = []
+    const body = Array.from({ length: 16 }, () => ({ x: 0, y: 0 }))
 
     function hide() {
       active = false
@@ -69,8 +71,19 @@ export function CursorEffects() {
       host!.style.setProperty('--cursor-stretch', String(1 + speed / 45))
       host!.dataset.hover = String(hovering)
       host!.dataset.pressed = String(pressed)
-      samples = samples.filter(p => time - p.born < (theme === 'crayon' ? 950 : 420))
-      if (theme === 'gooey') {
+      samples = samples.filter(p => time - p.born < (theme === 'crayon' ? 950 : isFantasyTheme(theme) ? 700 : 420))
+      if (isFantasyTheme(theme)) {
+        body[0] = { x, y }
+        for (let i = 1; i < body.length; i++) {
+          const before = body[i - 1], p = body[i]
+          if (!before || !p) continue
+          if (reduced.matches) { p.x = x - i * 3.4; p.y = y + Math.sin(i * .45) * 9; continue }
+          const angle = Math.atan2(p.y - before.y, p.x - before.x)
+          p.x += (before.x + Math.cos(angle) * 4 - p.x) * .65
+          p.y += (before.y + Math.sin(angle) * 4 - p.y) * .65
+        }
+        drawFantasyCursor(context!, theme, { x, y, time, speed, hovering, pressed, reduced: reduced.matches, pulse, pulseX, pulseY, samples, body })
+      } else if (theme === 'gooey') {
         dot(x, y, pressed ? 6 : hovering ? 17 : 9)
         if (!reduced.matches) samples.forEach((p, i) => dot(p.x, p.y, Math.max(1, 9 * (i + 1) / samples.length), .4 * (1 - (time - p.born) / 420)))
         if (time - pulse < 450 && !reduced.matches) for (let i = 0; i < 5; i++) {
@@ -107,7 +120,7 @@ export function CursorEffects() {
         })
       } else if (theme === 'lens') dot(x, y, 2)
       else dot(x, y, 2)
-      if (pulse > 0 && time - pulse < 500 && !reduced.matches) {
+      if (!isFantasyTheme(theme) && pulse > 0 && time - pulse < 500 && !reduced.matches) {
         const progress = (time - pulse) / 500
         context!.globalAlpha = 1 - progress
         context!.lineWidth = 1
@@ -115,7 +128,7 @@ export function CursorEffects() {
       }
       context!.globalAlpha = 1
       const unsettled = Math.hypot(dx, dy) > .2
-      if (samples.length || unsettled || (pulse > 0 && time - pulse < 500)) frame = requestAnimationFrame(draw)
+      if (samples.length || unsettled || (!reduced.matches && pulse > 0 && time - pulse < (isFantasyTheme(theme) ? 700 : 500))) frame = requestAnimationFrame(draw)
     }
 
     function schedule() { if (!frame) frame = requestAnimationFrame(draw) }
@@ -129,7 +142,10 @@ export function CursorEffects() {
         (window.getSelection()?.toString().length ?? 0) > 0) { hide(); return }
       const now = performance.now()
       previousX = x; previousY = y; x = event.clientX; y = event.clientY
-      if (!active) { lagX = x; lagY = y; previousX = x; previousY = y; samples = [] }
+      if (!active) {
+        lagX = x; lagY = y; previousX = x; previousY = y; samples = []
+        body.forEach((p, i) => { p.x = x - i * 3.4; p.y = y + Math.sin(i * .45) * 9 })
+      }
       active = true
       host!.hidden = false
       document.documentElement.dataset.genesisCursor = theme

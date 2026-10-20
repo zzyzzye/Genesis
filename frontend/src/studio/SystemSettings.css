@@ -17,6 +17,10 @@
 .cursor-settings__mark--emitter i { width: 24px; height: 24px; background: repeating-radial-gradient(circle, currentColor 0 1px, transparent 1px 5px); }
 .cursor-settings__mark--lens i { width: 23px; height: 23px; border-radius: 6px; background: linear-gradient(135deg, var(--studio-hover), var(--studio-muted)); opacity: .65; }
 .cursor-settings__mark--follower i { width: 24px; height: 14px; transform: rotate(-30deg); }
+.cursor-settings__mark--quill { color: #7963b2; }
+.cursor-settings__mark--starlight { color: #9c742a; }
+.cursor-settings__mark--dragon { color: #237d71; }
+.cursor-settings__preview { position: sticky; top: 0; align-self: start; min-height: 410px; }
 .cursor-settings__preview { min-width: 0; background: var(--studio-soft); border-radius: 12px; padding: 24px; display: flex; flex-direction: column; }
 .cursor-settings__preview-title { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--studio-muted); }
 .cursor-settings__playground { display: flex; flex: 1; min-height: 275px; align-items: center; justify-content: center; flex-direction: column; gap: 12px; }
@@ -37,4 +41,4 @@
 .cursor-settings__footer a { display: inline-block; margin-right: 18px; color: var(--studio-muted); text-decoration: none; }
 .cursor-settings__footer a:hover, .cursor-settings__footer a:focus-visible { color: var(--studio-ink); }
 @media (max-width: 1000px) { .cursor-settings__layout { grid-template-columns: 190px minmax(0, 1fr); gap: 20px; } }
-@media (max-width: 760px) { .cursor-settings__layout { grid-template-columns: minmax(0, 1fr); gap: 20px; } .cursor-settings__options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .cursor-settings__option { padding: 10px; gap: 10px; } .cursor-settings__preview { padding: 20px; } .cursor-settings__word { font-size: 52px; } .cursor-settings__input input { font-size: 16px; } }
+@media (max-width: 760px) { .cursor-settings__layout { grid-template-columns: minmax(0, 1fr); gap: 20px; } .cursor-settings__options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } .cursor-settings__option { padding: 10px; gap: 10px; } .cursor-settings__preview { position: static; padding: 20px; min-height: 360px; } .cursor-settings__word { font-size: 52px; } .cursor-settings__input input { font-size: 16px; } }

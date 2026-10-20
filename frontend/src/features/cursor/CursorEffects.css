@@ -2,7 +2,7 @@
 html[data-genesis-cursor] *, html[data-genesis-cursor] { cursor: none !important; }
 .genesis-cursor { position: fixed; inset: 0; z-index: 9999; pointer-events: none; overflow: hidden; }
 .genesis-cursor[hidden] { display: none; }
-.genesis-cursor:not(.genesis-cursor--lens) { mix-blend-mode: difference; }
+.genesis-cursor:not(.genesis-cursor--lens, .genesis-cursor--quill, .genesis-cursor--starlight, .genesis-cursor--dragon) { mix-blend-mode: difference; }
 .genesis-cursor canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .genesis-cursor--lens canvas { filter: drop-shadow(0 0 1px #171717); }
 .genesis-cursor__shape { position: absolute; left: 0; top: 0; transform: translate3d(var(--cursor-x), var(--cursor-y), 0) translate(-50%, -50%); pointer-events: none; }
