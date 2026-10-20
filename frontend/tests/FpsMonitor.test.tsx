@@ -5,22 +5,31 @@ import { FpsMonitor } from '../src/features/performance/FpsMonitor'
 import { fpsPreferenceKey, readFpsEnabled } from '../src/features/performance/preferences'
 import { FpsSettings } from '../src/studio/FpsSettings'
 
-const statsMocks = vi.hoisted(() => ({
-  instances: [] as { dom: HTMLDivElement; update: ReturnType<typeof vi.fn>; showPanel: ReturnType<typeof vi.fn> }[],
-}))
+const statsMocks = vi.hoisted<{
+  instances: { dom: HTMLDivElement; update: ReturnType<typeof vi.fn> }[]
+  originalPanel: unknown
+}>(() => ({ instances: [], originalPanel: null }))
 
-vi.mock('stats.js', () => ({
-  default: class {
+vi.mock('stats.js', () => {
+  class MockStats {
+    static Panel = class {
+      dom = document.createElement('canvas')
+      constructor(readonly name: string, readonly foreground: string, readonly background: string) {}
+      update = vi.fn<(value: number, maxValue: number) => void>()
+    }
+
     dom = document.createElement('div')
-    update = vi.fn()
-    showPanel = vi.fn()
+    panel: InstanceType<typeof MockStats.Panel>
+    update = vi.fn(() => this.panel.update(59.6, 100))
 
     constructor() {
-      this.dom.appendChild(document.createElement('canvas'))
+      this.panel = new MockStats.Panel('FPS', '#0ff', '#002')
       statsMocks.instances.push(this)
     }
-  },
-}))
+  }
+  statsMocks.originalPanel = MockStats.Panel
+  return { default: MockStats }
+})
 
 let callbacks: Map<number, (time: number) => void>
 let nextFrame: number
@@ -59,18 +68,23 @@ describe('全站 FPS 监测', () => {
     await waitFor(() => expect(statsMocks.instances).toHaveLength(1))
     expect(toggle).toBeChecked()
     expect(readFpsEnabled()).toBe(true)
-    expect(statsMocks.instances[0]!.showPanel).toHaveBeenCalledWith(0)
-    expect(screen.getByRole('img', { name: '实时 FPS 帧率图' })).toBeVisible()
+    const monitor = screen.getByRole('group', { name: '实时 FPS' })
+    expect(monitor).toBeVisible()
+    expect(monitor).toHaveTextContent('—FPS')
+    expect(monitor.querySelector('canvas')).toBeNull()
+    const { default: Stats } = await import('stats.js')
+    expect(Stats.Panel).toBe(statsMocks.originalPanel)
 
     const [id, callback] = [...callbacks.entries()][0]!
     callbacks.delete(id)
     callback(1000)
     expect(statsMocks.instances[0]!.update).toHaveBeenCalledOnce()
+    expect(monitor).toHaveTextContent('60FPS')
     expect(callbacks.size).toBe(1)
     fireEvent.click(toggle)
     expect(readFpsEnabled()).toBe(false)
     expect(callbacks.size).toBe(0)
-    expect(screen.queryByRole('img', { name: '实时 FPS 帧率图' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '实时 FPS' })).not.toBeInTheDocument()
   })
 
   it('后台停止，回到前台重建计时基线，卸载清理订阅和循环', async () => {
@@ -80,7 +94,7 @@ describe('全站 FPS 监测', () => {
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(true)
     fireEvent(document, new Event('visibilitychange'))
     expect(callbacks.size).toBe(0)
-    expect(screen.queryByRole('img', { name: '实时 FPS 帧率图' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: '实时 FPS' })).not.toBeInTheDocument()
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false)
     fireEvent(document, new Event('visibilitychange'))
     expect(callbacks.size).toBe(1)
@@ -105,7 +119,7 @@ describe('全站 FPS 监测', () => {
     localStorage.setItem(fpsPreferenceKey, 'true')
     const view = render(<StrictMode><Harness /></StrictMode>)
     await waitFor(() => expect(callbacks.size).toBe(1))
-    expect(screen.getAllByRole('img', { name: '实时 FPS 帧率图' })).toHaveLength(1)
+    expect(screen.getAllByRole('group', { name: '实时 FPS' })).toHaveLength(1)
     expect(statsMocks.instances).toHaveLength(1)
     view.unmount()
     expect(callbacks.size).toBe(0)

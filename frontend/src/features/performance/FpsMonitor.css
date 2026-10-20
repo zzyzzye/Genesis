@@ -5,20 +5,22 @@
   z-index: var(--z-performance-monitor);
   right: max(16px, env(safe-area-inset-right));
   bottom: calc(88px + env(safe-area-inset-bottom));
-  min-width: 80px;
-  min-height: 48px;
-  overflow: hidden;
-  border-radius: 6px;
-  background: #171717;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  min-width: 62px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgb(23 23 23 / 82%);
   color: #fff;
-  font: 11px/1.5 Inter, "PingFang SC", sans-serif;
+  font: 12px/18px Inter, "PingFang SC", sans-serif;
   pointer-events: none;
   user-select: none;
-  /* 保留库原生 FPS 图，将彩色调试面板统一为中性色。 */
-  filter: grayscale(1);
 }
 
 .fps-monitor[hidden] { display: none; }
-.fps-monitor canvas { display: block; }
+.fps-monitor__value { min-width: 2ch; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
+.fps-monitor__unit { color: rgb(255 255 255 / 65%); font-size: 9px; letter-spacing: .03em; }
 
 @media print { .fps-monitor { display: none; } }
