@@ -17,6 +17,25 @@ def utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
+class CommentBrowserVersion(BaseModel):
+    """浏览器开放的品牌与版本，仅用于评论来源展示。"""
+
+    model_config = {"extra": "forbid"}
+    brand: str = Field(min_length=1, max_length=50)
+    version: str = Field(max_length=32, pattern=r"^\d{1,6}(?:\.\d{1,6}){0,3}$")
+
+
+class CommentDeviceHints(BaseModel):
+    """只接收系统与浏览器版本，不接收设备型号、架构或原始 UA。"""
+
+    model_config = {"extra": "forbid"}
+    platform: str = Field(default="", max_length=32)
+    platform_version: str | None = Field(
+        default=None, max_length=32, pattern=r"^\d{1,6}(?:\.\d{1,6}){0,3}$"
+    )
+    full_version_list: list[CommentBrowserVersion] = Field(default_factory=list, max_length=8)
+
+
 class CommentWrite(BaseModel):
     """纯文本内容与客户端提交标识，不接受客户端指定身份或审核状态。"""
 
@@ -25,6 +44,7 @@ class CommentWrite(BaseModel):
     submission_id: UUID
     qq: str | None = Field(default=None, max_length=64)
     show_region: bool = False
+    device_hints: CommentDeviceHints | None = None
 
     @field_validator("qq")
     @classmethod

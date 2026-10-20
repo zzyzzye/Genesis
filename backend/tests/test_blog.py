@@ -837,7 +837,10 @@ async def test_comment_submission_moderation_and_public_boundary(
         data={"username": "comment-reader", "password": "test-comment-password"},
     )
     assert logged_in.status_code == 200
-    reader_headers = {"Authorization": f"Bearer {logged_in.json()['access_token']}"}
+    reader_headers = {
+        "Authorization": f"Bearer {logged_in.json()['access_token']}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0) Chrome/132.0.0.0 Safari/537.36",
+    }
     url = "/api/v1/blog/posts/published-featured/comments"
     monkeypatch.setattr("genesis_api.api.routes.blog_comments.lookup_region", lambda host: "浙江省")
     monkeypatch.setattr(
@@ -848,6 +851,11 @@ async def test_comment_submission_moderation_and_public_boundary(
         "submission_id": str(uuid4()),
         "qq": "12345@qq.com",
         "show_region": True,
+        "device_hints": {
+            "platform": "Windows",
+            "platform_version": "15.0.0",
+            "full_version_list": [{"brand": "Google Chrome", "version": "132.0.6834.110"}],
+        },
     }
     assert (await client.post(url, json=data)).status_code == 401
     first = await client.post(url, headers=reader_headers, json=data)
@@ -921,6 +929,8 @@ async def test_comment_submission_moderation_and_public_boundary(
     }
     assert public["items"][0]["content"] == str(data["content"]).strip()
     assert public["items"][0]["region"] == "浙江省"
+    assert public["items"][0]["operating_system"] == "Windows 11"
+    assert public["items"][0]["browser"] == "Chrome 132.0.6834.110"
     assert public["items"][0]["avatar_url"] == avatar_url
     assert "12345" not in str(public)
     avatar = await client.get(avatar_url)

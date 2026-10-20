@@ -110,7 +110,9 @@ def submit_comment(
     )
     if recent >= 5:
         raise HTTPException(429, "提交过于频繁，请一分钟后重试", headers={"Retry-After": "60"})
-    browser, operating_system = device_labels(request.headers.get("user-agent", ""))
+    browser, operating_system = device_labels(
+        request.headers.get("user-agent", ""), data.device_hints
+    )
     item = BlogComment(
         submission_id=data.submission_id,
         author_id=user.id,

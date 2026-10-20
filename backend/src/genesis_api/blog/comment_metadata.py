@@ -1,20 +1,112 @@
-"""评论来源适配：只保留粗粒度地区及解析后的浏览器、系统名称。"""
+"""评论来源适配：只保留粗粒度地区及可确认的浏览器、系统版本。"""
 
+import re
 from ipaddress import ip_address
 
 import httpx
 from ua_parser import parse
 
+from genesis_api.blog.comments import CommentDeviceHints
 
-def device_labels(user_agent: str) -> tuple[str | None, str | None]:
-    """使用维护中的 UA 规则识别设备，不保留原始请求头或设备型号。"""
+
+def _version(*parts: str | None) -> str:
+    """合并 UA 规则给出的数字版本，遇到缺失段即停止。"""
+    values = []
+    for part in parts:
+        if part is None or not part.isdigit():
+            break
+        values.append(part)
+    return ".".join(values)[:32]
+
+
+def _hint_browser(family: str, hints: CommentDeviceHints | None) -> tuple[str, str] | None:
+    """在 UA 对应浏览器族内选择明确品牌，忽略 GREASE 和内核替代项。"""
+    if hints is None or "WebView" in family:
+        return None
+    brands = {
+        "Microsoft Edge": ("Edge", "Edge"),
+        "Opera": ("Opera", "Opera"),
+        "Brave": ("Brave", "Brave"),
+        "Vivaldi": ("Vivaldi", "Vivaldi"),
+        "Samsung Internet": ("Samsung Internet", "Samsung Internet"),
+        "Google Chrome": ("Chrome", "Chrome"),
+        "Chromium": ("Chromium", "Chromium"),
+    }
+    chromium = family.startswith(("Chrome", "Chromium", "HeadlessChrome"))
+    for brand, (prefix, label) in brands.items():
+        if brand == "Chromium" and not family.startswith("Chromium"):
+            continue
+        if not family.startswith(prefix) and not chromium:
+            continue
+        for item in hints.full_version_list:
+            if item.brand == brand:
+                version = item.version
+                return label, version.split(".")[0] if version.endswith(".0.0.0") else version
+    return None
+
+
+def device_labels(
+    user_agent: str, hints: CommentDeviceHints | None = None
+) -> tuple[str | None, str | None]:
+    """解析可展示版本，优先使用浏览器开放的 Client Hints。
+
+    Args:
+        user_agent: 当前提交的请求头，仅用于当次解析，不持久化。
+        hints: 可选版本信息；缺失、被拒绝或平台不匹配时保守降级。
+
+    Returns:
+        浏览器与系统展示名称；无法区分 Windows 10/11 时标明版本未知，
+        不把 Chromium 或 Safari 冻结的系统版本当作真实版本。
+    """
     result = parse(user_agent[:1024])
-    browser = result.user_agent.family if result.user_agent else None
-    system = result.os.family if result.os else None
-    return (
-        browser[:100] if browser and browser != "Other" else None,
-        system[:100] if system and system != "Other" else None,
+    agent, os = result.user_agent, result.os
+    browser = None
+    if agent and agent.family != "Other":
+        version = _version(agent.major, agent.minor, agent.patch, agent.patch_minor)
+        # Chromium 的归零段是隐私占位，不能当作完整版本展示。
+        if version.endswith(".0.0.0"):
+            version = agent.major or ""
+        browser = f"{agent.family} {version}".strip()
+        hinted = _hint_browser(agent.family, hints)
+        if hinted:
+            browser = f"{hinted[0]} {hinted[1]}"
+
+    if not os or os.family == "Other":
+        return browser, None
+    family = "macOS" if os.family == "Mac OS X" else os.family
+    version = _version(os.major, os.minor, os.patch, os.patch_minor)
+    if family == "Windows" and os.major in {"XP", "Vista", "ME", "NT", "RT"}:
+        version = os.major
+    frozen_chromium = bool(re.search(r"Chrome/\d+\.0\.0\.0(?:\s|$)", user_agent[:1024]))
+    platforms = {
+        "Windows": "Windows",
+        "macOS": "macOS",
+        "Android": "Android",
+        "Chrome OS": "Chrome OS",
+    }
+    hinted_version = (
+        hints.platform_version if hints and platforms.get(family) == hints.platform else None
     )
+    if hinted_version and not any(int(part) for part in hinted_version.split(".")):
+        hinted_version = None
+    if family == "Windows" and version == "10":
+        major = int(hinted_version.split(".")[0]) if hinted_version else None
+        if major is not None and major >= 13:
+            version = "11"
+        elif major is not None and 1 <= major <= 10:
+            version = "10"
+        else:
+            return browser, "Windows（版本未知）"
+    elif hinted_version and family in {"macOS", "Android", "Chrome OS"}:
+        version = hinted_version
+    elif (
+        (family == "macOS" and version in {"10.15", "10.15.7"})
+        or (frozen_chromium and family in {"Android", "Chrome OS"})
+        or (family == "iOS" and re.match(r"^18\.[67](?:\.|$)", version))
+    ):
+        # Safari 26 起冻结在 iOS 18.6/18.7；第三方 WebKit 也可能沿用该占位。
+        version = ""
+    return browser, f"{family} {version}".strip()
 
 
 def lookup_region(host: str | None) -> str | None:

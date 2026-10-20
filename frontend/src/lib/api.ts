@@ -1,4 +1,5 @@
 import { handleStudioUnauthorized, rememberSessionUser } from './auth'
+import { collectCommentDeviceHints } from './commentDeviceHints'
 
 export interface BlogAuthor {
   id: string
@@ -52,8 +53,9 @@ export interface BlogCommentsPage<T = BlogComment> { items: T[]; total: number }
 export function getBlogComments(slug: string, offset: number, signal?: AbortSignal): Promise<BlogCommentsPage> {
   return request(`/blog/posts/${encodeURIComponent(slug)}/comments?limit=20&offset=${offset}`, { signal })
 }
-export function submitBlogComment(slug: string, token: string, content: string, submissionId: string, qq = '', showRegion = false): Promise<{ id: string; state: BlogCommentState }> {
-  return request(`/blog/posts/${encodeURIComponent(slug)}/comments`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ content, submission_id: submissionId, qq: qq.trim() || null, show_region: showRegion }) })
+export async function submitBlogComment(slug: string, token: string, content: string, submissionId: string, qq = '', showRegion = false): Promise<{ id: string; state: BlogCommentState }> {
+  const deviceHints = await collectCommentDeviceHints()
+  return request(`/blog/posts/${encodeURIComponent(slug)}/comments`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ content, submission_id: submissionId, qq: qq.trim() || null, show_region: showRegion, ...(deviceHints ? { device_hints: deviceHints } : {}) }) })
 }
 export function getAdminBlogComments(token: string, query: string, state: string, page: number, signal?: AbortSignal): Promise<BlogCommentsPage<BlogCommentAdmin>> {
   const params = new URLSearchParams({ q: query, limit: '20', offset: String((page - 1) * 20) })

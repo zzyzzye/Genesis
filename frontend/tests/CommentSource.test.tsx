@@ -8,6 +8,9 @@ afterEach(cleanup)
 
 it.each([
   ['Windows', 'windows'], ['Windows Phone', 'windows'], ['Mac OS X', 'macos'], ['macOS', 'macos'],
+  ['Windows 7', 'windows7'], ['Windows 10', 'windows10'], ['Windows 11', 'windows11'],
+  ['Windows 8.1', 'windows10'], ['Windows（版本未知）', 'windows'],
+  ['macOS 15.3.1', 'macos'], ['Android 15', 'android'], ['iOS 18.1.1', 'ios'], ['Ubuntu 24.04', 'ubuntu'],
   ['iOS', 'ios'], ['iPadOS', 'ios'], ['Android', 'android'], ['Linux', 'linux'], ['Chrome OS', 'chromeos'],
   ['HarmonyOS', 'harmony'], ['鸿蒙', 'harmony'], ['Ubuntu', 'ubuntu'], ['Debian', 'debian'], ['Fedora', 'fedora'],
   ['Arch Linux', 'arch'], ['CentOS', 'centos'], ['openSUSE', 'suse'], ['Linux Mint', 'mint'], ['Deepin', 'deepin'],
@@ -22,6 +25,7 @@ it.each([
 
 it.each([
   ['Chrome', 'chrome'], ['Chrome Mobile iOS', 'chrome'], ['Chromium', 'chromium'], ['Edge Mobile', 'edge'],
+  ['Chrome 132.0.6834.110', 'chrome'], ['Edge 132.0.2957.127', 'edge'], ['Mobile Safari 18.1', 'safari'],
   ['Safari', 'safari'], ['Mobile Safari', 'safari'], ['Firefox', 'firefox'], ['Firefox iOS', 'firefox'],
   ['Opera Mini', 'opera'], ['Samsung Internet', 'samsung'], ['IE', 'ie'], ['Brave', 'brave'], ['Vivaldi', 'vivaldi'],
   ['QQ Browser Mobile', 'qq'], ['UC Browser', 'uc'], ['Yandex Browser', 'yandex'],

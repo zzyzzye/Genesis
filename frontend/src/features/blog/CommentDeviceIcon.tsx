@@ -9,6 +9,9 @@ const bsd = <><path fill="#cf2727" d="m4 8-2-6 7 3a9 9 0 0 1 6 0l7-3-2 6a9 9 0 1
 
 const icons = {
   windows,
+  windows11: windows,
+  windows10: <path fill="#00a4ef" d="m2 5 9-1.3V11H2Zm11-1.6L22 2v9h-9ZM2 13h9v7.3L2 19Zm11 0h9v9l-9-1.4Z" />,
+  windows7: <><path fill="#ef4423" d="M4 4c3-2 5-2 8-1l-1.4 8c-3-1-5-1-8 1Z" /><path fill="#7fba00" d="M13.5 3.5c3 1 5 1 8-1L20 10c-3 2-5 2-8 .5Z" /><path fill="#00a4ef" d="M2.3 13.5c3-2 5-2 8-1l-1.4 8c-3-1-5-1-8 1Z" /><path fill="#ffb900" d="M11.8 13c3 1 5 1 8-1l-1.5 7.5c-3 2-5 2-8 .5Z" /></>,
   macos: <><rect x="2" y="2" width="20" height="20" rx="4" fill="#2088ec" /><path fill="#91d7ff" d="M12 2h6a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4h-6l2-10h-3Z" /><path d="M7 8v2m10-2v2M7 15c3 3 7 3 10 0" stroke="#123d70" strokeWidth="1.4" strokeLinecap="round" fill="none" /></>,
   ios: <><rect x="2" y="2" width="20" height="20" rx="5" fill="#6678f5" /><path fill="#fff" d="M15.3 7c-.3 1.4-1.2 2-2.3 2 .1-1.3 1-2.1 2.3-2ZM16 10c-1.2-.8-2.2-.2-3 .1-.8-.3-2-.9-3.1-.1-2 1.4-1.2 5.1.4 7 .7 1 1.4.6 2.5.3 1 .3 1.9.7 2.6-.3.7-.9 1.2-1.7 1.5-2.7-1.8-.9-2-2.8-.9-4.3Z" /></>,
   android,
@@ -53,6 +56,9 @@ const icons = {
 type IconName = keyof typeof icons
 type IconRule = readonly [RegExp, IconName]
 const systemRules: readonly IconRule[] = [
+  [/^windows\s+(?:7|vista|xp)(?:\b|\.)/, 'windows7'],
+  [/^windows\s+(?:8(?:\.1)?|10)(?:\b|\.)/, 'windows10'],
+  [/^windows\s+11(?:\b|\.)/, 'windows11'],
   [/^windows\b/, 'windows'],
   [/^(?:mac\s?os(?:\s?x)?|os x)\b/, 'macos'],
   [/^(?:ios|ipados|iphone os)\b/, 'ios'],
