@@ -41,11 +41,11 @@ function ActiveFpsMonitor() {
 
   useEffect(() => {
     const container = host.current!
-    const selector = '.studio-assistant, .media-agent'
-    let assistant: Element | null = null
+    const selector = '.studio-assistant, .media-agent, .reader-back-top'
+    let obstacle: Element | null = null
 
     function position() {
-      const bounds = assistant?.getBoundingClientRect()
+      const bounds = obstacle?.getBoundingClientRect()
       // 助手占满屏幕时让出输入区域；其他情况贴在它左侧的页面底边。
       container.classList.toggle('is-occluded', !!bounds?.width && bounds.left < 94)
       const right = bounds?.width ? window.innerWidth - bounds.left + 12 : 16
@@ -55,14 +55,14 @@ function ActiveFpsMonitor() {
     const resize = new ResizeObserver(position)
     function reconnect() {
       const next = document.querySelector(selector)
-      if (next !== assistant) {
+      if (next !== obstacle) {
         resize.disconnect()
-        assistant = next
-        if (assistant) resize.observe(assistant)
+        obstacle = next
+        if (obstacle) resize.observe(obstacle)
       }
       position()
     }
-    // 只响应助手容器的增删，正文流式输出和 FPS 数字变化不触发布局读取。
+    // 只响应角落控件的增删，正文流式输出和 FPS 数字变化不触发布局读取。
     const mutations = new MutationObserver(records => {
       if (records.some(record => [...record.addedNodes, ...record.removedNodes].some(node =>
         node instanceof Element && (node.matches(selector) || node.querySelector(selector)),

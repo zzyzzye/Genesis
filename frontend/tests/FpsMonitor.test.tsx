@@ -58,7 +58,7 @@ function Harness() {
 }
 
 describe('全站 FPS 监测', () => {
-  it('贴在助手左侧，跟随宽度变化；全屏助手隐藏读数，移除助手恢复角落', async () => {
+  it.each(['studio-assistant', 'media-agent', 'reader-back-top'])('%s 出现时避让，尺寸变化时跟随，隐藏或移除后恢复角落', async (className) => {
     localStorage.setItem(fpsPreferenceKey, 'true')
     let notify = () => {}
     const disconnect = vi.fn()
@@ -68,15 +68,20 @@ describe('全站 FPS 监测', () => {
       disconnect = disconnect
     })
     let left = 600
+    let width = 400
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function () {
-      return { left, width: 400 } as DOMRect
+      return { left, width } as DOMRect
     })
-    const view = render(<><div className="studio-assistant" /><Harness /></>)
+    const view = render(<><div className={className} /><Harness /></>)
     const monitor = await screen.findByRole('group', { name: '实时 FPS' })
     expect(monitor.style.getPropertyValue('--fps-right')).toBe(`${window.innerWidth - 600 + 12}px`)
     left = 400
     act(() => notify())
     expect(monitor.style.getPropertyValue('--fps-right')).toBe(`${window.innerWidth - 400 + 12}px`)
+    width = 0
+    act(() => notify())
+    expect(monitor.style.getPropertyValue('--fps-right')).toBe('16px')
+    width = 400
     left = 0
     act(() => notify())
     expect(monitor).toHaveClass('is-occluded')
