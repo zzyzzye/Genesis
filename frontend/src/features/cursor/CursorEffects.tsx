@@ -6,6 +6,7 @@ import { isArrowSkin } from './arrowSkinAssets'
 import { ArrowSkinEffects } from './ArrowSkinEffects'
 import './CursorEffects.css'
 import { effectCursorScale } from './sizing'
+import { createDrawingSurface } from './drawingSurface'
 
 type Sample = { x: number; y: number; born: number }
 
@@ -20,6 +21,10 @@ export function CursorEffects() {
     if (theme === 'system' || isArrowSkin(theme) || !host || !surface) return
     const context = surface.getContext('2d')
     if (!context) return
+    const drawing = createDrawingSurface(surface, context)
+    const shape = host.querySelector<HTMLElement>('.genesis-cursor__shape')
+    const fantasy = isFantasyTheme(theme)
+    const hasSamples = theme === 'gooey' || theme === 'crayon' || theme === 'emitter' || theme === 'quill' || theme === 'starlight'
     const renderScale = effectCursorScale(theme)
     host.style.setProperty('--cursor-scale', String(renderScale))
     const fine = matchMedia('(any-pointer: fine)')
@@ -29,28 +34,28 @@ export function CursorEffects() {
     let active = false
     let pressed = false
     let hovering = false
-    let x = 0, y = 0, previousX = 0, previousY = 0, lagX = 0, lagY = 0
+    let x = 0, y = 0, lagX = 0, lagY = 0
     let pulse = 0, pulseX = 0, pulseY = 0
-    let magnetX = 0, magnetY = 0
+    let moved = false
+    let target: Element | null = null
+    let native = false
+    let selecting = window.getSelection()?.isCollapsed === false
     let samples: Sample[] = []
     const body = Array.from({ length: 16 }, () => ({ x: 0, y: 0 }))
 
     function hide() {
+      target?.removeAttribute('data-genesis-cursor-target')
+      target = null
+      if (!active) return
       active = false
       pressed = false
-      samples = []
+      host!.dataset.pressed = 'false'
+      samples = []; moved = false; pulse = 0
       document.documentElement.removeAttribute('data-genesis-cursor')
       host!.hidden = true
       cancelAnimationFrame(frame)
       frame = 0
-    }
-
-    function resize() {
-      const ratio = Math.min(devicePixelRatio || 1, 2)
-      surface!.width = innerWidth * ratio
-      surface!.height = innerHeight * ratio
-      context!.setTransform(ratio, 0, 0, ratio, 0, 0)
-      hide()
+      drawing.clear()
     }
 
     function dot(cx: number, cy: number, radius: number, opacity = 1) {
@@ -63,20 +68,39 @@ export function CursorEffects() {
     function draw(time: number) {
       frame = 0
       if (!active) return
-      context!.clearRect(0, 0, innerWidth, innerHeight)
-      context!.fillStyle = '#fff'
-      context!.strokeStyle = '#fff'
       const dx = x - lagX, dy = y - lagY
       lagX += dx * .24
       lagY += dy * .24
       const speed = reduced.matches ? 0 : Math.min(Math.hypot(dx, dy), 40)
-      host!.style.setProperty('--cursor-x', `${x + magnetX}px`)
-      host!.style.setProperty('--cursor-y', `${y + magnetY}px`)
-      host!.style.setProperty('--cursor-angle', `${Math.atan2(dy, dx)}rad`)
-      host!.style.setProperty('--cursor-stretch', String(1 + Math.min(speed / 45, .15)))
-      host!.dataset.hover = String(hovering)
-      host!.dataset.pressed = String(pressed)
-      samples = samples.filter(p => time - p.born < (theme === 'crayon' ? 950 : isFantasyTheme(theme) ? 700 : 420))
+      if (theme === 'follower') {
+        host!.style.setProperty('--cursor-angle', `${Math.atan2(dy, dx)}rad`)
+        host!.style.setProperty('--cursor-stretch', String(1 + Math.min(speed / 45, .15)))
+      }
+      samples = samples.filter(p => time - p.born < (theme === 'crayon' ? 950 : fantasy ? 700 : 420))
+      if (moved && hasSamples && !reduced.matches && (theme !== 'crayon' || pressed)) {
+        const last = samples.at(-1)
+        if (!last || Math.hypot(x - last.x, y - last.y) > 2) {
+          samples.push({ x, y, born: time })
+          if (samples.length > 36) samples.shift()
+        }
+      }
+      moved = false
+      const unsettled = !reduced.matches && (theme === 'follower' || fantasy) && Math.hypot(dx, dy) > .2
+      const pulsing = !reduced.matches && pulse > 0 && time - pulse < (fantasy ? 700 : 500)
+      // 跟随造型由合成层直接显示，只有点击涟漪需要位图。
+      if (theme === 'follower' && !pulsing) {
+        drawing.clear()
+        if (unsettled) frame = requestAnimationFrame(draw)
+        return
+      }
+      const bounds = [{ x, y }, ...samples]
+      if (theme === 'dragon') bounds.push(...body)
+      if (pulse > 0 && time - pulse < (fantasy ? 700 : 500)) {
+        bounds.push(fantasy ? { x: pulseX, y: pulseY } : { x: x + (pulseX - x) / renderScale, y: y + (pulseY - y) / renderScale })
+      }
+      if (!drawing.begin(bounds, Math.max(54 * renderScale + 3, fantasy ? 0 : 37), renderScale, { x, y })) return
+      context!.fillStyle = '#fff'
+      context!.strokeStyle = '#fff'
       // 围绕真实落点缩放造型，鼠标坐标与命中位置保持不变。
       context!.save()
       context!.translate(x, y)
@@ -129,62 +153,61 @@ export function CursorEffects() {
           context!.beginPath(); context!.ellipse(p.x, p.y, 5 + age * 24, 5 + age * 15, 0, 0, Math.PI * 2); context!.stroke()
         })
       } else if (theme === 'lens') dot(x, y, 2)
-      else dot(x, y, 2)
       context!.restore()
-      if (!isFantasyTheme(theme) && pulse > 0 && time - pulse < 500 && !reduced.matches) {
+      if (!fantasy && pulse > 0 && time - pulse < 500 && !reduced.matches) {
         const progress = (time - pulse) / 500
         context!.globalAlpha = 1 - progress
         context!.lineWidth = 1
         context!.beginPath(); context!.arc(pulseX, pulseY, 4 + progress * 32, 0, Math.PI * 2); context!.stroke()
       }
       context!.globalAlpha = 1
-      const unsettled = Math.hypot(dx, dy) > .2
-      if (samples.length || unsettled || (!reduced.matches && pulse > 0 && time - pulse < (isFantasyTheme(theme) ? 700 : 500))) frame = requestAnimationFrame(draw)
+      if (samples.length || unsettled || pulsing) frame = requestAnimationFrame(draw)
     }
 
     function schedule() { if (!frame) frame = requestAnimationFrame(draw) }
 
     function move(event: PointerEvent) {
-      const target = event.target instanceof Element ? event.target : null
+      const nextTarget = event.target instanceof Element ? event.target : null
       // 输入、选择、画布拖拽、原生弹窗与系统特殊光标始终交还浏览器。
-      if (!fine.matches || forced.matches || event.pointerType !== 'mouse' || !target ||
-        target.closest('input, textarea, select, button:disabled, [aria-disabled="true"], [contenteditable]:not([contenteditable="false"]), .cm-editor, .react-flow, dialog, video, iframe, [data-native-cursor]') ||
-        ['text', 'vertical-text', 'grab', 'grabbing', 'move', 'not-allowed', 'wait', 'progress', 'crosshair', 'ew-resize', 'ns-resize', 'nesw-resize', 'nwse-resize'].includes(getComputedStyle(target).cursor) ||
-        (window.getSelection()?.toString().length ?? 0) > 0) { hide(); return }
-      const now = performance.now()
-      previousX = x; previousY = y; x = event.clientX; y = event.clientY
+      if (!fine.matches || forced.matches || document.hidden || event.pointerType !== 'mouse' || !nextTarget || selecting) { hide(); return }
+      if (nextTarget !== target) {
+        target?.removeAttribute('data-genesis-cursor-target')
+        target = nextTarget
+        // 仅在进入新元素时读取样式；先撤掉覆盖，才能识别原有的拖拽、缩放光标。
+        native = Boolean(target.closest('input, textarea, select, button:disabled, [aria-disabled="true"], [contenteditable]:not([contenteditable="false"]), .cm-editor, .react-flow, dialog, video, iframe, [data-native-cursor]')) ||
+          /^(text|vertical-text|grab|grabbing|move|not-allowed|wait|progress|crosshair|.*-resize)$/.test(getComputedStyle(target).cursor)
+        const nextHover = Boolean(target.closest('button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"])'))
+        if (hovering !== nextHover) { hovering = nextHover; host!.dataset.hover = String(hovering) }
+        if (!native) target.setAttribute('data-genesis-cursor-target', '')
+      }
+      if (native || target.closest('button:disabled, [aria-disabled="true"]')) { hide(); return }
+      x = event.clientX; y = event.clientY
       if (!active) {
-        lagX = x; lagY = y; previousX = x; previousY = y; samples = []
+        lagX = x; lagY = y; samples = []
         body.forEach((p, i) => { p.x = x - i * 3.4; p.y = y + Math.sin(i * .45) * 9 })
       }
-      active = true
-      host!.hidden = false
-      document.documentElement.dataset.genesisCursor = theme
-      hovering = Boolean(target.closest('button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"])'))
-      magnetX = 0; magnetY = 0
-      if (theme === 'follower' && hovering && !reduced.matches) {
-        const bounds = target.closest('button, a, [role="button"]')!.getBoundingClientRect()
-        magnetX = Math.max(-12, Math.min(12, (bounds.left + bounds.width / 2 - x) * .18))
-        magnetY = Math.max(-12, Math.min(12, (bounds.top + bounds.height / 2 - y) * .18))
+      if (!active) {
+        active = true
+        host!.hidden = false
+        document.documentElement.dataset.genesisCursor = theme
       }
-      host!.dataset.label = hovering ? (target.closest('[data-cursor-label]')?.getAttribute('data-cursor-label')?.slice(0, 4) || (target.closest('a') ? '前往' : '操作')) : ''
-      const shape = host!.querySelector<HTMLElement>('.genesis-cursor__shape')
-      if (shape) shape.dataset.label = host!.dataset.label
-      if (!reduced.matches && Math.hypot(x - previousX, y - previousY) > 2 && (theme !== 'crayon' || pressed)) {
-        samples.push({ x, y, born: now })
-        samples = samples.slice(-36)
-      }
+      // 主造型直接使用最新输入坐标，变形与粒子再按显示帧率绘制。
+      if (shape) shape.style.translate = `${x}px ${y}px`
+      moved = true
       schedule()
     }
     function press(event: PointerEvent) {
       const target = event.target instanceof Element ? event.target : null
       if (target?.closest('p, h1, h2, h3, h4, li, pre, blockquote') && !target.closest('button, a')) { hide(); return }
-      if (active) { pressed = true; samples = []; pulse = performance.now(); pulseX = x; pulseY = y; schedule() }
+      if (active) { pressed = true; host!.dataset.pressed = 'true'; samples = []; pulse = performance.now(); pulseX = x; pulseY = y; schedule() }
     }
-    function release() { pressed = false; if (active) schedule() }
+    function release() { pressed = false; host!.dataset.pressed = 'false'; if (active) schedule() }
     function keyboard() { hide() }
     function visibility() { if (document.hidden) hide() }
-    resize()
+    function selection() {
+      selecting = window.getSelection()?.isCollapsed === false
+      if (selecting) hide()
+    }
     window.addEventListener('pointermove', move, { passive: true })
     window.addEventListener('pointerdown', press)
     window.addEventListener('pointerup', release)
@@ -193,8 +216,9 @@ export function CursorEffects() {
     window.addEventListener('blur', hide)
     window.addEventListener('keydown', keyboard)
     window.addEventListener('scroll', hide, true)
-    window.addEventListener('resize', resize)
+    window.addEventListener('resize', hide)
     document.addEventListener('visibilitychange', visibility)
+    document.addEventListener('selectionchange', selection)
     fine.addEventListener('change', hide)
     forced.addEventListener('change', hide)
     reduced.addEventListener('change', hide)
@@ -208,8 +232,9 @@ export function CursorEffects() {
       window.removeEventListener('blur', hide)
       window.removeEventListener('keydown', keyboard)
       window.removeEventListener('scroll', hide, true)
-      window.removeEventListener('resize', resize)
+      window.removeEventListener('resize', hide)
       document.removeEventListener('visibilitychange', visibility)
+      document.removeEventListener('selectionchange', selection)
       fine.removeEventListener('change', hide)
       forced.removeEventListener('change', hide)
       reduced.removeEventListener('change', hide)
@@ -219,6 +244,6 @@ export function CursorEffects() {
   if (isArrowSkin(theme)) return <ArrowSkinEffects skin={theme} />
   if (theme === 'system') return null
   return createPortal(<div ref={layer} className={`genesis-cursor genesis-cursor--${theme}`} aria-hidden="true" hidden>
-    <canvas ref={canvas} /><div className="genesis-cursor__shape" />
+    <canvas ref={canvas} width={1} height={1} /><div className="genesis-cursor__shape" />
   </div>, document.body)
 }
