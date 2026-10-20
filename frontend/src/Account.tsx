@@ -1,39 +1,42 @@
 import './Account.css'
 
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import { ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey } from './lib/auth'
+import { getCurrentUser, login, registerAccount, updateCurrentUser, type CurrentUser } from './lib/api'
 
-import {
-  clearStoredAuthToken,
-  getStoredAuthToken,
-  storeAuthToken,
-  studioAuthTokenKey,
-} from './lib/auth'
-
-import {
-  getCurrentUser,
-  login,
-  registerAccount,
-  updateCurrentUser,
-  type CurrentUser,
-} from './lib/api'
-
+type AccountMode = 'login' | 'register'
 type AccountState =
   | { status: 'loading' }
-  | { status: 'guest'; error: string | null; mode: 'login' | 'register' }
+  | { status: 'guest'; error: string | null; mode: AccountMode }
   | { status: 'ready'; user: CurrentUser; feedback: string | null }
+type AccountField = 'handle' | 'displayName' | 'password'
 
-function AccountForm({
-  mode,
-  error,
-  onModeChange,
-  onLogin,
-  onRegister,
-  focusLogin = false,
-}: {
-  mode: 'login' | 'register'
+function AccountLayout({ children }: { children: ReactNode }) {
+  const [coverFailed, setCoverFailed] = useState(false)
+  return <main className="account-shell account-auth">
+    <div className="account-auth-main">
+      <header className="account-auth-header">
+        <Link className="account-brand" to="/" aria-label="返回 Genesis 首页"><span aria-hidden="true">G</span>Genesis</Link>
+        <Link className="account-header-back" to="/blog">返回博客 <ArrowUpRight size={16} /></Link>
+      </header>
+      <div className="account-auth-content">{children}</div>
+      <footer className="account-auth-footer"><span>Genesis · 账户</span><Link to="/blog/studio">进入写作台 <ArrowUpRight size={15} /></Link></footer>
+    </div>
+    <aside className="account-auth-feature" aria-label="Genesis Journal">
+      {!coverFailed && <img src="/images/blog/forest.jpg" alt="" width={1586} height={992} onError={() => setCoverFailed(true)} />}
+      <div className="account-feature-brand">Genesis Journal</div>
+      <div className="account-feature-copy"><h2>记录，<br />也分享。</h2><p>技术实践、产品思考与日常随笔。</p><Link to="/blog">浏览文章 <ArrowUpRight size={18} /></Link></div>
+    </aside>
+  </main>
+}
+
+function AccountForm({ mode, error, busy, onModeChange, onLogin, onRegister, focusLogin = false }: {
+  mode: AccountMode
   error: string | null
-  onModeChange: (mode: 'login' | 'register') => void
+  busy: boolean
+  onModeChange: (mode: AccountMode) => void
   onLogin: (handle: string, password: string) => void
   onRegister: (handle: string, displayName: string, password: string) => void
   focusLogin?: boolean
@@ -41,118 +44,72 @@ function AccountForm({
   const [handle, setHandle] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
+  const [visible, setVisible] = useState(false)
+  const [errors, setErrors] = useState<Partial<Record<AccountField, string>>>({})
+  const handleInput = useRef<HTMLInputElement>(null)
+  const displayNameInput = useRef<HTMLInputElement>(null)
+  const passwordInput = useRef<HTMLInputElement>(null)
+  const composing = useRef(false)
+  const isLogin = mode === 'login'
+
+  function changeMode() {
+    if (busy) return
+    setErrors({}); setVisible(false); setPassword('')
+    onModeChange(isLogin ? 'register' : 'login')
+    requestAnimationFrame(() => handleInput.current?.focus())
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (mode === 'login') {
-      onLogin(handle, password)
-      return
-    }
-    onRegister(handle, displayName, password)
+    if (busy || composing.current) return
+    const next: Partial<Record<AccountField, string>> = {}
+    const name = handle.trim()
+    if (!name) next.handle = '请输入账号。'
+    else if (!isLogin && !/^[a-z0-9][a-z0-9_-]{2,49}$/i.test(name)) next.handle = '账号须为 3–50 位英文、数字、_ 或 -，并以英文或数字开头。'
+    if (!isLogin && !displayName.trim()) next.displayName = '请输入用于展示的昵称。'
+    if (!password) next.password = '请输入密码。'
+    else if (!isLogin && (password.length < 8 || password.length > 128)) next.password = '密码长度须为 8–128 位。'
+    setErrors(next)
+    if (next.handle) { handleInput.current?.focus(); return }
+    if (next.displayName) { displayNameInput.current?.focus(); return }
+    if (next.password) { passwordInput.current?.focus(); return }
+    setVisible(false)
+    if (isLogin) onLogin(name, password)
+    else onRegister(name, displayName.trim(), password)
   }
 
-  const isLogin = mode === 'login'
+  function clearFieldError(field: AccountField) {
+    setErrors(previous => ({ ...previous, [field]: undefined }))
+  }
 
-  return (
-    <main className="account-shell">
-      <section className="account-pass" aria-labelledby="account-title">
-        <div className="account-pass__rail">
-          <Link className="account-pass__brand" to="/" aria-label="返回 Genesis 首页">
-            Genesis<span>.</span>
-          </Link>
-          <div className="account-pass__copy">
-            <p className="eyebrow">GENESIS / READER’S PASS</p>
-            <h1 id="account-title">{isLogin ? <>回来，<em>继续阅读。</em></> : <>留下名字，<em>参与讨论。</em></>}</h1>
-            <p>
-              {isLogin
-                ? '在文章、评论和个人记录之间，接上你上次停下的地方。'
-                : '创建一个轻量身份，让每一次值得回应的阅读都留下印记。'}
-            </p>
-          </div>
-          <dl className="account-pass__notes" aria-label="账户可以做什么">
-            <div><dt>01</dt><dd>参与文章讨论</dd></div>
-            <div><dt>02</dt><dd>维护个人资料</dd></div>
-            <div><dt>03</dt><dd>回到正在阅读的内容</dd></div>
-          </dl>
-          <Link className="account-pass__back" to="/blog"><span aria-hidden="true">←</span> 先去读一篇</Link>
+  return <AccountLayout>
+    <section className="account-auth-form" aria-labelledby="account-title">
+      <div className="account-form-heading"><span className="account-form-kicker">你的 Genesis 账户</span><h1 id="account-title">{isLogin ? '登录你的账户' : '创建你的账户'}</h1><p>{isLogin ? '参与讨论，继续你的创作。' : '留下名字，加入每一次有意思的讨论。'}</p></div>
+      <form className="account-form" aria-label={isLogin ? '账户登录' : '账户注册'} aria-busy={busy} noValidate onSubmit={submit} onCompositionStart={() => { composing.current = true }} onCompositionEnd={() => { composing.current = false }}>
+        <div className="account-field">
+          <label htmlFor="account-handle">账号</label>
+          <input ref={handleInput} autoComplete="username" autoCapitalize="none" spellCheck={false} id="account-handle" name="username" autoFocus={focusLogin} readOnly={busy} maxLength={isLogin ? undefined : 50} required value={handle} placeholder={isLogin ? '输入你的账号' : '为自己取一个账号'} aria-invalid={Boolean(errors.handle)} aria-describedby={errors.handle ? 'account-handle-error' : !isLogin ? 'account-handle-hint' : undefined} onChange={event => { setHandle(event.currentTarget.value); clearFieldError('handle') }} />
+          <div className="account-field-help">{errors.handle ? <p id="account-handle-error" className="account-field-error">{errors.handle}</p> : !isLogin && <p id="account-handle-hint">3–50 位英文、数字、_ 或 -，以英文或数字开头</p>}</div>
         </div>
-
-        <div className="account-pass__form-panel">
-          <div className="account-pass__form-heading">
-            <p>{isLogin ? 'MEMBER SIGN IN' : 'CREATE ACCOUNT'}</p>
-            <h2>{isLogin ? '登录你的账户' : '创建阅读身份'}</h2>
+        {!isLogin && <div className="account-field">
+          <label htmlFor="account-display-name">昵称</label>
+          <input ref={displayNameInput} autoComplete="nickname" id="account-display-name" name="nickname" readOnly={busy} required maxLength={100} value={displayName} placeholder="大家怎么称呼你" aria-invalid={Boolean(errors.displayName)} aria-describedby={errors.displayName ? 'account-display-name-error' : undefined} onChange={event => { setDisplayName(event.currentTarget.value); clearFieldError('displayName') }} />
+          <div className="account-field-help">{errors.displayName && <p id="account-display-name-error" className="account-field-error">{errors.displayName}</p>}</div>
+        </div>}
+        <div className="account-field">
+          <label htmlFor="account-password">密码</label>
+          <div className="account-password">
+            <input ref={passwordInput} autoComplete={isLogin ? 'current-password' : 'new-password'} id="account-password" name="password" readOnly={busy} required maxLength={isLogin ? undefined : 128} type={visible ? 'text' : 'password'} value={password} placeholder={isLogin ? '输入你的密码' : '设置 8–128 位密码'} aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? 'account-password-error' : !isLogin ? 'account-password-hint' : undefined} onChange={event => { setPassword(event.currentTarget.value); clearFieldError('password') }} />
+            <button className="account-password-toggle" type="button" aria-label={visible ? '隐藏密码' : '显示密码'} aria-pressed={visible} disabled={busy} onClick={() => setVisible(value => !value)}>{visible ? <EyeOff size={18} /> : <Eye size={18} />}</button>
           </div>
-          <div className="account-tabs" role="tablist" aria-label="账户操作">
-            <button
-              aria-selected={isLogin}
-              className={isLogin ? 'is-active' : ''}
-              onClick={() => onModeChange('login')}
-              role="tab"
-              type="button"
-            >
-              登录
-            </button>
-            <button
-              aria-selected={!isLogin}
-              className={!isLogin ? 'is-active' : ''}
-              onClick={() => onModeChange('register')}
-              role="tab"
-              type="button"
-            >
-              注册
-            </button>
-          </div>
-          <form className="account-form" onSubmit={submit}>
-            <label htmlFor="account-handle">
-              <span>账号</span>
-              <input
-                autoComplete="username"
-                id="account-handle"
-                autoFocus={focusLogin}
-                minLength={3}
-                onChange={(event) => setHandle(event.currentTarget.value)}
-                placeholder="3–50 位英文、数字、_ 或 -"
-                required
-                value={handle}
-              />
-            </label>
-            {!isLogin && (
-              <label htmlFor="account-display-name">
-                <span>昵称</span>
-                <input
-                  autoComplete="nickname"
-                  id="account-display-name"
-                  onChange={(event) => setDisplayName(event.currentTarget.value)}
-                  placeholder="评论中展示的名字"
-                  required
-                  value={displayName}
-                />
-              </label>
-            )}
-            <label htmlFor="account-password">
-              <span>密码</span>
-              <input
-                autoComplete={isLogin ? 'current-password' : 'new-password'}
-                id="account-password"
-                minLength={8}
-                onChange={(event) => setPassword(event.currentTarget.value)}
-                placeholder="至少 8 位"
-                required
-                type="password"
-                value={password}
-              />
-            </label>
-            {error && <p className="studio-form-error" role="alert">{error}</p>}
-            <button className="primary-button" type="submit">
-              {isLogin ? '进入 Genesis' : '创建并进入'} <span aria-hidden="true">→</span>
-            </button>
-          </form>
-          <p className="account-pass__privacy">仅使用必要的账户信息；不会公开你的登录资料。</p>
-          <Link className="account-pass__studio" to="/blog/studio">进入写作台 <span aria-hidden="true">→</span></Link>
+          <div className="account-field-help">{errors.password ? <p id="account-password-error" className="account-field-error">{errors.password}</p> : !isLogin && <p id="account-password-hint">至少 8 位，支持粘贴和密码管理器</p>}</div>
         </div>
-      </section>
-    </main>
-  )
+        <div className="account-form-message" aria-live="polite">{error && <p id="account-submit-error" role="alert">{error}</p>}</div>
+        <button className="account-submit" type="submit" disabled={busy}>{busy ? <><LoaderCircle className="account-submit-spinner" size={18} aria-hidden="true" /><span>{isLogin ? '正在登录…' : '正在创建账户…'}</span></> : <><span>{isLogin ? '进入 Genesis' : '创建并进入'}</span><ArrowRight size={18} aria-hidden="true" /></>}</button>
+      </form>
+      <p className="account-mode-switch">{isLogin ? '还没有账户？' : '已经有账户？'}<button type="button" disabled={busy} onClick={changeMode}>{isLogin ? '注册账户' : '返回登录'}</button></p>
+    </section>
+  </AccountLayout>
 }
 
 function Profile({ user, feedback, onLogout, onSave }: {
@@ -220,11 +177,15 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
   const [searchParams] = useSearchParams()
   const returnTo = searchParams.get('returnTo')
   const [token, setToken] = useState(() => getStoredAuthToken())
-  const [state, setState] = useState<AccountState>(() =>
-    getStoredAuthToken() === null
-      ? { status: 'guest', mode: 'login', error: null }
-      : { status: 'loading' },
-  )
+  const [state, setState] = useState<AccountState>(() => getStoredAuthToken() === null
+    ? { status: 'guest', mode: 'login', error: null }
+    : { status: 'loading' })
+  const [submitting, setSubmitting] = useState(false)
+  const pending = useRef(false)
+  const attempt = useRef(0)
+  const title = state.status === 'ready' ? '个人账户 · Genesis' : state.status === 'guest' && state.mode === 'register' ? '注册 · Genesis' : '登录 · Genesis'
+  useEffect(() => { document.title = title }, [title])
+  useEffect(() => () => { attempt.current += 1 }, [])
 
   useEffect(() => {
     const sync = () => setToken(getStoredAuthToken())
@@ -237,6 +198,7 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
     void getCurrentUser(token)
       .then((user) => {
         if (!active) return
+        pending.current = false; setSubmitting(false)
         if (user.role === 'owner') storeAuthToken(token, studioAuthTokenKey)
         else clearStoredAuthToken(studioAuthTokenKey)
         setState({ status: 'ready', user, feedback: null })
@@ -245,6 +207,7 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
       })
       .catch(() => {
         if (!active) return
+        pending.current = false; setSubmitting(false)
         clearStoredAuthToken()
         setToken(null)
         setState({ status: 'guest', mode: 'login', error: '登录状态已过期，请重新登录。' })
@@ -252,24 +215,33 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
     return () => { active = false }
   }, [token, returnTo, navigate, onAuthenticated])
 
-  function setLoggedInToken(accessToken: string) {
-    storeAuthToken(accessToken)
-    setToken(accessToken)
-  }
-
-  function handleLogin(handle: string, password: string) {
-    setState({ status: 'loading' })
-    void login(handle, password)
-      .then((data) => setLoggedInToken(data.access_token))
-      .catch(() => setState({ status: 'guest', mode: 'login', error: '账号或密码错误，请重试。' }))
-  }
-
-  function handleRegister(handle: string, displayName: string, password: string) {
-    setState({ status: 'loading' })
-    void registerAccount({ handle, display_name: displayName, password })
-      .then(() => login(handle, password))
-      .then((data) => setLoggedInToken(data.access_token))
-      .catch(() => setState({ status: 'guest', mode: 'register', error: '注册失败，请检查账号格式或稍后重试。' }))
+  async function authenticate(mode: AccountMode, handle: string, password: string, displayName = '') {
+    if (pending.current) return
+    pending.current = true; setSubmitting(true)
+    setState({ status: 'guest', mode, error: null })
+    const current = ++attempt.current
+    let registered = false
+    try {
+      if (mode === 'register') {
+        await registerAccount({ handle, display_name: displayName, password })
+        registered = true
+      }
+      if (current !== attempt.current) return
+      const data = await login(handle, password)
+      if (current !== attempt.current) return
+      storeAuthToken(data.access_token)
+      setToken(data.access_token)
+    } catch (error) {
+      if (current !== attempt.current) return
+      pending.current = false; setSubmitting(false)
+      const status = error instanceof Error && 'status' in error ? error.status : undefined
+      const message = registered ? '账户已创建，请使用刚才的账号和密码登录。'
+        : status === 429 ? '操作过于频繁，请稍后重试。'
+        : error instanceof TypeError || (typeof status === 'number' && status >= 500) ? '登录服务暂时不可用，请稍后重试。'
+        : mode === 'register' ? status === 409 ? '这个账号暂时无法注册，请换一个账号或直接登录。' : '注册失败，请检查账号格式或稍后重试。'
+        : '账号或密码错误，请重试。'
+      setState({ status: 'guest', mode: registered ? 'login' : mode, error: message })
+    }
   }
 
   function saveProfile(displayName: string, bio: string, avatarUrl: string) {
@@ -279,21 +251,10 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
       .catch(() => setState({ status: 'ready', user: state.user, feedback: '保存失败，请稍后重试。' }))
   }
 
-  if (state.status === 'loading') return <main className="account-shell account-loading">正在加载账户…</main>
-  if (state.status === 'ready') {
-    return (
-      <Profile
-        feedback={state.feedback}
-        onLogout={() => {
-          clearStoredAuthToken()
-          clearStoredAuthToken(studioAuthTokenKey)
-          setToken(null)
-          setState({ status: 'guest', mode: 'login', error: null })
-        }}
-        onSave={saveProfile}
-        user={state.user}
-      />
-    )
-  }
-  return <AccountForm focusLogin={Boolean(onAuthenticated)} error={state.error ?? (searchParams.get('reason') === 'expired' ? '登录已失效，请重新登录。' : null)} mode={state.mode} onLogin={handleLogin} onModeChange={(mode) => setState({ status: 'guest', mode, error: null })} onRegister={handleRegister} />
+  if (state.status === 'loading') return <AccountLayout><div className="account-auth-loading" role="status"><LoaderCircle className="account-submit-spinner" size={24} aria-hidden="true" /><span>正在加载账户…</span></div></AccountLayout>
+  if (state.status === 'ready') return <Profile feedback={state.feedback} user={state.user} onSave={saveProfile} onLogout={() => {
+    clearStoredAuthToken(); clearStoredAuthToken(studioAuthTokenKey)
+    setToken(null); setState({ status: 'guest', mode: 'login', error: null })
+  }} />
+  return <AccountForm focusLogin={Boolean(onAuthenticated) || searchParams.get('reason') === 'expired'} busy={submitting} error={state.error ?? (searchParams.get('reason') === 'expired' ? '登录已失效，请重新登录。' : null)} mode={state.mode} onLogin={(handle, password) => { void authenticate('login', handle, password) }} onRegister={(handle, displayName, password) => { void authenticate('register', handle, password, displayName) }} onModeChange={mode => setState({ status: 'guest', mode, error: null })} />
 }
