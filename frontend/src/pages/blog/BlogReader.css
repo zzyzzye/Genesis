@@ -37,13 +37,15 @@
 .blog-page--article .reader-summary { max-width: none; margin: 0; color: var(--blog-muted); font-size: 15px; line-height: 1.9; overflow-wrap: anywhere; }
 .blog-page--article .article-meta { align-items: baseline; gap: 8px 16px; margin-top: 20px; color: var(--blog-muted); font-size: 12px; }
 .blog-page--article .article-meta > *::before { content: none; }
-.reader-author { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: 14px; margin-bottom: 34px; }
-.reader-author > img, .reader-author__avatar { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }
-.reader-author__avatar { display: grid; place-items: center; background: var(--portal-soft); color: var(--blog-ink); font-size: 23px; font-weight: 550; }
+.reader-author { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 12px; margin-bottom: 28px; }
+.reader-author > img, .reader-author__avatar { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
+.reader-author__avatar { display: grid; place-items: center; background: var(--portal-soft); color: var(--blog-muted); font-size: 17px; font-weight: 500; }
 .reader-author__label, .reader-author__handle { display: block; color: var(--blog-muted); font-size: 11px; overflow-wrap: anywhere; }
-.reader-author strong { display: block; margin-block: 2px; font-size: 19px; font-weight: 650; overflow-wrap: anywhere; }
-.reader-author nav { display: flex; grid-column: 1 / -1; flex-wrap: wrap; gap: 8px; }
-.reader-author nav a { display: inline-flex; min-height: 40px; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 9px; background: var(--portal-soft); color: var(--blog-muted); font-size: 12px; }
+.reader-author__label { grid-column: 1 / -1; }
+.reader-author > div { min-width: 0; }
+.reader-author strong { display: block; margin-bottom: 2px; font-size: 15px; font-weight: 550; line-height: 1.5; overflow-wrap: anywhere; }
+.reader-author nav { display: flex; grid-column: 2; flex-wrap: wrap; gap: 4px 16px; margin-top: -4px; }
+.reader-author nav a { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; padding: 4px 0; border-radius: 4px; background: transparent; color: var(--blog-muted); font-size: 12px; outline: 0; box-shadow: none; }
 .reader-author nav a:is(:hover, :focus-visible) { background: var(--blog-hover); color: var(--blog-ink); }
 .reader-document .article-toc { font-family: inherit; font-size: 14px; }
 .reader-document .article-toc__toggle { padding: 8px 0; font-size: 16px; font-weight: 600; }

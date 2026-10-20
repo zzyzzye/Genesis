@@ -28,11 +28,12 @@ function ReaderAuthor({ author }: { author: BlogAuthor }) {
   const [failed, setFailed] = useState(false)
   const location: Location<unknown> = useLocation()
   return <section className="reader-author" aria-label="本文作者">
-    {author.avatar_url && !failed ? <img src={author.avatar_url} alt="" width={56} height={56} onError={() => setFailed(true)} /> : <span className="reader-author__avatar" aria-hidden="true">{author.display_name.slice(0, 1).toUpperCase()}</span>}
-    <div><span className="reader-author__label">本文作者</span><strong>{author.display_name}</strong><span className="reader-author__handle">@{author.handle}</span></div>
-    <nav aria-label="作者与讨论"><Link to="/blog"><Globe size={17} aria-hidden="true" />浏览博客</Link><Link to="#comments" state={location.state} preventScrollReset onClick={event => {
+    <span className="reader-author__label">本文作者</span>
+    {author.avatar_url && !failed ? <img src={author.avatar_url} alt="" width={40} height={40} onError={() => setFailed(true)} /> : <span className="reader-author__avatar" aria-hidden="true">{author.display_name.slice(0, 1).toUpperCase()}</span>}
+    <div><strong>{author.display_name}</strong><span className="reader-author__handle">@{author.handle}</span></div>
+    <nav aria-label="作者与讨论"><Link to="/blog"><Globe size={14} aria-hidden="true" />浏览博客</Link><Link to="#comments" state={location.state} preventScrollReset onClick={event => {
       if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) requestAnimationFrame(() => document.getElementById('comments')?.scrollIntoView({ block: 'start' }))
-    }}><MessageSquare size={17} aria-hidden="true" />参与讨论</Link></nav>
+    }}><MessageSquare size={14} aria-hidden="true" />参与讨论</Link></nav>
   </section>
 }
 
