@@ -525,7 +525,7 @@ function Dashboard({
           <header className="studio-topbar">
             <div className="studio-topbar__title">
               <span className="studio-mobile-level">内容工作区</span>
-              <div><p>{meta.eyebrow}</p><h1>{meta.title}</h1><small>{meta.description}</small></div>
+              <div><p>博客工作台</p><h1>{meta.title}</h1><small>{meta.description}</small></div>
             </div>
             <div className="studio-topbar__actions">
               <Link className="studio-topbar__site-link" to="/blog"><StudioIcon name="eye" />查看站点 <StudioIcon name="arrow-up-right" /></Link>

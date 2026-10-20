@@ -41,13 +41,12 @@ export function StudioNavigation({
     <aside className="studio-section-nav" aria-label="博客管理导航">
       <header className="studio-section-nav__header">
         <Link className="studio-section-nav__brand" to="/blog" aria-label="返回公开博客">
-          <span className="studio-section-nav__mark" aria-hidden="true">G<span>.</span></span>
+          <span className="studio-section-nav__mark" aria-hidden="true">G</span>
           <span>
-            <p>GENESIS</p>
-            <strong>博客</strong>
+            <strong>Genesis</strong>
+            <p>写作台</p>
           </span>
         </Link>
-        <small>内容工作台</small>
       </header>
 
       <nav ref={navigationRef} className="studio-nav-groups" aria-label="工作台页面">

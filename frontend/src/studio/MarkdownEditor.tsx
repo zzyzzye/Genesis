@@ -266,7 +266,6 @@ function PostSettingsModal({
       <section className="markdown-settings-modal__surface">
         <header className="markdown-settings-modal__header">
           <div>
-            <p className="eyebrow">{kind === 'page' ? 'PAGE SETTINGS' : 'ARTICLE SETTINGS'}</p>
             <h2 id="markdown-settings-title">{label}设置</h2>
           </div>
           <button className="markdown-settings-modal__close" disabled={isSaving} type="button" aria-label={`关闭${label}设置`} onClick={onClose}><StudioIcon name="close" /></button>

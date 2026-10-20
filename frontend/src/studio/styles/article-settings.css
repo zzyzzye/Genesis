@@ -14,9 +14,9 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #d7dee6;
-  border-radius: .55rem;
+  border-radius: var(--studio-dialog-radius);
   background: #f7f8fa;
-  box-shadow: 0 1.5rem 4rem rgb(20 32 51 / 24%);
+  box-shadow: none;
 }
 .markdown-settings-modal__header,
 .markdown-settings-modal__footer {
@@ -39,7 +39,7 @@
 .markdown-settings-modal__body > label,
 .markdown-settings-modal__body .editor-form__grid label { display: grid; gap: .4rem; color: var(--studio-text, #000); font-size: .74rem; font-weight: 800; }
 .markdown-settings-modal__body input,
-.markdown-settings-modal__body textarea { width: 100%; box-sizing: border-box; padding: .7rem .75rem; border: 1px solid #d5dde5; border-radius: .25rem; outline: 0; background: #fff; color: var(--studio-ink); font: inherit; font-size: .82rem; font-weight: 400; }
+.markdown-settings-modal__body textarea { width: 100%; box-sizing: border-box; padding: .7rem .75rem; border: 1px solid #d5dde5; border-radius: var(--studio-control-radius); outline: 0; background: #fff; color: var(--studio-ink); font: inherit; font-size: .82rem; font-weight: 400; }
 .markdown-settings-modal__body input:focus,
 .markdown-settings-modal__body textarea:focus { border-color: #1769bd; box-shadow: 0 0 0 2px rgb(23 105 189 / 10%); }
 .markdown-import-control { display: grid; gap: .2rem; padding: .8rem; border: 1px dashed #c9d4de; border-radius: .3rem; background: #fff; cursor: pointer; }
@@ -89,11 +89,11 @@
 .taxonomy-select-row,
 .taxonomy-create-row { display: flex; align-items: center; gap: .45rem; }
 .taxonomy-select-row select,
-.taxonomy-create-row input { min-width: 0; flex: 1 1 auto; width: 100%; box-sizing: border-box; padding: .55rem .6rem; border: 1px solid #d5dde5; border-radius: .25rem; outline: 0; background: #fff; color: var(--studio-text, #000); font: inherit; font-size: .72rem; }
+.taxonomy-create-row input { min-width: 0; flex: 1 1 auto; width: 100%; box-sizing: border-box; padding: .55rem .6rem; border: 1px solid #d5dde5; border-radius: var(--studio-control-radius); outline: 0; background: #fff; color: var(--studio-text, #000); font: inherit; font-size: .72rem; }
 .taxonomy-select-row select:focus,
 .taxonomy-create-row input:focus { border-color: #1769bd; box-shadow: 0 0 0 2px rgb(23 105 189 / 10%); }
 .taxonomy-select-row button,
-.taxonomy-create-row button { flex: 0 0 auto; padding: .56rem .7rem; border: 1px solid #cad6df; border-radius: .25rem; background: #f5f8fa; color: var(--studio-text, #000); font: inherit; font-size: .68rem; font-weight: 750; cursor: pointer; white-space: nowrap; }
+.taxonomy-create-row button { flex: 0 0 auto; padding: .56rem .7rem; border: 1px solid #cad6df; border-radius: var(--studio-control-radius); background: #f5f8fa; color: var(--studio-text, #000); font: inherit; font-size: .68rem; font-weight: 750; cursor: pointer; white-space: nowrap; }
 .taxonomy-select-row button:hover,
 .taxonomy-create-row button:hover { border-color: #1769bd; background: #eef5fb; color: #1769bd; }
 .taxonomy-select-row button:disabled { cursor: not-allowed; opacity: .5; }
@@ -157,7 +157,7 @@
   box-sizing: border-box;
   padding: .55rem .65rem;
   border: 1px solid #d5dde5;
-  border-radius: .25rem;
+  border-radius: var(--studio-control-radius);
   outline: 0;
   background: #fff;
   color: var(--studio-ink);
@@ -207,7 +207,7 @@
   min-width: 3.3rem;
   padding: .55rem .7rem;
   border: 1px solid #cad6df;
-  border-radius: .25rem;
+  border-radius: var(--studio-control-radius);
   background: #f5f8fa;
   color: var(--studio-text, #000);
   font: inherit;
@@ -246,13 +246,17 @@
 .markdown-settings-modal { width:100%; height:100%; max-width:none; max-height:none; margin:0; border:0; outline:0; background:transparent; }
 .markdown-settings-modal::backdrop { background:rgb(25 30 35 / 25%); }
 .markdown-settings-modal__surface { border:0; background:#fff; }
+.markdown-settings-modal__header, .markdown-settings-modal__footer { border: 0; }
+.markdown-settings-modal__header h2 { font: 600 20px/1.5 var(--studio-ui); }
+.studio-app-shell .markdown-settings-modal__footer .primary-button { background: var(--studio-ink); color: var(--studio-paper); }
+.studio-app-shell .markdown-settings-modal__footer .primary-button:hover:not(:disabled), .studio-app-shell .markdown-settings-modal__footer .primary-button:focus-visible { background: #373737; }
 .markdown-settings-modal__body { overflow-y:auto; gap:20px; background:#fff; }
 .markdown-settings-modal__body .taxonomy-picker__input input { padding:0; border:0; outline:0; box-shadow:none; background:transparent; font-size:12px; }
 .markdown-settings-modal__body .taxonomy-picker__input input:focus { border:0; outline:0; box-shadow:none; background:transparent; }
 .markdown-settings-modal__body .settings-field input,
-.markdown-settings-modal__body .settings-field textarea { border:0; outline:0; box-shadow:none; background:#f0f1f2; }
+.markdown-settings-modal__body .settings-field textarea { border:0; outline:0; box-shadow:none; background:var(--studio-soft); }
 .markdown-settings-modal__body .settings-field input:focus,
-.markdown-settings-modal__body .settings-field textarea:focus { border:0; outline:0; box-shadow:none; background:#f0f1f2; }
+.markdown-settings-modal__body .settings-field textarea:focus { border:0; outline:0; box-shadow:none; background:var(--studio-soft); }
 .markdown-settings-modal button { border:0; outline:0; box-shadow:none; }
 .markdown-settings-modal button:focus-visible { outline:0; box-shadow:none; }
 .settings-taxonomy-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; }

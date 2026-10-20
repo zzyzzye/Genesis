@@ -2,17 +2,17 @@
   --reasoning-text:var(--assistant-ink);
   --reasoning-muted:var(--assistant-muted);
   --reasoning-hover:var(--assistant-hover);
-  --assistant-paper: #fff;
-  --assistant-surface: #f5f6f7;
-  --assistant-composer: #f7f8f8;
-  --assistant-hover: #e9ecee;
-  --assistant-ink: #252a30;
-  --assistant-muted: #687079;
-  --assistant-accent: #52675a;
+  --assistant-paper: var(--studio-paper, #fff);
+  --assistant-surface: var(--studio-soft, #f4f4f4);
+  --assistant-composer: var(--studio-soft, #f4f4f4);
+  --assistant-hover: var(--studio-hover, #ededed);
+  --assistant-ink: var(--studio-ink, #171717);
+  --assistant-muted: var(--studio-muted, #686868);
+  --assistant-accent: var(--studio-ink, #171717);
   --assistant-layer: 30;
   --assistant-popover-layer: 2;
-  --assistant-scroll-thumb: #c3c8cd;
-  --assistant-scroll-hover: #969ea6;
+  --assistant-scroll-thumb: #c8c8c8;
+  --assistant-scroll-hover: #999;
   position: fixed; z-index: var(--assistant-layer); right: 20px; bottom: 20px;
   display: flex; align-items: flex-end; flex-direction: column; gap: 10px;
   color: var(--assistant-ink); font: 13px/1.65 Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -23,13 +23,11 @@
 .studio-assistant ::-webkit-scrollbar-thumb { border-radius: 6px; background: var(--assistant-scroll-thumb); }
 .studio-assistant ::-webkit-scrollbar-thumb:hover { background: var(--assistant-scroll-hover); }
 .studio-assistant ::-webkit-scrollbar-thumb:active { background: var(--assistant-muted); }
-.studio-assistant .studio-assistant__body, .studio-assistant .studio-assistant__history { scrollbar-width: none; }
-.studio-assistant .studio-assistant__body::-webkit-scrollbar, .studio-assistant .studio-assistant__history::-webkit-scrollbar { display: none; }
 .studio-assistant button { border: 0; outline: 0; box-shadow: none; font: inherit; color: inherit; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
 .studio-assistant button:disabled { cursor: not-allowed; opacity: .4; }
 .studio-assistant button:hover:not(:disabled), .studio-assistant button:focus-visible { background: var(--assistant-hover); }
 .studio-assistant__launcher { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border-radius: 50%; background: var(--assistant-ink); }
-.studio-assistant .studio-assistant__launcher:hover:not(:disabled), .studio-assistant .studio-assistant__launcher:focus-visible:not(:disabled) { background: #414950; }
+.studio-assistant .studio-assistant__launcher:hover:not(:disabled), .studio-assistant .studio-assistant__launcher:focus-visible:not(:disabled) { background: #373737; }
 .studio-assistant__launcher-icon { display: grid; place-items: center; color: #fff; }
 .studio-assistant__launcher-icon svg { width: 19px; height: 19px; }
 .studio-assistant__launcher-signal { display: none; }
@@ -100,14 +98,14 @@
 .studio-assistant .provider-icon path { fill: currentColor; stroke: none; }
 .studio-assistant__composer-tools > button[type=submit], .studio-assistant__composer-tools > .studio-assistant__stop { display: grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border-radius: 7px; background: var(--assistant-ink); color: #fff; }
 .studio-assistant__composer-tools > button[type=submit]:disabled { background: transparent; color: var(--assistant-muted); opacity: .6; }
-.studio-assistant .studio-assistant__composer-tools > button[type=submit]:hover:not(:disabled), .studio-assistant .studio-assistant__stop:hover:not(:disabled) { background: #414950; }
-.studio-assistant .studio-assistant__composer-tools > button[type=submit]:focus-visible:not(:disabled), .studio-assistant .studio-assistant__stop:focus-visible:not(:disabled) { background: #414950; }
+.studio-assistant .studio-assistant__composer-tools > button[type=submit]:hover:not(:disabled), .studio-assistant .studio-assistant__stop:hover:not(:disabled) { background: #373737; }
+.studio-assistant .studio-assistant__composer-tools > button[type=submit]:focus-visible:not(:disabled), .studio-assistant .studio-assistant__stop:focus-visible:not(:disabled) { background: #373737; }
 .studio-assistant__composer-tools > button[type=submit] svg, .studio-assistant__stop svg { width: 15px; height: 15px; }
 .studio-assistant__stop svg { fill: currentColor; }
 .studio-assistant__context-ring { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 24px; height: 24px; outline: 0; color: var(--assistant-muted); }
 .studio-assistant__context-ring > svg { width: 18px; height: 18px; }
 .studio-assistant__ring-track, .studio-assistant__ring-value { fill: none; stroke-width: 2; }
-.studio-assistant__ring-track { stroke: #dce1de; }
+.studio-assistant__ring-track { stroke: #dedede; }
 .studio-assistant__ring-value { stroke: var(--assistant-accent); stroke-linecap: round; }
 .studio-assistant__context-ring text { fill: currentColor; font-size: 11px; }
 .studio-assistant__ring-tooltip { position: absolute; z-index: var(--assistant-popover-layer); bottom: calc(100% + 10px); left: 0; width: max-content; max-width: min(260px, calc(100vw - 64px)); padding: 7px 10px; border-radius: 6px; background: var(--assistant-hover); color: var(--assistant-ink); font-size: 11px; line-height: 1.6; visibility: hidden; pointer-events: none; }
@@ -147,7 +145,7 @@
 .studio-assistant__action-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 3px; }
 .studio-assistant__action-footer > span { color: var(--assistant-muted); font-size: 11px; }
 .studio-assistant .studio-assistant__action-card button { flex: none; min-height: 30px; padding: 5px 12px; border: 0; outline: none; box-shadow: none; border-radius: 5px; background: var(--assistant-ink); color: #fff; font-size: 12px; }
-.studio-assistant .studio-assistant__action-card button:is(:hover, :focus-visible):not(:disabled) { background: #414950; }
+.studio-assistant .studio-assistant__action-card button:is(:hover, :focus-visible):not(:disabled) { background: #373737; }
 .studio-assistant .studio-assistant__action-card button:disabled { background: var(--assistant-hover); color: var(--assistant-muted); cursor: default; }
 .studio-assistant__timing { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px 12px; color: var(--assistant-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .studio-assistant__timing > span:not(.studio-assistant__speed) { white-space: nowrap; }

@@ -25,10 +25,10 @@ export function StudioOverview({
   const drafts = posts.length - published
   const totalMinutes = posts.reduce((total, post) => total + post.read_time_minutes, 0)
   const stats: Array<{ label: string; value: string; icon: StudioIconName; note: string }> = [
-    { label: '全部文章', value: String(posts.length), icon: 'articles', note: '内容资产' },
-    { label: '已发布', value: String(published), icon: 'eye', note: '公开可见' },
-    { label: '待完善草稿', value: String(drafts), icon: 'pages', note: drafts > 0 ? '继续创作' : '暂无积压' },
-    { label: '累计阅读时长', value: `${totalMinutes}`, icon: 'spark', note: '分钟内容量' },
+    { label: '全部文章', value: String(posts.length), icon: 'articles', note: '' },
+    { label: '已发布', value: String(published), icon: 'eye', note: '' },
+    { label: '草稿', value: String(drafts), icon: 'pages', note: '' },
+    { label: '内容阅读时长', value: `${totalMinutes}`, icon: 'spark', note: '分钟' },
   ]
   const quickActions: Array<{ title: string; description: string; icon: StudioIconName; action: () => void }> = [
     { title: '创建文章', description: '开启一篇新的 Markdown 草稿', icon: 'plus', action: onCreatePost },
@@ -51,7 +51,7 @@ export function StudioOverview({
         {stats.map((stat) => (
           <article className="studio-stat-card" key={stat.label}>
             <span className="studio-card-icon"><StudioIcon name={stat.icon} /></span>
-            <div><p>{stat.label}</p><strong>{stat.value}</strong><small>{stat.note}</small></div>
+            <div><p>{stat.label}</p><strong>{stat.value}</strong>{stat.note && <small>{stat.note}</small>}</div>
           </article>
         ))}
       </div>
@@ -59,7 +59,7 @@ export function StudioOverview({
       <div className="studio-overview-grid">
         <article className="studio-panel studio-quick-panel">
           <header className="studio-panel__header">
-            <div><p>QUICK ACCESS</p><h2 id="studio-overview-title">快捷访问</h2></div>
+            <h2 id="studio-overview-title">快捷访问</h2>
           </header>
           <div className="studio-quick-grid">
             {quickActions.map((item) => (
@@ -79,7 +79,7 @@ export function StudioOverview({
 
         <article className="studio-panel studio-activity-panel">
           <header className="studio-panel__header">
-            <div><p>RECENT ACTIVITY</p><h2>最近内容</h2></div>
+            <h2>最近内容</h2>
             <button type="button" onClick={() => onChange('posts')}>查看全部</button>
           </header>
           <div className="studio-activity-list">
