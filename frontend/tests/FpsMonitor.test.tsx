@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FpsMonitor } from '../src/features/performance/FpsMonitor'
@@ -58,6 +58,35 @@ function Harness() {
 }
 
 describe('全站 FPS 监测', () => {
+  it('贴在助手左侧，跟随宽度变化；全屏助手隐藏读数，移除助手恢复角落', async () => {
+    localStorage.setItem(fpsPreferenceKey, 'true')
+    let notify = () => {}
+    const disconnect = vi.fn()
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { notify = callback }
+      observe = vi.fn()
+      disconnect = disconnect
+    })
+    let left = 600
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function () {
+      return { left, width: 400 } as DOMRect
+    })
+    const view = render(<><div className="studio-assistant" /><Harness /></>)
+    const monitor = await screen.findByRole('group', { name: '实时 FPS' })
+    expect(monitor.style.getPropertyValue('--fps-right')).toBe(`${window.innerWidth - 600 + 12}px`)
+    left = 400
+    act(() => notify())
+    expect(monitor.style.getPropertyValue('--fps-right')).toBe(`${window.innerWidth - 400 + 12}px`)
+    left = 0
+    act(() => notify())
+    expect(monitor).toHaveClass('is-occluded')
+    view.rerender(<>{null}<Harness /></>)
+    await waitFor(() => expect(monitor).not.toHaveClass('is-occluded'))
+    expect(monitor.style.getPropertyValue('--fps-right')).toBe('16px')
+    view.unmount()
+    expect(disconnect).toHaveBeenCalled()
+  })
+
   it('默认关闭，不创建面板或动画循环；开启后仅展示 FPS，关闭立即释放', async () => {
     render(<Harness />)
     const toggle = screen.getByRole('switch', { name: '显示 FPS' })

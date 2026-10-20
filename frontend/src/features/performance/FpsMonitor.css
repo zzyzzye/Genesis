@@ -3,8 +3,8 @@
 .fps-monitor {
   position: fixed;
   z-index: var(--z-performance-monitor);
-  right: max(16px, env(safe-area-inset-right));
-  bottom: calc(88px + env(safe-area-inset-bottom));
+  right: max(var(--fps-right, 16px), env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
   display: inline-flex;
   align-items: baseline;
   justify-content: center;
@@ -19,7 +19,7 @@
   user-select: none;
 }
 
-.fps-monitor[hidden] { display: none; }
+.fps-monitor[hidden], .fps-monitor.is-occluded { display: none; }
 .fps-monitor__value { min-width: 2ch; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
 .fps-monitor__unit { color: rgb(255 255 255 / 65%); font-size: 9px; letter-spacing: .03em; }
 

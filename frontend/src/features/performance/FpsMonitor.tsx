@@ -41,6 +41,45 @@ function ActiveFpsMonitor() {
 
   useEffect(() => {
     const container = host.current!
+    const selector = '.studio-assistant, .media-agent'
+    let assistant: Element | null = null
+
+    function position() {
+      const bounds = assistant?.getBoundingClientRect()
+      // 助手占满屏幕时让出输入区域；其他情况贴在它左侧的页面底边。
+      container.classList.toggle('is-occluded', !!bounds?.width && bounds.left < 94)
+      const right = bounds?.width ? window.innerWidth - bounds.left + 12 : 16
+      container.style.setProperty('--fps-right', `${right}px`)
+    }
+
+    const resize = new ResizeObserver(position)
+    function reconnect() {
+      const next = document.querySelector(selector)
+      if (next !== assistant) {
+        resize.disconnect()
+        assistant = next
+        if (assistant) resize.observe(assistant)
+      }
+      position()
+    }
+    // 只响应助手容器的增删，正文流式输出和 FPS 数字变化不触发布局读取。
+    const mutations = new MutationObserver(records => {
+      if (records.some(record => [...record.addedNodes, ...record.removedNodes].some(node =>
+        node instanceof Element && (node.matches(selector) || node.querySelector(selector)),
+      ))) reconnect()
+    })
+    mutations.observe(document.getElementById('root') ?? document.body, { childList: true, subtree: true })
+    window.addEventListener('resize', position)
+    reconnect()
+    return () => {
+      mutations.disconnect()
+      resize.disconnect()
+      window.removeEventListener('resize', position)
+    }
+  }, [])
+
+  useEffect(() => {
+    const container = host.current!
     const value = reading.current!
     let disposed = false
     let frame: number | null = null
