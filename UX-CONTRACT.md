@@ -43,6 +43,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | 助手思考设置 | AgentModelPicker、ReasoningEffortControl、useReasoningEffort | 框架原生 profile 与 MiMo 官方协议最小补充 | native select 承担思考模式和强度选择；两者独立；按模型记忆；选完模型保持菜单展开 | 请求参数、恢复、图缓存、菜单保持展开、键盘与窄屏 |
 | 博客 Agent 写入确认 | BlogAssistant 的确认卡片、/ai/actions/confirm | 工具更新事件及服务端任务 proposals | 结构化提议与正文分离；点击确认执行才写入；执行中禁用，失败保留，成功状态恢复；下一轮注入可信执行回执 | 无 JSON 正文、重连、历史恢复、写入成功与失败、桌面与窄屏 |
 | 模块管理入口 / Navigation | React Router、Studio | App.tsx、Studio.tsx、Account.tsx | 所属模块下的 /studio 直接进入管理，旧博客链接保留路径、查询参数与锚点 | 直接访问、旧链接跳转、账户入口、桌面与窄屏 |
+| 文章阅读布局与搜索 | PublicBlog、ArticleDocument、ArticleToc、BlogSearch | BlogPage.tsx、BlogReader.css、BlogDirectory.css、useModalDialog | 复用目录的搜索、焦点管理与 q 查询；正文锚点和评论不变；桌面侧栏只使用公开作者资料，手机目录移到正文前；不增加 Live2D、知识图谱或未接通的订阅表单 | 搜索加载/空态/结果、Escape 与恢复、目录定位/选中/折叠、长标题与代码块、桌面/390/320px |
 | 账户登录 / 注册 Form | AccountLayout、AccountForm、Account、SessionRecovery | Account.tsx/CSS、lib/auth.ts、lib/api.ts、auth.py 的注册约束 | 普通按钮切换模式；noValidate 与关联字段错误、首错聚焦；密码默认隐藏、可切换显示；提交保留表单、同步锁防重、输入只读；失败保留内存输入；离开忽略迟到响应；注册已成功但自动登录失败时回到登录，避免重复创建；返回路径沿用原有规则 | 桌面/390/320px、登录/注册/失效/初始加载、校验、输入法、密码切换、提交中与重试、成功返回及成员/作者资料、离开时的迟到响应 |
 | Select/Listbox | 原生 select | ProjectCanvas.tsx、AssetLibrary.tsx | 系统菜单负责弹出几何与键盘选择；模型选择仍沿用 MediaAssistant 的现有组件 | 浏览器展开、选择、Escape，组件测试 |
 | Form | 画布节点直接编辑、MediaHome 的 ProjectDialog | ProjectCanvas.tsx、MediaHome.tsx | 节点编辑无需提交表单；提交表单使用 noValidate 与内联错误 | 整数时长、保存恢复、失败保留草稿 |
@@ -163,6 +164,10 @@ QQ 号或数字 QQ 邮箱选填，只用于该条评论的头像，不改变账�
 博客与影音复用 `AgentModelPicker`、`ReasoningEffortControl` 和 `useReasoningEffort`。供应商切换清空搜索，搜索按展示名与 ID 过滤，Enter 不提交对话。选择模型后菜单保持展开，可继续选择思考模式或强度；点击外部或 Escape 才关闭，Escape 恢复触发器焦点。加载、无模型和无结果分别显示状态。思考强度使用原生 select，提供默认与模型实际支持的档位，由浏览器管理展开和键盘选择；默认选项清除显式强度。无档位时只显示默认说明，加载或生成期间禁用调节。每个模型独立记忆，能力失效的档位不发送；调整设置不发起模型请求。 思考模式与强度独立展示：MiMo 提供默认、开启、关闭；强度仍仅依据框架档位。每个模型独立记忆开关，未知能力不发送开关；生成或加载期间禁用。MiMo 不展示虚构强度档位。
 
 ## 验证边界
+
+2026-10-20 公开文章阅读页按用户参考截图统一为白底黑灰主题，复用 Compose 5173 服务。Chrome 在 1470px、390px、320px 检查长标题、无标签、默认头像、桌面作者与目录侧栏、当前章节选中、目录展开收起与锚点定位、导读缓存展开、代码块 20/22 行折叠及区域内横向滚动、评论空态与输入聚焦、搜索默认/加载/空结果/正常结果、Escape 焦点恢复、快捷键和文章不可用界面。手机单栏与弹窗无横向溢出，输入聚焦无边框、描边、阴影或底色变化。发现并修复锚点跳转丢失来源筛选，浏览器实测章节、讨论、回顶后返回仍为 /blog?q=Python。未修改文章、评论或作者资料，未新增订阅、Live2D 或知识图谱。
+
+前端原有 194 项全量测试通过，追加搜索与来源保留回归后，App/ArticleToc 15 项及独立页面 6 项复验通过。新增回归首次未等待目录数据加载而失败，补充异步等待后通过；未放宽断言。ESLint、TypeScript/生产构建通过；DESIGN lint 零错误、7 项既有警告；strict 静态审计保留 18 项既有发现，不代表全站审计通过。构建保留既有大分块提示，本次无后端改动。
 
 2026-10-20 写作台统一为白底、黑色主操作与浅灰选中，复用 Compose 5173 前端服务。Chrome 检查 1470px、390px、320px：仪表盘真实统计、文章列表正常内容与搜索/草稿空态、侧栏选中及手机横向导航、分类编辑与取消、链接空态和新增表单、页面与评论空态、附件列表、文章长标题、富文本/源码切换、代码块聚焦、设置弹窗及助手模型菜单。输入聚焦无新增边框、描边、阴影或底色变化，主要页面与模态无横向溢出。未保存、发布、删除文章，未新增分类或链接，未发送助手消息。
 

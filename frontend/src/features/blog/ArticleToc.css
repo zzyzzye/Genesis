@@ -20,13 +20,9 @@
 .article-document .article-content :is(h1,h2,h3,h4,h5,h6) { scroll-margin-top: 100px; }
 @media (min-width: 1280px) {
   /* 阅读栏为目录预留独立宽度，固定目录不挤压或覆盖正文。 */
-  .blog-page.blog-page--article .reader-shell,
   .blog-page .blog-pages-reader:has(.article-document) { box-sizing: border-box; width: min(calc(100% - 3rem), 1128px); max-width: 1128px; padding-right: 360px; }
-  .blog-page--article .article-document__toc,
   .blog-pages-reader .article-document__toc { position: absolute; top: 0; left: calc(100% + 40px); width: 320px; margin: 0; }
-  .blog-page--article .article-toc,
   .blog-pages-reader .article-toc { position: fixed; top: 96px; width: var(--article-toc-width); }
-  .blog-page--article .article-toc nav,
   .blog-pages-reader .article-toc nav { max-height: calc(100dvh - 176px); }
 }
 @media (max-width: 680px) {

@@ -151,6 +151,43 @@ describe('App', () => {
     expect(window.location.hash).toBe('#comments')
   })
 
+  it('阅读页复用搜索，章节与讨论跳转后返回仍保留关键词', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost')
+      const body = url.pathname.endsWith('/blog/posts/start-with-one-module')
+        ? { ...posts.items[0], content_markdown: '## 内容章节\n\n可搜索的文章正文。' }
+        : url.pathname.endsWith('/blog/posts') ? posts
+        : url.pathname.endsWith('/blog/tags') ? [] : { items: [], total: 0 }
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+    })
+    window.history.pushState({}, '', '/articles/start-with-one-module')
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: '内容章节' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: '本文作者' })).toHaveTextContent('Genesis')
+    expect(screen.getByRole('button', { name: '本文目录 1' })).toBeInTheDocument()
+    fireEvent.keyDown(document.body, { key: '/' })
+    expect(await screen.findByRole('dialog', { name: '搜索文章' })).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: '搜索文章关键词' }), { target: { value: '模块' } })
+    const submit = await screen.findByRole('button', { name: '查看全部搜索结果' })
+    fireEvent.click(submit)
+    expect(await screen.findByRole('heading', { name: '搜索「模块」' })).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/blog')
+    expect(new URLSearchParams(window.location.search).get('q')).toBe('模块')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('link', { name: '阅读 从一个完整模块开始' }))
+    expect(await screen.findByRole('heading', { name: '内容章节' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: '内容章节' }))
+    await waitFor(() => expect(decodeURIComponent(window.location.hash)).toContain('内容章节'))
+    fireEvent.click(screen.getByRole('link', { name: '参与讨论' }))
+    await waitFor(() => expect(window.location.hash).toBe('#comments'))
+    fireEvent.click(screen.getByRole('link', { name: '回到顶部 ↑' }))
+    await waitFor(() => expect(window.location.hash).toBe('#top'))
+    fireEvent.click(screen.getByRole('button', { name: '返回文章列表' }))
+    expect(await screen.findByRole('heading', { name: '搜索「模块」' })).toBeInTheDocument()
+    expect(new URLSearchParams(window.location.search).get('q')).toBe('模块')
+  })
+
   it('文章加载与失败保持阅读页，重试成功后可返回列表', async () => {
     let articleAttempts = 0
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
