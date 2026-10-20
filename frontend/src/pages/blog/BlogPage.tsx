@@ -174,11 +174,37 @@ function PublicBlog() {
             )}
           </article>
         ) : (
-          <>
-            <header className="blog-index-intro">
-              <h1>博客</h1>
-              <p>记录技术实践、产品思考与日常随笔。</p>
-            </header>
+          <div className="blog-index-layout">
+            <aside className="blog-index-sidebar" aria-label="博客介绍与主题">
+              <header className="blog-index-intro">
+                <h1>博客<span aria-hidden="true">.</span></h1>
+                <p>记录技术实践、产品思考<br className="blog-index-intro-break" />与日常随笔。</p>
+              </header>
+              {blogState.status === 'ready' && <nav className="blog-topics" aria-label="按标签筛选文章">
+                <h2>阅读主题</h2>
+                <div className="tag-filter">
+                  <button
+                    className={activeTag === null ? 'is-active' : ''}
+                    type="button"
+                    aria-pressed={activeTag === null}
+                    onClick={() => setActiveTag(null)}
+                  >
+                    <span>全部</span><span className="blog-topic-count" aria-hidden="true">{posts.length}</span>
+                  </button>
+                  {tags.map((tag) => (
+                    <button
+                      className={activeTag === tag.slug ? 'is-active' : ''}
+                      key={tag.id}
+                      type="button"
+                      aria-pressed={activeTag === tag.slug}
+                      onClick={() => setActiveTag(tag.slug)}
+                    >
+                      <span>{tag.name}</span><span className="blog-topic-count" aria-hidden="true">{posts.filter(post => post.tags.some(item => item.slug === tag.slug)).length}</span>
+                    </button>
+                  ))}
+                </div>
+              </nav>}
+            </aside>
 
             <section className="blog-index" id="articles" aria-labelledby="articles-title" aria-busy={blogState.status === 'loading'}>
               <div className="blog-index-heading">
@@ -202,28 +228,6 @@ function PublicBlog() {
 
               {blogState.status === 'ready' && (
                 <>
-                  <div className="tag-filter" aria-label="按标签筛选文章">
-                    <button
-                      className={activeTag === null ? 'is-active' : ''}
-                      type="button"
-                      aria-pressed={activeTag === null}
-                      onClick={() => setActiveTag(null)}
-                    >
-                      全部
-                    </button>
-                    {tags.map((tag) => (
-                      <button
-                        className={activeTag === tag.slug ? 'is-active' : ''}
-                        key={tag.id}
-                        type="button"
-                        aria-pressed={activeTag === tag.slug}
-                        onClick={() => setActiveTag(tag.slug)}
-                      >
-                        {tag.name}
-                      </button>
-                    ))}
-                  </div>
-
                   {visiblePosts.length > 0 && (
                     <ul className="blog-article-list" aria-label="文章列表">
                       {visiblePosts.map((post) => (
@@ -233,16 +237,15 @@ function PublicBlog() {
                             to={`/articles/${encodeURIComponent(post.slug)}`}
                             aria-label={`阅读 ${post.title}`}
                           >
-                            <div className="blog-article-date">
-                              <time dateTime={post.published_at}>{formatDate(post.published_at)}</time>
-                              <span>{post.read_time_minutes} 分钟阅读</span>
-                            </div>
                             <div className="blog-article-copy">
-                              <div className="blog-article-title"><h3>{post.title}</h3>{post.is_featured && <span className="blog-article-featured">精选</span>}</div>
+                              <div className="blog-article-meta">
+                                <time dateTime={post.published_at}>{formatDate(post.published_at)}</time>
+                                <span>{post.read_time_minutes} 分钟阅读</span>
+                                <TagList tags={post.tags} />
+                              </div>
+                              <div className="blog-article-title"><h3>{post.title}{post.is_featured && <span className="blog-article-featured">精选</span>}</h3><span className="blog-article-arrow" aria-hidden="true">↗</span></div>
                               {post.excerpt && <p>{post.excerpt}</p>}
-                              <TagList tags={post.tags} />
                             </div>
-                            <span className="blog-article-arrow" aria-hidden="true">↗</span>
                           </Link>
                         </li>
                       ))}
@@ -253,7 +256,7 @@ function PublicBlog() {
                 </>
               )}
             </section>
-          </>
+          </div>
         )}
         <BlogLinks />
       </main>
