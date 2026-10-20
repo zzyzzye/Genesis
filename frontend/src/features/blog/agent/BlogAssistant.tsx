@@ -47,9 +47,12 @@ import {
   type AiConversation,
   type AiConversationSelection,
   type AiGenerationMetrics,
+  type AiAttachment,
 } from '../../../lib/api'
 import { AgentModelPicker } from '../../agent/AgentModelPicker'
 import { BlogConversationHistory } from './BlogConversationHistory'
+import { BlogAgentAttachments, BlogMessageAttachments } from './BlogAgentAttachments'
+import { agentAttachmentAccept, useBlogAttachments } from './useBlogAttachments'
 import { BlogActionProposal } from './BlogActionProposal'
 import { AgentQuestion } from '../../agent/AgentQuestion'
 import { questionAnswers, splitAgentQuestion } from '../../agent/questionProtocol'
@@ -58,7 +61,7 @@ import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from '../
 import { getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
 
 type AssistantTiming = { startedAt: number; firstTokenAt?: number; completedAt?: number }
-type AssistantMessage = { role: 'assistant' | 'user'; content: string; status?: string; error?: string | null; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; executedProposals?: string[] }
+type AssistantMessage = { role: 'assistant' | 'user'; content: string; attachments?: AiAttachment[]; status?: string; error?: string | null; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; executedProposals?: string[] }
 type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string; status: 'draft' | 'published' }
 type AssistantPageContext = { route: string; section: string; pageType: 'overview' | 'posts_list' | 'post_editor' | 'post_preview' | 'section' }
 type ActiveAssistantRun = { id: string; assistantMessageIndex: number }
@@ -106,7 +109,7 @@ function readAssistantSession(key = assistantSessionKey): AssistantSession {
     ) ? activeCandidate as ActiveAssistantRun : null
     const restoredMessages = activeRun
       ? normalizedMessages
-      : normalizedMessages.filter((message) => message.content.trim().length > 0 || message.proposals?.length || message.status)
+      : normalizedMessages.filter((message) => message.content.trim().length > 0 || message.attachments?.length || message.proposals?.length || message.status)
     return {
       isOpen: value.isOpen === true,
       messages: restoredMessages.length ? restoredMessages : initialAssistantMessages(),
@@ -245,6 +248,10 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const [isStarting, setIsStarting] = useState(false)
   const [streamStatus, setStreamStatus] = useState<string | null>(initialSession.activeRun ? '正在恢复输出…' : null)
   const [draft, setDraft] = useState('')
+  const attachments = useBlogAttachments(conversationId ?? 'new')
+  const fileInput = useRef<HTMLInputElement>(null)
+  const dragDepth = useRef(0)
+  const [draggingFiles, setDraggingFiles] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmingAction, setConfirmingAction] = useState<number | null>(null)
   const [executionMode, setExecutionMode] = useState<AiExecutionMode>("approval_required")
@@ -263,6 +270,12 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const isBusy = isStarting || activeRun !== null || conversationLoading || historyDeleting
   const selectedModel = models.find((item) => item.id === model)
+  const conversationAttachments = [...attachments.items, ...messages.flatMap(message => message.attachments ?? [])]
+  const attachmentModelError = conversationAttachments.some(item => item.kind === 'image') && !selectedModel?.image_inputs
+    ? '当前模型未标明支持图片，请切换支持识图的模型。'
+    : conversationAttachments.some(item => item.kind === 'video') && !selectedModel?.video_inputs
+      ? '当前模型或通道不支持视频，请切换 Gemini 原生通道。' : ''
+  const attachmentBlocked = !!attachmentModelError || (attachments.items.length > 0 && !attachments.ready)
   const reasoning = useReasoningEffort(provider, model, selectedModel)
   const contextWindow = selectedModel?.context_window ?? null
   const pageCharacters = useMemo(() => JSON.stringify({ page, editor }).length, [page, editor])
@@ -363,8 +376,8 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
       setConversation(result)
       const restored: AssistantMessage[] = [
         ...initialAssistantMessages(),
-        ...result.messages.map(({ role, content, metrics, proposals, status, error }) => ({
-          role, content, metrics, proposals, status, error,
+        ...result.messages.map(({ role, content, metrics, proposals, status, error, attachments }) => ({
+          role, content, metrics, proposals, status, error, attachments,
           ...((status === 'pending' || status === 'running') ? {
             timing: { startedAt: Date.now() - (metrics?.total_seconds ?? 0) * 1000 },
           } : {}),
@@ -421,6 +434,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
     setHistoryLoading(false)
     try {
       const result = await deleteAiConversations(token, selection)
+      attachments.drop(selection)
       setHistory(current => current.filter(item => !conversationIsSelected(selection, item.id)))
       for (const id of Object.keys(drafts.current)) {
         if (id !== 'new' && conversationIsSelected(selection, id)) delete drafts.current[id]
@@ -640,7 +654,8 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   async function sendMessage(answer: string) {
     const content = answer.trim()
     const token = getStoredAuthToken(studioAuthTokenKey)
-    if (!content || isBusy || !token) return
+    if ((!content && !attachments.items.length) || isBusy || attachmentBlocked || !token) return
+    const selectedAttachments: AiAttachment[] = attachments.items.map(({ id, name, size, mime_type, kind }) => ({ id, name, size, mime_type, kind }))
     const nextMessages: AiChatMessage[] = [
       ...messages.filter((message) => message.content.trim().length > 0).map(({ role, content: messageContent }) => ({ role, content: messageContent })),
       { role: 'user', content },
@@ -649,10 +664,10 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
       setError('当前对话已达到 40 条消息上限，请新建对话后继续。')
       return
     }
-    const retainedMessages = messages.filter((message) => message.content.trim().length > 0 || message.proposals?.length || message.status)
+    const retainedMessages = messages.filter((message) => message.content.trim().length > 0 || message.attachments?.length || message.proposals?.length || message.status)
     const assistantMessageIndex = retainedMessages.length + 1
     shouldStickToBottomRef.current = true
-    setMessages([...retainedMessages, { role: 'user', content }, { role: 'assistant', content: '', timing: { startedAt: Date.now() } }])
+    setMessages([...retainedMessages, { role: 'user', content, attachments: selectedAttachments }, { role: 'assistant', content: '', timing: { startedAt: Date.now() } }])
     setDraft('')
     setError(null)
     setStreamStatus('正在创建生成任务…')
@@ -665,11 +680,12 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
         hydrated.current = id
         setConversation(created)
         setConversationId(id)
+        attachments.moveTo(id)
       }
       const run = await createAiChatRun(token, {
         surface: 'studio',
         conversation_id: id,
-        messages: [{ role: 'user', content }],
+        messages: [{ role: 'user', content, ...(selectedAttachments.length ? { attachment_ids: selectedAttachments.map(item => item.id) } : {}) }],
         provider,
         model: model || undefined,
         reasoning_effort: reasoning.effort,
@@ -690,6 +706,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
         },
       })
       setActiveRun({ id: run.id, assistantMessageIndex })
+      attachments.clear(id)
       setStreamStatus('正在生成…')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'AI 请求失败，请稍后再试。')
@@ -721,7 +738,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
             timing: message.timing ? { ...message.timing, completedAt } : undefined,
           }
         : message)
-      .filter((message) => message.content.trim().length > 0 || message.proposals?.length || message.status))
+      .filter((message) => message.content.trim().length > 0 || message.attachments?.length || message.proposals?.length || message.status))
     setActiveRun(null)
     setStreamStatus(null)
     setError(null)
@@ -807,7 +824,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
                 return (
                 <motion.div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={(message.role === 'assistant' ? splitAgentQuestion(message.content).request?.id : null) ?? `${conversationId ?? 'new'}-${message.role}-${index}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={transition}>
                   {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
-                  {message.role === 'assistant' ? <MarkdownMessage {...message} targetPost={editor} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} onAnswer={(answer) => { void sendMessage(answer) }} questionDisabled={isBusy || conversationLoading} questionAnswer={messages.slice(index + 1).find((item) => item.role === 'user')?.content} /> : <p>{message.content}</p>}
+                  {message.role === 'assistant' ? <MarkdownMessage {...message} targetPost={editor} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} onAnswer={(answer) => { void sendMessage(answer) }} questionDisabled={isBusy || conversationLoading} questionAnswer={messages.slice(index + 1).find((item) => item.role === 'user')?.content} /> : <div className="blog-agent-user-content">{message.content && <p>{message.content}</p>}{!!message.attachments?.length && <BlogMessageAttachments items={message.attachments} />}</div>}
                 </motion.div>
               )})}
             </div>
@@ -819,7 +836,14 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
               </div>
             )}
           </div>
-          <form className="studio-assistant__composer" noValidate onSubmit={(event) => { void submit(event) }}>
+          <form className={`studio-assistant__composer${draggingFiles ? ' is-dragging' : ''}`} noValidate onSubmit={(event) => { void submit(event) }}
+            onDragEnter={event => { if (!event.dataTransfer.types.includes('Files')) return; event.preventDefault(); dragDepth.current += 1; if (!isBusy) setDraggingFiles(true) }}
+            onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }}
+            onDragLeave={() => { dragDepth.current -= 1; if (dragDepth.current <= 0) setDraggingFiles(false) }}
+            onDrop={event => { event.preventDefault(); dragDepth.current = 0; setDraggingFiles(false); if (!isBusy) attachments.add(Array.from(event.dataTransfer.files)) }}>
+            {!!attachments.items.length && <BlogAgentAttachments items={attachments.items} disabled={isBusy} onRetry={attachments.retry} onRemove={attachments.remove} onStop={attachments.stop} />}
+            <p className="blog-agent-upload-hint">{draggingFiles ? '松开以添加附件' : '文档、图片、视频 · 最多 8 个，共 20 MiB · 上传后保留在私有附件库'}</p>
+            {(attachments.error || attachmentModelError) && <p className="blog-agent-upload-error" role="alert">{attachments.error || attachmentModelError}</p>}
             <textarea
               aria-label="向博客助手提问"
               placeholder="告诉我你想完成什么…"
@@ -827,6 +851,10 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
               value={draft}
               disabled={conversationLoading}
               onChange={(event) => setDraft(event.target.value)}
+              onPaste={event => {
+                const files = Array.from(event.clipboardData.files)
+                if (files.length && !isBusy) { event.preventDefault(); attachments.add(files) }
+              }}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
                 event.preventDefault()
@@ -835,6 +863,8 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
             />
             {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
             <div className="studio-assistant__composer-tools">
+              <button type="button" className="studio-assistant__tool-button" aria-label="添加附件" title="添加文件、图片或视频" disabled={isBusy || attachments.items.length >= 8} onClick={() => fileInput.current?.click()}><StudioIcon name="attachment" /></button>
+              <input ref={fileInput} type="file" hidden multiple accept={agentAttachmentAccept} aria-label="选择 Agent 附件" onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ''; if (!isBusy) attachments.add(files) }} />
               <div className="studio-assistant__mode-switch">
                 <select
                   aria-label="Agent 执行方式"
@@ -872,7 +902,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
               </div>}
               {activeRun
                 ? <button className="studio-assistant__stop" type="button" aria-label="停止生成" onClick={stopGeneration}><StudioIcon name="stop" /></button>
-                : <button type="submit" aria-label="发送消息" disabled={!draft.trim() || isBusy}><StudioIcon name="send" /></button>}
+                : <button type="submit" aria-label="发送消息" disabled={(!draft.trim() && !attachments.items.length) || isBusy || attachmentBlocked}><StudioIcon name="send" /></button>}
             </div>
           </form>
           </motion.div>

@@ -405,6 +405,8 @@ export interface AvailableModel {
   reasoning_effort_levels?: string[] | null
   thinking_modes?: ThinkingMode[] | null
   reasoning_effort_default?: string | null
+  image_inputs?: boolean | null
+  video_inputs?: boolean | null
 }
 
 export interface ProviderModels {
@@ -419,6 +421,16 @@ export function getProviderModels(token: string, provider: AiProvider): Promise<
 export interface AiChatMessage {
   role: 'user' | 'assistant'
   content: string
+  attachment_ids?: string[]
+  attachments?: AiAttachment[]
+}
+
+export interface AiAttachment {
+  id: string
+  name: string
+  size: number
+  mime_type: string
+  kind: 'document' | 'image' | 'video'
 }
 
 export interface AiChatContext {

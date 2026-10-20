@@ -24,6 +24,7 @@ from genesis_api.ai.schemas import (
     AiGenerationMetrics,
 )
 from genesis_api.ai.service import AgentService
+from genesis_api.blog.agent.attachments import prepare_attachments
 from genesis_api.core.config import Settings
 from genesis_api.database.session import SessionLocal
 
@@ -92,6 +93,8 @@ def create_ai_chat_run(
         已持久化的任务 ID 与初始状态，不负责启动后台协程。
     """
     provider = request.provider or settings.text_provider
+    # 调用方随后用此请求启动任务，持久化、执行与历史展示必须使用同一份资料。
+    request.messages = prepare_attachments(session, user_id, request, settings).messages
     if request.conversation_id is not None:
         prepare_conversation_run(session, user_id, request.conversation_id, request.surface)
         if len(request.messages) != 1 or request.messages[0].role != "user":
@@ -409,7 +412,9 @@ class AiChatRunManager:
             conversation = session.get(AiConversation, conversation_id)
             if conversation is None or conversation.title_source != "pending":
                 return
-        fallback = request.messages[0].content.strip().replace("\n", " ")[:32] or "新对话"
+        first = request.messages[0]
+        topic = first.content.strip() or "、".join(item.name for item in first.attachments)
+        fallback = topic.replace("\n", " ")[:32] or "新对话"
         source = "fallback"
         title = fallback
         try:

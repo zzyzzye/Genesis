@@ -12,6 +12,7 @@ from pydantic import SecretStr
 from genesis_api.core.config import Settings
 from genesis_api.llm.capabilities import model_capabilities_for
 from genesis_api.llm.models import AvailableModel, ProviderModels, ProviderName
+from genesis_api.llm.profiles import transport_provider_for
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +125,14 @@ class ModelDiscoveryService:
                 if capabilities.thinking_modes is not None else None
             )
             model.thinking_mode_default = capabilities.thinking_mode_default
+            model.image_inputs = profile.get("image_inputs")
+            # OpenAI 兼容通道尚不支持标准视频块，不能只按模型名称展示可用。
+            native_video = profile.get("video_inputs")
+            model.video_inputs = native_video
+            if native_video and transport_provider_for(
+                provider, self._provider_config(provider)[1]
+            ) != "google_genai":
+                model.video_inputs = False
         return models
 
     def _provider_config(self, provider: ProviderName) -> tuple[SecretStr | None, str]:

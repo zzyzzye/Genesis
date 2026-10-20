@@ -17,11 +17,37 @@ AiExecutionMode = Literal["automatic", "approval_required"]
 MessageRole = Literal["user", "assistant"]
 
 
+class AiAttachment(BaseModel):
+    """服务端核验后的附件展示信息，不包含存储路径或公开链接。"""
+
+    id: UUID
+    name: str
+    size: int
+    mime_type: str
+    kind: Literal["document", "image", "video"]
+
+
 class AiMessage(BaseModel):
     """客户端对话历史中的用户或助手文本，不允许客户端提交系统角色。"""
 
     role: MessageRole
-    content: str = Field(min_length=1)
+    content: str = ""
+    attachment_ids: list[UUID] = Field(
+        default_factory=list, max_length=8, exclude_if=lambda v: not v
+    )
+    # 此字段供历史展示；执行前始终以 attachment_ids 查询的真实记录覆盖。
+    attachments: list[AiAttachment] = Field(
+        default_factory=list, max_length=8, exclude_if=lambda v: not v
+    )
+
+    @model_validator(mode="after")
+    def validate_input(self) -> AiMessage:
+        """允许单独发送附件，拒绝空消息和助手伪造附件输入。"""
+        if not self.content.strip() and not self.attachment_ids:
+            raise ValueError("请输入消息或添加附件")
+        if self.role != "user" and self.attachment_ids:
+            raise ValueError("只有用户消息可以添加附件")
+        return self
 
 
 class AiContext(BaseModel):
@@ -152,6 +178,7 @@ class AiConversationMessage(BaseModel):
     error: str | None = None
     metrics: AiGenerationMetrics | None = None
     proposals: list[AgentActionProposal] = Field(default_factory=list)
+    attachments: list[AiAttachment] = Field(default_factory=list, exclude_if=lambda v: not v)
 
 
 class AiConversationDetail(AiConversationSummary):

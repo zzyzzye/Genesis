@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from genesis_api.agent.checkpoints import delete_agent_threads
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
 from genesis_api.ai.schemas import (
+    AiAttachment,
     AiConversationDelete,
     AiConversationDetail,
     AiConversationMessage,
@@ -88,6 +89,10 @@ def conversation_detail(session: Session, conversation: AiConversation) -> AiCon
                     messages.append(AiConversationMessage(
                         role="user", content=str(message.get("content", "")),
                         run_id=run.id, status=run.status,
+                        attachments=[
+                            AiAttachment.model_validate(item)
+                            for item in message.get("attachments", [])
+                        ],
                     ))
         messages.append(AiConversationMessage(
             role="assistant", content=run.content, run_id=run.id,

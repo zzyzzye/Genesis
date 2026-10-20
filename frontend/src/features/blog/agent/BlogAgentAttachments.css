@@ -1,0 +1,22 @@
+.blog-agent-attachments { display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; padding: 0; margin: 0 0 10px; list-style: none; }
+.blog-agent-attachments li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 0; }
+.blog-agent-attachments li > svg { flex: none; width: 16px; height: 16px; }
+.blog-agent-attachments li > span { flex: 1; min-width: 0; }
+.blog-agent-attachments strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; }
+.blog-agent-attachments small { display: block; color: var(--assistant-muted); font-size: 11px; overflow-wrap: anywhere; }
+.blog-agent-attachments button { flex: none; min-height: 32px; min-width: 32px; padding: 4px; color: var(--assistant-muted); background: transparent; border: 0; border-radius: 6px; outline: none; box-shadow: none; cursor: pointer; font-size: 11px; }
+.blog-agent-attachments button svg { width: 14px; height: 14px; }
+.blog-agent-attachments button:hover:not(:disabled), .blog-agent-attachments button:focus-visible { background: var(--assistant-hover); color: var(--assistant-ink); }
+.blog-agent-upload-hint { margin: 0 0 8px; color: var(--assistant-muted); font-size: 10px; line-height: 1.6; }
+.blog-agent-upload-error { margin: 0 0 8px; color: var(--assistant-ink); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.studio-assistant__composer.is-dragging { background: var(--assistant-hover); }
+.blog-agent-message-files ul { display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 8px 0; list-style: none; }
+.blog-agent-message-files li { max-width: 100%; min-width: 0; }
+.blog-agent-message-files button { display: flex; align-items: center; gap: 6px; max-width: 100%; min-height: 32px; padding: 5px 8px; border: 0; border-radius: 6px; outline: none; box-shadow: none; color: var(--assistant-ink); background: var(--assistant-hover); cursor: pointer; font-size: 12px; }
+.blog-agent-message-files button span { min-width: 0; overflow-wrap: anywhere; text-align: left; }
+.blog-agent-message-files button svg { width: 14px; height: 14px; flex: none; }
+.blog-agent-message-files button:hover:not(:disabled), .blog-agent-message-files button:focus-visible { color: var(--assistant-muted); }
+.blog-agent-message-files p { font-size: 11px; color: var(--assistant-muted); }
+.blog-agent-user-content { min-width: 0; max-width: 90%; }
+.blog-agent-user-content > p { margin: 0; padding: 9px 12px; border-radius: 9px; background: var(--assistant-surface); white-space: pre-wrap; overflow-wrap: anywhere; }
+.studio-assistant .studio-assistant__tool-button[aria-label="添加附件"] { flex: none; margin-left: 0; }

@@ -5,10 +5,13 @@ from __future__ import annotations
 from langchain_core.tools import BaseTool
 from sqlalchemy.orm import Session
 
+from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.blog.agent.actions import BLOG_ACTIONS, confirm_blog_action
+from genesis_api.blog.agent.attachments import attachment_input
 from genesis_api.blog.agent.prompt import BlogAgentPrompt
 from genesis_api.blog.agent.tools import build_blog_tools
 from genesis_api.core.config import Settings
+from genesis_api.database.session import SessionLocal
 from genesis_api.identity.models import User
 
 
@@ -17,6 +20,16 @@ class BlogAgentCapability:
 
     module = "blog"
     name = "genesis-blog-agent"
+
+    @staticmethod
+    def load_attachments(
+        request: AiChatRequest,
+    ) -> tuple[list[dict[str, object]], list[tuple[str, bytes]]]:
+        """仅读取已认证请求选择的私有附件，文档解析交给 LangChain Loader。"""
+        if request.actor_id is None or request.actor_role != "owner":
+            raise RuntimeError("读取附件需要博客所有者权限")
+        with SessionLocal() as session:
+            return attachment_input(session, request.actor_id, request)
 
     @staticmethod
     def system_prompt() -> str:

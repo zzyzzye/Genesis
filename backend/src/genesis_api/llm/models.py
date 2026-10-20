@@ -22,6 +22,8 @@ class AvailableModel(BaseModel):
     reasoning_effort_default: str | None = None
     thinking_modes: list[str] | None = None
     thinking_mode_default: str | None = None
+    image_inputs: bool | None = None
+    video_inputs: bool | None = None
 
 
 class ProviderModels(BaseModel):

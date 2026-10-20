@@ -101,6 +101,8 @@ async def test_list_openai_models_uses_configured_url_and_bearer_key() -> None:
         name="gpt-5.6-luna",
         context_window=1_050_000,
         max_output_tokens=128_000,
+        image_inputs=model_profile_for("openai", "gpt-5.6-luna").get("image_inputs"),
+        video_inputs=model_profile_for("openai", "gpt-5.6-luna").get("video_inputs"),
         reasoning_effort_levels=model_profile_for("openai", "gpt-5.6-luna").get(
             "reasoning_effort_levels"
         ),
@@ -293,6 +295,8 @@ async def test_list_models_uses_default_model_when_upstream_is_unavailable(
             name="gpt-5.6-luna",
             context_window=1_050_000,
             max_output_tokens=128_000,
+            image_inputs=model_profile_for("openai", "gpt-5.6-luna").get("image_inputs"),
+            video_inputs=model_profile_for("openai", "gpt-5.6-luna").get("video_inputs"),
             reasoning_effort_levels=model_profile_for("openai", "gpt-5.6-luna").get(
                 "reasoning_effort_levels"
             ),

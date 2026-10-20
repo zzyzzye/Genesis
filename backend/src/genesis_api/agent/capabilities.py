@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from langchain_core.tools import BaseTool
 from sqlalchemy.orm import Session
 
+from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.blog.agent.capability import BlogAgentCapability
 from genesis_api.core.config import Settings
 from genesis_api.identity.models import User
@@ -113,6 +114,14 @@ class AgentCapabilityRegistry:
                 action, payload, current_user=current_user, session=session
             )
         raise ValueError("操作类型无效")
+
+    def load_attachments(
+        self, module: str, request: AiChatRequest,
+    ) -> tuple[list[dict[str, object]], list[tuple[str, bytes]]]:
+        """由业务能力核验附件并准备输入，公共运行时不访问业务文件库。"""
+        if module != self._blog.module:
+            raise RuntimeError("当前模块尚不支持附件输入")
+        return self._blog.load_attachments(request)
 
 
 agent_capabilities = AgentCapabilityRegistry()
