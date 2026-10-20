@@ -28,6 +28,48 @@ it('完整选择后才提交，自定义回答优先且不会默认选择推荐�
   expect(onAnswer).toHaveBeenCalledWith('文章面向谁？\n有一定基础的创作者\n\n想突出什么？\n可持续写作')
 })
 
+it('仅回答后面的题目时说明缺题数量，并能定位到前面未回答的题目', () => {
+  const onAnswer = vi.fn()
+  render(<AgentQuestion request={request} disabled={false} answered={false} onAnswer={onAnswer} />)
+  expect(screen.getByRole('status')).toHaveTextContent('已回答 0/2 题，还有 2 题未回答')
+  fireEvent.change(screen.getByRole('textbox', { name: '自定义回答：想突出什么？' }), { target: { value: '实际案例' } })
+  const submit = screen.getByRole('button', { name: '继续' })
+  expect(submit).toBeDisabled()
+  expect(submit).toHaveAccessibleDescription('已回答 1/2 题，还有 1 题未回答')
+  expect(screen.getByText('问题 1/2 · 待回答')).toBeInTheDocument()
+  expect(screen.getByText('问题 2/2 · 已回答')).toBeInTheDocument()
+  const firstOption = screen.getByRole('button', { name: /入门读者/ })
+  const firstQuestion = firstOption.closest('fieldset')!
+  const scrollIntoView = vi.fn()
+  firstQuestion.scrollIntoView = scrollIntoView
+  fireEvent.click(screen.getByRole('button', { name: '前往第 1 题' }))
+  expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'auto' })
+  expect(firstOption).toHaveFocus()
+  expect(onAnswer).not.toHaveBeenCalled()
+  fireEvent.click(firstOption)
+  expect(screen.getByRole('status')).toHaveTextContent('已回答 2/2 题，可以继续')
+  expect(screen.queryByRole('button', { name: /前往第/ })).not.toBeInTheDocument()
+  expect(submit).toBeEnabled()
+  fireEvent.click(submit)
+  expect(onAnswer).toHaveBeenCalledWith('文章面向谁？\n入门读者\n\n想突出什么？\n实际案例')
+})
+
+it('清空自由回答后恢复缺题提示，定位到自由回答输入框且生成中不能定位', () => {
+  const view = render(<AgentQuestion request={request} disabled={false} answered={false} onAnswer={vi.fn()} />)
+  fireEvent.click(screen.getByRole('button', { name: /专业读者/ }))
+  const input = screen.getByRole('textbox', { name: '自定义回答：想突出什么？' })
+  fireEvent.change(input, { target: { value: '案例' } })
+  expect(screen.getByRole('button', { name: '继续' })).toBeEnabled()
+  fireEvent.change(input, { target: { value: '   ' } })
+  expect(screen.getByRole('status')).toHaveTextContent('已回答 1/2 题，还有 1 题未回答')
+  input.closest('fieldset')!.scrollIntoView = vi.fn()
+  fireEvent.click(screen.getByRole('button', { name: '前往第 2 题' }))
+  expect(input).toHaveFocus()
+  view.rerender(<AgentQuestion request={request} disabled answered={false} onAnswer={vi.fn()} />)
+  expect(screen.getByRole('button', { name: '前往第 2 题' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '请稍候…' })).toBeDisabled()
+})
+
 it('生成期间锁定选择，历史回答恢复为可折叠的问答摘要', () => {
   const view = render(<AgentQuestion request={request} disabled answered={false} onAnswer={vi.fn()} />)
   expect(screen.getByRole('button', { name: /入门读者/ })).toBeDisabled()

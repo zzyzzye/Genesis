@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { ChevronDown, MessageSquare } from 'lucide-react'
 
 import { questionAnswers, type QuestionRequest } from './questionProtocol'
@@ -13,8 +13,13 @@ export function AgentQuestion({ request, disabled, answered, answerContent, onAn
 }) {
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [custom, setCustom] = useState<Record<number, string>>({})
+  const formRef = useRef<HTMLFormElement>(null)
   const submitRef = useRef(false)
-  const complete = request.questions.every((_, index) => (custom[index]?.trim() || answers[index]?.trim()))
+  const progressId = useId()
+  const completed = request.questions.map((_, index) => Boolean(custom[index]?.trim() || answers[index]?.trim()))
+  const answeredCount = completed.filter(Boolean).length
+  const firstUnanswered = completed.indexOf(false)
+  const complete = firstUnanswered === -1
   const locked = disabled || answered
   if (answered) {
     const submitted = questionAnswers(request, answerContent)
@@ -26,7 +31,7 @@ export function AgentQuestion({ request, disabled, answered, answerContent, onAn
       </li>)}</ul>
     </details>
   }
-  return <form className="agent-question" aria-label="补充关键信息" noValidate onSubmit={(event) => {
+  return <form ref={formRef} className="agent-question" aria-label="补充关键信息" noValidate onSubmit={(event) => {
     event.preventDefault()
     if (locked || !complete || submitRef.current) return
     submitRef.current = true
@@ -36,7 +41,7 @@ export function AgentQuestion({ request, disabled, answered, answerContent, onAn
     queueMicrotask(() => { submitRef.current = false })
   }}>
     {request.questions.map((question, index) => <fieldset key={index} disabled={locked}>
-      <legend>{question.question}</legend>
+      <legend><span className="agent-question__number">问题 {index + 1}/{request.questions.length} · {completed[index] ? '已回答' : '待回答'}</span>{question.question}</legend>
       {question.options.length > 0 && <div className="agent-question__options" role="group" aria-label={question.question}>
         {question.options.map((option) => <button type="button" key={option.label} aria-pressed={!custom[index]?.trim() && answers[index] === option.label} onClick={() => {
           setAnswers((current) => ({ ...current, [index]: option.label }))
@@ -48,6 +53,16 @@ export function AgentQuestion({ request, disabled, answered, answerContent, onAn
         setCustom((current) => ({ ...current, [index]: value }))
       }} /></label>
     </fieldset>)}
-    <div className="agent-question__footer"><span>选择方向或自行填写后继续</span><button type="submit" disabled={locked || !complete}>{disabled ? '请稍候…' : '继续'}</button></div>
+    <div className="agent-question__footer">
+      <div className="agent-question__progress">
+        <span id={progressId} role="status">已回答 {answeredCount}/{request.questions.length} 题{complete ? (disabled ? '，请等待当前操作结束' : '，可以继续') : `，还有 ${request.questions.length - answeredCount} 题未回答`}</span>
+        {!complete && <button type="button" className="agent-question__locate" disabled={locked} onClick={() => {
+          const fieldset = formRef.current?.querySelectorAll('fieldset')[firstUnanswered]
+          fieldset?.scrollIntoView({ block: 'start', behavior: 'auto' })
+          fieldset?.querySelector<HTMLElement>('button, textarea')?.focus({ preventScroll: true })
+        }}>前往第 {firstUnanswered + 1} 题</button>}
+      </div>
+      <button type="submit" aria-describedby={progressId} disabled={locked || !complete}>{disabled ? '请稍候…' : '继续'}</button>
+    </div>
   </form>
 }
