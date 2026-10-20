@@ -18,6 +18,14 @@ export const cursorThemes = [
 ] as const
 export type CursorTheme = typeof cursorThemes[number]['id']
 export const cursorPreferenceKey = 'genesis.cursor-theme.v1'
+export const cursorTrails = [
+  { id: 'none', name: '无拖尾', detail: '保持干净的指针' },
+  { id: 'silk', name: '流光丝带', detail: '细丝沿移动轨迹逐渐淡出' },
+  { id: 'dust', name: '星尘微光', detail: '散落细小的金紫星芒' },
+  { id: 'ripple', name: '涟漪轨迹', detail: '细圈沿路径舒展消散' },
+] as const
+export type CursorTrailStyle = typeof cursorTrails[number]['id']
+export const cursorTrailKey = 'genesis.cursor-trail.v1'
 const changedEvent = 'genesis:cursor-theme'
 
 export function readCursorTheme(): CursorTheme {
@@ -37,7 +45,7 @@ export function saveCursorTheme(theme: CursorTheme): boolean {
 
 function subscribe(listener: () => void) {
   const onStorage = (event: StorageEvent) => {
-    if (event.key === cursorPreferenceKey || event.key === null) listener()
+    if (event.key === cursorPreferenceKey || event.key === cursorTrailKey || event.key === null) listener()
   }
   window.addEventListener(changedEvent, listener)
   window.addEventListener('storage', onStorage)
@@ -49,4 +57,41 @@ function subscribe(listener: () => void) {
 
 export function useCursorTheme() {
   return useSyncExternalStore(subscribe, readCursorTheme, () => 'system' as const)
+}
+
+export function readCursorTrail(): CursorTrailStyle {
+  try { return cursorTrails.find(item => item.id === localStorage.getItem(cursorTrailKey))?.id ?? 'none' }
+  catch { return 'none' }
+}
+
+export function saveCursorTrail(style: CursorTrailStyle): boolean {
+  try { localStorage.setItem(cursorTrailKey, style); window.dispatchEvent(new Event(changedEvent)); return true }
+  catch { return false }
+}
+
+export function useCursorTrail() {
+  return useSyncExternalStore(subscribe, readCursorTrail, () => 'none' as const)
+}
+
+export function resetCursorPreferences(): boolean {
+  let previousTheme: string | null = null, previousTrail: string | null = null
+  let captured = false
+  try {
+    previousTheme = localStorage.getItem(cursorPreferenceKey)
+    previousTrail = localStorage.getItem(cursorTrailKey)
+    captured = true
+    localStorage.removeItem(cursorPreferenceKey)
+    localStorage.removeItem(cursorTrailKey)
+    window.dispatchEvent(new Event(changedEvent))
+    return true
+  } catch {
+    if (captured) {
+      try {
+        if (previousTheme !== null) localStorage.setItem(cursorPreferenceKey, previousTheme)
+        if (previousTrail !== null) localStorage.setItem(cursorTrailKey, previousTrail)
+      } catch { /* 让订阅者读取实际存储状态，错误提示继续保留。 */ }
+    }
+    window.dispatchEvent(new Event(changedEvent))
+    return false
+  }
 }

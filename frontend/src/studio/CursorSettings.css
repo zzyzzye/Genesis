@@ -18,6 +18,16 @@
 .cursor-settings__caption { display: block; padding-top: 10px; }
 .cursor-settings__caption strong { display: block; font-size: 12px; font-weight: 500; }
 .cursor-settings__caption small { display: block; font-size: 11px; color: var(--studio-muted); margin-top: 3px; }
+.cursor-settings__mini-states { display: flex; gap: 8px; margin-top: 8px; }
+.cursor-settings__mini-states img { width: 19px; height: 19px; }
+.cursor-settings__sample canvas { object-fit: contain; }
+.cursor-settings__all-effects { margin-top: 32px; }
+.cursor-settings__live-sample { display: grid; place-items: center; width: 200px; height: 112px; }
+.cursor-settings__live-sample > svg { width: 48px; height: 48px; stroke-width: 1.2; }
+.cursor-settings__sample > svg { width: 28px; height: 28px; }
+.cursor-settings__trail-summary { margin: 10px 0 0; color: var(--studio-muted); font-size: 11px; }
+.cursor-settings__preview-reset { margin-top: 12px; padding: 8px 0; background: transparent; color: var(--studio-muted); font-size: 11px; cursor: pointer; border-radius: 4px; }
+.cursor-settings__preview-reset:hover, .cursor-settings__preview-reset:focus-visible { color: var(--studio-ink); background: var(--studio-hover); }
 .cursor-settings__check { position: absolute; right: 8px; top: 8px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; }
 .cursor-settings__option[aria-pressed="true"] .cursor-settings__check { color: var(--studio-paper); background: var(--studio-ink); }
 .cursor-settings__effects { margin-top: 30px; }

@@ -12,6 +12,7 @@ import { ToolboxPage } from './pages/toolbox/ToolboxPage'
 import { pageTransition } from './lib/motion'
 import { SessionRecovery } from './SessionRecovery'
 import { CursorEffects } from './features/cursor/CursorEffects'
+import { CursorTrail } from './features/cursor/CursorTrail'
 
 function LegacyStudioRedirect() {
   const location = useLocation()
@@ -78,6 +79,7 @@ export function App({ router: providedRouter }: { router?: ReturnType<typeof cre
   return (
     <MotionConfig reducedMotion="user">
       <CursorEffects />
+      <CursorTrail />
       <RouterProvider router={router} />
     </MotionConfig>
   )
