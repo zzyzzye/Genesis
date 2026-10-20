@@ -6,4 +6,4 @@
 .comment-source svg { flex: none; opacity: .75; }
 .comment-source > .comment-source__device { min-width: 0; max-width: 100%; gap: 5px; }
 .comment-source__device > span { min-width: 0; overflow-wrap: anywhere; }
-.comment-source .comment-device-icon { width: 15px; height: 15px; opacity: 1; }
+.comment-source .comment-device-icon { display: block; flex: none; width: 16px; height: 16px; object-fit: contain; opacity: 1; }

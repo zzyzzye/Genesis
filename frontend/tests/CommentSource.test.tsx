@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { CommentSource } from '../src/features/blog/CommentSource'
 import type { BlogComment } from '../src/lib/api'
@@ -14,13 +14,13 @@ it.each([
   ['iOS', 'ios'], ['iPadOS', 'ios'], ['Android', 'android'], ['Linux', 'linux'], ['Chrome OS', 'chromeos'],
   ['HarmonyOS', 'harmony'], ['鸿蒙', 'harmony'], ['Ubuntu', 'ubuntu'], ['Debian', 'debian'], ['Fedora', 'fedora'],
   ['Arch Linux', 'arch'], ['CentOS', 'centos'], ['openSUSE', 'suse'], ['Linux Mint', 'mint'], ['Deepin', 'deepin'],
-  ['Kali Linux', 'kali'], ['Kylin', 'kylin'], ['FreeBSD', 'bsd'], ['OpenBSD', 'openbsd'], ['NetBSD', 'netbsd'],
+  ['Kali Linux', 'kali'], ['Kylin', 'genericSystem'], ['FreeBSD', 'bsd'], ['OpenBSD', 'openbsd'], ['NetBSD', 'netbsd'],
   ['Tizen', 'tizen'], ['webOS', 'webos'], ['KaiOS', 'kaios'], ['BlackBerry OS', 'blackberry'], ['Symbian OS', 'symbian'],
 ])('操作系统 %s 使用对应图标，保留原名称', (name, icon) => {
   const { container } = render(<CommentSource item={{ ...comment, operating_system: name }} />)
   expect(screen.getByText(name)).toBeInTheDocument()
-  expect(container.querySelector('svg')).toHaveAttribute('data-device-icon', icon)
-  expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+  expect(container.querySelector('[data-device-icon]')).toHaveAttribute('data-device-icon', icon)
+  expect(container.querySelector('[data-device-icon]')).toHaveAttribute('aria-hidden', 'true')
 })
 
 it.each([
@@ -32,7 +32,7 @@ it.each([
 ])('浏览器 %s 使用对应图标，不把内核名称当作浏览器', (name, icon) => {
   const { container } = render(<CommentSource item={{ ...comment, browser: name }} />)
   expect(screen.getByText(name)).toBeInTheDocument()
-  expect(container.querySelector('svg')).toHaveAttribute('data-device-icon', icon)
+  expect(container.querySelector('[data-device-icon]')).toHaveAttribute('data-device-icon', icon)
 })
 
 it('地区、系统和浏览器独立显示，未知名称使用通用图标', () => {
@@ -50,4 +50,14 @@ it('没有设备资料时不编造信息，只有地区时不渲染设备图标'
   rerender(<CommentSource item={{ ...comment, region: '浙江省' }} />)
   expect(screen.getByText('浙江省')).toBeInTheDocument()
   expect(container.querySelector('[data-device-icon]')).toBeNull()
+})
+
+it('本地品牌素材加载失败时回退到通用图标，保留设备与版本文字', () => {
+  const { container } = render(<CommentSource item={{ ...comment, browser: 'Firefox 132.0.2' }} />)
+  const asset = container.querySelector('img')!
+  expect(asset).toHaveAttribute('alt', '')
+  expect(asset).toHaveAttribute('draggable', 'false')
+  fireEvent.error(asset)
+  expect(container.querySelector('[data-device-icon="genericBrowser"]')).toBeInTheDocument()
+  expect(screen.getByText('Firefox 132.0.2')).toBeInTheDocument()
 })
