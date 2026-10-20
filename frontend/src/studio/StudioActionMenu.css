@@ -1,0 +1,24 @@
+:root { --z-studio-action-menu: 40; }
+.studio-action-menu {
+  position: fixed;
+  z-index: var(--z-studio-action-menu);
+  inset: auto;
+  visibility: hidden;
+  width: 176px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  margin: 0;
+  padding: 6px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--studio-soft, #f4f4f4);
+  color: var(--studio-ink, #171717);
+  font: 13px/1.6 var(--studio-ui, Inter, "PingFang SC", sans-serif);
+}
+.studio-action-menu button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: left; outline: 0; box-shadow: none; cursor: pointer; }
+.studio-action-menu button:is(:hover, :focus-visible) { background: var(--studio-hover, #ededed); }
+.studio-action-menu button svg { width: 16px; height: 16px; flex: none; stroke-width: 1.7; }
+.studio-action-menu button[data-destructive] { margin-top: 4px; color: var(--studio-muted, #686868); }
+.studio-action-menu__trigger { display: grid; width: 40px; min-height: 40px; padding: 0; place-items: center; border: 0; border-radius: 8px; background: transparent; color: inherit; outline: 0; box-shadow: none; cursor: pointer; }
+.studio-action-menu__trigger:is(:hover, :focus-visible) { background: var(--studio-hover, #ededed); }

@@ -80,7 +80,8 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | 博客链接 Form / CRUD | LinksWorkspace、useModalDialog、BlogWorkflowDialog | blog/links.py、admin_blog.py、BlogLinks.tsx | 默认隐藏；明确勾选公开；更新与删除携带版本，复用 OwnerDependency | 增删改、筛选分页、失败重试、并发冲突、模态焦点、窄屏与公开边界 |
 | 博客评论 Form / CRUD | ArticleComments、CommentsWorkspace、BlogWorkflowDialog | blog/comments.py、api/routes/blog_comments.py | 登录提交待审核，作者公开/隐藏/删除；公开查询同时校验文章状态；审核与删除校验版本 | 提交重试、频率限制、权限、过滤分页、并发冲突、离开提醒、模态焦点与窄屏 |
 | 博客流程 Dialog / Feedback | BlogWorkflowDialog、useModalDialog、写作页状态区 | Studio.tsx、writing.css | 单层原生 dialog；状态明确区分标签页暂存与站点保存 | Escape、Tab、焦点恢复、窄屏与长内容 |
-| 博客附件 / 文件夹 / 上传 | AttachmentsWorkspace、useModalDialog、BlogWorkflowDialog | blog/attachments.py、api/routes/blog_attachments.py、core/uploads.py | 任意类型与空文件；逐文件上传保留相对目录；默认私有，逐文件确认公开；版本校验、稳定上传 UUID 与摘要核对 | 目录创建/移动/改名/删除、循环与同名拒绝、大小上限、失败重试、停止、权限、桌面与窄屏 |
+| 博客附件 / 文件夹 / 上传 | AttachmentsWorkspace、useModalDialog、BlogWorkflowDialog | blog/attachments.py、api/routes/blog_attachments.py、core/uploads.py | 原生表格、紧凑工具栏与窄容器双列；任意类型与空文件；逐文件上传保留相对目录；默认私有，逐文件确认公开；版本校验、稳定上传 UUID 与摘要核对 | 目录创建/移动/改名/删除、循环与同名拒绝、大小上限、失败重试、停止、权限、桌面与窄屏 |
+| 工作台行操作菜单 | StudioActionMenu、原生 auto popover、React portal | StudioActionMenu.tsx/CSS、shell.css 中性令牌 | 显式更多入口；旧浏览器兼容回退；屏幕内定位与自动翻转；方向键、Home/End、Escape/Tab、滚动/外部关闭；选择动作后交还既有确认 | 仅一个菜单、焦点恢复、写操作确认、桌面/窄容器/320px、上下翻转、滚动与重试 |
 | 正文插入附件 | MarkdownEditor、EditorAttachmentPicker、useModalDialog、Studio 唯一 blocker | lib/attachments.ts、blog/attachments.py、api/routes/blog_attachments.py | 文章与独立页面共用；富文本/源码原生事务；单选已有文件或上传后选中；私有文件确认公开；位图内嵌，其余下载 | 光标、撤销、权限重取、失败保留、重试 UUID、文件夹搜索分页、单模态导航保护、桌面与窄屏 |
 | 附件缩略图 / 作者预览 | AttachmentThumbnail、AttachmentPreviewContent、AttachmentPreviewDialog、EditorAttachmentPicker | lib/attachments.ts、blog/attachments.py、api/routes/blog_attachments.py | 私有鉴权；按内容识别；8 MiB 内图片按需显示缩略图；64 MiB 内媒体、256 KiB UTF-8 文本；原生 PDF/音视频 | 大图、PDF、播放、文本转义、失败重试、格式回退、焦点恢复、保持选择、单模态、桌面与窄屏 |
 | Scrollbar | 画布编辑器样式 | CanvasNodes.css、MediaPage.css | 参数展开时节点内部滚动，保留预览；深色原生媒体控件 | 桌面与窄屏截图 |
@@ -162,6 +163,10 @@ Safari 26 起也会冻结 iOS UA 的系统版本；18.6/18.7 无法据此确认�
 
 ## 博客附件与文件夹
 
+附件管理使用原生表格，搜索与上传集中，路径、数量和刷新紧邻列表；窄容器切换为名称/操作两列，元信息移到名称下。名称与缩略图负责打开，下载直达，低频写操作由 StudioActionMenu 的更多入口发现；菜单内只选择动作，公开/撤回/删除仍必须经过既有确认。队列收起不影响任务、失败或离开拦截，摘要保留失败数，新文件批次重新展开。仅展示当前服务端页的数据，不用客户端筛选或排序冒充全库结果。
+
+2026-10-20 附件管理改版复用 Compose 5173，实测桌面正常/无结果、文件夹路径、重命名弹窗取消、菜单方向键/Escape、助手展开后的窄容器布局，390px/320px 文件行与菜单、320×600 菜单向上翻转，截图确认无裁切或横向溢出。通过本地 201 MiB 超限文件检查错误队列及展开/收起，文件在客户端被拒绝，未进入上传请求，之后移除队列并清理临时文件。37 项附件、菜单、预览、选择器、写作与 API 组件测试通过；覆盖确认、失败重试、稳定 UUID、导航保护、上传折叠不重复请求及焦点恢复。
+
 正文工具栏「插入附件」同时供文章与独立页面使用。文件夹点击进入，面包屑标明当前位置；搜索限定当前目录，每页 20 项，切换目录/搜索返回第一页，删除导致页码越界时回到末页。单选文件可跨搜索保留，底部始终显示已选名称；文件夹不可插入。直接上传接受任意文件，单文件上限沿用 200 MiB，上传到当前目录，成功后选中而不自动插入或公开。停止与失败保留 File 和稳定 UUID，重试核对服务端结果，关闭不会删除已经落盘的文件。
 
 私有文件插入前在同一模态明确说明「立即公开，即使正文为草稿」，默认聚焦返回选择。插入前读取最新名称与公开状态；已公开文件若被其他标签页撤回，必须重新确认。公开失败保留选择，不插入失效链接。PNG/JPEG/GIF/WebP/AVIF 依据服务端文件签名走 `/image`，内嵌响应为图片 MIME + inline + nosniff + no-store + CSP sandbox；SVG、HTML、未知类型只走强制下载 `/file`。不存在、未公开、撤回后均不能匿名读取；非位图进入图片入口返回 415。文件名转义后插入，保留显示名称，不被解析为 HTML/MDX。
@@ -176,7 +181,7 @@ Safari 26 起也会冻结 iOS UA 的系统版本；18.6/18.7 无法据此确认�
 
 图片缩略图与独立预览复用同一鉴权读取接口 `/api/v1/admin/blog/attachments/{id}/preview`，只有附件所有者可读取，匿名、其他作者及公开路径不能读取私有预览。格式以文件内容识别，响应禁止缓存和类型猜测。HTML/SVG 只显示转义纯文本，不执行脚本；文本仅返回前 256 KiB，不截断 UTF-8 字符，截取后持续提示下载完整内容。媒体超过 64 MiB、未知格式或浏览器无法解码时说明原因并提供下载方向。缩略图仅自动读取可见区域内 8 MiB 以内的图片，较大图片仍可手动预览。关闭或切换取消请求并释放临时对象地址。
 
-管理列表点击图片缩略图、文件名或「预览」进入单层原生模态，带下载入口与模态内下载失败提示；Escape 关闭并恢复触发焦点。正文选择器在原模态内切换预览，返回或 Escape 保留单选文件并恢复预览按钮焦点；预览不公开、不插入，点击插入仍执行原有权限重取及公开确认。加载中、空文本、格式不支持、解码失败和网络失败均有明确状态，网络失败可重试。桌面与窄屏媒体适配可用空间，不遮挡底部动作。
+管理列表点击图片缩略图或文件名进入单层原生模态，带下载入口与模态内下载失败提示；Escape 关闭并恢复触发焦点。正文选择器在原模态内切换预览，返回或 Escape 保留单选文件并恢复预览按钮焦点；预览不公开、不插入，点击插入仍执行原有权限重取及公开确认。加载中、空文本、格式不支持、解码失败和网络失败均有明确状态，网络失败可重试。桌面与窄屏媒体适配可用空间，不遮挡底部动作。
 
 原生多文件与 webkitdirectory 选择器不设置类型白名单，接受空文件，单个最多 200 MiB。目录上传保留每个文件的相对路径，空子目录无法由浏览器 FileList 返回，在入口说明并提供新建文件夹。文件选择后立即固定 FileList 内容，再重置选择器，允许重新选择相同文件。队列按序上传，最多先展示十项，可继续展开；大小限制、错误与重试在对应项持续显示。进度 100% 表示传输完成，收到成功回执才显示已保存。同一文件重试使用稳定 UUID 与服务端摘要核对，不重复创建。停止不承诺回滚已完成的服务端写入，保留未知结果说明和重试入口。
 

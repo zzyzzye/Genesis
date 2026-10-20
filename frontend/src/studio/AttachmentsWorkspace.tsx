@@ -5,11 +5,25 @@ import { BlogWorkflowDialog } from './BlogWorkflowDialog'
 import { AttachmentPreviewDialog, AttachmentThumbnail } from './AttachmentPreview'
 import { StudioIcon } from './StudioIcon'
 import { useModalDialog } from './useModalDialog'
+import { StudioActionMenu } from './StudioActionMenu'
+import { ChevronDown, Download, FolderInput, FolderPlus, Globe, LockKeyhole, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import './LinksWorkspace.css'
 import './AttachmentsWorkspace.css'
 
 function message(reason: unknown) { return reason instanceof Error ? reason.message : '操作未完成，请稍后重试。' }
 function fileSize(bytes: number) { return bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KiB` : `${(bytes / 1024 / 1024).toFixed(1)} MiB` }
+function fileType(item: Attachment) {
+  if (item.kind === 'folder') return '文件夹'
+  const mime = item.preview_mime_type ?? item.image_mime_type ?? item.mime_type
+  if (mime.startsWith('image/')) return '图片'
+  if (mime.startsWith('video/')) return '视频'
+  if (mime.startsWith('audio/')) return '音频'
+  if (mime === 'application/pdf') return 'PDF'
+  if (mime.startsWith('text/')) return '文本'
+  const extension = item.name.includes('.') ? item.name.split('.').at(-1) ?? '' : ''
+  return extension && extension.length <= 10 ? extension.toUpperCase() : '文件'
+}
+const modifiedDate = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 type Editor = { mode: 'create' | 'rename' | 'move'; item: Attachment | null }
 type QueueItem = { id: string; file: File; path: string; parent: string | null; destination: string; state: 'waiting' | 'uploading' | 'done' | 'error' | 'paused'; percent: number; error: string }
 type NavigationProps = { navigationBlocked: boolean; onCancelNavigation: () => void; onConfirmNavigation: () => void }
@@ -106,6 +120,7 @@ export function AttachmentsWorkspace({ token, onDirtyChange, onPendingChange, on
   const [actionError, setActionError] = useState('')
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [queueVisible, setQueueVisible] = useState(10)
+  const [queueExpanded, setQueueExpanded] = useState(true)
   const [busyFile, setBusyFile] = useState<string | null>(null)
   const [copy, setCopy] = useState<Attachment | null>(null)
   const [preview, setPreview] = useState<Attachment | null>(null)
@@ -158,7 +173,8 @@ export function AttachmentsWorkspace({ token, onDirtyChange, onPendingChange, on
     const destination = ['全部附件', ...(data?.breadcrumbs.map((folder) => folder.name) ?? [])].join(' / ')
     const batch = selected.map((file): QueueItem => ({ id: crypto.randomUUID(), file, path: file.webkitRelativePath || file.name, parent, destination, state: file.size > limit ? 'error' : 'waiting', percent: 0, error: file.size > limit ? `单个文件不能超过 ${fileSize(limit)}。请移除此项后选择较小文件。` : '' }))
     setQueue((current) => [...current, ...batch])
-    setNotice('已加入上传队列。文件会逐个保存，全部默认私有。')
+    setQueueExpanded(true)
+    setNotice('')
   }
   function stopUploads() { setQueue((current) => current.map((item) => item.state === 'waiting' ? { ...item, state: 'paused', error: '尚未上传，可以继续上传或移除。' } : item)); active.current?.abort() }
   function closeEditor() { setEditor(null); setEditorDirty(false) }
@@ -185,31 +201,44 @@ export function AttachmentsWorkspace({ token, onDirtyChange, onPendingChange, on
     catch { setCopy(item) }
   }
   const completed = queue.filter((item) => item.state === 'done').length
+  const failed = queue.filter((item) => item.state === 'error').length
   return <section className="blog-links-workspace blog-attachments" aria-label="附件管理">
-    <header><div><h2>文件与文件夹 <span>{data?.total ?? 0}</span></h2><p>支持任何文件类型，单个文件最多 {fileSize(limit)}，默认仅作者可见。</p></div><div className="blog-attachments__toolbar">
-      <button type="button" disabled={loading || Boolean(error)} onClick={() => setEditor({ mode: 'create', item: null })}>新建文件夹</button>
+    <header className="blog-attachments__header">
+      <div className="blog-links__search"><StudioIcon name="search" /><input ref={search} aria-label="搜索当前文件夹" placeholder="搜索当前文件夹" maxLength={200} value={query} onChange={(event) => updateParams({ q: event.target.value, page: '1' })} onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)} />{query && <button type="button" aria-label="清空附件搜索" onClick={() => updateParams({ q: '', page: '1' })}><StudioIcon name="close" /></button>}</div>
+      <div className="blog-attachments__toolbar">
+      <button type="button" disabled={loading || Boolean(error)} onClick={() => setEditor({ mode: 'create', item: null })}><FolderPlus aria-hidden="true" />新建文件夹</button>
       <button type="button" disabled={loading || Boolean(error)} onClick={() => folderInput.current?.click()}>上传文件夹</button>
-      <button className="blog-links__primary" type="button" disabled={loading || Boolean(error)} onClick={() => fileInput.current?.click()}>上传文件</button>
+      <button className="blog-links__primary" type="button" disabled={loading || Boolean(error)} onClick={() => fileInput.current?.click()}><StudioIcon name="upload" />上传文件</button>
       <input ref={fileInput} type="file" multiple hidden aria-label="选择上传文件" onChange={(event) => { addFiles(event.target.files); event.target.value = '' }} />
       <input ref={folderInput} type="file" multiple hidden {...{ webkitdirectory: '' }} aria-label="选择上传文件夹" onChange={(event) => { addFiles(event.target.files); event.target.value = '' }} />
     </div></header>
-    <p className="blog-attachments__help">上传文件夹会保留文件的目录层级；浏览器不会读取其中的空文件夹，可用「新建文件夹」补充。</p>
-    <nav className="blog-attachments__breadcrumbs" aria-label="附件位置"><button type="button" aria-current={parent === null ? 'location' : undefined} onClick={() => navigateFolder(null)}>全部附件</button>{data?.breadcrumbs.map((folder, index) => <button key={folder.id} type="button" aria-current={index === data.breadcrumbs.length - 1 ? 'location' : undefined} onClick={() => navigateFolder(folder.id)}><span aria-hidden="true">/</span>{folder.name}</button>)}</nav>
-    <div className="blog-attachments__tools"><div className="blog-links__search"><StudioIcon name="search" /><input ref={search} aria-label="搜索当前文件夹" placeholder="搜索当前文件夹中的名称" maxLength={200} value={query} onChange={(event) => updateParams({ q: event.target.value, page: '1' })} onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)} />{query && <button type="button" aria-label="清空附件搜索" onClick={() => updateParams({ q: '', page: '1' })}><StudioIcon name="close" /></button>}</div><button type="button" disabled={loading} onClick={() => setReload((value) => value + 1)}>刷新列表</button></div>
+    <div className="blog-attachments__location">
+      <nav className="blog-attachments__breadcrumbs" aria-label="附件位置"><button type="button" aria-current={parent === null ? 'location' : undefined} onClick={() => navigateFolder(null)}>全部附件</button>{data?.breadcrumbs.map((folder, index) => <button key={folder.id} type="button" aria-current={index === data.breadcrumbs.length - 1 ? 'location' : undefined} onClick={() => navigateFolder(folder.id)}><span aria-hidden="true">/</span>{folder.name}</button>)}</nav>
+      {!loading && !error && <span className="blog-attachments__count">{data?.total ?? 0} 项</span>}
+      <button className="blog-attachments__refresh" type="button" aria-label="刷新列表" title="刷新列表" disabled={loading} onClick={() => setReload((value) => value + 1)}><RefreshCw aria-hidden="true" size={16} /></button>
+    </div>
     <p className="blog-links__notice" role="status">{notice}</p>
-    {queue.length > 0 && <section className="blog-attachments__queue" aria-label="上传队列"><header><h3>上传进度 · {completed} / {queue.length}</h3><div>{uploadBusy && <button type="button" onClick={stopUploads}>停止上传</button>}{completed > 0 && <button type="button" onClick={() => setQueue((current) => current.filter((item) => item.state !== 'done'))}>清除已完成</button>}</div></header>
-      <ul>{queue.slice(0, queueVisible).map((item) => <li key={item.id}><div><strong>{item.path}</strong><small>{item.destination} · {fileSize(item.file.size)}</small><span>{item.state === 'done' ? '已保存 · 私有' : item.state === 'waiting' ? '等待上传' : item.state === 'uploading' ? item.percent === 100 ? '文件已传输，正在保存…' : `正在上传 ${item.percent}%` : item.state === 'paused' ? '已停止' : '上传失败'}</span>{item.error && <p role="alert">{item.error}</p>}{item.state === 'uploading' && <progress aria-label={'上传进度：' + item.path} max={100} value={item.percent} />}</div><div>{(item.state === 'error' || item.state === 'paused') && <><button type="button" disabled={item.file.size > limit} onClick={() => setQueue((current) => current.map((row) => row.id === item.id ? { ...row, state: 'waiting', error: '', percent: 0 } : row))}>{item.state === 'paused' ? '继续上传' : '重试'}</button><button type="button" onClick={() => setQueue((current) => current.filter((row) => row.id !== item.id))}>移除</button></>}</div></li>)}</ul>
-      {queue.length > queueVisible && <button type="button" onClick={() => setQueueVisible((value) => value + 20)}>显示更多上传项（还有 {queue.length - queueVisible} 项）</button>}
+    {queue.length > 0 && <section className="blog-attachments__queue" aria-label="上传队列"><header><button className="blog-attachments__queue-toggle" type="button" aria-expanded={queueExpanded} aria-controls="attachment-upload-items" onClick={() => setQueueExpanded(value => !value)}><ChevronDown aria-hidden="true" /><span>上传队列</span><span>{completed} / {queue.length} 已完成{failed > 0 && ` · ${failed} 项失败`}</span></button><div>{uploadBusy && <button type="button" onClick={stopUploads}>停止上传</button>}{completed > 0 && <button type="button" onClick={() => setQueue((current) => current.filter((item) => item.state !== 'done'))}>清除已完成</button>}</div></header>
+      <div id="attachment-upload-items" hidden={!queueExpanded}><ul>{queue.slice(0, queueVisible).map((item) => <li key={item.id}><div><strong>{item.path}</strong><small>{item.destination} · {fileSize(item.file.size)}</small><span>{item.state === 'done' ? '已保存 · 私有' : item.state === 'waiting' ? '等待上传' : item.state === 'uploading' ? item.percent === 100 ? '文件已传输，正在保存…' : `正在上传 ${item.percent}%` : item.state === 'paused' ? '已停止' : '上传失败'}</span>{item.error && <p role="alert">{item.error}</p>}{item.state === 'uploading' && <progress aria-label={'上传进度：' + item.path} max={100} value={item.percent} />}</div><div>{(item.state === 'error' || item.state === 'paused') && <><button type="button" disabled={item.file.size > limit} onClick={() => setQueue((current) => current.map((row) => row.id === item.id ? { ...row, state: 'waiting', error: '', percent: 0 } : row))}>{item.state === 'paused' ? '继续上传' : '重试'}</button><button type="button" onClick={() => setQueue((current) => current.filter((row) => row.id !== item.id))}>移除</button></>}</div></li>)}</ul>
+      {queue.length > queueVisible && <button type="button" onClick={() => setQueueVisible((value) => value + 20)}>显示更多上传项（还有 {queue.length - queueVisible} 项）</button>}</div>
     </section>}
     <div className="blog-links__content" aria-busy={loading}>
-      {loading ? <p role="status">正在加载附件…</p> : error ? <div role="alert"><p>{error}</p><button type="button" onClick={() => setReload((value) => value + 1)}>重新加载</button>{parent && <button type="button" onClick={() => navigateFolder(null)}>返回全部附件</button>}</div> : !data?.items.length ? <div className="blog-links__empty"><StudioIcon name="folder" /><h3>{query ? '没有匹配的附件' : '这个文件夹还是空的'}</h3><p>{query ? '换一个搜索词，或清空搜索。' : '上传文件、整个文件夹，或先新建文件夹整理内容。'}</p>{query && <button type="button" onClick={() => updateParams({ q: '', page: '1' })}>清空搜索</button>}</div> : <ul aria-label="附件列表">{data.items.map((item) => <li key={item.id}>
-        <div className="blog-attachments__item">{item.kind === 'file' ? <button className="blog-attachments__thumbnail-button" type="button" aria-label={'查看预览：' + item.name} aria-haspopup="dialog" onClick={() => setPreview(item)}><AttachmentThumbnail item={item} token={token} /></button> : <AttachmentThumbnail item={item} token={token} />}<div>{item.kind === 'folder' ? <button type="button" className="blog-attachments__folder" onClick={() => navigateFolder(item.id)}>{item.name}</button> : <button className="blog-attachments__filename" type="button" aria-haspopup="dialog" onClick={() => setPreview(item)}>{item.name}</button>}<small>{item.kind === 'folder' ? '文件夹' : `${fileSize(item.size)} · ${item.is_public ? '公开链接可访问' : '私有'}`}</small></div></div>
-        <div className="blog-links__actions">{item.kind === 'file' && <><button type="button" aria-label={'预览：' + item.name} aria-haspopup="dialog" onClick={() => setPreview(item)}>预览</button><button type="button" disabled={Boolean(busyFile)} onClick={() => void download(item)} aria-label={'下载：' + item.name}>{busyFile === item.id ? '准备中…' : '下载'}</button>{item.is_public && <button type="button" onClick={() => void copyUrl(item)} aria-label={'复制链接：' + item.name}>复制链接</button>}<button type="button" onClick={() => { setAction({ item, type: 'visibility' }); setActionError('') }} aria-label={(item.is_public ? '撤回公开：' : '公开：') + item.name}>{item.is_public ? '撤回公开' : '公开'}</button></>}
-          <button type="button" aria-haspopup="dialog" aria-label={'重命名：' + item.name} onClick={() => setEditor({ mode: 'rename', item })}>重命名</button><button type="button" aria-haspopup="dialog" aria-label={'移动：' + item.name} onClick={() => setEditor({ mode: 'move', item })}>移动</button><button type="button" aria-label={'删除：' + item.name} onClick={() => { setAction({ item, type: 'delete' }); setActionError('') }}>删除</button>
-        </div>
-      </li>)}</ul>}
+      {loading ? <p role="status">正在加载附件…</p> : error ? <div role="alert"><p>{error}</p><button type="button" onClick={() => setReload((value) => value + 1)}>重新加载</button>{parent && <button type="button" onClick={() => navigateFolder(null)}>返回全部附件</button>}</div> : !data?.items.length ? <div className="blog-links__empty"><StudioIcon name="folder" /><h3>{query ? '没有匹配的附件' : '这个文件夹还是空的'}</h3><p>{query ? '换一个搜索词，或清空搜索。' : '上传文件，或新建文件夹开始整理。'}</p>{query ? <button type="button" onClick={() => updateParams({ q: '', page: '1' })}>清空搜索</button> : <button className="blog-links__primary" type="button" onClick={() => fileInput.current?.click()}>选择文件</button>}</div> : <table className="blog-attachments__table" aria-label="附件列表"><thead><tr><th scope="col">名称</th><th className="blog-attachments__column" scope="col">类型</th><th className="blog-attachments__column blog-attachments__size" scope="col">大小</th><th className="blog-attachments__column" scope="col">访问权限</th><th className="blog-attachments__column blog-attachments__modified" scope="col">修改时间</th><th className="blog-attachments__action-heading" scope="col">操作</th></tr></thead><tbody>{data.items.map(item => <tr key={item.id}>
+        <td><div className="blog-attachments__item"><button className="blog-attachments__thumbnail-button" type="button" aria-label={(item.kind === 'folder' ? '打开文件夹：' : '查看预览：') + item.name} aria-haspopup={item.kind === 'file' ? 'dialog' : undefined} onClick={() => item.kind === 'folder' ? navigateFolder(item.id) : setPreview(item)}><AttachmentThumbnail item={item} token={token} /></button><div><button className="blog-attachments__filename" type="button" title={item.name} aria-haspopup={item.kind === 'file' ? 'dialog' : undefined} onClick={() => item.kind === 'folder' ? navigateFolder(item.id) : setPreview(item)}>{item.name}</button><small className="blog-attachments__mobile-meta">{fileType(item)}{item.kind === 'file' && <> · {fileSize(item.size)} · {item.is_public ? '公开链接' : '私有'}</>}</small></div></div></td>
+        <td className="blog-attachments__column">{fileType(item)}</td><td className="blog-attachments__column blog-attachments__size">{item.kind === 'folder' ? '—' : fileSize(item.size)}</td><td className="blog-attachments__column">{item.kind === 'folder' ? '—' : <span className="blog-attachments__visibility">{item.is_public ? <Globe aria-hidden="true" /> : <LockKeyhole aria-hidden="true" />}{item.is_public ? '公开链接' : '私有'}</span>}</td><td className="blog-attachments__column blog-attachments__modified"><time dateTime={item.updated_at}>{modifiedDate.format(new Date(item.updated_at))}</time></td>
+        <td className="blog-attachments__row-actions"><div>
+          {item.kind === 'file' && <button className="blog-attachments__download" type="button" disabled={Boolean(busyFile)} onClick={() => void download(item)} aria-label={'下载：' + item.name} title={busyFile === item.id ? '正在准备下载' : '下载文件'}><Download aria-hidden="true" size={17} /></button>}
+          <StudioActionMenu label={'更多操作：' + item.name}>{close => <>
+            <button type="button" role="menuitem" tabIndex={-1} aria-label={'重命名：' + item.name} onClick={() => { close(); setEditor({ mode: 'rename', item }) }}><Pencil aria-hidden="true" />重命名</button>
+            <button type="button" role="menuitem" tabIndex={-1} aria-label={'移动：' + item.name} onClick={() => { close(); setEditor({ mode: 'move', item }) }}><FolderInput aria-hidden="true" />移动到…</button>
+            {item.kind === 'file' && <>{item.is_public && <button type="button" role="menuitem" tabIndex={-1} aria-label={'复制链接：' + item.name} onClick={() => { close(); void copyUrl(item) }}><StudioIcon name="link" />复制链接</button>}<button type="button" role="menuitem" tabIndex={-1} aria-label={(item.is_public ? '撤回公开：' : '公开：') + item.name} onClick={() => { close(); setAction({ item, type: 'visibility' }); setActionError('') }}>{item.is_public ? <LockKeyhole aria-hidden="true" /> : <Globe aria-hidden="true" />}{item.is_public ? '撤回公开链接' : '设为公开'}</button></>}
+            <button type="button" role="menuitem" tabIndex={-1} data-destructive aria-label={'删除：' + item.name} onClick={() => { close(); setAction({ item, type: 'delete' }); setActionError('') }}><Trash2 aria-hidden="true" />删除</button>
+          </>}</StudioActionMenu>
+        </div></td>
+      </tr>)}</tbody></table>}
     </div>
     {!error && (data?.total ?? 0) > 20 && <nav className="blog-links__pagination" aria-label="附件分页"><button type="button" disabled={loading || page === 1} onClick={() => updateParams({ page: String(page - 1) })}>上一页</button><span>第 {page} / {Math.ceil(data!.total / 20)} 页</span><button type="button" disabled={loading || page * 20 >= data!.total} onClick={() => updateParams({ page: String(page + 1) })}>下一页</button></nav>}
+    <p className="blog-attachments__help">文件默认私有，单个最大 {fileSize(limit)}。上传文件夹保留目录层级，空文件夹请单独新建。</p>
     {editor && <AttachmentEditor editor={editor} token={token} parent={parent} onClose={closeEditor} onSaved={(item) => { closeEditor(); setNotice('已保存「' + item.name + '」。'); setReload((value) => value + 1); search.current?.focus() }} onDirtyChange={setEditorDirty} onPendingChange={setMutation} backgroundPending={uploadBusy || Boolean(busyFile)} navigationBlocked={navigationBlocked} onCancelNavigation={onCancelNavigation} onConfirmNavigation={onConfirmNavigation} />}
     {action && <BlogWorkflowDialog title={action.type === 'delete' ? '删除附件' : action.item.is_public ? '撤回公开链接' : '公开文件'} description={action.type === 'delete' ? `永久删除「${action.item.name}」后无法恢复，公开链接也会失效。文件夹仅能在清空内容后删除。` : action.item.is_public ? `撤回「${action.item.name}」后，文章或其他位置使用的下载链接也会失效。` : `公开「${action.item.name}」后，任何拿到链接的人都能下载文件。请先确认文件适合公开。`} confirmLabel={action.type === 'delete' ? '确认删除' : action.item.is_public ? '撤回公开' : '确认公开'} busy={mutation} error={actionError} onCancel={() => setAction(null)} onConfirm={() => void applyAction()} />}
     {navigationBlocked && !editor && !action && !copy && <BlogWorkflowDialog title="离开附件管理？" description={uploadBusy || mutation || busyFile ? '操作仍在进行。可取消此提醒，停止上传或等待操作完成后再离开。' : '未完成的上传只保留在当前页面，离开后需重新选择文件。已保存的文件会保留，已停止等待的上传可能仍在服务端完成。'} confirmLabel="离开附件管理" confirmDisabled={uploadBusy || mutation || Boolean(busyFile)} onCancel={onCancelNavigation} onConfirm={onConfirmNavigation} />}

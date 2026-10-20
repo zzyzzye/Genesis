@@ -15,10 +15,16 @@ function mount(query = '', navigationBlocked = false) {
 beforeEach(() => vi.mocked(listAttachments).mockResolvedValue(listing))
 afterEach(() => { cleanup(); vi.resetAllMocks() })
 
+async function chooseAction(name: string) {
+  const filename = name.slice(name.indexOf('：') + 1)
+  fireEvent.click(await screen.findByRole('button', { name: '更多操作：' + filename }))
+  await act(async () => { fireEvent.click(screen.getByRole('menuitem', { name })); await Promise.resolve() })
+}
+
 describe('附件管理', () => {
   it('任意文件与文件夹选择器保持独立，列表与 URL 目录搜索有界', async () => {
     const view = mount('?folder=folder-1&q=测试&page=2')
-    await screen.findByRole('list', { name: '附件列表' })
+    await screen.findByRole('table', { name: '附件列表' })
     expect(listAttachments).toHaveBeenCalledWith('test-placeholder', 'folder-1', '测试', 2, expect.any(AbortSignal))
     const inputs = [...view.container.querySelectorAll<HTMLInputElement>('input[type=file]')]
     expect(inputs).toHaveLength(2)
@@ -30,7 +36,7 @@ describe('附件管理', () => {
 
   it('新建校验与网络失败保留输入，同一创建标识重试且阻止重复保存', async () => {
     const view = mount()
-    await screen.findByRole('list', { name: '附件列表' })
+    await screen.findByRole('table', { name: '附件列表' })
     fireEvent.click(screen.getByRole('button', { name: '新建文件夹' }))
     const input = screen.getByLabelText('名称')
     expect(input).toHaveFocus()
@@ -56,7 +62,7 @@ describe('附件管理', () => {
 
   it('重命名保留版本，取消脏表单在同一个弹窗内确认', async () => {
     mount()
-    fireEvent.click(await screen.findByRole('button', { name: '重命名：说明.any' }))
+    await chooseAction('重命名：说明.any')
     fireEvent.change(screen.getByLabelText('名称'), { target: { value: '新名称.bin' } })
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
     expect(screen.getAllByRole('dialog')).toHaveLength(1)
@@ -70,12 +76,12 @@ describe('附件管理', () => {
 
   it('移动使用分页目录选择，不能把自身作为目标，失败保留位置', async () => {
     mount()
-    fireEvent.click(await screen.findByRole('button', { name: '移动：资料' }))
+    await chooseAction('移动：资料')
     const picker = await screen.findByRole('list', { name: '可选文件夹' })
     expect(within(picker).getByRole('button', { name: /不能移入自身/ })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
     vi.mocked(listAttachments).mockResolvedValueOnce({ ...listing, items: [folder] })
-    fireEvent.click(screen.getByRole('button', { name: '移动：说明.any' }))
+    await chooseAction('移动：说明.any')
     fireEvent.click(await within(screen.getByRole('dialog')).findByRole('button', { name: '资料 →' }))
     vi.mocked(listAttachments).mockResolvedValueOnce({ ...listing, items: [], total: 0, breadcrumbs: [folder] })
     await waitFor(() => expect(screen.getByRole('button', { name: '移动到此处' })).not.toBeDisabled())
@@ -87,14 +93,14 @@ describe('附件管理', () => {
 
   it('公开与永久删除必须确认，下载失败给出可操作反馈', async () => {
     mount()
-    fireEvent.click(await screen.findByRole('button', { name: '公开：说明.any' }))
+    await chooseAction('公开：说明.any')
     expect(updateAttachment).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: '取消' })).toHaveFocus()
     expect(screen.getByRole('dialog')).toHaveTextContent('任何拿到链接的人都能下载')
     vi.mocked(updateAttachment).mockResolvedValueOnce({ ...file, is_public: true })
     fireEvent.click(screen.getByRole('button', { name: '确认公开' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    fireEvent.click(await screen.findByRole('button', { name: '删除：资料' }))
+    await chooseAction('删除：资料')
     vi.mocked(deleteAttachment).mockRejectedValueOnce(new Error('文件夹不为空'))
     fireEvent.click(screen.getByRole('button', { name: '确认删除' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('文件夹不为空')
@@ -107,7 +113,7 @@ describe('附件管理', () => {
 
   it('文件夹上传保留相对路径；失败重试沿用 UUID，进度 100 仍等待回执', async () => {
     const view = mount()
-    await screen.findByRole('list', { name: '附件列表' })
+    await screen.findByRole('table', { name: '附件列表' })
     const input = screen.getByLabelText('选择上传文件夹')
     const selected = new File(['data'], '文件.custom', { type: 'application/custom' })
     Object.defineProperty(selected, 'webkitRelativePath', { value: '目录/子目录/文件.custom' })
@@ -128,11 +134,16 @@ describe('附件管理', () => {
 
   it('顺序处理批量文件，停止后保留回执不确定说明，待上传项不会继续发送', async () => {
     const view = mount()
-    await screen.findByRole('list', { name: '附件列表' })
+    await screen.findByRole('table', { name: '附件列表' })
     vi.mocked(uploadAttachment).mockImplementationOnce((_token, _id, _file, _parent, _path, progress, signal) => new Promise((_resolve, reject) => { progress(40); signal.addEventListener('abort', () => reject(new DOMException('停止', 'AbortError'))) }))
     fireEvent.change(screen.getByLabelText('选择上传文件'), { target: { files: [new File(['1'], '1.bin'), new File(['2'], '2.bin')] } })
     expect(await screen.findByText('正在上传 40%')).toBeInTheDocument()
     expect(uploadAttachment).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: /上传队列/ }))
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+    expect(uploadAttachment).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: /上传队列/ }))
+    expect(screen.getByRole('progressbar')).toHaveAttribute('value', '40')
     fireEvent.click(screen.getByRole('button', { name: '停止上传' }))
     expect(await screen.findByText(/服务端可能已保存/)).toBeInTheDocument()
     expect(uploadAttachment).toHaveBeenCalledTimes(1)
