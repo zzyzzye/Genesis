@@ -3,16 +3,44 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from genesis_api.blog.guide import ArticleGuideContent, ArticleGuideRead, article_revision
 from genesis_api.blog.links import BlogLinkList, BlogLinkPublic, list_links
+from genesis_api.blog.models import BlogPost, BlogPostStatus, BlogTag
 from genesis_api.blog.schemas import BlogPostDetail, BlogPostListResponse, BlogPostPreview
 from genesis_api.blog.service import get_published_post, list_published_posts
 from genesis_api.database.session import get_session
 
 router = APIRouter(prefix="/blog", tags=["博客"])
 SessionDependency = Annotated[Session, Depends(get_session)]
+
+
+class PublicBlogTag(BaseModel):
+    """仅统计已发布文章的公开标签，不泄露草稿分类信息。"""
+
+    id: str
+    name: str
+    slug: str
+    post_count: int
+
+
+@router.get("/tags", response_model=list[PublicBlogTag])
+def get_blog_tags(session: SessionDependency) -> list[PublicBlogTag]:
+    """返回已发布文章使用的全部标签与文章数，不受文章分页影响。"""
+    rows = session.execute(
+        select(BlogTag.id, BlogTag.name, BlogTag.slug, func.count(BlogPost.id))
+        .select_from(BlogPost)
+        .join(BlogPost.tags)
+        .where(BlogPost.status == BlogPostStatus.PUBLISHED)
+        .group_by(BlogTag.id, BlogTag.name, BlogTag.slug)
+        .order_by(BlogTag.name, BlogTag.id)
+    )
+    return [
+        PublicBlogTag(id=str(row[0]), name=row[1], slug=row[2], post_count=row[3]) for row in rows
+    ]
 
 
 @router.get("/links", response_model=BlogLinkList)
@@ -32,6 +60,7 @@ def get_blog_posts(
     limit: Annotated[int, Query(ge=1, le=50)] = 12,
     offset: Annotated[int, Query(ge=0)] = 0,
     tag: str | None = None,
+    q: Annotated[str, Query(max_length=200)] = "",
 ) -> BlogPostListResponse:
     """分页返回公开文章摘要，不要求登录。
 
@@ -40,6 +69,7 @@ def get_blog_posts(
         limit: 每页数量，FastAPI 校验为 1 至 50。
         offset: 非负分页偏移。
         tag: 可选标签 slug，空值表示全部标签。
+        q: 标题或摘要的普通文本关键词，不包含草稿。
 
     Returns:
         已发布文章的当前页与筛选后总数，不包含正文。
@@ -49,6 +79,7 @@ def get_blog_posts(
         limit=limit,
         offset=offset,
         tag_slug=tag,
+        query=q,
     )
     return BlogPostListResponse(
         items=[BlogPostPreview.model_validate(post) for post in posts],

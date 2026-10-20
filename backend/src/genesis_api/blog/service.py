@@ -3,16 +3,14 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from genesis_api.blog.guide import queue_article_guide
 from genesis_api.blog.models import BlogCategory, BlogPost, BlogPostStatus, BlogTag
 from genesis_api.blog.schemas import BlogPostWrite, BlogTagWrite
 
-POST_SLUG_CONFLICT_MESSAGE = (
-    "文章路径已被使用；修改现有文章请使用更新操作，新建草稿请换一个路径。"
-)
+POST_SLUG_CONFLICT_MESSAGE = "文章路径已被使用；修改现有文章请使用更新操作，新建草稿请换一个路径。"
 
 
 def get_blog_post_by_slug(session: Session, slug: str) -> BlogPost | None:
@@ -26,6 +24,7 @@ def list_published_posts(
     limit: int,
     offset: int,
     tag_slug: str | None,
+    query: str = "",
 ) -> tuple[list[BlogPost], int]:
     """分页读取已发布文章，精选优先，其后按发布时间倒序。
 
@@ -34,6 +33,7 @@ def list_published_posts(
         limit: 当前页最多返回的文章数，由路由校验范围。
         offset: 跳过的文章数。
         tag_slug: 可选标签标识；空值表示不按标签筛选。
+        query: 标题或摘要关键词，按普通文本匹配，空白表示不过滤。
 
     Returns:
         当前页文章与筛选后的总数，关联作者、分类和标签已批量加载。
@@ -41,6 +41,13 @@ def list_published_posts(
     statement = select(BlogPost).where(BlogPost.status == BlogPostStatus.PUBLISHED)
     if tag_slug:
         statement = statement.join(BlogPost.tags).where(BlogTag.slug == tag_slug)
+    if query.strip():
+        statement = statement.where(
+            or_(
+                BlogPost.title.icontains(query.strip(), autoescape=True),
+                BlogPost.excerpt.icontains(query.strip(), autoescape=True),
+            )
+        )
 
     # 计数和分页共用过滤条件，计数不应用 limit/offset。
     total = session.scalar(select(func.count()).select_from(statement.subquery())) or 0
@@ -52,7 +59,7 @@ def list_published_posts(
                 selectinload(BlogPost.category),
                 selectinload(BlogPost.tags),
             )
-            .order_by(BlogPost.is_featured.desc(), BlogPost.published_at.desc())
+            .order_by(BlogPost.is_featured.desc(), BlogPost.published_at.desc(), BlogPost.id)
             .offset(offset)
             .limit(limit)
         )

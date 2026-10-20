@@ -215,9 +215,19 @@ export async function previewCommentAvatar(token: string, qq: string, signal: Ab
   return response.blob()
 }
 
-export function getBlogPosts(signal?: AbortSignal, limit?: number): Promise<BlogPostListResponse> {
-  const query = limit === undefined ? '' : `?${new URLSearchParams({ limit: String(limit) })}`
-  return request<BlogPostListResponse>(`/blog/posts${query}`, { signal })
+export function getBlogPosts(signal?: AbortSignal, limit?: number, filters: { q?: string; tag?: string; offset?: number } = {}): Promise<BlogPostListResponse> {
+  const params = new URLSearchParams()
+  if (limit !== undefined) params.set('limit', String(limit))
+  if (filters.q) params.set('q', filters.q)
+  if (filters.tag) params.set('tag', filters.tag)
+  if (filters.offset) params.set('offset', String(filters.offset))
+  return request<BlogPostListResponse>(`/blog/posts${params.size ? `?${params}` : ''}`, { signal })
+}
+
+export interface PublicBlogTag extends BlogTag { post_count: number }
+
+export function getPublicBlogTags(signal?: AbortSignal): Promise<PublicBlogTag[]> {
+  return request('/blog/tags', { signal })
 }
 
 export function getBlogPost(slug: string, signal?: AbortSignal): Promise<BlogPostDetail> {

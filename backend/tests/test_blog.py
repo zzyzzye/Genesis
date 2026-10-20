@@ -189,6 +189,44 @@ async def test_list_published_posts_and_filter_by_tag(
 
 
 @pytest.mark.anyio
+async def test_public_search_is_literal_combines_tags_and_excludes_drafts(
+    client: AsyncClient, database_session: Session
+) -> None:
+    """搜索公开标题和摘要，通配符按普通字符处理，分页总数保持一致。"""
+    add_blog_content(database_session)
+    for query, expected in [("精选", 1), ("标签筛选", 1), ("草稿", 0), ("%", 0), ("_", 0)]:
+        response = await client.get("/api/v1/blog/posts", params={"q": query})
+        assert response.status_code == 200
+        assert response.json()["total"] == expected
+
+    response = await client.get("/api/v1/blog/posts", params={"q": "随笔", "tag": "engineering"})
+    assert response.json() == {"items": [], "total": 0}
+    response = await client.get(
+        "/api/v1/blog/posts", params={"q": "已发布", "limit": 1, "offset": 1}
+    )
+    assert response.json()["total"] == 2
+    assert response.json()["items"][0]["slug"] == "published-note"
+
+
+@pytest.mark.anyio
+async def test_public_tags_count_only_published_articles(
+    client: AsyncClient, database_session: Session
+) -> None:
+    """目录标签不受分页影响，不泄露仅用于草稿的标签。"""
+    add_blog_content(database_session)
+    draft = database_session.scalar(select(BlogPost).where(BlogPost.slug == "private-draft"))
+    assert draft is not None
+    draft.tags.append(BlogTag(name="内部草稿", slug="draft-only"))
+    database_session.commit()
+    response = await client.get("/api/v1/blog/tags")
+    assert response.status_code == 200
+    assert {item["slug"]: item["post_count"] for item in response.json()} == {
+        "engineering": 1,
+        "notes": 1,
+    }
+
+
+@pytest.mark.anyio
 async def test_get_published_post_hides_drafts(
     client: AsyncClient, database_session: Session
 ) -> None:
