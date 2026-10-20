@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.ai.models import AiChatRunStatus
@@ -104,6 +104,31 @@ class AiConversationRename(BaseModel):
     """用户指定的新标题；空白标题由服务层拒绝。"""
 
     title: str = Field(min_length=1, max_length=80)
+
+
+class AiConversationDelete(BaseModel):
+    """选择指定对话，或选择全部历史并保留明确排除的条目。"""
+
+    model_config = {"extra": "forbid"}
+
+    scope: Literal["selected", "all"]
+    ids: list[UUID] = Field(default_factory=list, max_length=1000)
+    excluded_ids: list[UUID] = Field(default_factory=list, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_selection(self) -> AiConversationDelete:
+        """拒绝空选择与混用范围，避免错误载荷扩大删除范围。"""
+        if self.scope == "selected" and (not self.ids or self.excluded_ids):
+            raise ValueError("请选择要删除的对话，指定删除时不能同时排除条目")
+        if self.scope == "all" and self.ids:
+            raise ValueError("全选历史时不能同时指定单独的对话")
+        return self
+
+
+class AiConversationDeleteResult(BaseModel):
+    """返回实际删除数量；重复删除已不存在的记录不会报错。"""
+
+    deleted_count: int
 
 
 class AiGenerationMetrics(BaseModel):

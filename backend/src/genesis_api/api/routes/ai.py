@@ -17,7 +17,11 @@ from sqlalchemy import select
 
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.contracts import AgentActionConfirmation
-from genesis_api.ai.conversations import conversation_detail, owned_conversation
+from genesis_api.ai.conversations import (
+    conversation_detail,
+    delete_conversations,
+    owned_conversation,
+)
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
 from genesis_api.ai.runs import (
     ai_chat_run_manager,
@@ -29,6 +33,8 @@ from genesis_api.ai.schemas import (
     AiChatRunCreated,
     AiChatRunSnapshot,
     AiContext,
+    AiConversationDelete,
+    AiConversationDeleteResult,
     AiConversationDetail,
     AiConversationRename,
     AiConversationSummary,
@@ -68,6 +74,18 @@ def list_conversations(
         AiConversation.updated_at.desc(), AiConversation.id.desc()
     ).offset(offset).limit(limit))
     return [AiConversationSummary.model_validate(item) for item in conversations]
+
+
+@router.post("/chat/conversations/bulk-delete", response_model=AiConversationDeleteResult)
+def bulk_delete_conversations(
+    payload: AiConversationDelete,
+    current_user: OwnerDependency,
+    session: SessionDependency,
+) -> AiConversationDeleteResult:
+    """删除已认证所有者的博客历史；全选包括尚未加载的分页。"""
+    return AiConversationDeleteResult(
+        deleted_count=delete_conversations(session, current_user.id, payload),
+    )
 
 
 @router.get("/chat/conversations/{conversation_id}", response_model=AiConversationDetail)

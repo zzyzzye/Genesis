@@ -34,6 +34,8 @@ import {
   createAiConversation,
   getAiConversation,
   listAiConversations,
+  deleteAiConversations,
+  conversationIsSelected,
   renameAiConversation,
   getProviderModels,
   streamAiChatRun,
@@ -43,9 +45,11 @@ import {
   type AiProvider,
   type AvailableModel,
   type AiConversation,
+  type AiConversationSelection,
   type AiGenerationMetrics,
 } from '../../../lib/api'
 import { AgentModelPicker } from '../../agent/AgentModelPicker'
+import { BlogConversationHistory } from './BlogConversationHistory'
 import { BlogActionProposal } from './BlogActionProposal'
 import { AgentQuestion } from '../../agent/AgentQuestion'
 import { questionAnswers, splitAgentQuestion } from '../../agent/questionProtocol'
@@ -225,6 +229,9 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const [history, setHistory] = useState<AiConversation[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
+  const [historyDeleting, setHistoryDeleting] = useState(false)
+  const historyDeletingRef = useRef(false)
+  const historyRequestVersion = useRef(0)
   const [hasMoreHistory, setHasMoreHistory] = useState(false)
   const [conversationLoading, setConversationLoading] = useState(false)
   const [renaming, setRenaming] = useState(false)
@@ -254,7 +261,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const streamControllerRef = useRef<AbortController | null>(null)
   const activeReceivedRef = useRef<{ index: number; content: string } | null>(null)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
-  const isBusy = isStarting || activeRun !== null || conversationLoading
+  const isBusy = isStarting || activeRun !== null || conversationLoading || historyDeleting
   const selectedModel = models.find((item) => item.id === model)
   const reasoning = useReasoningEffort(provider, model, selectedModel)
   const contextWindow = selectedModel?.context_window ?? null
@@ -341,6 +348,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   }, [isOpen, panelWidth, reducedMotion])
 
   const loadConversation = useCallback(async (id: string) => {
+    if (historyDeletingRef.current) return
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!token) return
     const version = ++selectionVersion.current
@@ -390,16 +398,39 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const loadHistory = useCallback(async (offset = 0) => {
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!token) return
+    const version = ++historyRequestVersion.current
     setHistoryLoading(true)
     setHistoryError(null)
     try {
       const result = await listAiConversations(token, offset)
+      if (version !== historyRequestVersion.current) return
       setHistory((current) => offset ? [...current, ...result.filter((item) => !current.some((existing) => existing.id === item.id))] : result)
       setHasMoreHistory(result.length === 30)
     } catch (caught) {
-      setHistoryError(caught instanceof Error ? caught.message : '读取历史失败，请重试。')
-    } finally { setHistoryLoading(false) }
+      if (version === historyRequestVersion.current) setHistoryError(caught instanceof Error ? caught.message : '读取历史失败，请重试。')
+    } finally { if (version === historyRequestVersion.current) setHistoryLoading(false) }
   }, [])
+
+  async function deleteHistory(selection: AiConversationSelection): Promise<number> {
+    const token = getStoredAuthToken(studioAuthTokenKey)
+    if (!token) throw new Error('登录已失效，请重新登录。')
+    if (historyDeletingRef.current) throw new Error('正在删除对话，请稍候。')
+    historyDeletingRef.current = true
+    setHistoryDeleting(true)
+    ++historyRequestVersion.current
+    setHistoryLoading(false)
+    try {
+      const result = await deleteAiConversations(token, selection)
+      setHistory(current => current.filter(item => !conversationIsSelected(selection, item.id)))
+      for (const id of Object.keys(drafts.current)) {
+        if (id !== 'new' && conversationIsSelected(selection, id)) delete drafts.current[id]
+      }
+      if (conversationId && conversationIsSelected(selection, conversationId)) resetConversation()
+      // 删除已成功；刷新失败只提示读取错误，不能把成功删除误报为失败。
+      await loadHistory()
+      return result.deleted_count
+    } finally { historyDeletingRef.current = false; setHistoryDeleting(false) }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -413,8 +444,9 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
     const token = getStoredAuthToken(studioAuthTokenKey)
     if (!token) return
     const timer = window.setInterval(() => {
+      const version = selectionVersion.current
       void getAiConversation(token, conversationId).then((result) => {
-        if (!cancelled) {
+        if (!cancelled && !historyDeletingRef.current && version === selectionVersion.current) {
           setConversation(result)
           setHistory((current) => current.map((item) => item.id === result.id ? result : item))
         }
@@ -426,7 +458,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   async function saveTitle(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const token = getStoredAuthToken(studioAuthTokenKey)
-    if (!conversationId || !token || renameBusy) return
+    if (!conversationId || !token || renameBusy || historyDeletingRef.current) return
     if (!titleDraft.trim()) { setRenameError('请输入对话标题。'); return }
     setRenameBusy(true)
     setRenameError(null)
@@ -575,7 +607,12 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   }, [activeRun, isOpen])
 
   function startNewConversation() {
-    if (isStarting || conversationLoading || renameBusy) return
+    if (isStarting || conversationLoading || renameBusy || historyDeletingRef.current) return
+    resetConversation()
+    setHistoryOpen(false)
+  }
+
+  function resetConversation() {
     ++selectionVersion.current
     streamControllerRef.current?.abort()
     setActiveRun(null)
@@ -583,13 +620,16 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
     setConversation(null)
     setConfirmingAction(null)
     hydrated.current = null
-    setHistoryOpen(false)
+    setConversationLoading(false)
+    setHistoryError(null)
     setRenaming(false)
     setMessages(initialAssistantMessages())
     setDraft('')
     setError(null)
     setStreamStatus(null)
     setModelMenuOpen(false)
+    sessionRef.current = { isOpen, messages: initialAssistantMessages(), activeRun: null, conversationId: null }
+    try { sessionStorage.removeItem(storageKey) } catch { /* 存储不可用时仍清理内存中的已删除对话。 */ }
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -725,7 +765,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
             </div>
             <div className="studio-assistant__header-actions">
               <button type="button" aria-label="聊天历史" title="聊天历史" aria-expanded={historyOpen || expanded} onClick={() => { setHistoryOpen((open) => !open); setModelMenuOpen(false) }}><StudioIcon name="menu" /></button>
-              <button className="studio-assistant__new-conversation" type="button" aria-label="新建对话" title="新建对话" disabled={isStarting || conversationLoading || renameBusy} onClick={startNewConversation}>
+              <button className="studio-assistant__new-conversation" type="button" aria-label="新建对话" title="新建对话" disabled={isStarting || conversationLoading || renameBusy || historyDeleting} onClick={startNewConversation}>
                 <StudioIcon name="plus" />
               </button>
               <button type="button" aria-label={expanded ? '还原助手宽度' : '展开助手'} title={expanded ? '还原助手宽度' : '展开助手'} onClick={() => { setExpanded((value) => !value); setHistoryOpen(false) }}><StudioIcon name={expanded ? 'arrow-right' : 'arrow-up-right'} /></button>
@@ -736,15 +776,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
           </header>
           <div className={`studio-assistant__workspace${historyOpen ? ' is-history' : ''}`}>
           {(historyOpen || expanded) && <motion.nav className="studio-assistant__history" aria-label="历史对话" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={transition}>
-            <div className="studio-assistant__history-heading"><strong>历史对话</strong><button type="button" disabled={historyLoading} onClick={() => { void loadHistory() }}>刷新</button></div>
-            {historyError && <div role="alert"><p>{historyError}</p><button type="button" onClick={() => { void loadHistory() }}>重试</button></div>}
-            {!historyLoading && !historyError && history.length === 0 && <p className="studio-assistant__history-empty">还没有历史对话。发送第一条消息后，会自动保存在这里。</p>}
-            {history.map((item) => <button key={item.id} type="button" className={`studio-assistant__history-item${item.id === conversationId ? ' is-selected' : ''}`} aria-current={item.id === conversationId ? 'true' : undefined} disabled={isStarting || conversationLoading || renameBusy} onClick={() => { void loadConversation(item.id) }}>
-              <span>{item.title}</span><small>{new Date(item.updated_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}{item.title_source === 'pending' ? ' · 待命名' : ''}</small>
-            </button>)}
-            {historyLoading && <p role="status">正在读取历史…</p>}
-            {hasMoreHistory && <button type="button" disabled={historyLoading} onClick={() => { void loadHistory(history.length) }}>加载更多</button>}
-            {!expanded && <button type="button" className="studio-assistant__history-back" onClick={() => setHistoryOpen(false)}>返回当前对话</button>}
+            <BlogConversationHistory history={history} currentId={conversationId} loading={historyLoading} error={historyError} hasMore={hasMoreHistory} disabled={isStarting || conversationLoading || renameBusy || historyDeleting} expanded={expanded} onReload={() => { void loadHistory() }} onLoadMore={() => { void loadHistory(history.length) }} onOpen={id => { void loadConversation(id) }} onBack={() => setHistoryOpen(false)} onDelete={deleteHistory} />
           </motion.nav>}
           <motion.div className="studio-assistant__chat" animate={{ opacity: historyOpen && !expanded ? 0 : 1 }} transition={transition}>
           <div className="studio-assistant__conversation-heading">
@@ -752,7 +784,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
               <input autoFocus aria-label="对话标题" maxLength={80} value={titleDraft} disabled={renameBusy} onChange={(event) => setTitleDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape' && !renameBusy) setRenaming(false) }} />
               <button type="submit" disabled={renameBusy}>{renameBusy ? '保存中…' : '保存'}</button><button type="button" disabled={renameBusy} onClick={() => setRenaming(false)}>取消</button>
               {renameError && <p role="alert">{renameError}</p>}
-            </form> : <><strong title={conversation?.title}>{conversation?.title ?? '新对话'}</strong><button type="button" disabled={!conversationId || conversationLoading} onClick={() => { setTitleDraft(conversation?.title ?? '新对话'); setRenameError(null); setRenaming(true) }}>重命名</button></>}
+            </form> : <><strong title={conversation?.title}>{conversation?.title ?? '新对话'}</strong><button type="button" disabled={!conversationId || conversationLoading || historyDeleting} onClick={() => { setTitleDraft(conversation?.title ?? '新对话'); setRenameError(null); setRenaming(true) }}>重命名</button></>}
           </div>
           {conversationLoading && <p className="studio-assistant__loading" role="status">正在读取对话…</p>}
           {historyError && !historyOpen && <p className="studio-assistant__request-error" role="alert">{historyError}<button type="button" onClick={() => { if (conversationId) void loadConversation(conversationId) }}>重试</button></p>}

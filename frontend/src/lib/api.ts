@@ -492,6 +492,18 @@ export function listAiConversations(token: string, offset = 0): Promise<AiConver
   return request<AiConversation[]>(`/ai/chat/conversations?offset=${offset}&limit=30`, { headers: authHeaders(token) })
 }
 
+export type AiConversationSelection = { scope: 'selected'; ids: string[] } | { scope: 'all'; excluded_ids: string[] }
+
+export function conversationIsSelected(selection: AiConversationSelection, id: string): boolean {
+  return selection.scope === 'all' ? !selection.excluded_ids.includes(id) : selection.ids.includes(id)
+}
+
+export function deleteAiConversations(token: string, selection: AiConversationSelection): Promise<{ deleted_count: number }> {
+  return request('/ai/chat/conversations/bulk-delete', {
+    method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(selection),
+  })
+}
+
 export function createAiConversation(token: string): Promise<AiConversation> {
   return request<AiConversation>('/ai/chat/conversations', { method: 'POST', headers: authHeaders(token) })
 }
