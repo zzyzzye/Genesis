@@ -1,0 +1,19 @@
+/* 反相指针在深浅表面保持可见，覆盖层不接收任何操作。 */
+html[data-genesis-cursor] *, html[data-genesis-cursor] { cursor: none !important; }
+.genesis-cursor { position: fixed; inset: 0; z-index: 9999; pointer-events: none; overflow: hidden; }
+.genesis-cursor[hidden] { display: none; }
+.genesis-cursor:not(.genesis-cursor--lens) { mix-blend-mode: difference; }
+.genesis-cursor canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.genesis-cursor--lens canvas { filter: drop-shadow(0 0 1px #171717); }
+.genesis-cursor__shape { position: absolute; left: 0; top: 0; transform: translate3d(var(--cursor-x), var(--cursor-y), 0) translate(-50%, -50%); pointer-events: none; }
+.genesis-cursor--gooey canvas { filter: blur(.65px); }
+.genesis-cursor--lens .genesis-cursor__shape { width: 36px; height: 36px; border-radius: 9px; background: rgb(160 160 160 / .16); backdrop-filter: blur(1px) contrast(1.25) saturate(1.5); transition: width 160ms, height 160ms, border-radius 160ms; }
+.genesis-cursor--lens[data-hover="true"] .genesis-cursor__shape { width: 56px; height: 56px; border-radius: 16px; }
+.genesis-cursor--lens[data-pressed="true"] .genesis-cursor__shape { width: 26px; height: 26px; }
+.genesis-cursor--follower .genesis-cursor__shape { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #fff; color: #000; transform: translate3d(var(--cursor-x), var(--cursor-y), 0) translate(-50%, -50%) rotate(var(--cursor-angle)) scaleX(var(--cursor-stretch)); transition: width 140ms, height 140ms; }
+.genesis-cursor--follower[data-hover="true"] .genesis-cursor__shape { width: 44px; height: 44px; transform: translate3d(var(--cursor-x), var(--cursor-y), 0) translate(-50%, calc(-100% - 12px)); }
+.genesis-cursor--follower[data-hover="true"] .genesis-cursor__shape::after { content: attr(data-label); }
+.genesis-cursor--follower .genesis-cursor__shape::after { font: 11px/1.2 Inter, "PingFang SC", sans-serif; white-space: nowrap; }
+.genesis-cursor--follower[data-pressed="true"] .genesis-cursor__shape { width: 18px; height: 18px; }
+@media (prefers-reduced-motion: reduce) { .genesis-cursor__shape { transition: none !important; } }
+@media print { .genesis-cursor { display: none; } }

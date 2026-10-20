@@ -11,6 +11,7 @@ import { MediaPage } from './pages/media/MediaPage'
 import { ToolboxPage } from './pages/toolbox/ToolboxPage'
 import { pageTransition } from './lib/motion'
 import { SessionRecovery } from './SessionRecovery'
+import { CursorEffects } from './features/cursor/CursorEffects'
 
 function LegacyStudioRedirect() {
   const location = useLocation()
@@ -76,6 +77,7 @@ export function App({ router: providedRouter }: { router?: ReturnType<typeof cre
   useEffect(() => () => { if (!providedRouter) router.dispose() }, [providedRouter, router])
   return (
     <MotionConfig reducedMotion="user">
+      <CursorEffects />
       <RouterProvider router={router} />
     </MotionConfig>
   )
