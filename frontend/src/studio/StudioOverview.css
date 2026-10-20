@@ -1,5 +1,6 @@
-.studio-overview { display: grid; width: 100%; gap: 28px; }
-.studio-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; padding-block: 4px 20px; }
+.studio-content:has(> .studio-overview) { padding-bottom: 24px; }
+.studio-overview { display: grid; width: 100%; gap: 16px; }
+.studio-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; padding-block: 4px 8px; }
 .studio-stat-card { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
 .studio-card-icon { display: grid; place-items: center; flex: none; width: 28px; height: 28px; color: var(--studio-muted); }
 .studio-card-icon svg { width: 18px; height: 18px; }
@@ -8,23 +9,24 @@
 .studio-stat-card small { display: block; margin-top: 10px; color: var(--studio-muted); font-size: 11px; }
 .studio-overview-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); align-items: start; gap: 40px; }
 .studio-panel { min-width: 0; }
-.studio-panel__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+.studio-panel__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .studio-panel__header p { margin: 0 0 6px; color: var(--studio-muted); font-size: 10px; letter-spacing: .1em; }
 .studio-panel__header h2 { margin: 0; font-size: 18px; font-weight: 600; }
 .studio-panel__header > button { padding: 5px 8px; border-radius: 6px; background: transparent; color: var(--studio-muted); font-size: 12px; }
 .studio-panel__header > button:hover, .studio-panel__header > button:focus-visible { background: var(--studio-hover); }
-.studio-quick-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.studio-quick-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
 .studio-quick-grid button, .studio-quick-grid > a { display: grid; grid-template-columns: 28px minmax(0, 1fr) 14px; align-items: center; gap: 12px; min-height: 80px; padding: 14px; border: 0; border-radius: var(--studio-control-radius); background: transparent; color: var(--studio-ink); text-align: left; }
-.studio-quick-grid > button:first-child { grid-column: 1 / -1; min-height: 88px; background: var(--studio-ink); color: var(--studio-paper); }
+.studio-quick-grid > button:first-child { grid-column: 1 / -1; min-height: 72px; background: var(--studio-ink); color: var(--studio-paper); }
 .studio-quick-grid > button:first-child :is(small, .studio-card-icon, .studio-quick-chevron) { color: #e0e0e0; }
 .studio-quick-grid > button:first-child:hover, .studio-quick-grid > button:first-child:focus-visible { background: #373737; }
 .studio-quick-grid button:hover, .studio-quick-grid button:focus-visible, .studio-quick-grid > a:hover, .studio-quick-grid > a:focus-visible { background: var(--studio-hover); outline: 0; box-shadow: none; }
 .studio-quick-grid strong, .studio-quick-grid small { display: block; }
+.studio-quick-grid button, .studio-quick-grid > a { min-height: 64px; padding: 10px 14px; }
 .studio-quick-grid strong { font-size: 14px; font-weight: 550; }
 .studio-quick-grid small { margin-top: 5px; color: var(--studio-muted); font-size: 11px; line-height: 1.6; }
 .studio-quick-chevron, .studio-external-arrow { width: 14px !important; height: 14px !important; color: var(--studio-muted); }
 .studio-activity-list { display: grid; gap: 4px; }
-.studio-activity-list > button { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 12px; width: 100%; min-height: 86px; padding: 14px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--studio-ink); text-align: left; }
+.studio-activity-list > button { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 12px; width: 100%; min-height: 80px; padding: 12px; border: 0; border-radius: 8px; background: transparent; color: var(--studio-ink); text-align: left; }
 .studio-activity-list > button:hover, .studio-activity-list > button:focus-visible { background: var(--studio-hover); }
 .studio-activity-list > button > svg { width: 16px; height: 16px; margin-top: 3px; color: var(--studio-muted); }
 .studio-activity-list strong { display: block; font-size: 15px; line-height: 1.6; font-weight: 550; overflow-wrap: anywhere; }

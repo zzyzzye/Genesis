@@ -1,4 +1,8 @@
 :root {
+  --scroll-thumb: #dedede;
+  --scroll-hover: #b8b8b8;
+  --scroll-active: #969696;
+  --scroll-track: transparent;
   color: #1e2433;
   background: #f7f5f0;
   font-family: Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
@@ -8,6 +12,23 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+/* Chromium 使用明确的像素宽度，避免原生 thin 仍呈现粗长滑块。 */
+@supports selector(::-webkit-scrollbar) {
+  * { scrollbar-width: auto; scrollbar-color: auto; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: var(--scroll-track); }
+  ::-webkit-scrollbar-thumb { border-radius: 4px; background: var(--scroll-thumb); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--scroll-hover); }
+  ::-webkit-scrollbar-thumb:active { background: var(--scroll-active); }
+}
+
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; }
+  ::-webkit-scrollbar-thumb { background: CanvasText; }
 }
 
 html {

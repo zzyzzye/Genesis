@@ -11,18 +11,11 @@
   --assistant-accent: var(--studio-ink, #171717);
   --assistant-layer: 30;
   --assistant-popover-layer: 2;
-  --assistant-scroll-thumb: #c8c8c8;
-  --assistant-scroll-hover: #999;
   position: fixed; z-index: var(--assistant-layer); right: 20px; bottom: 20px;
   display: flex; align-items: flex-end; flex-direction: column; gap: 10px;
   color: var(--assistant-ink); font: 13px/1.65 Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 .studio-assistant *, .studio-assistant *::before, .studio-assistant *::after { box-sizing: border-box; }
-.studio-assistant, .studio-assistant * { scrollbar-width: thin; scrollbar-color: var(--assistant-scroll-thumb) transparent; }
-.studio-assistant ::-webkit-scrollbar { width: 6px; height: 6px; }
-.studio-assistant ::-webkit-scrollbar-thumb { border-radius: 6px; background: var(--assistant-scroll-thumb); }
-.studio-assistant ::-webkit-scrollbar-thumb:hover { background: var(--assistant-scroll-hover); }
-.studio-assistant ::-webkit-scrollbar-thumb:active { background: var(--assistant-muted); }
 .studio-assistant button { border: 0; outline: 0; box-shadow: none; font: inherit; color: inherit; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
 .studio-assistant button:disabled { cursor: not-allowed; opacity: .4; }
 .studio-assistant button:hover:not(:disabled), .studio-assistant button:focus-visible { background: var(--assistant-hover); }

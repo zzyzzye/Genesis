@@ -17,17 +17,10 @@
   --studio-display: "Noto Serif SC", "Source Han Serif SC", "STSong", "SimSun", serif;
   --studio-ui: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
   --studio-sans: var(--studio-ui);
-  --studio-scroll-thumb: #c8c8c8;
-  --studio-scroll-hover: #999;
   display: grid; grid-template-columns: var(--studio-nav-width) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
   height: 100dvh; min-width: 0; overflow: hidden;
   background: var(--studio-canvas); color: var(--studio-ink); font: 13px/1.6 var(--studio-ui);
 }
-.studio-app-shell, .studio-app-shell * { scrollbar-width: thin; scrollbar-color: var(--studio-scroll-thumb) transparent; }
-.studio-app-shell ::-webkit-scrollbar { width: 6px; height: 6px; }
-.studio-app-shell ::-webkit-scrollbar-thumb { border-radius: 6px; background: var(--studio-scroll-thumb); }
-.studio-app-shell ::-webkit-scrollbar-thumb:hover { background: var(--studio-scroll-hover); }
-.studio-app-shell ::-webkit-scrollbar-thumb:active { background: var(--studio-muted); }
 .studio-app-shell button, .studio-app-shell a { -webkit-tap-highlight-color: transparent; outline: 0; box-shadow: none; }
 .studio-app-shell button { border: 0; transition: background-color 140ms ease, color 140ms ease; }
 .studio-app-shell .primary-button { border-radius: var(--studio-control-radius); background: var(--studio-ink); color: var(--studio-paper); font-weight: 550; }
