@@ -1,5 +1,5 @@
 .studio-level-mark { color: var(--studio-muted); font-size: 11px; letter-spacing: .08em; }
-.studio-section-nav { position: relative; z-index: 3; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--studio-paper); }
+.studio-section-nav { position: relative; z-index: 3; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-right: 1px solid var(--studio-line); background: var(--studio-navigation); }
 .studio-section-nav__header { padding: 12px 20px; }
 .studio-section-nav__brand { --genesis-logo-size: 34px; --genesis-wordmark-size: 18px; display: flex; align-items: center; gap: 12px; min-height: 44px; width: fit-content; border-radius: 6px; }
 .studio-section-nav__brand:focus-visible { background: var(--studio-hover); }
@@ -26,7 +26,7 @@
 .studio-section-account > button { display: grid; place-items: center; flex: none; width: 28px; height: 28px; margin-left: auto; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--studio-muted); }
 .studio-section-account > button:hover, .studio-section-account > button:focus-visible { background: var(--studio-hover); color: var(--studio-ink); }
 @media (max-width: 680px) {
-  .studio-section-nav { flex-direction: row; align-items: center; }
+  .studio-section-nav { flex-direction: row; align-items: center; border-right: 0; border-bottom: 1px solid var(--studio-line); }
   .studio-section-nav__header { flex: none; padding: 12px; }
   .studio-section-nav__brand { --genesis-logo-size: 30px; --genesis-wordmark-size: 13px; gap: 6px; }
   .studio-section-nav__subtitle { display: none; }

@@ -10,6 +10,7 @@
   --studio-soft: #f4f4f4;
   --studio-hover: #ededed;
   --studio-paper: #fff;
+  --studio-navigation: #f7f7f7;
   --studio-nav-width: 232px;
   --studio-gutter: clamp(20px, 2.2vw, 32px);
   --studio-control-radius: 10px;
@@ -30,7 +31,7 @@
 .studio-app-shell button:disabled { cursor: not-allowed; opacity: .45; }
 .studio-app-shell svg { width: 18px; height: 18px; flex: none; }
 .studio-workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--studio-canvas); }
-.studio-topbar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 20px; min-height: 104px; padding: 22px var(--studio-gutter) 18px; background: var(--studio-paper); }
+.studio-topbar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 20px; min-height: 104px; padding: 22px var(--studio-gutter) 18px; border-bottom: 1px solid var(--studio-line); background: var(--studio-paper); }
 .studio-topbar__title { min-width: 0; }
 .studio-topbar__title p { margin: 0 0 6px; color: var(--studio-muted); font-size: 10px; letter-spacing: .1em; font-weight: 400; }
 .studio-topbar__title h1 { margin: 0; font-size: 28px; line-height: 1.4; font-weight: 650; letter-spacing: -.025em; }
@@ -42,6 +43,12 @@
 .studio-topbar__site-link svg { width: 14px; height: 14px; }
 .studio-content { min-width: 0; min-height: 0; flex: 1 1 auto; overflow: auto; padding: 20px var(--studio-gutter) 48px; }
 .studio-content--editor { padding: 0; background: var(--studio-paper); }
+/* 设置分类与内容共用壳层分隔规则，不给每一项再包一层卡片。 */
+.studio-workspace .system-settings__nav { border-right: 1px solid var(--studio-line); padding-right: 16px; margin-right: -18px; }
+.studio-workspace .system-settings__group + .system-settings__group { border-top: 1px solid var(--studio-line); padding-top: 24px; }
+@media (max-width: 1180px) {
+  .studio-workspace .system-settings__nav { border-right: 0; border-bottom: 1px solid var(--studio-line); padding: 0 0 12px; margin: 0; }
+}
 .studio-placeholder-panel { display: grid; align-content: center; justify-items: start; gap: 12px; width: 100%; min-height: 360px; padding-block: 48px; }
 .studio-placeholder-icon { color: var(--studio-muted); }
 .studio-placeholder-panel > p { margin: 12px 0 0; color: var(--studio-muted); font-size: 10px; letter-spacing: .1em; }
