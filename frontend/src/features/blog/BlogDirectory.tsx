@@ -8,6 +8,7 @@ import { useModalDialog } from '../../studio/useModalDialog'
 import { BlogLinks } from './BlogLinks'
 import { BlogSearch } from './BlogSearch'
 import { GenesisLogo } from '../../components/GenesisLogo'
+import { FpsStatusSlot } from '../performance/FpsMonitor'
 
 type DirectoryState = { key: string; status: 'loading' | 'ready' | 'error'; items: BlogPostPreview[]; total: number }
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -142,7 +143,7 @@ export function BlogDirectory() {
     <header className="portal-header">
       <div className="portal-brand"><button type="button" aria-label={mobile ? '打开博客导航' : collapsed ? '展开博客侧栏' : '收起博客侧栏'} aria-expanded={mobile ? mobileOpen : !collapsed} onClick={() => { if (mobile) setMobileOpen(true); else setCollapsed(value => !value) }}><Menu size={21} /></button><Link to="/blog"><GenesisLogo label="Genesis Journal" /></Link></div>
       <button className="portal-search-trigger" type="button" onClick={() => setSearchOpen(true)} aria-label="搜索文章"><Search size={19} /><span>{query || '搜索文章'}</span><kbd>/</kbd></button>
-      <Link className="portal-account" to="/account" aria-label="打开账户"><UserRound size={23} /></Link>
+      <div className="fps-status-actions"><FpsStatusSlot /><Link className="portal-account" to="/account" aria-label="打开账户"><UserRound size={23} /></Link></div>
     </header>
     <aside className="portal-sidebar" aria-label="博客侧栏">{navigation()}</aside>
     <main className="portal-main">

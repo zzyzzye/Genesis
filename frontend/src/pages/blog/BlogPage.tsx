@@ -11,6 +11,7 @@ import { ArticleGuide } from '../../features/blog/ArticleGuide'
 import { GenesisLogo } from '../../components/GenesisLogo'
 import { BlogDirectory } from '../../features/blog/BlogDirectory'
 import { BlogSearch } from '../../features/blog/BlogSearch'
+import { FpsStatusSlot } from '../../features/performance/FpsMonitor'
 
 import { getBlogPost, type BlogAuthor, type BlogPostDetail, type BlogTag } from '../../lib/api'
 
@@ -124,7 +125,7 @@ function PublicBlog() {
       <header className="portal-header reader-header">
         <div className="portal-brand"><Link className="reader-brand" to="/blog" aria-label="返回博客首页"><GenesisLogo label="Genesis Journal" /></Link></div>
         <button className="portal-search-trigger" type="button" onClick={() => setSearchOpen(true)} aria-label="搜索文章"><Search size={19} aria-hidden="true" /><span>搜索文章</span><kbd>/</kbd></button>
-        <Link className="portal-account" to="/account" aria-label="打开账户"><UserRound size={23} aria-hidden="true" /></Link>
+        <div className="fps-status-actions"><FpsStatusSlot /><Link className="portal-account" to="/account" aria-label="打开账户"><UserRound size={23} aria-hidden="true" /></Link></div>
       </header>
 
       <main>

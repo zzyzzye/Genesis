@@ -32,6 +32,10 @@ components:
 
 # Genesis Design System
 
+### 全站 FPS 监测
+
+`features/performance/FpsMonitor` 在 App 级唯一挂载并提供显示位置上下文；各页面的页头通过同一 `FpsStatusSlot` 显式注册状态位置，React portal 只将读数呈现到该位置，切换路由不重启计数器。偏好由 `preferences.ts` 保存，默认关闭、仅当前浏览器生效、跨标签同步。外观页 `FpsSettings` 使用扁平说明行和原生 button switch。FPS 属于页头状态文字，与导航操作对齐；画布使用已有作品工具栏。读数宽 48px，11px tabular-nums 数字、9px FPS 标签，浅色 #686868；深色影音通过 `--fps-status-ink: #a0a0a0` 适配。无胶囊背景、边框、阴影、固定定位或独立层级；不追踪助手、回顶按钮或控件几何，不使用 MutationObserver / ResizeObserver 避让。开启后延迟加载 stats.js，复用原生 Panel.update 读取 FPS，同步构造结束立即还原面板工厂，不另建计数算法或绘制 Canvas 图表。首次显示「—」，约每秒更新读数，只更新读数组件，不逐帧触发 React 渲染；后台停止帧回调，恢复时重建基线，关闭与卸载清理。统计动画回调 FPS，不宣称为屏幕实际呈现帧率，不上传监测数据。
+
 ### 光标移动与绘制预算
 
 `CursorEffects` 的透镜与跟随主造型直接使用最新鼠标坐标，速度只影响轻微形变，不再用磁吸偏移改变落点。粒子、笔迹与 `CursorTrail` 按显示帧率采样，同一帧合并高频移动事件；进入新元素时才读取原生 cursor，不读取按钮布局。原生光标覆盖只作用于当前命中元素，退出、输入、选择文字、键盘操作及卸载及时清理。`drawingSurface.ts` 为两种运行时共享的局部画布，按可见笔迹范围和 64px 分档复用位图，滤镜与反相仅作用于小块内容；不再创建两张整屏高分辨率位图。拖尾消散后释放为 1×1 并停止帧调度；减少动态效果时不为惯性续帧。原生箭头皮肤继续使用浏览器 cursor，不接管移动坐标。

@@ -14,6 +14,7 @@ import type { StudioSection } from './studio/StudioNavigationModel'
 import { BlogAssistant } from './features/blog/agent/BlogAssistant'
 import { StudioOverview } from './studio/StudioOverview'
 import { SystemSettings } from './studio/SystemSettings'
+import { FpsStatusSlot } from './features/performance/FpsMonitor'
 import { PostsIndex } from './studio/PostsIndex'
 import { TaxonomyWorkspace } from './studio/TaxonomyWorkspace'
 import { LinksWorkspace } from './studio/LinksWorkspace'
@@ -531,6 +532,7 @@ function Dashboard({
               <div><p>博客工作台</p><h1>{meta.title}</h1><small>{meta.description}</small></div>
             </div>
             <div className="studio-topbar__actions">
+              <FpsStatusSlot />
               <Link className="studio-topbar__site-link" to="/blog"><StudioIcon name="eye" />查看站点 <StudioIcon name="arrow-up-right" /></Link>
             </div>
           </header>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArticleDocument } from '../../features/blog/ArticleToc'
 import { GenesisLogo } from '../../components/GenesisLogo'
+import { FpsStatusSlot } from '../../features/performance/FpsMonitor'
 import { ApiError, getPublicBlogPage, getPublicBlogPages, type BlogPagePreview, type BlogPagePublic } from '../../lib/api'
 import './BlogPage.css'
 import './PublicPages.css'
@@ -43,7 +44,7 @@ function PageContent({ slug }: { slug?: string }) {
 export function PublicPages() {
   const { slug } = useParams<{ slug: string }>()
   return <div className="blog-page">
-    <header className="blog-masthead"><Link className="blog-home-link" to="/" aria-label="返回 Genesis 首页"><GenesisLogo /></Link><Link className="blog-wordmark" to="/blog">Genesis Journal</Link><div className="blog-masthead-links"><Link className="blog-account-link" to="/blog/pages">页面</Link><Link className="blog-account-link" to="/account" aria-label="打开账户">账户 ↗</Link></div></header>
+    <header className="blog-masthead"><Link className="blog-home-link" to="/" aria-label="返回 Genesis 首页"><GenesisLogo /></Link><Link className="blog-wordmark" to="/blog">Genesis Journal</Link><div className="blog-masthead-links"><FpsStatusSlot /><Link className="blog-account-link" to="/blog/pages">页面</Link><Link className="blog-account-link" to="/account" aria-label="打开账户">账户 ↗</Link></div></header>
     <PageContent key={slug ?? 'index'} slug={slug} />
   </div>
 }

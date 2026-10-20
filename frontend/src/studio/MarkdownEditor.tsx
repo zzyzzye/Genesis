@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArticleDocument, ArticleToc } from '../features/blog/ArticleToc'
+import { FpsStatusSlot } from '../features/performance/FpsMonitor'
 import { getArticleHeadings, type ArticleHeading } from '../features/blog/articleOutline'
 import { EditorView } from '@codemirror/view'
 import {
@@ -423,6 +424,7 @@ export function MarkdownEditor({
           <textarea aria-label={`${label}标题`} className="markdown-editor__title" id="markdown-editor-title" rows={1} style={{ resize: 'none' }} disabled={isSaving || recovery !== null} maxLength={200} onChange={(event) => onChange({ ...editor, title: event.currentTarget.value.replace(/\n/g, '') })} placeholder={`输入${label}标题`} value={editor.title} />
         </div>
         <div className="markdown-editor__actions">
+          <FpsStatusSlot />
           {kind === 'page' && editor.status === 'published' && <a className="page-public-link" href={'/blog/pages/' + encodeURIComponent(editor.slug)} target="_blank" rel="noopener noreferrer">查看公开页面 ↗</a>}
           <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" onClick={onPreview}><StudioIcon name="eye" /> 预览</button>
           <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" aria-label={`打开${label}设置`} onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" /> 设置</button>

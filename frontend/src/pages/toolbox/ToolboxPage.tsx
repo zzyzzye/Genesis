@@ -2,6 +2,7 @@ import './ToolboxPage.css'
 
 import { Link } from 'react-router-dom'
 import { GenesisLogo } from '../../components/GenesisLogo'
+import { FpsStatusSlot } from '../../features/performance/FpsMonitor'
 
 const utilities = [
   { code: 'TXT', name: '文本工作台', description: '整理、转换和清洗日常文本。', status: '规划中' },
@@ -19,7 +20,7 @@ export function ToolboxPage() {
       <main className="toolbox-main">
         <header className="toolbox-header">
           <div><span className="toolbox-status-dot" /> LOCAL TOOLBOX</div>
-          <Link to="/account">ACCOUNT ↗</Link>
+          <div className="fps-status-actions fps-status-actions--compact"><FpsStatusSlot /><Link to="/account">ACCOUNT ↗</Link></div>
         </header>
         <section className="toolbox-hero" aria-labelledby="toolbox-title">
           <p>UTILITY WORKSPACE / 02</p>

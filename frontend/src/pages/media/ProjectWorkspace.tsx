@@ -4,6 +4,7 @@ import { api, type Project } from './api'
 import { AssetLibrary } from './AssetLibrary'
 import { ArrowLeft, ArrowUpRight, Clapperboard, FolderOpen, House, Menu, X } from 'lucide-react'
 import { GenesisLogo } from '../../components/GenesisLogo'
+import { FpsStatusSlot } from '../../features/performance/FpsMonitor'
 import type { ReactNode } from 'react'
 import { PanelsTopLeft, LibraryBig, Images, LayoutDashboard, Workflow } from 'lucide-react'
 import './MediaHome.css'
@@ -24,7 +25,7 @@ function AssetsLayout({ children, projectId, overview = false }: { children: Rea
       <div className="media-home-sidebar-bottom"><Link to="/media"><ArrowLeft />返回影音</Link></div>
     </aside>
     {open && <button className="media-home-nav-scrim" aria-label="收起导航" onClick={() => setOpen(false)} />}
-    <main className="media-project-workspace media-assets-workspace"><button className="media-assets-nav-toggle" aria-label={open ? '收起导航' : '展开导航'} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X /> : <Menu />}</button>{children}</main>
+    <main className="media-project-workspace media-assets-workspace"><button className="media-assets-nav-toggle" aria-label={open ? '收起导航' : '展开导航'} aria-expanded={open} onClick={() => setOpen(!open)}>{open ? <X /> : <Menu />}</button><header className="media-workspace-status"><FpsStatusSlot /></header>{children}</main>
   </div>
 }
 

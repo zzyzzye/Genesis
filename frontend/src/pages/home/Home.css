@@ -29,7 +29,7 @@ body:has(.home-page) { min-width: 0; }
 .home-header nav { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .home-header nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 11px 17px; border-radius: 10px; color: var(--home-muted); transition: color 160ms ease, background 160ms ease; }
 .home-header nav a:hover, .home-account:hover, .home-brand:hover { background: var(--home-surface); color: var(--home-ink); }
-.home-account { display: inline-flex; align-items: center; justify-self: end; gap: 8px; min-height: 44px; padding: 11px 12px; border-radius: 10px; color: var(--home-muted); font-size: 13px; }
+.home-account { display: inline-flex; flex: none; align-items: center; justify-self: end; gap: 8px; min-height: 44px; padding: 11px 12px; border-radius: 10px; color: var(--home-muted); font-size: 13px; white-space: nowrap; }
 .home-account > svg:last-child { margin-left: 4px; }
 
 .home-overview { display: grid; grid-template-columns: 1.08fr 1fr; align-items: center; gap: clamp(48px, 7vw, 112px); padding: 32px 0 40px; }
@@ -122,3 +122,4 @@ body:has(.home-page) { min-width: 0; }
 @media (prefers-reduced-motion: reduce) {
   .home-page a { transition: none; }
 }
+@media (max-width: 360px) { .home-header:has(.fps-monitor) .home-account > svg:last-child { display: none; } }

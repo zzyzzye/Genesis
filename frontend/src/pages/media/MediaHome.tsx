@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowUpRight, AudioLines, BookOpen, Check, ChevronRight, Cla
 import { api, type Project } from './api'
 import { PanelsTopLeft, LibraryBig } from 'lucide-react'
 import { GenesisLogo } from '../../components/GenesisLogo'
+import { FpsStatusSlot } from '../../features/performance/FpsMonitor'
 
 type ProjectAction = { kind: 'create' | 'rename' | 'delete'; project?: Project; canvas?: boolean; title?: string }
 
@@ -72,7 +73,7 @@ export function MediaHome() {
     </aside>
     {mobileNav && <button className="media-home-nav-scrim" aria-label="收起导航" onClick={() => setMobileNav(false)} />}
     <main className="media-home-main">
-      <header className="media-home-topbar"><button className="media-home-mobile-toggle" aria-label={mobileNav ? '收起导航' : '展开导航'} aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><Menu /></button><span>创作空间</span><div><Link to="/media/assets"><Layers3 />账户素材库</Link><Link className="media-home-account" to="/account" aria-label="账户设置"><UserRound /></Link></div></header>
+      <header className="media-home-topbar"><button className="media-home-mobile-toggle" aria-label={mobileNav ? '收起导航' : '展开导航'} aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><Menu /></button><span>创作空间</span><div><FpsStatusSlot /><Link to="/media/assets"><Layers3 />账户素材库</Link><Link className="media-home-account" to="/account" aria-label="账户设置"><UserRound /></Link></div></header>
       {!allProjects && <>
         <div className="media-home-launch">
           <button className="media-home-hero" onClick={() => create()}><h1>新建画布创作</h1><span className="media-home-hero-hint">编排视频、图片、音频和便签</span><span className="media-home-hero-action">新建画布<Plus /></span></button>

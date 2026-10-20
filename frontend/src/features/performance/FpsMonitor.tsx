@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { createContext, useCallback, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import type Stats from 'stats.js'
 import { useFpsEnabled } from './preferences'
@@ -35,52 +35,24 @@ function createCounter(StatsConstructor: typeof Stats, onFps: (value: number) =>
   }
 }
 
-function ActiveFpsMonitor() {
-  const host = useRef<HTMLDivElement>(null)
-  const reading = useRef<HTMLSpanElement>(null)
+const StatusTarget = createContext<Dispatch<SetStateAction<HTMLSpanElement | null>> | null>(null)
+
+/** 页头显式提供状态位置，不测量或追踪其他页面控件。 */
+export function FpsStatusSlot() {
+  const setTarget = useContext(StatusTarget)
+  const register = useCallback((node: HTMLSpanElement | null) => {
+    if (!node || !setTarget) return
+    setTarget(node)
+    return () => setTarget(current => current === node ? null : current)
+  }, [setTarget])
+  return <span className="fps-status-slot" ref={register} />
+}
+
+function ActiveFpsMonitor({ target }: { target: HTMLSpanElement | null }) {
+  const [reading, setReading] = useState('—')
+  const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    const container = host.current!
-    const selector = '.studio-assistant, .media-agent, .reader-back-top'
-    let obstacle: Element | null = null
-
-    function position() {
-      const bounds = obstacle?.getBoundingClientRect()
-      // 助手占满屏幕时让出输入区域；其他情况贴在它左侧的页面底边。
-      container.classList.toggle('is-occluded', !!bounds?.width && bounds.left < 94)
-      const right = bounds?.width ? window.innerWidth - bounds.left + 12 : 16
-      container.style.setProperty('--fps-right', `${right}px`)
-    }
-
-    const resize = new ResizeObserver(position)
-    function reconnect() {
-      const next = document.querySelector(selector)
-      if (next !== obstacle) {
-        resize.disconnect()
-        obstacle = next
-        if (obstacle) resize.observe(obstacle)
-      }
-      position()
-    }
-    // 只响应角落控件的增删，正文流式输出和 FPS 数字变化不触发布局读取。
-    const mutations = new MutationObserver(records => {
-      if (records.some(record => [...record.addedNodes, ...record.removedNodes].some(node =>
-        node instanceof Element && (node.matches(selector) || node.querySelector(selector)),
-      ))) reconnect()
-    })
-    mutations.observe(document.getElementById('root') ?? document.body, { childList: true, subtree: true })
-    window.addEventListener('resize', position)
-    reconnect()
-    return () => {
-      mutations.disconnect()
-      resize.disconnect()
-      window.removeEventListener('resize', position)
-    }
-  }, [])
-
-  useEffect(() => {
-    const container = host.current!
-    const value = reading.current!
     let disposed = false
     let frame: number | null = null
     let teardown: (() => void) | undefined
@@ -92,8 +64,8 @@ function ActiveFpsMonitor() {
       function stop() {
         if (frame !== null) cancelAnimationFrame(frame)
         frame = null
-        value.textContent = '—'
-        container.hidden = true
+        setReading('—')
+        setVisible(false)
       }
 
       function restart() {
@@ -102,9 +74,9 @@ function ActiveFpsMonitor() {
 
         // 恢复可见时重建计时基线，后台时间不计入 FPS。
         const stats = createCounter(Stats, fps => {
-          value.textContent = String(Math.round(fps))
+          setReading(String(Math.round(fps)))
         })
-        container.hidden = false
+        setVisible(true)
 
         function tick() {
           stats.update()
@@ -124,28 +96,30 @@ function ActiveFpsMonitor() {
       if (disposed) return
       teardown?.()
       teardown = undefined
-      container.hidden = false
-      value.textContent = '不可用'
-      container.title = 'FPS 加载失败，请关闭后重试'
+      setVisible(true)
+      setReading('不可用')
     })
 
     return () => {
       disposed = true
       teardown?.()
-      value.textContent = '—'
     }
   }, [])
 
-  return createPortal(<div
-    ref={host}
-    hidden
+  return target ? createPortal(<span
+    hidden={!visible}
     className="fps-monitor"
     role="group"
     aria-label="实时 FPS"
-    title="动画回调 FPS"
-  ><span ref={reading} className="fps-monitor__value">—</span><span className="fps-monitor__unit">FPS</span></div>, document.body)
+    title={reading === '不可用' ? 'FPS 加载失败，请关闭后重试' : '动画回调 FPS'}
+  ><span className="fps-monitor__value">{reading}</span><span className="fps-monitor__unit">FPS</span></span>, target) : null
 }
 
-export function FpsMonitor() {
-  return useFpsEnabled() ? <ActiveFpsMonitor /> : null
+export function FpsMonitor({ children }: { children?: ReactNode }) {
+  const [target, setTarget] = useState<HTMLSpanElement | null>(null)
+  const enabled = useFpsEnabled()
+  return <StatusTarget.Provider value={setTarget}>
+    {children}
+    {enabled && <ActiveFpsMonitor target={target} />}
+  </StatusTarget.Provider>
 }

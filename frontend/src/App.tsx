@@ -81,8 +81,7 @@ export function App({ router: providedRouter }: { router?: ReturnType<typeof cre
     <MotionConfig reducedMotion="user">
       <CursorEffects />
       <CursorTrail />
-      <FpsMonitor />
-      <RouterProvider router={router} />
+      <FpsMonitor><RouterProvider router={router} /></FpsMonitor>
     </MotionConfig>
   )
 }

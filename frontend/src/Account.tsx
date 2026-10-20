@@ -4,6 +4,7 @@ import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'rea
 import { ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { GenesisLogo } from './components/GenesisLogo'
+import { FpsStatusSlot } from './features/performance/FpsMonitor'
 import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey } from './lib/auth'
 import { getCurrentUser, login, registerAccount, updateCurrentUser, type CurrentUser } from './lib/api'
 
@@ -20,7 +21,7 @@ function AccountLayout({ children }: { children: ReactNode }) {
     <div className="account-auth-main">
       <header className="account-auth-header">
         <Link className="account-brand" to="/" aria-label="返回 Genesis 首页"><GenesisLogo /></Link>
-        <Link className="account-header-back" to="/blog">返回博客 <ArrowUpRight size={16} /></Link>
+        <div className="fps-status-actions fps-status-actions--compact"><FpsStatusSlot /><Link className="account-header-back" to="/blog">返回博客 <ArrowUpRight size={16} /></Link></div>
       </header>
       <div className="account-auth-content">{children}</div>
       <footer className="account-auth-footer"><span>Genesis · 账户</span><Link to="/blog/studio">进入写作台 <ArrowUpRight size={15} /></Link></footer>

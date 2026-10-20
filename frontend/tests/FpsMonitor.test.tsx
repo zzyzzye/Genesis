@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { FpsMonitor } from '../src/features/performance/FpsMonitor'
+import { FpsMonitor, FpsStatusSlot } from '../src/features/performance/FpsMonitor'
 import { fpsPreferenceKey, readFpsEnabled } from '../src/features/performance/preferences'
 import { FpsSettings } from '../src/studio/FpsSettings'
 
@@ -53,43 +53,24 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function Harness() {
-  return <><FpsSettings /><FpsMonitor /></>
+function Harness({ page = '当前页头' }: { page?: string }) {
+  return <FpsMonitor><FpsSettings /><header key={page} aria-label={page}><FpsStatusSlot /></header></FpsMonitor>
 }
 
 describe('全站 FPS 监测', () => {
-  it.each(['studio-assistant', 'media-agent', 'reader-back-top'])('%s 出现时避让，尺寸变化时跟随，隐藏或移除后恢复角落', async (className) => {
+  it('切换页头只迁移显示位置，保留同一计数器和读数', async () => {
     localStorage.setItem(fpsPreferenceKey, 'true')
-    let notify = () => {}
-    const disconnect = vi.fn()
-    vi.stubGlobal('ResizeObserver', class {
-      constructor(callback: () => void) { notify = callback }
-      observe = vi.fn()
-      disconnect = disconnect
-    })
-    let left = 600
-    let width = 400
-    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function () {
-      return { left, width } as DOMRect
-    })
-    const view = render(<><div className={className} /><Harness /></>)
-    const monitor = await screen.findByRole('group', { name: '实时 FPS' })
-    expect(monitor.style.getPropertyValue('--fps-right')).toBe(`${window.innerWidth - 600 + 12}px`)
-    left = 400
-    act(() => notify())
-    expect(monitor.style.getPropertyValue('--fps-right')).toBe(`${window.innerWidth - 400 + 12}px`)
-    width = 0
-    act(() => notify())
-    expect(monitor.style.getPropertyValue('--fps-right')).toBe('16px')
-    width = 400
-    left = 0
-    act(() => notify())
-    expect(monitor).toHaveClass('is-occluded')
-    view.rerender(<>{null}<Harness /></>)
-    await waitFor(() => expect(monitor).not.toHaveClass('is-occluded'))
-    expect(monitor.style.getPropertyValue('--fps-right')).toBe('16px')
-    view.unmount()
-    expect(disconnect).toHaveBeenCalled()
+    const view = render(<Harness />)
+    await waitFor(() => expect(callbacks.size).toBe(1))
+    const [id, callback] = [...callbacks.entries()][0]!
+    callbacks.delete(id)
+    act(() => callback(1000))
+    view.rerender(<Harness page="下一页头" />)
+    const monitor = screen.getByRole('group', { name: '实时 FPS' })
+    expect(monitor.closest('header')).toHaveAttribute('aria-label', '下一页头')
+    expect(monitor).toHaveTextContent('60FPS')
+    expect(statsMocks.instances).toHaveLength(1)
+    expect(callbacks.size).toBe(1)
   })
 
   it('默认关闭，不创建面板或动画循环；开启后仅展示 FPS，关闭立即释放', async () => {
@@ -111,7 +92,7 @@ describe('全站 FPS 监测', () => {
 
     const [id, callback] = [...callbacks.entries()][0]!
     callbacks.delete(id)
-    callback(1000)
+    act(() => callback(1000))
     expect(statsMocks.instances[0]!.update).toHaveBeenCalledOnce()
     expect(monitor).toHaveTextContent('60FPS')
     expect(callbacks.size).toBe(1)

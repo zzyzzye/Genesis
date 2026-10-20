@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { HomeReading } from './HomeReading'
 import { GenesisLogo } from '../../components/GenesisLogo'
 import './Home.css'
+import { FpsStatusSlot } from '../../features/performance/FpsMonitor'
 
 const systems = [
   { name: '博客', path: '/blog', description: '技术实践、产品思考与日常随笔', action: '进入博客', icon: BookOpen },
@@ -22,7 +23,7 @@ function Home() {
         <nav aria-label="主导航">
           {systems.map(system => <Link key={system.path} to={system.path}>{system.name}</Link>)}
         </nav>
-        <Link className="home-account" to="/account"><UserRound aria-hidden="true" size={17} />账户<ArrowUpRight aria-hidden="true" size={14} /></Link>
+        <div className="fps-status-actions"><FpsStatusSlot /><Link className="home-account" to="/account"><UserRound aria-hidden="true" size={17} />账户<ArrowUpRight aria-hidden="true" size={14} /></Link></div>
       </header>
       <main id="home-main" tabIndex={-1}>
         <section className="home-overview" aria-label="欢迎来到 Genesis">

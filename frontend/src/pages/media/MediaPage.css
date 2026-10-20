@@ -213,3 +213,7 @@
 @keyframes media-agent-rise { from { opacity:0; transform:translateY(8px) scale(.98); } to { opacity:1; transform:none; } }
 @media(max-width:700px) { .media-agent { right:12px; bottom:12px; }.media-agent--canvas { bottom:124px; }.media-agent__panel { width:min(416px,calc(100vw - 24px)); height:calc(100dvh - 156px); max-height:none; }.media-agent__launcher-copy { display:none; } }
 @media(prefers-reduced-motion:reduce) { .media-agent * { transition:none!important; animation:none!important; }.media-node.is-selected::before,.media-video-card.is-selected::before,.media-node.is-selected::after,.media-video-card.is-selected::after { animation:none; }.media-node.is-selected::before,.media-video-card.is-selected::before { opacity:0; } }
+.media-workspace-status { display: flex; justify-content: flex-end; }
+.media-home, .media-editor { --fps-status-ink: #a0a0a0; }
+.media-workspace-status:has(.fps-status-slot:empty) { display: none; }
+.media-project-controls .fps-status-slot { align-self: center; padding-inline: 6px; }

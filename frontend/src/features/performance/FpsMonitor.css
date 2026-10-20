@@ -1,26 +1,23 @@
-:root { --z-performance-monitor: 80; }
+.fps-status-slot { display: inline-flex; flex: none; align-items: center; }
+.fps-status-slot:empty { display: none; }
+.fps-status-actions { display: flex; align-items: center; justify-self: end; gap: 12px; min-width: 0; }
 
 .fps-monitor {
-  position: fixed;
-  z-index: var(--z-performance-monitor);
-  right: max(var(--fps-right, 16px), env(safe-area-inset-right));
-  bottom: max(16px, env(safe-area-inset-bottom));
   display: inline-flex;
   align-items: baseline;
   justify-content: center;
-  gap: 5px;
-  min-width: 62px;
-  padding: 5px 9px;
-  border-radius: 999px;
-  background: rgb(23 23 23 / 82%);
-  color: #fff;
-  font: 12px/18px Inter, "PingFang SC", sans-serif;
+  gap: 4px;
+  width: 48px;
+  color: var(--fps-status-ink, #686868);
+  white-space: nowrap;
+  font: 11px/18px Inter, "PingFang SC", sans-serif;
   pointer-events: none;
   user-select: none;
 }
 
-.fps-monitor[hidden], .fps-monitor.is-occluded { display: none; }
-.fps-monitor__value { min-width: 2ch; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
-.fps-monitor__unit { color: rgb(255 255 255 / 65%); font-size: 9px; letter-spacing: .03em; }
+.fps-monitor[hidden] { display: none; }
+.fps-monitor__value { min-width: 3ch; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
+.fps-monitor__unit { font-size: 9px; letter-spacing: .03em; }
 
 @media print { .fps-monitor { display: none; } }
+@media (max-width: 680px) { .fps-status-actions--compact { flex-direction: column; align-items: flex-end; gap: 2px; } }

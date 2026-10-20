@@ -10,7 +10,7 @@ export function FpsSettings() {
     <div className="fps-settings__row">
       <div>
         <h2 id="fps-settings-title">FPS 监测</h2>
-        <p id="fps-settings-description">在页面右下角显示实时帧率，观察动画与特效的流畅度。</p>
+        <p id="fps-settings-description">在页头显示实时帧率，观察动画与特效的流畅度。</p>
         <small>仅此浏览器 · 全站生效 · 关闭后停止监测</small>
       </div>
       <button

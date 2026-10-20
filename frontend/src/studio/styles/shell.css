@@ -62,6 +62,7 @@
   .studio-topbar__title small { max-width: 210px; font-size: 11px; }
   .studio-topbar__site-link { padding: 8px; font-size: 11px; }
   .studio-topbar__site-link > svg:first-child { display: none; }
+  .studio-topbar__actions:has(.fps-monitor) { flex-direction: column; align-items: flex-end; gap: 4px; }
   .studio-content { padding-top: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { .studio-app-shell button { transition: none; } }
