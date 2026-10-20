@@ -18,7 +18,7 @@ describe('系统设置层级', () => {
     fireEvent.click(screen.getByRole('link', { name: /外观与交互.*选择光标/ }))
     expect(screen.getByLabelText('当前地址')).toHaveTextContent('/blog/studio/settings/appearance')
     expect(screen.getByRole('heading', { name: '光标外观' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('link', { name: '系统设置' }))
+    fireEvent.click(screen.getByRole('link', { name: '设置总览' }))
     expect(screen.getByRole('heading', { name: '设置总览' })).toBeInTheDocument()
   })
   it('外观深链接可直接打开，返回总览保留已选偏好', () => {

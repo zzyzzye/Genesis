@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { ArrowLeft, ArrowUpRight, ChevronRight, MousePointer2, Settings2, UserRound } from 'lucide-react'
+import { ArrowUpRight, ChevronRight, MousePointer2, UserRound } from 'lucide-react'
 import { cursorThemes, useCursorTheme } from '../features/cursor/preferences'
 import { CursorSettings } from './CursorSettings'
 import './SystemSettingsHub.css'
@@ -15,15 +15,12 @@ export function SystemSettings() {
 
   return <div className="system-settings">
     <nav className="system-settings__nav" aria-label="设置分类">
-      <Link to={settingsPath} aria-current={overview ? 'page' : undefined}><Settings2 />设置总览</Link>
-      <Link to={`${settingsPath}/appearance`} aria-current={appearance ? 'page' : undefined}><MousePointer2 />外观与交互</Link>
-      <Link to="/account"><UserRound />账户资料<ArrowUpRight /></Link>
+      <Link to={settingsPath} aria-current={overview ? 'page' : undefined}>设置总览</Link>
+      <Link to={`${settingsPath}/appearance`} aria-current={appearance ? 'page' : undefined}>外观与交互</Link>
+      <Link className="system-settings__account" to="/account">账户资料<ArrowUpRight /></Link>
     </nav>
     <div className="system-settings__content">
-      {appearance ? <>
-        <nav className="system-settings__breadcrumb" aria-label="设置位置"><ol><li><Link to={settingsPath}><ArrowLeft />系统设置</Link></li><li aria-current="page">外观与交互</li></ol></nav>
-        <CursorSettings />
-      </> : overview ? <section aria-labelledby="settings-overview-title">
+      {appearance ? <CursorSettings /> : overview ? <section aria-labelledby="settings-overview-title">
         <header className="system-settings__intro"><h2 id="settings-overview-title">设置总览</h2><p>管理账户资料和当前浏览器的使用偏好。</p></header>
         <section className="system-settings__group" aria-labelledby="settings-account-title"><h3 id="settings-account-title">账户</h3>
           <Link className="system-settings__row" to="/account"><UserRound /><span><strong>账户资料</strong><small>修改昵称、个人简介和头像。</small></span><span className="system-settings__scope">账户设置</span><ArrowUpRight /></Link>

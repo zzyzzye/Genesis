@@ -43,12 +43,8 @@
 .studio-topbar__site-link svg { width: 14px; height: 14px; }
 .studio-content { min-width: 0; min-height: 0; flex: 1 1 auto; overflow: auto; padding: 20px var(--studio-gutter) 48px; }
 .studio-content--editor { padding: 0; background: var(--studio-paper); }
-/* 设置分类与内容共用壳层分隔规则，不给每一项再包一层卡片。 */
-.studio-workspace .system-settings__nav { border-right: 1px solid var(--studio-line); padding-right: 16px; margin-right: -18px; }
+/* 设置组之间只用细线和留白分隔。 */
 .studio-workspace .system-settings__group + .system-settings__group { border-top: 1px solid var(--studio-line); padding-top: 24px; }
-@media (max-width: 1180px) {
-  .studio-workspace .system-settings__nav { border-right: 0; border-bottom: 1px solid var(--studio-line); padding: 0 0 12px; margin: 0; }
-}
 .studio-placeholder-panel { display: grid; align-content: center; justify-items: start; gap: 12px; width: 100%; min-height: 360px; padding-block: 48px; }
 .studio-placeholder-icon { color: var(--studio-muted); }
 .studio-placeholder-panel > p { margin: 12px 0 0; color: var(--studio-muted); font-size: 10px; letter-spacing: .1em; }
