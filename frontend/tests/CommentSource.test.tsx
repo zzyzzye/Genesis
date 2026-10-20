@@ -1,0 +1,49 @@
+import { cleanup, render, screen } from '@testing-library/react'
+import { afterEach, expect, it } from 'vitest'
+import { CommentSource } from '../src/features/blog/CommentSource'
+import type { BlogComment } from '../src/lib/api'
+
+const comment: BlogComment = { id: 'source-test', author_name: '访客', content: '测试评论', created_at: '2026-10-20T00:00:00Z' }
+afterEach(cleanup)
+
+it.each([
+  ['Windows', 'windows'], ['Windows Phone', 'windows'], ['Mac OS X', 'macos'], ['macOS', 'macos'],
+  ['iOS', 'ios'], ['iPadOS', 'ios'], ['Android', 'android'], ['Linux', 'linux'], ['Chrome OS', 'chromeos'],
+  ['HarmonyOS', 'harmony'], ['鸿蒙', 'harmony'], ['Ubuntu', 'ubuntu'], ['Debian', 'debian'], ['Fedora', 'fedora'],
+  ['Arch Linux', 'arch'], ['CentOS', 'centos'], ['openSUSE', 'suse'], ['Linux Mint', 'mint'], ['Deepin', 'deepin'],
+  ['Kali Linux', 'kali'], ['Kylin', 'kylin'], ['FreeBSD', 'bsd'], ['OpenBSD', 'openbsd'], ['NetBSD', 'netbsd'],
+  ['Tizen', 'tizen'], ['webOS', 'webos'], ['KaiOS', 'kaios'], ['BlackBerry OS', 'blackberry'], ['Symbian OS', 'symbian'],
+])('操作系统 %s 使用对应图标，保留原名称', (name, icon) => {
+  const { container } = render(<CommentSource item={{ ...comment, operating_system: name }} />)
+  expect(screen.getByText(name)).toBeInTheDocument()
+  expect(container.querySelector('svg')).toHaveAttribute('data-device-icon', icon)
+  expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+})
+
+it.each([
+  ['Chrome', 'chrome'], ['Chrome Mobile iOS', 'chrome'], ['Chromium', 'chromium'], ['Edge Mobile', 'edge'],
+  ['Safari', 'safari'], ['Mobile Safari', 'safari'], ['Firefox', 'firefox'], ['Firefox iOS', 'firefox'],
+  ['Opera Mini', 'opera'], ['Samsung Internet', 'samsung'], ['IE', 'ie'], ['Brave', 'brave'], ['Vivaldi', 'vivaldi'],
+  ['QQ Browser Mobile', 'qq'], ['UC Browser', 'uc'], ['Yandex Browser', 'yandex'],
+])('浏览器 %s 使用对应图标，不把内核名称当作浏览器', (name, icon) => {
+  const { container } = render(<CommentSource item={{ ...comment, browser: name }} />)
+  expect(screen.getByText(name)).toBeInTheDocument()
+  expect(container.querySelector('svg')).toHaveAttribute('data-device-icon', icon)
+})
+
+it('地区、系统和浏览器独立显示，未知名称使用通用图标', () => {
+  const { container } = render(<CommentSource item={{ ...comment, region: '浙江省', operating_system: '未收录系统', browser: '定制浏览器' }} />)
+  expect(screen.getByText('浙江省')).toBeInTheDocument()
+  expect(screen.getByText('未收录系统')).toBeInTheDocument()
+  expect(screen.getByText('定制浏览器')).toBeInTheDocument()
+  expect(container.querySelector('[data-device-icon="genericSystem"]')).toBeInTheDocument()
+  expect(container.querySelector('[data-device-icon="genericBrowser"]')).toBeInTheDocument()
+})
+
+it('没有设备资料时不编造信息，只有地区时不渲染设备图标', () => {
+  const { container, rerender } = render(<CommentSource item={comment} />)
+  expect(container).toBeEmptyDOMElement()
+  rerender(<CommentSource item={{ ...comment, region: '浙江省' }} />)
+  expect(screen.getByText('浙江省')).toBeInTheDocument()
+  expect(container.querySelector('[data-device-icon]')).toBeNull()
+})

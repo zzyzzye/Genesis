@@ -80,7 +80,10 @@ describe('文章评论', () => {
     reader()
     vi.mocked(getBlogComments).mockResolvedValue({ items: [{ ...item, avatar_url: '/avatar-test', region: '浙江省', browser: 'Chrome', operating_system: 'Windows' }], total: 1 })
     expect(await screen.findByText('浙江省')).toBeInTheDocument()
-    expect(screen.getByText('Chrome · Windows')).toBeInTheDocument()
+    expect(screen.getByText('Windows')).toBeInTheDocument()
+    expect(screen.getByText('Chrome')).toBeInTheDocument()
+    expect(document.querySelector('[data-device-icon="windows"]')).toBeInTheDocument()
+    expect(document.querySelector('[data-device-icon="chrome"]')).toBeInTheDocument()
     const image = document.querySelector('.comment-avatar img')!
     fireEvent.error(image)
     expect(document.querySelector('.comment-avatar')).toHaveTextContent('测')

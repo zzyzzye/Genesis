@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Globe, Monitor } from 'lucide-react'
+import { Globe } from 'lucide-react'
 import type { BlogComment } from '../../lib/api'
+import { CommentDeviceIcon } from './CommentDeviceIcon'
 import './CommentSource.css'
 
 export function CommentAvatar({ item }: { item: BlogComment }) {
@@ -16,6 +17,7 @@ export function CommentSource({ item }: { item: BlogComment }) {
   if (!item.region && !item.browser && !item.operating_system) return null
   return <span className="comment-source" aria-label="评论来源">
     {item.region && <span><Globe size={12} aria-hidden="true" />{item.region}</span>}
-    {(item.browser || item.operating_system) && <span><Monitor size={12} aria-hidden="true" />{[item.browser, item.operating_system].filter(Boolean).join(' · ')}</span>}
+    {item.operating_system && <span className="comment-source__device"><CommentDeviceIcon kind="system" name={item.operating_system} /><span>{item.operating_system}</span></span>}
+    {item.browser && <span className="comment-source__device"><CommentDeviceIcon kind="browser" name={item.browser} /><span>{item.browser}</span></span>}
   </span>
 }
