@@ -5,6 +5,7 @@ import { drawFantasyCursor, isFantasyTheme } from './fantasy'
 import { isArrowSkin } from './arrowSkinAssets'
 import { ArrowSkinEffects } from './ArrowSkinEffects'
 import './CursorEffects.css'
+import { effectCursorScale } from './sizing'
 
 type Sample = { x: number; y: number; born: number }
 
@@ -19,6 +20,8 @@ export function CursorEffects() {
     if (theme === 'system' || isArrowSkin(theme) || !host || !surface) return
     const context = surface.getContext('2d')
     if (!context) return
+    const renderScale = effectCursorScale(theme)
+    host.style.setProperty('--cursor-scale', String(renderScale))
     const fine = matchMedia('(any-pointer: fine)')
     const reduced = matchMedia('(prefers-reduced-motion: reduce)')
     const forced = matchMedia('(forced-colors: active)')
@@ -70,10 +73,15 @@ export function CursorEffects() {
       host!.style.setProperty('--cursor-x', `${x + magnetX}px`)
       host!.style.setProperty('--cursor-y', `${y + magnetY}px`)
       host!.style.setProperty('--cursor-angle', `${Math.atan2(dy, dx)}rad`)
-      host!.style.setProperty('--cursor-stretch', String(1 + speed / 45))
+      host!.style.setProperty('--cursor-stretch', String(1 + Math.min(speed / 45, .15)))
       host!.dataset.hover = String(hovering)
       host!.dataset.pressed = String(pressed)
       samples = samples.filter(p => time - p.born < (theme === 'crayon' ? 950 : isFantasyTheme(theme) ? 700 : 420))
+      // 围绕真实落点缩放造型，鼠标坐标与命中位置保持不变。
+      context!.save()
+      context!.translate(x, y)
+      context!.scale(renderScale, renderScale)
+      context!.translate(-x, -y)
       if (isFantasyTheme(theme)) {
         body[0] = { x, y }
         for (let i = 1; i < body.length; i++) {
@@ -86,7 +94,7 @@ export function CursorEffects() {
         }
         drawFantasyCursor(context!, theme, { x, y, time, speed, hovering, pressed, reduced: reduced.matches, pulse, pulseX, pulseY, samples, body })
       } else if (theme === 'gooey') {
-        dot(x, y, pressed ? 6 : hovering ? 17 : 9)
+        dot(x, y, pressed ? 6 : 9)
         if (!reduced.matches) samples.forEach((p, i) => dot(p.x, p.y, Math.max(1, 9 * (i + 1) / samples.length), .4 * (1 - (time - p.born) / 420)))
         if (time - pulse < 450 && !reduced.matches) for (let i = 0; i < 5; i++) {
           const a = i / 5 * Math.PI * 2, r = Math.sin((time - pulse) / 450 * Math.PI) * 25
@@ -122,6 +130,7 @@ export function CursorEffects() {
         })
       } else if (theme === 'lens') dot(x, y, 2)
       else dot(x, y, 2)
+      context!.restore()
       if (!isFantasyTheme(theme) && pulse > 0 && time - pulse < 500 && !reduced.matches) {
         const progress = (time - pulse) / 500
         context!.globalAlpha = 1 - progress

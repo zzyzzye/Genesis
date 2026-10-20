@@ -1,3 +1,5 @@
+import { cursorArtworkSize, cursorRenderScale, nativeCursorSize } from './sizing'
+
 export const arrowSkinIds = ['crystal', 'obsidian', 'arcane', 'scales', 'cream'] as const
 export type ArrowSkin = typeof arrowSkinIds[number]
 export type SkinState = 'default' | 'pointer' | 'text' | 'grab' | 'disabled'
@@ -16,9 +18,9 @@ const outlines: Record<SkinState, string> = {
   grab: 'M10 19 V13 C10 9 15 9 15 13 V17 V9 C15 5 20 5 20 9 V17 V10 C20 6 25 6 25 10 V18 V14 C25 10 30 10 30 14 V24 L27 34 H13 L6 24 C4 20 8 17 10 21 Z',
   disabled: 'M19 4 A15 15 0 1 1 18.99 4 Z',
 }
-export function skinImage(skin: ArrowSkin, state: SkinState = 'default') {
+export function skinImage(skin: ArrowSkin, state: SkinState = 'default', size = cursorArtworkSize) {
   const m = materials[skin]
-  const shape = skin === 'cream' && state === 'default' ? 'M5 6 Q5 3 8 6 L29 19 Q32 22 28 22 L20 22 L25 32 Q26 35 23 36 L21 37 Q19 38 18 35 L13 25 L8 30 Q5 33 5 29 Z' : outlines[state]
+  const shape = skin === 'cream' && state === 'default' ? 'M5 3 Q6 3 8 5 L29 19 Q32 22 28 22 L20 22 L25 32 Q26 35 23 36 L21 37 Q19 38 18 35 L13 25 L8 30 Q5 33 5 29 Z' : outlines[state]
   const detail = skin === 'scales'
     ? `<path d="M1 10 Q6 17 11 10 Q16 17 21 10 Q26 17 31 10 M1 19 Q6 26 11 19 Q16 26 21 19 Q26 26 31 19 M1 28 Q6 35 11 28 Q16 35 21 28 Q26 35 31 28" fill="none" stroke="${m.accent}" stroke-width=".8"/>`
     : skin === 'cream'
@@ -26,11 +28,14 @@ export function skinImage(skin: ArrowSkin, state: SkinState = 'default') {
     : skin === 'arcane'
       ? `<path d="M11 12 L16 16 L12 20 M18 22 L22 27 L19 29 M13 17 L18 13" fill="none" stroke="${m.accent}" stroke-width="1.2"/>`
       : `<path d="M6 4 L15 20 L29 20 M15 20 L24 33 M6 4 L7 28 L15 20" fill="none" stroke="${m.accent}" stroke-width=".8" opacity=".6"/>`
-  const art = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><defs><linearGradient id="material" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${m.light}"/><stop offset=".46" stop-color="${m.mid}"/><stop offset="1" stop-color="${m.dark}"/></linearGradient><clipPath id="shape"><path d="${shape}"/></clipPath></defs><path d="${shape}" fill="url(#material)" stroke="${m.edge}" stroke-width="1.2" stroke-linejoin="${skin === 'cream' ? 'round' : 'miter'}"/><g clip-path="url(#shape)">${detail}</g>${state === 'disabled' ? `<path d="M9 9 L29 29" stroke="${m.accent}" stroke-width="3"/>` : ''}</svg>`
+  const art = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 40 40"><defs><linearGradient id="material" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${m.light}"/><stop offset=".46" stop-color="${m.mid}"/><stop offset="1" stop-color="${m.dark}"/></linearGradient><clipPath id="shape"><path d="${shape}"/></clipPath></defs><path d="${shape}" fill="url(#material)" stroke="${m.edge}" stroke-width="1.2" stroke-linejoin="${skin === 'cream' ? 'round' : 'miter'}"/><g clip-path="url(#shape)">${detail}</g>${state === 'disabled' ? `<path d="M9 9 L29 29" stroke="${m.accent}" stroke-width="3"/>` : ''}</svg>`
   return `data:image/svg+xml,${encodeURIComponent(art)}`
 }
 export function skinStyles(skin: ArrowSkin) {
-  const cursor = (state: SkinState, fallback: string) => `url("${skinImage(skin, state)}") ${state === 'default' ? '5 3' : state === 'pointer' ? '17 5' : '19 19'}, ${fallback}`
+  const cursor = (state: SkinState, fallback: string) => {
+    const [x, y]: [number, number] = state === 'default' ? [5, 3] : state === 'pointer' ? [17, 5] : [19, 19]
+    return `url("${skinImage(skin, state, nativeCursorSize)}") ${Math.round(x * cursorRenderScale)} ${Math.round(y * cursorRenderScale)}, ${fallback}`
+  }
   const scope = `html[data-genesis-skin="${skin}"]`
   return `
     @media (any-pointer: fine) and (forced-colors: none) {

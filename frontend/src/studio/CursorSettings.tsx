@@ -34,7 +34,7 @@ export function CursorSettings() {
         <p className="cursor-settings__scope">选择即保存 · 仅此浏览器 · 全站生效</p>
       </div>
       <div className="cursor-settings__preview">
-        <div className="cursor-settings__preview-title"><span>现场试用</span><span>{theme.name}</span></div>
+        <div className="cursor-settings__preview-title"><span>放大预览 · 现场试用</span><span>{theme.name}</span></div>
         <div className="cursor-settings__playground" data-cursor-state={preview}>
           {skin ? <img className="cursor-settings__hero" src={skinImage(skin, preview)} alt={`${theme.name} · ${states.find(item => item.id === preview)!.label}状态预览`} /> : <span className="cursor-settings__live-sample" aria-hidden="true"><CursorSample theme={selected} /></span>}
           <p>{skin ? '造型换新，落点依旧准确' : selected === 'system' ? '选一套皮肤，移入这里体验' : '移动、停留，再轻轻点击'}</p>
