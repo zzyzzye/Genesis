@@ -7,6 +7,7 @@ import { getBlogPosts, getPublicBlogTags, type BlogPostPreview, type PublicBlogT
 import { useModalDialog } from '../../studio/useModalDialog'
 import { BlogLinks } from './BlogLinks'
 import { BlogSearch } from './BlogSearch'
+import { GenesisLogo } from '../../components/GenesisLogo'
 
 type DirectoryState = { key: string; status: 'loading' | 'ready' | 'error'; items: BlogPostPreview[]; total: number }
 const dateFormatter = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -139,7 +140,7 @@ export function BlogDirectory() {
 
   return <div className={`blog-portal${collapsed ? ' blog-portal--collapsed' : ''}`} id="top">
     <header className="portal-header">
-      <div className="portal-brand"><button type="button" aria-label={mobile ? '打开博客导航' : collapsed ? '展开博客侧栏' : '收起博客侧栏'} aria-expanded={mobile ? mobileOpen : !collapsed} onClick={() => { if (mobile) setMobileOpen(true); else setCollapsed(value => !value) }}><Menu size={21} /></button><Link to="/blog">Genesis Journal</Link></div>
+      <div className="portal-brand"><button type="button" aria-label={mobile ? '打开博客导航' : collapsed ? '展开博客侧栏' : '收起博客侧栏'} aria-expanded={mobile ? mobileOpen : !collapsed} onClick={() => { if (mobile) setMobileOpen(true); else setCollapsed(value => !value) }}><Menu size={21} /></button><Link to="/blog"><GenesisLogo label="Genesis Journal" /></Link></div>
       <button className="portal-search-trigger" type="button" onClick={() => setSearchOpen(true)} aria-label="搜索文章"><Search size={19} /><span>{query || '搜索文章'}</span><kbd>/</kbd></button>
       <Link className="portal-account" to="/account" aria-label="打开账户"><UserRound size={23} /></Link>
     </header>

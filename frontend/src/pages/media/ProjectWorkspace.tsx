@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, type Project } from './api'
 import { AssetLibrary } from './AssetLibrary'
-import { ArrowLeft, ArrowUpRight, Clapperboard, FolderOpen, House, Layers3, Menu, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Clapperboard, FolderOpen, House, Menu, X } from 'lucide-react'
+import { GenesisLogo } from '../../components/GenesisLogo'
 import type { ReactNode } from 'react'
 import { PanelsTopLeft, LibraryBig, Images, LayoutDashboard, Workflow } from 'lucide-react'
 import './MediaHome.css'
@@ -18,7 +19,7 @@ function AssetsLayout({ children, projectId, overview = false }: { children: Rea
   }, [open])
   return <div className={`media-home media-assets-shell${overview ? ' media-overview-shell' : ''}`}>
     <aside className={`media-home-sidebar${open ? ' is-open' : ''}`} aria-label="影音导航" onClick={(event) => { if ((event.target as Element).closest('a')) setOpen(false) }}>
-      <Link className="media-home-brand" to="/"><Layers3 />Genesis<span className="media-home-brand-label">STUDIO</span></Link>
+      <Link className="media-home-brand" to="/" aria-label="Genesis 首页"><GenesisLogo inverse /><span className="media-home-brand-label">STUDIO</span></Link>
       <nav aria-label="创作空间"><Link to="/media"><House />首页</Link><Link to="/media?view=projects"><PanelsTopLeft />项目</Link><Link to="/media/assets" aria-current={!projectId ? 'page' : undefined}><LibraryBig />账户素材库</Link>{projectId && <><span className="media-home-nav-label">当前作品</span><Link to={`/media/projects/${projectId}`} aria-current={overview ? 'page' : undefined}><LayoutDashboard />作品概览</Link><Link to={`/media/projects/${projectId}/assets`} aria-current={!overview ? 'page' : undefined}><Images />作品素材库</Link><Link to={`/media/projects/${projectId}/canvas`}><Workflow />创作画布</Link></>}</nav>
       <div className="media-home-sidebar-bottom"><Link to="/media"><ArrowLeft />返回影音</Link></div>
     </aside>

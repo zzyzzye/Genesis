@@ -1,7 +1,7 @@
 .toolbox-page { --toolbox-ink: #15242c; min-height: 100vh; display: grid; grid-template-columns: 4.5rem 1fr; background: #dfe8e9; color: var(--toolbox-ink); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
 .toolbox-rail { position: sticky; top: 0; display: flex; height: 100vh; flex-direction: column; align-items: center; justify-content: space-between; padding: 1.5rem 0 2rem; border-right: 1px solid rgb(21 36 44 / 20%); }
-.toolbox-rail a { display: grid; width: 2.3rem; height: 2.3rem; place-items: center; border: 1px solid var(--toolbox-ink); font-size: 1.1rem; font-weight: 800; }
-.toolbox-rail span { color: #587078; font-size: .7rem; letter-spacing: .15em; writing-mode: vertical-rl; }
+.toolbox-rail a { display: grid; width: 44px; height: 44px; place-items: center; border: 0; border-radius: 8px; }
+.toolbox-rail > span { color: #587078; font-size: .7rem; letter-spacing: .15em; writing-mode: vertical-rl; }
 .toolbox-main { min-width: 0; }
 .toolbox-header { display: flex; min-height: 4.5rem; align-items: center; justify-content: space-between; padding: 0 clamp(1.25rem, 4vw, 4rem); border-bottom: 1px solid rgb(21 36 44 / 20%); font-size: .68rem; font-weight: 800; letter-spacing: .12em; }
 .toolbox-header div { display: flex; align-items: center; gap: .65rem; }
@@ -24,5 +24,5 @@
 .tool-tile h3 { margin: 0 0 .8rem; font-family: Inter, "PingFang SC", sans-serif; font-size: 1.4rem; }
 .tool-tile p { min-height: 3.5rem; color: #53686e; font-family: Inter, "PingFang SC", sans-serif; line-height: 1.7; }
 .tool-tile small { display: block; margin-top: 2.5rem; }
-@media (max-width: 760px) { .toolbox-page { grid-template-columns: 1fr; } .toolbox-rail { position: static; width: 100%; height: 3.75rem; flex-direction: row; padding: 0 1rem; border-right: 0; border-bottom: 1px solid rgb(21 36 44 / 20%); } .toolbox-rail span { writing-mode: initial; } .toolbox-header { min-height: 3.75rem; } .toolbox-grid { grid-template-columns: 1fr; } .tool-tile { min-height: 17rem; } .tool-glyph { margin-top: 2.5rem; } }
+@media (max-width: 760px) { .toolbox-page { grid-template-columns: 1fr; } .toolbox-rail { position: static; width: 100%; height: 3.75rem; flex-direction: row; padding: 0 1rem; border-right: 0; border-bottom: 1px solid rgb(21 36 44 / 20%); } .toolbox-rail > span { writing-mode: initial; } .toolbox-header { min-height: 3.75rem; } .toolbox-grid { grid-template-columns: 1fr; } .tool-tile { min-height: 17rem; } .tool-glyph { margin-top: 2.5rem; } }
 @media (prefers-reduced-motion: reduce) { .toolbox-page * { scroll-behavior: auto !important; } }

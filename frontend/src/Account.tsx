@@ -3,6 +3,7 @@ import './Account.css'
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import { ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { GenesisLogo } from './components/GenesisLogo'
 import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey } from './lib/auth'
 import { getCurrentUser, login, registerAccount, updateCurrentUser, type CurrentUser } from './lib/api'
 
@@ -18,7 +19,7 @@ function AccountLayout({ children }: { children: ReactNode }) {
   return <main className="account-shell account-auth">
     <div className="account-auth-main">
       <header className="account-auth-header">
-        <Link className="account-brand" to="/" aria-label="返回 Genesis 首页"><span aria-hidden="true">G</span>Genesis</Link>
+        <Link className="account-brand" to="/" aria-label="返回 Genesis 首页"><GenesisLogo /></Link>
         <Link className="account-header-back" to="/blog">返回博客 <ArrowUpRight size={16} /></Link>
       </header>
       <div className="account-auth-content">{children}</div>

@@ -18,8 +18,7 @@ body:has(.account-shell) { min-width: 0; }
 .account-auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .94fr); gap: 20px; padding: 20px; }
 .account-auth-main { display: flex; min-width: 0; flex-direction: column; }
 .account-auth-header { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 20px; padding: 10px 24px; }
-.account-brand { display: inline-flex; align-items: center; gap: 10px; min-height: 40px; border-radius: 9px; font-size: 19px; font-weight: 650; letter-spacing: -.035em; }
-.account-brand > span { display: inline-flex; width: 31px; height: 31px; align-items: center; justify-content: center; border-radius: 9px; background: #171717; color: #fff; font-size: 19px; font-weight: 550; }
+.account-brand { --genesis-logo-size: 31px; --genesis-wordmark-size: 20px; display: inline-flex; align-items: center; min-height: 44px; border-radius: 9px; }
 .account-brand:hover, .account-brand:focus-visible { color: #626262; }
 .account-header-back, .account-auth-footer > a { display: inline-flex; min-height: 40px; align-items: center; gap: 7px; padding: 8px; border-radius: 8px; color: var(--account-muted); font-size: 12px; white-space: nowrap; }
 .account-header-back:hover, .account-header-back:focus-visible, .account-auth-footer > a:hover, .account-auth-footer > a:focus-visible { background: var(--account-soft); color: var(--account-ink); }

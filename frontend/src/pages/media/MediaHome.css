@@ -7,8 +7,7 @@
 .media-home button:disabled,.media-home-dialog button:disabled { opacity:.45; cursor:not-allowed; }
 .media-home :is(h1,h2,h3,p),.media-home-dialog :is(h2,p) { margin:0; }
 .media-home-sidebar { position:fixed; inset:0 auto 0 0; z-index:20; display:flex; flex-direction:column; width:248px; padding:28px 16px 20px; background:#171717; box-shadow:1px 0 0 #262626; }
-.media-home-brand { display:flex; align-items:center; gap:9px; padding:0 10px; margin:0 0 30px; color:#fff; font-size:25px; font-weight:750; letter-spacing:-1px; }
-.media-home-brand>span:first-child { display:grid; place-items:center; }.media-home-brand svg { width:28px; height:28px; }
+.media-home-brand { --genesis-logo-size:30px; --genesis-wordmark-size:23px; display:flex; align-items:center; gap:9px; min-height:44px; padding:0 10px; margin:0 0 30px; color:#fff; }
 .media-home-brand .media-home-brand-label { font-size:8px; letter-spacing:1.5px; color:#a3a3a3; align-self:flex-end; margin-bottom:4px; }
 .media-home .media-home-primary,.media-home-dialog .media-home-primary { min-height:40px; padding:10px 16px; background:var(--home-accent); color:#04272e; font-weight:550; }
 .media-home .media-home-primary:hover,.media-home .media-home-primary:focus-visible,.media-home-dialog .media-home-primary:hover,.media-home-dialog .media-home-primary:focus-visible { background:#cbdccf; color:#17271b; }

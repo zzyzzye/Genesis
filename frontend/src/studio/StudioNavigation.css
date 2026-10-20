@@ -1,10 +1,9 @@
 .studio-level-mark { color: var(--studio-muted); font-size: 11px; letter-spacing: .08em; }
 .studio-section-nav { position: relative; z-index: 3; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--studio-paper); }
 .studio-section-nav__header { padding: 24px 20px; }
-.studio-section-nav__brand { display: flex; align-items: center; gap: 12px; width: fit-content; border-radius: 6px; }
+.studio-section-nav__brand { --genesis-logo-size: 34px; --genesis-wordmark-size: 18px; display: flex; align-items: center; gap: 12px; min-height: 44px; width: fit-content; border-radius: 6px; }
 .studio-section-nav__brand:focus-visible { background: var(--studio-hover); }
-.studio-section-nav__mark { position: relative; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--studio-ink); color: var(--studio-paper); font-family: var(--studio-ui); font-size: 21px; font-weight: 550; line-height: 1; }
-.studio-section-nav__mark span { position: absolute; right: 0; bottom: 3px; color: var(--studio-accent); font-family: var(--studio-ui); font-size: 18px; }
+.studio-section-nav__subtitle { color: var(--studio-muted); font-size: 11px; white-space: nowrap; }
 .studio-section-nav__header p { margin: 3px 0 0; color: var(--studio-muted); font-size: 11px; letter-spacing: 0; }
 .studio-section-nav__header strong { display: block; font-size: 18px; font-weight: 650; line-height: 1.3; letter-spacing: -.025em; }
 .studio-section-nav__header > small { display: block; margin-top: 14px; color: var(--studio-muted); font-size: 11px; }
@@ -29,8 +28,8 @@
 @media (max-width: 680px) {
   .studio-section-nav { flex-direction: row; align-items: center; }
   .studio-section-nav__header { flex: none; padding: 12px; }
-  .studio-section-nav__brand { gap: 6px; }
-  .studio-section-nav__mark { width: 30px; height: 30px; font-size: 19px; }
+  .studio-section-nav__brand { --genesis-logo-size: 30px; --genesis-wordmark-size: 13px; gap: 6px; }
+  .studio-section-nav__subtitle { display: none; }
   .studio-section-nav__header p, .studio-section-nav__header > small, .studio-section-account { display: none; }
   .studio-section-nav__header strong { font-size: 13px; }
   .studio-nav-groups { display: flex; align-items: center; gap: 4px; padding: 8px 12px 8px 0; }

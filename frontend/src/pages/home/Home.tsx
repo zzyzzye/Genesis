@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { ArrowRight, ArrowUp, ArrowUpRight, BookOpen, Clapperboard, UserRound, Wrench } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { HomeReading } from './HomeReading'
+import { GenesisLogo } from '../../components/GenesisLogo'
 import './Home.css'
 
 const systems = [
@@ -17,7 +18,7 @@ function Home() {
     <div className="home-page" id="top">
       <a className="home-skip-link" href="#home-main">跳到主要内容</a>
       <header className="home-header">
-        <Link className="home-brand" to="/" aria-label="Genesis 首页"><span className="home-brand-mark" aria-hidden="true">g</span>Genesis</Link>
+        <Link className="home-brand" to="/" aria-label="Genesis 首页"><GenesisLogo /></Link>
         <nav aria-label="主导航">
           {systems.map(system => <Link key={system.path} to={system.path}>{system.name}</Link>)}
         </nav>

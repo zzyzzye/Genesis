@@ -17,7 +17,7 @@ body:has(.blog-portal) { min-width: 0; }
 .blog-portal button, .blog-search-dialog button, .portal-mobile-navigation button { color: inherit; font: inherit; cursor: pointer; }
 .blog-portal button:disabled { color: #b4b4b4; cursor: default; }
 .portal-header { position: fixed; z-index: 30; top: 0; left: 0; display: grid; grid-template-columns: var(--portal-sidebar-width) minmax(0, 1fr) 76px; align-items: center; width: 100%; height: var(--portal-header-height); padding-inline: 16px; background: var(--portal-paper); }
-.portal-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.portal-brand { --genesis-logo-size: 28px; --genesis-wordmark-size: 17px; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .portal-brand > button, .portal-account { display: inline-flex; flex: none; width: 40px; height: 40px; align-items: center; justify-content: center; border-radius: 10px; background: transparent; }
 .portal-brand > a { padding: 8px 0; overflow: hidden; font-size: 17px; font-weight: 650; letter-spacing: -.025em; white-space: nowrap; }
 .portal-account { justify-self: end; }
@@ -124,7 +124,7 @@ body:has(.blog-portal) { min-width: 0; }
 }
 @media (max-width: 800px) {
   .blog-portal { --portal-header-height: 64px; --portal-sidebar-width: 0px; }
-  .portal-header { grid-template-columns: minmax(0, 1fr) 44px 44px; gap: 5px; padding-inline: 12px; }.portal-brand { gap: 5px; }.portal-brand > a, .blog-portal--collapsed .portal-brand > a { display: block; font-size: 16px; }
+  .portal-header { grid-template-columns: minmax(0, 1fr) 44px 44px; gap: 5px; padding-inline: 12px; }.portal-brand { --genesis-logo-size: 26px; --genesis-wordmark-size: 14px; --genesis-logo-gap: 7px; gap: 5px; }.portal-brand > a, .blog-portal--collapsed .portal-brand > a { display: block; font-size: 16px; }
   .portal-search-trigger { width: 40px; height: 40px; min-height: 40px; justify-content: center; padding: 0; background: transparent; }.portal-search-trigger > span, .portal-search-trigger > kbd { display: none; }
   .portal-sidebar { display: none; }.portal-main { margin-left: 0; padding: 80px 20px 0; }.portal-topics { margin-bottom: 22px; gap: 4px; }.portal-topics button { padding-inline: 12px; font-size: 14px; }
   .portal-featured { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 16px; border-radius: 22px; }.portal-featured-cover { grid-row: auto; max-height: none; }.portal-featured-cover > img { height: 100%; min-height: 250px; }.portal-featured-copy { padding: 7px; }.portal-featured h2 { font-size: 23px; }

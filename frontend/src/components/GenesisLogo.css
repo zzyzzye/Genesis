@@ -1,0 +1,31 @@
+.genesis-logo {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--genesis-logo-gap, 9px);
+  vertical-align: middle;
+  color: inherit;
+  line-height: 1;
+}
+
+.genesis-logo-symbol {
+  display: block;
+  flex: none;
+  width: var(--genesis-logo-size, 32px);
+  height: var(--genesis-logo-size, 32px);
+  object-fit: contain;
+}
+
+.genesis-logo--inverse .genesis-logo-symbol { filter: brightness(0) invert(1); }
+
+.genesis-logo-wordmark {
+  min-width: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: var(--genesis-wordmark-size, 22px);
+  font-weight: 650;
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: -.045em;
+  line-height: 1.2;
+  white-space: nowrap;
+}

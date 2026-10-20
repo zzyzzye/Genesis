@@ -1,6 +1,7 @@
 import './ToolboxPage.css'
 
 import { Link } from 'react-router-dom'
+import { GenesisLogo } from '../../components/GenesisLogo'
 
 const utilities = [
   { code: 'TXT', name: '文本工作台', description: '整理、转换和清洗日常文本。', status: '规划中' },
@@ -12,7 +13,7 @@ export function ToolboxPage() {
   return (
     <div className="toolbox-page">
       <aside className="toolbox-rail" aria-label="工具箱标识">
-        <Link to="/" aria-label="返回 Genesis 首页">G</Link>
+        <Link to="/" aria-label="返回 Genesis 首页"><GenesisLogo markOnly /></Link>
         <span>02</span>
       </aside>
       <main className="toolbox-main">

@@ -8,6 +8,7 @@ import { ArticleDocument } from '../../features/blog/ArticleToc'
 import { BlogLinks } from '../../features/blog/BlogLinks'
 import { ArticleComments } from '../../features/blog/ArticleComments'
 import { ArticleGuide } from '../../features/blog/ArticleGuide'
+import { GenesisLogo } from '../../components/GenesisLogo'
 import { BlogDirectory } from '../../features/blog/BlogDirectory'
 import { BlogSearch } from '../../features/blog/BlogSearch'
 
@@ -124,7 +125,7 @@ function PublicBlog() {
   return (
     <div className="blog-page blog-page--article blog-portal" id="top">
       <header className="portal-header reader-header">
-        <div className="portal-brand"><Link className="reader-brand" to="/blog" aria-label="返回博客首页"><span aria-hidden="true">G</span>Genesis Journal</Link></div>
+        <div className="portal-brand"><Link className="reader-brand" to="/blog" aria-label="返回博客首页"><GenesisLogo label="Genesis Journal" /></Link></div>
         <button className="portal-search-trigger" type="button" onClick={() => setSearchOpen(true)} aria-label="搜索文章"><Search size={19} aria-hidden="true" /><span>搜索文章</span><kbd>/</kbd></button>
         <Link className="portal-account" to="/account" aria-label="打开账户"><UserRound size={23} aria-hidden="true" /></Link>
       </header>

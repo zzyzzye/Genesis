@@ -6,6 +6,7 @@ import { useLayoutEffect, useRef } from 'react'
 import type { CurrentUser } from '../lib/api'
 import { StudioIcon } from './StudioIcon'
 import { navigationGroups, type StudioSection } from './StudioNavigationModel'
+import { GenesisLogo } from '../components/GenesisLogo'
 
 export function StudioNavigation({
   activeSection,
@@ -41,11 +42,8 @@ export function StudioNavigation({
     <aside className="studio-section-nav" aria-label="博客管理导航">
       <header className="studio-section-nav__header">
         <Link className="studio-section-nav__brand" to="/blog" aria-label="返回公开博客">
-          <span className="studio-section-nav__mark" aria-hidden="true">G</span>
-          <span>
-            <strong>Genesis</strong>
-            <p>写作台</p>
-          </span>
+          <GenesisLogo />
+          <span className="studio-section-nav__subtitle">写作台</span>
         </Link>
       </header>
 

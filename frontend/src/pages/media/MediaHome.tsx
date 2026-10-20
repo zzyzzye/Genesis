@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowUpRight, AudioLines, BookOpen, Check, ChevronRight, Clapperboard, Film, FolderOpen, House, Image, Layers3, LayoutGrid, Menu, MoreHorizontal, Pencil, Plus, Search, Sparkles, StickyNote, Trash2, UserRound, WandSparkles, X } from 'lucide-react'
 import { api, type Project } from './api'
 import { PanelsTopLeft, LibraryBig } from 'lucide-react'
+import { GenesisLogo } from '../../components/GenesisLogo'
 
 type ProjectAction = { kind: 'create' | 'rename' | 'delete'; project?: Project; canvas?: boolean; title?: string }
 
@@ -56,7 +57,7 @@ export function MediaHome() {
   ]
   return <div className="media-home">
     <aside className={`media-home-sidebar${mobileNav ? ' is-open' : ''}`} aria-label="影音导航">
-      <Link className="media-home-brand" to="/"><span aria-hidden="true"><Layers3 /></span>Genesis<span className="media-home-brand-label">STUDIO</span></Link>
+      <Link className="media-home-brand" to="/" aria-label="Genesis 首页"><GenesisLogo inverse /><span className="media-home-brand-label">STUDIO</span></Link>
       <button className="media-home-primary" onClick={() => create('', false)}><Plus />新建项目</button>
       <nav aria-label="创作空间">
         <button onClick={() => { setMobileNav(false); window.dispatchEvent(new Event('genesis:open-media-assistant')) }}><Sparkles />镜头搭档<span className="media-home-tag">AI</span></button>
