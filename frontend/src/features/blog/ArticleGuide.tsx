@@ -1,8 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { BookOpenText, ChevronDown } from 'lucide-react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { getBlogArticleGuide, type BlogArticleGuide } from '../../lib/api'
-import { motionTiming } from '../../lib/motion'
+import { motionTiming, useLiveReducedMotion } from '../../lib/motion'
 import { TypewriterText } from '../../studio/TypewriterText'
 import './ArticleGuide.css'
 
@@ -13,7 +13,7 @@ function GuideContent({ data, playing, onFinish }: { data: BlogArticleGuide; pla
   const [step, setStep] = useState(0)
   function line(text: string, index: number) {
     if (!playing || index < step) return text
-    return <TypewriterText key={index} inline content={text} charactersPerSecond={90} onProgress={noProgress} onComplete={() => {
+    return <TypewriterText key={index} inline content={text} charactersPerSecond={40} onProgress={noProgress} onComplete={() => {
       if (index === data.key_points.length) onFinish()
       else setStep(index + 1)
     }} />
@@ -29,7 +29,7 @@ function GuideContent({ data, playing, onFinish }: { data: BlogArticleGuide; pla
 }
 
 export function ArticleGuide({ slug, revision }: { slug: string; revision?: string }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [state, setState] = useState<GuideState>({ status: 'idle' })
   const [retry, setRetry] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -37,7 +37,8 @@ export function ArticleGuide({ slug, revision }: { slug: string; revision?: stri
   const contentRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(0)
   const panelId = useId()
-  const reducedMotion = useReducedMotion()
+  const reducedMotion = useLiveReducedMotion()
+  const transition = { duration: reducedMotion ? 0 : motionTiming.articleGuide, ease: motionTiming.articleGuideEase }
 
   useEffect(() => {
     if (!reducedMotion) return
@@ -88,11 +89,11 @@ export function ArticleGuide({ slug, revision }: { slug: string; revision?: stri
     <button className="article-guide__trigger" type="button" aria-expanded={open} aria-controls={panelId} onClick={toggle}>
       <BookOpenText size={17} aria-hidden="true" />
       <span className="article-guide__heading"><span className="article-guide__title">AI 导读</span><span className="article-guide__caption">文章要点 · 阅读建议</span></span>
-      <span className="article-guide__action">{open ? '收起' : '展开要点'}<ChevronDown size={14} aria-hidden="true" /></span>
+      <span className="article-guide__action">{open ? '收起' : '展开要点'}<motion.span className="article-guide__chevron" initial={false} animate={{ rotate: open ? 180 : 0 }} transition={transition}><ChevronDown size={14} aria-hidden="true" /></motion.span></span>
     </button>
     <div id={panelId} aria-hidden={!open} inert={!open}>
       <AnimatePresence initial={false}>
-        {open && <motion.div className="article-guide__panel" key="guide" initial={{ height: 0, opacity: 0 }} animate={{ height, opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: reducedMotion ? 0 : motionTiming.page, ease: motionTiming.ease }}>
+        {open && <motion.div className="article-guide__panel" key="guide" initial={{ height: 0, opacity: 0 }} animate={{ height, opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={transition}>
           <div ref={contentRef} className="article-guide__content" aria-busy={state.status === 'loading'}>
             {(state.status === 'idle' || state.status === 'loading') && <p role="status">正在读取导读…</p>}
             {state.status === 'error' && <div role="alert"><p>导读暂时未能加载，文章仍可正常阅读。</p><button type="button" onClick={reload}>重新加载导读</button></div>}

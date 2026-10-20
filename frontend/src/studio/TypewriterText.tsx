@@ -34,6 +34,7 @@ export const TypewriterText = memo(function TypewriterText({ content, onProgress
     let offset = 0
     let previous = ''
     let completedFor = ''
+    let characterBudget = 0
 
     function paint(now: number) {
       frame = null
@@ -42,6 +43,7 @@ export const TypewriterText = memo(function TypewriterText({ content, onProgress
         text.data = ''
         offset = 0
         completedFor = ''
+        characterBudget = 0
       }
       previous = next
       const elapsed = lastPaint ? Math.min(now - lastPaint, 100) : 32
@@ -50,14 +52,16 @@ export const TypewriterText = memo(function TypewriterText({ content, onProgress
         return
       }
       lastPaint = now
-      // 大块数据到达时自适应加速追赶；不拆开 UTF-16 代理对。
+      // 指定速度时累计小数额度，避免每帧取整导致实际速度翻倍；聊天仍自适应追赶。
+      if (speed.current) characterBudget += elapsed * speed.current / 1000
       const count = reducedMotion ? next.length : speed.current
-        ? Math.max(1, Math.ceil(elapsed * speed.current / 1000))
+        ? Math.max(0, Math.floor(characterBudget))
         : Math.max(1, Math.ceil(elapsed * .08), Math.ceil((next.length - offset) / 8))
       let end = Math.min(next.length, offset + count)
       const last = next.charCodeAt(end - 1)
       if (end < next.length && last >= 0xd800 && last <= 0xdbff) end += 1
       if (end > offset) {
+        if (speed.current) characterBudget -= end - offset
         text.appendData(next.slice(offset, end))
         offset = end
         progress.current()

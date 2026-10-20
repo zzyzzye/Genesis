@@ -1,4 +1,20 @@
+import { useSyncExternalStore } from 'react'
 import type { Variants } from 'motion/react'
+
+const reducedMotionQuery = '(prefers-reduced-motion: reduce)'
+
+function subscribeReducedMotion(listener: () => void) {
+  const media = window.matchMedia?.(reducedMotionQuery)
+  media?.addEventListener?.('change', listener)
+  return () => media?.removeEventListener?.('change', listener)
+}
+
+function readReducedMotion() { return window.matchMedia?.(reducedMotionQuery).matches ?? false }
+
+// Motion 的 hook 只读取初始偏好；导读需要响应阅读中的设置切换，及时停止打字。
+export function useLiveReducedMotion() {
+  return useSyncExternalStore(subscribeReducedMotion, readReducedMotion, () => true)
+}
 
 export const motionTiming = {
   quick: 0.14,
@@ -8,6 +24,8 @@ export const motionTiming = {
   assistantEase: [0.25, 0.8, 0.25, 1] as const,
   studioEnter: 0.28,
   studioExit: 0.18,
+  articleGuide: 0.44,
+  articleGuideEase: [0.25, 0.1, 0.25, 1] as const,
 }
 
 export const pageTransition: Variants = {

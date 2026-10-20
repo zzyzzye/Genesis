@@ -83,4 +83,12 @@ describe('增量打字机', () => {
     view.unmount()
     expect(frames.size).toBe(0)
   })
+
+  it('指定每秒四十字时保留小数进度，不因逐帧取整而加速', () => {
+    const view = render(<TypewriterText inline content={'导读内容'.repeat(40)} charactersPerSecond={40} onProgress={() => undefined} />)
+    for (let i = 0; i < 30; i++) tick()
+    const text = view.container.querySelector('span > span')!.textContent
+    expect(text.length).toBeGreaterThanOrEqual(39)
+    expect(text.length).toBeLessThanOrEqual(41)
+  })
 })
