@@ -151,7 +151,7 @@ describe('App', () => {
     expect(window.location.hash).toBe('#comments')
   })
 
-  it('阅读页复用搜索，章节与讨论跳转后返回仍保留关键词', async () => {
+  it('阅读页复用搜索，精简作者入口且章节跳转后返回仍保留关键词', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost')
       const body = url.pathname.endsWith('/blog/posts/start-with-one-module')
@@ -179,8 +179,8 @@ describe('App', () => {
     expect(await screen.findByRole('heading', { name: '内容章节' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: '内容章节' }))
     await waitFor(() => expect(decodeURIComponent(window.location.hash)).toContain('内容章节'))
-    fireEvent.click(screen.getByRole('link', { name: '参与讨论' }))
-    await waitFor(() => expect(window.location.hash).toBe('#comments'))
+    expect(screen.queryByRole('link', { name: '参与讨论' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '浏览博客' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('link', { name: '回到顶部 ↑' }))
     await waitFor(() => expect(window.location.hash).toBe('#top'))
     fireEvent.click(screen.getByRole('button', { name: '返回文章列表' }))

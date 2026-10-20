@@ -44,9 +44,6 @@
 .reader-author__label { grid-column: 1 / -1; }
 .reader-author > div { min-width: 0; }
 .reader-author strong { display: block; margin-bottom: 2px; font-size: 15px; font-weight: 550; line-height: 1.5; overflow-wrap: anywhere; }
-.reader-author nav { display: flex; grid-column: 2; flex-wrap: wrap; gap: 4px 16px; margin-top: -4px; }
-.reader-author nav a { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; padding: 4px 0; border-radius: 4px; background: transparent; color: var(--blog-muted); font-size: 12px; outline: 0; box-shadow: none; }
-.reader-author nav a:is(:hover, :focus-visible) { background: var(--blog-hover); color: var(--blog-ink); }
 .reader-document .article-toc { font-family: inherit; font-size: 14px; }
 .reader-document .article-toc__toggle { padding: 8px 0; font-size: 16px; font-weight: 600; }
 .reader-document .article-toc__toggle > span { gap: 10px; }
