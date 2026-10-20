@@ -51,12 +51,15 @@
 .reader-document .article-toc nav { max-height: none; padding-top: 12px; }
 .reader-document .article-toc li a { padding: 10px 12px 10px calc(12px + var(--toc-indent, 0px)); border-radius: 8px; line-height: 1.7; }
 .reader-document .article-toc [aria-current="location"] { font-weight: 550; }
-.blog-page--article .article-content { padding: 0; font-family: inherit; font-size: 17px; line-height: 1.95; overflow-wrap: anywhere; }
-.blog-page--article .article-content :is(h1, h2, h3, h4, h5, h6) { margin: 40px 0 18px; color: var(--blog-ink); font-family: inherit; font-weight: 600; letter-spacing: -.02em; line-height: 1.6; scroll-margin-top: 100px; }
+.blog-page--article .article-content { padding: 0; font-family: inherit; font-size: 17px; line-height: 1.8; overflow-wrap: anywhere; }
+.blog-page--article .article-content :is(h1, h2, h3, h4, h5, h6) { margin: 28px 0 12px; color: var(--blog-ink); font-family: inherit; font-weight: 600; letter-spacing: -.02em; line-height: 1.45; scroll-margin-top: 100px; }
 .blog-page--article .article-content > :first-child { margin-top: 0; }
 .blog-page--article .article-content :is(h1, h2) { font-size: 24px; }
 .blog-page--article .article-content :is(h3, h4, h5, h6) { font-size: 20px; }
-.blog-page--article .article-content :is(p, ul, ol) { margin-bottom: 24px; color: #404040; }
+.blog-page--article .article-content :is(p, ul, ol) { margin-bottom: 16px; color: #404040; }
+.blog-page--article .article-code { margin-block: 16px 24px; }
+.blog-page--article .article-content p + .article-code { margin-top: 0; }
+.blog-page--article .article-code + :is(h1, h2, h3, h4, h5, h6) { margin-top: 28px; }
 .blog-page--article .article-content li > p { margin-bottom: 8px; }
 .blog-page--article .article-content strong { color: var(--blog-ink); font-weight: 600; }
 .blog-page--article .article-content blockquote { margin: 28px 0; padding: 20px 24px; border: 0; border-radius: 10px; background: var(--portal-soft); }
@@ -98,7 +101,7 @@
   .blog-page--article .reader-intro h1 { font-size: 26px; letter-spacing: -.025em; }
   .blog-page--article .reader-summary { font-size: 14px; }
   .blog-page--article .article-meta { gap: 6px 12px; font-size: 11px; }
-  .blog-page--article .article-content { font-size: 16px; line-height: 1.95; }
+  .blog-page--article .article-content { font-size: 16px; line-height: 1.8; }
   .blog-page--article .article-content :is(h1, h2) { font-size: 21px; }
   .blog-page--article .article-content :is(h3, h4, h5, h6) { font-size: 18px; }
   .blog-page--article .article-content blockquote { padding: 16px; }
