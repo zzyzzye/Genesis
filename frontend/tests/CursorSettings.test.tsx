@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SystemSettings } from '../src/studio/SystemSettings'
+import { CursorSettings as SystemSettings } from '../src/studio/CursorSettings'
 import { cursorPreferenceKey, readCursorTheme } from '../src/features/cursor/preferences'
 import { CursorEffects } from '../src/features/cursor/CursorEffects'
 

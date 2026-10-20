@@ -35,7 +35,7 @@ export const navigationGroups: NavigationGroup[] = [
     icon: 'settings',
     items: [
       { id: 'users', label: '用户', icon: 'user', description: '管理作者资料与权限' },
-      { id: 'settings', label: '设置', icon: 'settings', description: '调整个人偏好与光标外观' },
+      { id: 'settings', label: '设置', icon: 'settings', description: '管理账户与使用偏好' },
     ],
   },
 ]

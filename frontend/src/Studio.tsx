@@ -350,8 +350,10 @@ function Dashboard({
       ? `${pages.ready ? pages.editor.title || '新页面' : pages.loadError ? '页面未能打开' : '正在打开页面'} · ${pages.editing ? '写作' : '预览'} · Genesis`
       : activeSection === 'posts' && resource !== null
       ? `${activeEditor.title || '新文章'} · ${isEditorOpen ? '写作' : '预览'} · Genesis`
+      : activeSection === 'settings' && location.pathname.replace(/\/$/, '') === '/blog/studio/settings/appearance'
+      ? '外观与交互 · 系统设置 · Genesis'
       : `${sectionMeta[activeSection].title} · Genesis`
-  }, [activeSection, activeEditor.title, isEditorOpen, resource, pages.active, pages.resource, pages.ready, pages.editor.title, pages.loadError, pages.editing])
+  }, [activeSection, activeEditor.title, isEditorOpen, resource, pages.active, pages.resource, pages.ready, pages.editor.title, pages.loadError, pages.editing, location.pathname])
 
   function changeEditor(next: EditorState) {
     if (mutationLock.current || recovery) return
