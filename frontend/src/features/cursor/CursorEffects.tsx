@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useCursorTheme } from './preferences'
 import { drawFantasyCursor, isFantasyTheme } from './fantasy'
+import { isArrowSkin } from './arrowSkinAssets'
+import { ArrowSkinEffects } from './ArrowSkinEffects'
 import './CursorEffects.css'
 
 type Sample = { x: number; y: number; born: number }
@@ -14,7 +16,7 @@ export function CursorEffects() {
   useEffect(() => {
     const host = layer.current
     const surface = canvas.current
-    if (theme === 'system' || !host || !surface) return
+    if (theme === 'system' || isArrowSkin(theme) || !host || !surface) return
     const context = surface.getContext('2d')
     if (!context) return
     const fine = matchMedia('(any-pointer: fine)')
@@ -205,6 +207,7 @@ export function CursorEffects() {
     }
   }, [theme])
 
+  if (isArrowSkin(theme)) return <ArrowSkinEffects skin={theme} />
   if (theme === 'system') return null
   return createPortal(<div ref={layer} className={`genesis-cursor genesis-cursor--${theme}`} aria-hidden="true" hidden>
     <canvas ref={canvas} /><div className="genesis-cursor__shape" />

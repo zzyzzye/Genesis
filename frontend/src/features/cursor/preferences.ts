@@ -2,6 +2,11 @@ import { useSyncExternalStore } from 'react'
 
 export const cursorThemes = [
   { id: 'system', name: '系统默认', detail: '使用浏览器原生光标', signature: '原生 · 精准' },
+  { id: 'crystal', name: '水晶箭头', detail: '蓝紫晶体切面，配套手型、文本、拖拽与禁用光标', signature: '通透 · 冷光' },
+  { id: 'obsidian', name: '黑曜石箭头', detail: '深色金属与细银刃口，配套完整操作光标', signature: '金属 · 银刃' },
+  { id: 'arcane', name: '魔法箭头', detail: '紫色箭身嵌入金色符文，配套完整操作光标', signature: '符文 · 鎏金' },
+  { id: 'scales', name: '龙鳞箭头', detail: '青金鳞片包覆箭身，配套完整操作光标', signature: '青金 · 鳞纹' },
+  { id: 'cream', name: '奶油箭头', detail: '柔和奶杏与圆润轮廓，配套完整操作光标', signature: '奶杏 · 柔软' },
   { id: 'gooey', name: '液态融合', detail: '柔软墨团随移动融合，点击分裂再聚合', signature: '融合 · 分裂' },
   { id: 'crayon', name: '手绘蜡笔', detail: '带颗粒的手绘笔尖，按住空白处留下短暂笔迹', signature: '笔触 · 纸感' },
   { id: 'emitter', name: '波纹发射', detail: '沿移动路径释放细线波纹，点击激起涟漪', signature: '波纹 · 扩散' },

@@ -2,10 +2,36 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SystemSettings } from '../src/studio/SystemSettings'
 import { cursorPreferenceKey, readCursorTheme } from '../src/features/cursor/preferences'
+import { CursorEffects } from '../src/features/cursor/CursorEffects'
 
 afterEach(() => { cleanup(); localStorage.removeItem(cursorPreferenceKey); vi.restoreAllMocks() })
 
 describe('光标外观偏好', () => {
+  it.each([['水晶箭头', 'crystal'], ['黑曜石箭头', 'obsidian'], ['魔法箭头', 'arcane'], ['龙鳞箭头', 'scales'], ['奶油箭头', 'cream']])('箭头皮肤 %s 配套状态可预览与保存', (name, id) => {
+    render(<SystemSettings />)
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(name) }))
+    expect(readCursorTheme()).toBe(id)
+    const states = screen.getByLabelText('预览光标状态')
+    expect(states.querySelectorAll('button')).toHaveLength(5)
+    fireEvent.click(states.querySelector('[data-cursor-state="text"]')!)
+    expect(screen.getByAltText(`${name} · 输入状态预览`)).toBeInTheDocument()
+    fireEvent.click(states.querySelector('[data-cursor-state="grab"]')!)
+    expect(screen.getByAltText(`${name} · 拖拽状态预览`)).toBeInTheDocument()
+  })
+
+  it('原生皮肤切换与重置清理全站样式，不创建动画覆盖层', () => {
+    localStorage.setItem(cursorPreferenceKey, 'crystal')
+    const { unmount } = render(<><SystemSettings /><CursorEffects /></>)
+    expect(document.documentElement.dataset.genesisSkin).toBe('crystal')
+    expect(document.querySelector('.genesis-cursor')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /奶油箭头/ }))
+    expect(document.documentElement.dataset.genesisSkin).toBe('cream')
+    fireEvent.click(screen.getByRole('button', { name: /系统默认/ }))
+    expect(document.documentElement.dataset.genesisSkin).toBeUndefined()
+    unmount()
+    expect(document.documentElement.dataset.genesisSkin).toBeUndefined()
+  })
+
   it.each([['魔法羽毛笔', 'quill'], ['星灵', 'starlight'], ['游龙', 'dragon']])('奇幻主题 %s 可保存与恢复', (name, id) => {
     const { unmount } = render(<SystemSettings />)
     fireEvent.click(screen.getByRole('button', { name: new RegExp(name) }))
