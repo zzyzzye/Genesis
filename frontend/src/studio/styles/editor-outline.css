@@ -1,10 +1,11 @@
 /* 标题、工具栏与正文共用左列，目录独占右列。 */
 .markdown-editor {
-  --writing-toc-width: clamp(384px, 28vw, 464px);
+  --writing-toc-width: clamp(300px, 22vw, 360px);
   --writing-padding: clamp(20px, 3vw, 48px);
+  --writing-end-padding: 16px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--writing-toc-width);
-  gap: 24px;
+  gap: 12px;
   background: var(--studio-paper);
 }
 .markdown-editor__main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
@@ -16,7 +17,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px 16px;
-  padding-inline: var(--writing-padding);
+  padding-inline: var(--writing-padding) var(--writing-end-padding);
 }
 .markdown-editor__identity { display: contents; }
 .markdown-editor__identity > .text-button { grid-column: 1; grid-row: 1; justify-self: start; }
@@ -36,10 +37,10 @@
   box-sizing: border-box;
   width: 100%;
   max-width: none;
-  padding-inline: var(--writing-padding);
+  padding-inline: var(--writing-padding) var(--writing-end-padding);
 }
 .markdown-editor .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
-  margin-inline: var(--writing-padding);
+  margin-inline: var(--writing-padding) var(--writing-end-padding);
   padding-inline: 0;
 }
 .markdown-editor__toc { min-width: 0; padding: 24px 24px 0 0; }
@@ -50,7 +51,7 @@
 }
 .genesis-mdx-content :is(h1,h2,h3,h4,h5,h6) { scroll-margin-top: 140px; }
 @media (max-width: 1100px) {
-  .markdown-editor { display: flex; flex-direction: column; gap: 0; }
+  .markdown-editor { --writing-end-padding: var(--writing-padding); display: flex; flex-direction: column; gap: 0; }
   .markdown-editor__main { display: contents; }
   .markdown-editor__toc { position: static; order: 1; box-sizing: border-box; width: 100%; padding: 12px var(--writing-padding); }
   .markdown-editor__workspace--mdx { order: 2; }

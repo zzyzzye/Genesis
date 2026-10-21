@@ -119,16 +119,17 @@
 }
 .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0 12px;
+  grid-template-columns: minmax(0, max-content) auto;
+  justify-content: start;
+  gap: 0 8px;
   overflow: visible;
   border: 0;
   border-radius: 0;
 }
-/* 两行工具常驻，模式切换固定在第一行右侧。 */
+/* 工具按两行紧凑分组，模式切换紧跟常用格式，不拉到远端。 */
 .editor-tools-primary, .editor-tools-secondary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 4px; min-width: 0; }
 .editor-tools-primary { grid-column: 1; grid-row: 1; }
-.editor-tools-secondary { grid-column: 1 / -1; grid-row: 2; padding: 12px 0 4px; }
+.editor-tools-secondary { grid-column: 1 / -1; grid-row: 2; padding: 6px 0 2px; }
 .editor-tools-primary > *, .editor-tools-secondary > * { flex-shrink: 0; }
 .editor-tools-label { padding-inline: 4px; color: var(--studio-muted); font: 11px var(--studio-sans); }
 .markdown-editor__source--mdx > .genesis-mdx-editor .mdxeditor-toolbar > div:last-child { grid-column: 2; grid-row: 1; align-self: start; position: static; }
