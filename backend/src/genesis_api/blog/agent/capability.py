@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from langchain.agents.middleware import AgentMiddleware
 from langchain_core.tools import BaseTool
 from sqlalchemy.orm import Session
 
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.blog.agent.actions import BLOG_ACTIONS, confirm_blog_action
 from genesis_api.blog.agent.attachments import attachment_input
+from genesis_api.blog.agent.middleware import finish_after_blog_write
 from genesis_api.blog.agent.prompt import BlogAgentPrompt
 from genesis_api.blog.agent.tools import build_blog_tools
 from genesis_api.core.config import Settings
@@ -47,6 +51,11 @@ class BlogAgentCapability:
             LangChain 工具列表；写工具遵循可信上下文的审阅或自动执行策略。
         """
         return build_blog_tools(settings)
+
+    @staticmethod
+    def middleware() -> tuple[AgentMiddleware[Any, Any], ...]:
+        """提供博客写操作的原生流程终点，不接管公共模型执行循环。"""
+        return (finish_after_blog_write,)
 
     @staticmethod
     def handles_action(action: str) -> bool:

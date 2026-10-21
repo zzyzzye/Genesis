@@ -8,24 +8,36 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Literal, cast
 from uuid import UUID, uuid4
 
+from fastapi import HTTPException
 from jwt import encode
-from langchain_core.tools import BaseTool, tool
+from langchain_core.tools import BaseTool, ToolException, tool
+from pydantic import BaseModel, ConfigDict, ValidationError, create_model
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
 from genesis_api.agent.context import automatic_actions_allowed, require_owner
 from genesis_api.agent.contracts import AgentActionProposal
-from genesis_api.blog.agent.actions import confirm_blog_action
-from genesis_api.blog.models import BlogPost
+from genesis_api.blog.agent.actions import (
+    check_post_references,
+    check_post_version,
+    confirm_blog_action,
+    post_write_data,
+)
+from genesis_api.blog.comments import utc
+from genesis_api.blog.models import BlogCategory, BlogPost, BlogTag
+from genesis_api.blog.schemas import BlogTagWrite
 from genesis_api.blog.service import (
     POST_SLUG_CONFLICT_MESSAGE,
     get_blog_post_by_id,
     get_blog_post_by_slug,
+    list_admin_categories,
     list_admin_posts,
+    list_admin_tags,
 )
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.database.session import SessionLocal
@@ -34,6 +46,21 @@ from genesis_api.identity.models import User, UserRole
 BlogAgentAction = Literal[
     "create_draft", "create_and_publish", "update_post", "delete_post", "publish_post"
 ]
+async def _invoke[**P](operation: Callable[P, str], *args: P.args, **kwargs: P.kwargs) -> str:
+    """让可修正的业务错误成为 LangChain 工具回执，不中断整轮 Agent 执行。"""
+    try:
+        return await asyncio.to_thread(operation, *args, **kwargs)
+    except HTTPException as exc:
+        raise ToolException(str(exc.detail)) from None
+    except ValidationError as exc:
+        # 只回报字段与原因，不在工具错误中复述文章正文或其他输入值。
+        reasons = [f"{'.'.join(map(str, error['loc'])) or '文章'}：" + (
+            "时间必须包含时区偏移" if error["type"] == "timezone_aware" else error["msg"]
+        )
+                   for error in exc.errors(include_input=False, include_url=False)]
+        raise ToolException("参数校验失败：" + "；".join(reasons)) from None
+    except ValueError as exc:
+        raise ToolException(str(exc)) from None
 
 
 def _owner_id() -> UUID:
@@ -62,9 +89,12 @@ def _summary(post: BlogPost) -> dict[str, object]:
         "title": post.title,
         "excerpt": post.excerpt,
         "status": post.status.value,
-        "updated_at": post.updated_at.isoformat(),
+        "updated_at": utc(post.updated_at).isoformat(),
+        "scheduled_at": utc(post.scheduled_at).isoformat() if post.scheduled_at else None,
+        "slug": post.slug,
         "category": post.category.name if post.category else None,
         "categories": [category.name for category in getattr(post, "categories", [])],
+        "category_ids": [str(category.id) for category in post.categories],
         "tags": [tag.slug for tag in post.tags],
     }
 
@@ -78,7 +108,25 @@ def _detail(post: BlogPost) -> dict[str, object]:
     Returns:
         供模型分析或改写使用的完整文章数据。
     """
-    return {**_summary(post), "content_markdown": post.content_markdown, "slug": post.slug}
+    return {
+        **_summary(post), "content_markdown": post.content_markdown,
+        "tag_details": [{"name": tag.name, "slug": tag.slug} for tag in post.tags],
+        "cover_image_url": post.cover_image_url, "is_featured": post.is_featured,
+        "read_time_minutes": post.read_time_minutes,
+        "published_at": utc(post.published_at).isoformat() if post.published_at else None,
+    }
+
+
+def _list_taxonomies() -> str:
+    """读取真实分类和共享标签，供模型引用稳定标识及原有名称。"""
+    _owner_id()
+    with SessionLocal() as session:
+        return json.dumps({
+            "categories": [{"id": str(item.id), "name": item.name, "slug": item.slug}
+                           for item in list_admin_categories(session)],
+            "tags": [{"id": str(item.id), "name": item.name, "slug": item.slug}
+                     for item in list_admin_tags(session)],
+        }, ensure_ascii=False)
 
 
 def _list_posts() -> str:
@@ -125,7 +173,7 @@ def _search_posts(query: str) -> str:
     """在所有状态的文章中搜索标题、摘要、正文与 slug。
 
     Args:
-        query: 不区分大小写的 SQL ILIKE 搜索片段；百分号与下划线保留通配语义。
+        query: 不区分大小写的普通文本，同时匹配文章、分类和标签，不解释通配符。
 
     Returns:
         按更新时间倒序排列的匹配文章摘要 JSON，无匹配时为 []。
@@ -134,17 +182,20 @@ def _search_posts(query: str) -> str:
         RuntimeError: 当前调用不具备博客所有者身份。
     """
     _owner_id()
-    pattern = f"%{query}%"
+    query = query.strip()
     with SessionLocal() as session:
         posts = session.scalars(
             select(BlogPost)
             .where(
                 BlogPost.deleted_at.is_(None),
                 or_(
-                    BlogPost.title.ilike(pattern),
-                    BlogPost.excerpt.ilike(pattern),
-                    BlogPost.content_markdown.ilike(pattern),
-                    BlogPost.slug.ilike(pattern),
+                    BlogPost.title.icontains(query, autoescape=True),
+                    BlogPost.excerpt.icontains(query, autoescape=True),
+                    BlogPost.content_markdown.icontains(query, autoescape=True),
+                    BlogPost.slug.icontains(query, autoescape=True),
+                    BlogPost.tags.any(BlogTag.name.icontains(query, autoescape=True)),
+                    BlogPost.tags.any(BlogTag.slug.icontains(query, autoescape=True)),
+                    BlogPost.categories.any(BlogCategory.name.icontains(query, autoescape=True)),
                 )
             )
             .options(selectinload(BlogPost.category), selectinload(BlogPost.tags))
@@ -156,7 +207,7 @@ def _search_posts(query: str) -> str:
 def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Settings) -> str:
     """校验并签名博客操作，按可信上下文审阅或自动执行。
 
-    此处检查目标是否存在及创建所需字段，不替代确认阶段的完整业务校验。
+    此处预检版本、完整写入契约与关联数据；确认阶段仍重新读取并校验。
     令牌绑定用户、操作及载荷；不得在日志中输出令牌。
 
     Args:
@@ -173,6 +224,7 @@ def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Sett
     """
     actor_id = _owner_id()
     with SessionLocal() as session:
+        post = None
         if action in {"update_post", "delete_post", "publish_post"}:
             try:
                 post_id = UUID(str(payload.get("post_id")))
@@ -181,14 +233,23 @@ def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Sett
             post = get_blog_post_by_id(session, post_id)
             if post is None:
                 raise ValueError("文章不存在")
+            check_post_version(post, payload.get("expected_updated_at"))
+            if payload.get("cancel_schedule") and post.scheduled_at is None:
+                raise ValueError("该文章当前没有定时发布计划，无需取消。")
             # 在操作前保留可信标题，删除后与历史恢复时仍能识别目标文章。
-            payload = {**payload, "target_title": post.title}
-        required = ("title", "excerpt", "content_markdown", "slug")
-        if action in {"create_draft", "create_and_publish"}:
-            if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
-                raise ValueError("创建草稿缺少必要字段")
-            if get_blog_post_by_slug(session, str(payload["slug"])) is not None:
+            payload = {**payload, "target_title": post.title,
+                       "target_status": post.status.value,
+                       "expected_updated_at": utc(post.updated_at).isoformat()}
+        if action != "delete_post":
+            data = post_write_data(action, payload, post)
+            names = check_post_references(session, data)
+            existing = get_blog_post_by_slug(session, data.slug)
+            if existing is not None and (post is None or existing.id != post.id):
                 raise ValueError(POST_SLUG_CONFLICT_MESSAGE)
+            payload = {**payload, "category_names": names}
+            if action == "update_post":
+                changes = payload["changes"]
+                payload["changes"] = json.loads(changes) if isinstance(changes, str) else changes
 
     proposal_id = uuid4()
     expires_at = datetime.now(UTC) + timedelta(seconds=settings.agent_action_expire_seconds)
@@ -236,7 +297,7 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         settings: 可选工具配置；None 时使用应用配置。
 
     Returns:
-        十个可调用工具，写操作按可信执行策略审阅或自动执行。
+        博客工具集合，写操作按可信执行策略审阅或自动执行。
     """
     runtime_settings = settings or get_settings()
 
@@ -249,7 +310,16 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         Returns:
             所有文章的摘要 JSON，包含 ID、状态与更新时间，不包含正文。
         """
-        return await asyncio.to_thread(_list_posts)
+        return await _invoke(_list_posts)
+
+    @tool
+    async def list_taxonomies() -> str:
+        """列出已有分类和标签，包含真实 ID、名称和 slug。
+
+        为文章选择分类前先调用；分类只可引用已有 ID，标签可复用或新建。
+        复用标签时沿用原名称，不通过文章操作修改共享标签名称。
+        """
+        return await _invoke(_list_taxonomies)
 
     @tool
     async def get_post(post_id: str) -> str:
@@ -261,11 +331,11 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         Returns:
             包含 Markdown 正文与 slug 的文章详情 JSON。
         """
-        return await asyncio.to_thread(_get_post, post_id)
+        return await _invoke(_get_post, post_id)
 
     @tool
     async def search_posts(query: str) -> str:
-        """按标题、摘要、正文和 slug 搜索文章。
+        """按标题、摘要、正文、slug、分类和标签搜索文章。
 
         Args:
             query: 要检索的内容片段，不区分大小写。
@@ -273,7 +343,7 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         Returns:
             匹配文章的摘要 JSON；无匹配时返回 []。
         """
-        return await asyncio.to_thread(_search_posts, query)
+        return await _invoke(_search_posts, query)
 
     @tool
     async def analyze_post(post_id: str) -> str:
@@ -286,7 +356,7 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             文章详情 JSON；分析结论由模型生成，工具本身不执行内容分析。
         """
         # 工具只读取正文，文章分析由模型结合返回内容完成。
-        return await asyncio.to_thread(_get_post, post_id)
+        return await _invoke(_get_post, post_id)
 
     @tool
     async def suggest_revision(post_id: str) -> str:
@@ -296,16 +366,18 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             post_id: 待改写文章的 UUID 字符串。
 
         Returns:
-            文章详情 JSON；采用建议时仍需调用写工具生成待确认提议。
+            文章详情 JSON；采用建议时仍需调用写工具，遵循当前执行策略。
         """
-        # 改写建议由模型生成；采用建议时仍需走待确认的写操作。
-        return await asyncio.to_thread(_get_post, post_id)
+        # 改写建议由模型生成；采用建议时仍需走业务写工具。
+        return await _invoke(_get_post, post_id)
 
     @tool
     async def create_draft(
-        title: str, excerpt: str, content_markdown: str, slug: str
+        title: str, excerpt: str, content_markdown: str, slug: str,
+        category_ids: list[str] | None = None, tags: list[BlogTagWrite] | None = None,
+        cover_image_url: str | None = None,
     ) -> str:
-        """为全新文章生成创建草稿的待确认操作，不直接写入数据库。
+        """创建新草稿，可同时设置分类、标签和封面；定时发布请用 create_scheduled_post。
 
         补充、修订已有文章应使用 update_post，不要用同一 slug 再次创建。
 
@@ -314,6 +386,9 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             excerpt: 草稿摘要，不能留空。
             content_markdown: 草稿 Markdown 正文，不能留空。
             slug: 未被任何文章或草稿占用的地址标识，完整格式由确认阶段校验。
+            category_ids: 从 list_taxonomies 取得的分类 ID，支持多选。
+            tags: 标签名称和 slug 列表，最多十个；已有 slug 沿用原名称。
+            cover_image_url: 可选封面地址。
 
         Returns:
             审阅模式返回签名提议，自动模式返回执行回执。
@@ -323,12 +398,43 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             "excerpt": excerpt,
             "content_markdown": content_markdown,
             "slug": slug,
+            "category_ids": category_ids, "tags": [tag.model_dump() for tag in tags or []],
+            "cover_image_url": cover_image_url,
         }
-        return await asyncio.to_thread(_preview, "create_draft", payload, runtime_settings)
+        return await _invoke(_preview, "create_draft", payload, runtime_settings)
+
+    @tool
+    async def create_scheduled_post(
+        title: str, excerpt: str, content_markdown: str, slug: str, scheduled_at: str,
+        category_ids: list[str], tags: list[BlogTagWrite],
+        cover_image_url: str | None = None,
+    ) -> str:
+        """一次创建文章并安排定时发布，用户要求未来发布新文章时必须使用。
+
+        Args:
+            title: 完整文章标题。
+            excerpt: 文章摘要。
+            content_markdown: 完整 Markdown 正文。
+            slug: 尚未被任何文章占用的地址标识。
+            scheduled_at: 必填未来发布时间，使用含时区偏移的 ISO 8601 时间。
+            category_ids: 先读取 list_taxonomies 后选择已有分类 ID，无分类时明确传空列表。
+            tags: 先读取 list_taxonomies 后选择标签，最多十个；无标签时明确传空列表。
+            cover_image_url: 可选封面地址。
+
+        Returns:
+            审阅时返回一次确认的完整计划；自动时返回已保存计划的真实回执。
+        """
+        return await _invoke(_preview, "create_draft", {
+            "title": title, "excerpt": excerpt, "content_markdown": content_markdown, "slug": slug,
+            "scheduled_at": scheduled_at, "category_ids": category_ids,
+            "tags": [tag.model_dump() for tag in tags or []], "cover_image_url": cover_image_url,
+        }, runtime_settings)
 
     @tool
     async def create_and_publish(
-        title: str, excerpt: str, content_markdown: str, slug: str
+        title: str, excerpt: str, content_markdown: str, slug: str,
+        category_ids: list[str] | None = None, tags: list[BlogTagWrite] | None = None,
+        cover_image_url: str | None = None,
     ) -> str:
         """一次创建并发布全新文章；用户要求直接发布时使用，不要拆成创建草稿和再次发布。
 
@@ -337,67 +443,135 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             excerpt: 最终文章摘要。
             content_markdown: 完整 Markdown 正文。
             slug: 尚未占用的文章地址标识。
+            category_ids: 已有分类 ID，支持多选。
+            tags: 标签名称和 slug 列表，最多十个；已有 slug 沿用原名称。
+            cover_image_url: 可选封面地址。
 
         Returns:
             审阅模式返回一次性发布提议；自动模式返回已执行的发布结果。
         """
-        return await asyncio.to_thread(_preview, "create_and_publish", {
+        return await _invoke(_preview, "create_and_publish", {
             "title": title, "excerpt": excerpt, "content_markdown": content_markdown, "slug": slug,
+            "category_ids": category_ids, "tags": [tag.model_dump() for tag in tags or []],
+            "cover_image_url": cover_image_url,
         }, runtime_settings)
 
     @tool
-    async def update_post(post_id: str, changes: str) -> str:
-        """生成修改文章的待确认操作，不直接写入数据库。
+    async def update_post(
+        post_id: str, changes: str, expected_updated_at: str,
+    ) -> str:
+        """修改文章内容、分类标签或发布计划，按当前执行策略审阅或执行。
 
         Args:
             post_id: 目标文章的 UUID 字符串。
             changes: 局部修改的 JSON 对象字符串，字段使用文章写入契约名称。
-                例如 {"title": "新标题"}；确认时与当前数据库记录合并后校验。
+                支持 title、excerpt、content_markdown、slug、category_ids、tags、
+                cover_image_url、is_featured、read_time_minutes、status、published_at、scheduled_at。
+                定时发布使用 {"status":"draft","scheduled_at":"2099-01-01T09:00:00+08:00"}；
+                取消计划用 {"scheduled_at":null}；立即发布用 {"status":"published"}。
+                撤回并取消计划用 {"status":"draft","scheduled_at":null}。
+                空分类/标签列表清空关联，省略字段保留原值；确认时重新校验。
+            expected_updated_at: 从 get_post 原样取得的 updated_at，防止覆盖较新版本。
 
         Returns:
-            修改文章的签名提议 JSON，不表示文章已经修改。
+            审阅模式返回签名提议，自动模式返回真实执行回执。
         """
-        return await asyncio.to_thread(
-            _preview, "update_post", {"post_id": post_id, "changes": changes}, runtime_settings
+        return await _invoke(
+            _preview, "update_post", {"post_id": post_id, "changes": changes,
+                                     "expected_updated_at": expected_updated_at}, runtime_settings
         )
 
     @tool
-    async def delete_post(post_id: str) -> str:
+    async def schedule_post(
+        post_id: str, scheduled_at: str, expected_updated_at: str,
+    ) -> str:
+        """为已有文章安排定时发布；保持原内容，当前公开文章将先撤回为草稿。
+
+        Args:
+            post_id: 先通过 get_post 确认的目标文章 UUID。
+            scheduled_at: 必填未来发布时间，使用含时区偏移的 ISO 8601 时间。
+            expected_updated_at: 从 get_post 原样取得的 updated_at。
+
+        Returns:
+            审阅时返回发布计划提议，自动时保存计划并返回真实回执。
+        """
+        return await _invoke(_preview, "update_post", {
+            "post_id": post_id, "expected_updated_at": expected_updated_at,
+            "changes": {"status": "draft", "scheduled_at": scheduled_at},
+        }, runtime_settings)
+
+    @tool
+    async def cancel_post_schedule(post_id: str, expected_updated_at: str) -> str:
+        """取消指定文章的发布计划，保留正文、分类标签与草稿状态。
+
+        Args:
+            post_id: 先通过 get_post 确认具有定时计划的文章 UUID。
+            expected_updated_at: 从 get_post 原样取得的 updated_at。
+
+        Returns:
+            审阅时返回取消计划提议，自动时直接取消并返回真实回执。
+        """
+        return await _invoke(_preview, "update_post", {
+            "post_id": post_id, "expected_updated_at": expected_updated_at,
+            "changes": {"scheduled_at": None}, "cancel_schedule": True,
+        }, runtime_settings)
+
+    @tool
+    async def delete_post(post_id: str, expected_updated_at: str) -> str:
         """将文章移入回收站，保留正文和评论，可在文章管理中恢复为草稿。
 
         Args:
             post_id: 待删除文章的 UUID 字符串。
+            expected_updated_at: 从 get_post 取得的 updated_at，防止删除已变更的文章。
 
         Returns:
             审阅模式返回签名提议；自动模式返回已移入回收站的执行回执。
         """
-        return await asyncio.to_thread(
-            _preview, "delete_post", {"post_id": post_id}, runtime_settings
+        return await _invoke(
+            _preview, "delete_post", {"post_id": post_id,
+                                     "expected_updated_at": expected_updated_at}, runtime_settings
         )
 
     @tool
-    async def publish_post(post_id: str) -> str:
+    async def publish_post(post_id: str, expected_updated_at: str) -> str:
         """生成发布文章的待确认操作，不直接写入数据库。
 
         Args:
             post_id: 待发布文章的 UUID 字符串。
+            expected_updated_at: 从 get_post 取得的 updated_at，防止公开已变更的正文。
 
         Returns:
             审阅模式返回签名提议；自动模式直接执行，均须通过完整发布校验。
         """
-        return await asyncio.to_thread(
-            _preview, "publish_post", {"post_id": post_id}, runtime_settings
+        return await _invoke(
+            _preview, "publish_post", {"post_id": post_id,
+                                      "expected_updated_at": expected_updated_at}, runtime_settings
         )
 
-    return [
+    tools = [
         list_posts,
+        list_taxonomies,
         get_post,
         search_posts,
         analyze_post,
         suggest_revision,
         create_draft,
+        create_scheduled_post,
         create_and_publish,
         update_post,
+        schedule_post,
+        cancel_post_schedule,
         delete_post,
         publish_post,
     ]
+    for item in tools:
+        schema = item.args_schema
+        if isinstance(schema, type) and issubclass(schema, BaseModel):
+            # 工具参数也拒绝未知字段，避免把误传的定时参数忽略后立即发布。
+            item.args_schema = create_model(schema.__name__, __base__=schema,
+                                            __config__=ConfigDict(extra="forbid"))
+        item.handle_tool_error = True
+        item.handle_validation_error = (
+            "参数无效，请按工具定义提供完整且正确的字段，不要传入未声明的参数。"
+        )
+    return tools

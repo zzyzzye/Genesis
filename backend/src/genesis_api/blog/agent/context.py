@@ -23,13 +23,17 @@ def tool_manifest() -> list[dict[str, str | bool]]:
         {"name": name, "description": description, "mode": mode, "requires_confirmation": requires}
         for name, description, mode, requires in (
             ("list_posts", "列出博客文章及其状态", "read", False),
+            ("list_taxonomies", "读取分类和标签的真实标识与名称", "read", False),
             ("get_post", "读取当前上下文中的文章内容", "read", False),
             ("search_posts", "按标题、摘要、正文和标签搜索文章", "read", False),
             ("analyze_post", "分析文章结构、表达和内容质量", "read", False),
             ("suggest_revision", "生成文章优化建议或完整修改稿", "read", False),
-            ("create_draft", "创建一篇新的文章草稿", "write", True),
+            ("create_draft", "创建新草稿，可同时设置分类标签", "write", True),
+            ("create_scheduled_post", "一次创建新文章并安排定时发布", "write", True),
             ("create_and_publish", "一次创建并发布新文章", "write", True),
-            ("update_post", "修改现有文章内容或元数据", "write", True),
+            ("update_post", "修改文章、分类标签，安排或取消定时发布", "write", True),
+            ("schedule_post", "为已有文章安排定时发布，已公开文章先撤回为草稿", "write", True),
+            ("cancel_post_schedule", "取消文章已有的定时发布计划", "write", True),
             ("delete_post", "将文章移入回收站，可恢复为草稿", "write", True),
             ("publish_post", "发布文章", "write", True),
         )
@@ -48,6 +52,7 @@ def _post_list_item(post: BlogPost) -> dict[str, object]:
     return {
         "id": str(post.id), "title": post.title, "excerpt": post.excerpt,
         "status": post.status.value, "updated_at": post.updated_at.isoformat(),
+        "scheduled_at": post.scheduled_at.isoformat() if post.scheduled_at else None,
         "category": post.category.name if post.category else None,
         "categories": [category.name for category in post.categories],
         "tags": [tag.slug for tag in post.tags],
@@ -67,6 +72,7 @@ def _persisted_post(post: BlogPost) -> dict[str, object]:
         "id": str(post.id), "title": post.title, "excerpt": post.excerpt,
         "content_markdown": post.content_markdown,
         "database_status": post.status.value,
+        "scheduled_at": post.scheduled_at.isoformat() if post.scheduled_at else None,
         "updated_at": post.updated_at.isoformat(),
         "tags": [tag.slug for tag in post.tags],
     }
@@ -110,7 +116,7 @@ def build_blog_agent_context(
     }
     context: dict[str, object] = {
         "module": "blog", "page": page, "available_tools": tool_manifest(),
-        "write_policy": "写入、覆盖、删除和发布必须先返回待确认操作，不能直接执行。",
+        "write_policy": "写操作通过业务工具，审阅模式等待确认，自动模式执行后以真实回执为准。",
     }
     if page["type"] == "posts_list":
         posts = list_admin_posts(session)
@@ -118,6 +124,7 @@ def build_blog_agent_context(
             "total": len(posts),
             "published": sum(post.status is BlogPostStatus.PUBLISHED for post in posts),
             "draft": sum(post.status is BlogPostStatus.DRAFT for post in posts),
+            "scheduled": sum(post.scheduled_at is not None for post in posts),
         }
         context["articles"] = [_post_list_item(post) for post in posts]
         context["current_post"] = None

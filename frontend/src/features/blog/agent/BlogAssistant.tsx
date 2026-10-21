@@ -151,7 +151,7 @@ function formatDuration(milliseconds: number) {
   return `${minutes} 分 ${(seconds % 60).toFixed(2)} 秒`
 }
 
-const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming, showMetrics }: { timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; streaming: boolean; showMetrics: boolean }) {
+const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming, showMetrics, operationOnly = false }: { timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; streaming: boolean; showMetrics: boolean; operationOnly?: boolean }) {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!streaming || !timing) return
@@ -168,6 +168,10 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
   const speed = metrics?.tokens_per_second != null && count != null && seconds !== null && seconds > 0 ? count / seconds : null
   const suffix = source === 'estimated' ? '（估算）' : ''
   const waiting = streaming && !firstToken && metrics?.first_token_seconds == null
+  if (operationOnly && !streaming) {
+    const total = metrics ? metrics.total_seconds * 1000 : timing ? end - timing.startedAt : null
+    return total === null ? null : <div className="studio-assistant__timing" aria-label="操作耗时"><span><Clock3 aria-hidden="true" />处理耗时 <span className="studio-assistant__duration">{formatDuration(total)}</span></span></div>
+  }
   if (waiting) return <div className="studio-assistant__timing" aria-label="生成耗时">
     <span><Timer aria-hidden="true" />等待首字 <span className="studio-assistant__duration">{formatDuration(timing ? end - timing.startedAt : (metrics?.total_seconds ?? 0) * 1000)}</span></span>
     {timing && end - timing.startedAt >= 15000 && <span className="studio-assistant__wait-hint">模型尚未返回正文，可继续等待，或停止后切换模型。</span>}
@@ -193,13 +197,15 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
 const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, timing, metrics, proposals, executedProposals, index, onConfirm, confirming, streaming, onProgress, onAnswer, questionDisabled, questionAnswer, targetPost }: AssistantMessage & { index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void; onAnswer: (answer: string) => void; questionDisabled: boolean; questionAnswer?: string; targetPost: AssistantEditorContext | null }) {
   const legacyAction = streaming ? null : parsePendingAction(content)
   const actions = proposals?.length ? proposals : legacyAction ? [legacyAction] : []
+  const operationOnly = actions.length > 0 && !timing?.firstTokenAt && metrics?.first_token_seconds == null
   const question = splitAgentQuestion(content)
   return <div className="studio-assistant__response">
     {question.text && <div className="studio-assistant__markdown">{streaming ? <TypewriterText content={question.text} onProgress={onProgress} /> : <Markdown remarkPlugins={[remarkGfm]}>{question.text}</Markdown>}</div>}
     {!streaming && error && <p className="studio-assistant__message-status">{error.includes('停止') && !content.trim() ? '已停止，未收到模型正文。' : error}</p>}
     {!streaming && !error && status === 'completed' && !content.trim() && !actions.length && <p className="studio-assistant__message-status">本轮未返回正文，请重试或切换模型。</p>}
+    {!streaming && !error && !content.trim() && actions.length > 0 && <p className="studio-assistant__stream-text">{actions.every(action => action.executed || executedProposals?.includes(action.proposal_id)) ? '操作已执行，结果如下。' : '操作提议已准备，请核对后确认。'}</p>}
     {question.request && <AgentQuestion key={question.request.id} request={question.request} disabled={questionDisabled} answered={questionAnswer !== undefined} answerContent={questionAnswer} onAnswer={onAnswer} />}
-    <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} />
+    <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} operationOnly={operationOnly} />
     {actions.map((action) => <BlogActionProposal key={action.proposal_id} action={action} targetPost={targetPost} executed={Boolean(action.executed || executedProposals?.includes(action.proposal_id))} busy={confirming} disabled={streaming} onConfirm={() => { void onConfirm(index, action) }} />)}
   </div>
 })

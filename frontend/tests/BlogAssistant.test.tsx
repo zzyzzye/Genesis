@@ -73,6 +73,26 @@ describe('助手失败后的继续对话', () => {
     expect(screen.queryByRole('form', { name: '补充关键信息' })).not.toBeInTheDocument()
   })
 
+  it('只有操作提议时显示真实操作状态和处理耗时，不误报未输出正文', async () => {
+    const proposal: AiActionProposal = {
+      type: 'pending_action', proposal_id: 'only-action', module: 'blog', action: 'create_draft',
+      payload: { title: '完整操作' }, summary: '创建草稿', requires_confirmation: true,
+      expires_at: '2099-01-01T00:00:00Z', proposal_token: 'test',
+    }
+    vi.mocked(createAiChatRun).mockResolvedValue({ id: 'only-action-run', status: 'pending' })
+    vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
+      callbacks.onProposals?.([proposal])
+      return Promise.resolve('completed')
+    })
+    mount([{ role: 'assistant', content: '你好' }])
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '创建草稿' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
+    expect(await screen.findByText('操作提议已准备，请核对后确认。')).toBeInTheDocument()
+    expect(screen.getByText('处理耗时')).toBeInTheDocument()
+    expect(screen.queryByText('本轮未返回正文，请重试或切换模型。')).not.toBeInTheDocument()
+    expect(screen.queryByText(/tokens\/s 不可用/)).not.toBeInTheDocument()
+  })
+
   it('正文没有 JSON 时仍展示工具提议，失败可重试，成功后禁用确认', async () => {
     const proposal: AiActionProposal = {
       type: 'pending_action', proposal_id: 'draft-1', module: 'blog', action: 'create_draft',

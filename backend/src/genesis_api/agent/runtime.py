@@ -6,6 +6,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
+from datetime import UTC, datetime
 from typing import Any, TypeVar, cast
 from urllib.parse import urlparse
 
@@ -267,7 +268,10 @@ class EmbeddedAgentRuntime:
                 tools=[*capability.tools, ask_user_question],
                 system_prompt=capability.prompt + "\n" + COLLABORATION_PROMPT,
                 checkpointer=self._checkpointer,
-                middleware=[AttachmentFilesMiddleware()] if module == "blog" else [],
+                middleware=[
+                    *([AttachmentFilesMiddleware()] if module == "blog" else []),
+                    *capability.middleware,
+                ],
                 name=capability.name,
             )
         return self._graphs[key]
@@ -330,6 +334,7 @@ class EmbeddedAgentRuntime:
                     if request.execution_mode == "automatic"
                     else "执行策略：审阅模式，写操作生成提议后等待用户确认。\n"
                 )
+                + f"当前 UTC 时间：{datetime.now(UTC).isoformat()}。\n"
                 + "本轮服务端实际调用的模型配置："
                 + json.dumps({"provider": provider, "model": model}, ensure_ascii=False)
                 + "\nGenesis Agent 是产品中的助手角色名，不是底层模型型号。"

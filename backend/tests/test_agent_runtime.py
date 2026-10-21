@@ -5,13 +5,16 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
 from uuid import uuid4
 
 import httpx
 import pytest
+from fastapi import HTTPException
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 from pydantic import SecretStr
 
 from genesis_api.agent.context import agent_invocation_context, automatic_actions_allowed
@@ -24,7 +27,9 @@ from genesis_api.agent.runtime import (
 from genesis_api.ai.schemas import AiChatRequest, AiMessage
 from genesis_api.ai.service import AgentService
 from genesis_api.blog.agent import tools as agent_tools
+from genesis_api.blog.agent.context import tool_manifest
 from genesis_api.blog.agent.prompt import BlogAgentPrompt
+from genesis_api.blog.models import BlogPostStatus
 from genesis_api.core.config import Settings
 from genesis_api.identity.models import UserRole
 
@@ -52,6 +57,71 @@ def test_prompt_and_message_text() -> None:
     assert _message_text(AIMessage(content=[{"type": "text", "text": "分块"}])) == ["分块"]
     assert _message_text(HumanMessage(content="问题")) == []
     assert _message_text(object()) == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automatic", [False, True])
+async def test_native_blog_boundary_corrects_errors_then_ends_after_write(
+    monkeypatch: pytest.MonkeyPatch, automatic: bool,
+) -> None:
+    """真实框架允许错误后重试，成功提议或回执不会再触发下一次模型调用。"""
+    from deepagents import create_deep_agent
+    from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    from genesis_api.blog.agent.middleware import finish_after_blog_write
+
+    class Model(FakeMessagesListChatModel):
+        def bind_tools(self, *args: Any, **kwargs: Any) -> Model:
+            return self
+
+    proposal = AgentActionProposal(
+        proposal_id=uuid4(), module="blog", action="create_draft",
+        payload={"title": "验收文章"}, summary="创建草稿",
+        expires_at=datetime(2099, 1, 1, tzinfo=UTC), proposal_token="test-placeholder",
+        executed=automatic,
+        execution_result={"status": "created"} if automatic else None,
+    )
+    monkeypatch.setattr(agent_tools, "_preview", lambda *_: proposal.model_dump_json())
+    monkeypatch.setattr(agent_tools, "_list_taxonomies", lambda: '{"categories":[],"tags":[]}')
+    arguments: dict[str, object] = {
+        "title": "验收文章", "excerpt": "摘要", "content_markdown": "正文", "slug": "test",
+        "category_ids": [], "tags": [],
+    }
+    model = Model(responses=[
+        AIMessage(content="", tool_calls=[{
+            "name": "list_taxonomies", "args": {}, "id": "read-taxonomies",
+        }]),
+        AIMessage(content="", tool_calls=[{
+            "name": "create_scheduled_post", "args": arguments, "id": "missing-time",
+        }, {
+            "name": "create_scheduled_post", "args": {
+                **arguments, "scheduled_at": "2099-01-01T09:00:00+08:00",
+            }, "id": "sibling-write",
+        }]),
+        AIMessage(content="", tool_calls=[{
+            "name": "create_scheduled_post", "args": {
+                **arguments, "scheduled_at": "2099-01-01T09:00:00+08:00",
+            }, "id": "fixed-time",
+        }]),
+        AIMessage(content="下一轮正常回答"),
+    ])
+    graph = create_deep_agent(
+        model=model, tools=agent_tools.build_blog_tools(Settings()),
+        middleware=[finish_after_blog_write], checkpointer=InMemorySaver(),
+    )
+    config: RunnableConfig = {"configurable": {"thread_id": "boundary"}}
+    with agent_invocation_context(uuid4(), "owner", "blog", execution_mode=(
+        "automatic" if automatic else "approval_required"
+    )):
+        result = await graph.ainvoke({"messages": [HumanMessage(content="安排定时发布")]}, config)
+        assert model.i == 3
+        outputs = [message for message in result["messages"] if isinstance(message, ToolMessage)]
+        assert len(outputs) == 4 and outputs[1].status == "error"
+        assert isinstance(outputs[-1].content, str)
+        assert AgentActionProposal.model_validate_json(outputs[-1].content).executed is automatic
+        again = await graph.ainvoke({"messages": [HumanMessage(content="继续聊")]}, config)
+        assert again["messages"][-1].content == "下一轮正常回答"
 
 
 def test_visible_text_excludes_reasoning_and_non_text_blocks() -> None:
@@ -446,12 +516,16 @@ async def test_blog_tools_keep_invocation_context_isolated(
         id=uuid4(),
         title="标题",
         excerpt="摘要",
-        status=SimpleNamespace(value="draft"),
-        updated_at=SimpleNamespace(isoformat=lambda: "2026-09-22T00:00:00+00:00"),
+        status=BlogPostStatus.DRAFT,
+        updated_at=datetime(2026, 9, 22, tzinfo=UTC),
         category=None,
+        category_id=None,
+        categories=[],
         tags=[],
         content_markdown="# 正文",
         slug="post",
+        scheduled_at=None, published_at=None, cover_image_url=None,
+        is_featured=False, read_time_minutes=1,
     )
     monkeypatch.setattr(agent_tools, "SessionLocal", FakeSession)
     monkeypatch.setattr(agent_tools, "list_admin_posts", lambda _: [post])
@@ -499,7 +573,7 @@ async def test_blog_tools_keep_invocation_context_isolated(
             )
         )
         assert deletion["payload"]["target_title"] == post.title
-        with pytest.raises(ValueError, match="必要字段"):
+        with pytest.raises(HTTPException, match="必要字段"):
             agent_tools._preview(
                 "create_draft",
                 {"title": "缺少其他字段"},
@@ -530,6 +604,7 @@ async def test_built_tools_delegate_without_http(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(agent_tools, "_search_posts", lambda query: f"search:{query}")
     monkeypatch.setattr(agent_tools, "_preview", lambda action, payload, settings: action)
     tools = {item.name: item for item in agent_tools.build_blog_tools(Settings())}
+    assert set(tools) == {entry["name"] for entry in tool_manifest()}
 
     assert await tools["list_posts"].ainvoke({}) == "list"
     assert await tools["get_post"].ainvoke({"post_id": "1"}) == "post:1"
@@ -542,6 +617,28 @@ async def test_built_tools_delegate_without_http(monkeypatch: pytest.MonkeyPatch
     assert await tools["create_and_publish"].ainvoke(
         {"title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s"}
     ) == "create_and_publish"
-    assert await tools["update_post"].ainvoke({"post_id": "1", "changes": "{}"}) == "update_post"
-    assert await tools["delete_post"].ainvoke({"post_id": "1"}) == "delete_post"
-    assert await tools["publish_post"].ainvoke({"post_id": "1"}) == "publish_post"
+    assert await tools["create_scheduled_post"].ainvoke({
+        "title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s",
+        "scheduled_at": "2099-01-01T09:00:00+08:00",
+        "category_ids": [], "tags": [],
+    }) == "create_draft"
+    assert await tools["schedule_post"].ainvoke({
+        "post_id": "1", "scheduled_at": "2099-01-01T09:00:00+08:00",
+        "expected_updated_at": "2026-01-01T00:00:00Z",
+    }) == "update_post"
+    version = {"post_id": "1", "expected_updated_at": "2026-01-01T00:00:00Z"}
+    assert await tools["cancel_post_schedule"].ainvoke(version) == "update_post"
+    assert await tools["update_post"].ainvoke({**version, "changes": "{}"}) == "update_post"
+    assert await tools["delete_post"].ainvoke(version) == "delete_post"
+    assert await tools["publish_post"].ainvoke(version) == "publish_post"
+    missing_version = await tools["publish_post"].ainvoke({
+        "type": "tool_call", "name": "publish_post", "id": "no-version", "args": {"post_id": "1"},
+    })
+    assert missing_version.status == "error"
+    unexpected = await tools["create_and_publish"].ainvoke({
+        "type": "tool_call", "name": "create_and_publish", "id": "unexpected", "args": {
+            "title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s",
+            "scheduled_at": "2099-01-01T09:00:00+08:00",
+        },
+    })
+    assert unexpected.status == "error" and "未声明的参数" in unexpected.content

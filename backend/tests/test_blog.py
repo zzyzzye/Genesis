@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import AsyncGenerator, Generator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -18,7 +18,9 @@ from genesis_api.api.routes.blog import router
 from genesis_api.blog.agent import actions as blog_actions
 from genesis_api.blog.agent import tools as blog_agent_tools
 from genesis_api.blog.agent.actions import confirm_blog_action
-from genesis_api.blog.models import BlogComment, BlogPost, BlogPostStatus, BlogTag
+from genesis_api.blog.models import BlogCategory, BlogComment, BlogPost, BlogPostStatus, BlogTag
+from genesis_api.blog.operations import touch_post
+from genesis_api.blog.publication import publish_due_posts
 from genesis_api.core.config import Settings
 from genesis_api.database import seed
 from genesis_api.database.base import Base
@@ -891,6 +893,230 @@ def test_agent_slug_conflicts_rollback_without_changing_articles(
     )
     assert isinstance(result, dict) and result["status"] == "updated"
     assert target.excerpt == "成功更新摘要"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automatic", [False, True])
+async def test_agent_creates_scheduled_post_with_taxonomy_in_one_operation(
+    database_session: Session, monkeypatch: pytest.MonkeyPatch, automatic: bool,
+) -> None:
+    """同一次操作保存分类、标签和计划；审阅不提前写入，自动模式直接执行。"""
+    add_blog_content(database_session)
+    owner = database_session.scalar(select(User).where(User.handle == "genesis"))
+    assert owner is not None
+    categories = [BlogCategory(name="工程实践", slug="practice"),
+                  BlogCategory(name="写作", slug="writing")]
+    database_session.add_all(categories)
+    database_session.commit()
+    category_ids = [str(item.id) for item in categories]
+    sessions = sessionmaker(bind=database_session.get_bind(), expire_on_commit=False)
+    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessions)
+    tools = {item.name: item for item in blog_agent_tools.build_blog_tools(Settings())}
+    scheduled = (datetime.now(UTC) + timedelta(days=2)).isoformat()
+    with agent_invocation_context(owner.id, "owner", "blog", execution_mode=(
+        "automatic" if automatic else "approval_required"
+    )):
+        taxonomy = json.loads(await tools["list_taxonomies"].ainvoke({}))
+        assert {item["id"] for item in taxonomy["categories"]} == set(category_ids)
+        assert {item["name"] for item in taxonomy["tags"]} == {"工程", "随笔"}
+        proposal = json.loads(await tools["create_scheduled_post"].ainvoke({
+            "title": "计划文章", "excerpt": "摘要", "content_markdown": "完整正文",
+            "slug": "agent-scheduled", "category_ids": category_ids,
+            "tags": [{"name": "工程", "slug": "engineering"}, {"name": "新标签", "slug": "new"}],
+            "scheduled_at": scheduled, "cover_image_url": "https://example.com/cover.png",
+        }))
+    assert proposal["executed"] is automatic
+    assert proposal["payload"]["category_names"] == ["工程实践", "写作"]
+    if not automatic:
+        assert database_session.scalar(select(BlogPost).where(
+            BlogPost.slug == "agent-scheduled",
+        )) is None
+        confirm_blog_action("create_draft", proposal["payload"], current_user=owner,
+                            session=database_session)
+    database_session.expire_all()
+    post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "agent-scheduled"))
+    assert post is not None and post.status is BlogPostStatus.DRAFT
+    assert post.scheduled_at is not None and post.published_at is None
+    assert {str(item.id) for item in post.categories} == set(category_ids)
+    assert {tag.name for tag in post.tags} == {"工程", "新标签"}
+    assert post.cover_image_url == "https://example.com/cover.png"
+    due = datetime.fromisoformat(scheduled) + timedelta(minutes=1)
+    assert publish_due_posts(sessions, now=due) == 1
+    assert publish_due_posts(sessions, now=due) == 0
+    database_session.expire_all()
+    published = database_session.get(BlogPost, post.id)
+    assert published is not None and published.status is BlogPostStatus.PUBLISHED
+    assert published.scheduled_at is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automatic", [False, True])
+async def test_agent_schedule_edit_cancel_and_publish_preserve_article(
+    database_session: Session, monkeypatch: pytest.MonkeyPatch, automatic: bool,
+) -> None:
+    """定时、普通修改、取消、立即发布沿用人工流程，省略字段不会清除计划。"""
+    add_blog_content(database_session)
+    owner = database_session.scalar(select(User).where(User.handle == "genesis"))
+    post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "private-draft"))
+    assert owner is not None and post is not None
+    owner_id, post_id = owner.id, post.id
+    category = BlogCategory(name="保留分类", slug="preserved")
+    post.category = category
+    post.categories = [category]
+    database_session.commit()
+    category_id = category.id
+    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
+        bind=database_session.get_bind(), expire_on_commit=False,
+    ))
+    tools = {item.name: item for item in blog_agent_tools.build_blog_tools(Settings())}
+
+    async def update(changes: dict[str, object], tool_name: str = "update_post") -> None:
+        with agent_invocation_context(owner_id, "owner", "blog", execution_mode=(
+            "automatic" if automatic else "approval_required"
+        )):
+            detail = json.loads(await tools["get_post"].ainvoke({"post_id": str(post_id)}))
+            arguments: dict[str, object] = {
+                "post_id": str(post_id),
+                "expected_updated_at": detail["updated_at"],
+            }
+            if tool_name == "update_post":
+                arguments["changes"] = json.dumps(changes)
+            elif tool_name == "schedule_post":
+                arguments["scheduled_at"] = changes["scheduled_at"]
+            proposal = json.loads(await tools[tool_name].ainvoke(arguments))
+        assert proposal["payload"]["expected_updated_at"] == detail["updated_at"]
+        if not automatic:
+            confirm_blog_action("update_post", proposal["payload"], current_user=owner,
+                                session=database_session)
+        database_session.expire_all()
+
+    scheduled = (datetime.now(UTC) + timedelta(days=2)).isoformat()
+    await update({"status": "draft", "scheduled_at": scheduled}, "schedule_post")
+    assert post.scheduled_at is not None and post.status is BlogPostStatus.DRAFT
+    planned_time = post.scheduled_at
+    await update({"excerpt": "保留计划的新摘要"})
+    assert post.scheduled_at == planned_time
+    assert post.category_id == category_id
+    await update({"category_ids": None})
+    assert post.category_id == category_id
+    await update({"category_ids": [], "tags": []})
+    assert post.category_id is None and post.categories == []
+    await update({"scheduled_at": None}, "cancel_post_schedule")
+    assert post.scheduled_at is None and post.status is BlogPostStatus.DRAFT
+    await update({"scheduled_at": scheduled})
+    await update({"status": "published"})
+    assert post.status is BlogPostStatus.PUBLISHED and post.scheduled_at is None
+    assert post.content_markdown == "# 草稿" and post.excerpt == "保留计划的新摘要"
+    await update({"status": "draft", "scheduled_at": None})
+    assert post.status is BlogPostStatus.DRAFT and post.published_at is None
+    with agent_invocation_context(owner_id, "owner", "blog"):
+        latest = json.loads(await tools["get_post"].ainvoke({"post_id": str(post_id)}))
+        feedback = await tools["cancel_post_schedule"].ainvoke({
+            "post_id": str(post_id), "expected_updated_at": latest["updated_at"],
+        })
+        assert "无需取消" in feedback
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("action", ["update_post", "publish_post", "delete_post"])
+async def test_agent_checks_versions_before_proposal_and_confirmation(
+    database_session: Session, monkeypatch: pytest.MonkeyPatch, action: str,
+) -> None:
+    """读取后或确认前出现新版本，都不能覆盖、公开或删除较新的文章。"""
+    add_blog_content(database_session)
+    owner = database_session.scalar(select(User).where(User.handle == "genesis"))
+    post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "private-draft"))
+    assert owner is not None and post is not None
+    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
+        bind=database_session.get_bind(), expire_on_commit=False,
+    ))
+    tools = {item.name: item for item in blog_agent_tools.build_blog_tools(Settings())}
+    with agent_invocation_context(owner.id, "owner", "blog"):
+        detail = json.loads(await tools["get_post"].ainvoke({"post_id": str(post.id)}))
+        arguments = {"post_id": str(post.id), "expected_updated_at": detail["updated_at"]}
+        if action == "update_post":
+            arguments["changes"] = '{"title":"旧版本改写"}'
+        proposal = json.loads(await tools[action].ainvoke(arguments))
+        post.title = "其他页面的新标题"
+        touch_post(post)
+        database_session.commit()
+        feedback = await tools[action].ainvoke({
+            "type": "tool_call", "name": action, "args": arguments, "id": "stale-version",
+        })
+        assert feedback.status == "error" and "文章已变更" in feedback.content
+    with pytest.raises(HTTPException) as raised:
+        confirm_blog_action(
+            action, proposal["payload"], current_user=owner, session=database_session,
+        )
+    assert raised.value.status_code == 409
+    assert post.title == "其他页面的新标题" and post.deleted_at is None
+    assert post.status is BlogPostStatus.DRAFT
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("changes, reason", [
+    ({"scheduled_at": "2020-01-01T09:00:00+08:00"}, "晚于当前时间"),
+    ({"scheduled_at": "2099-01-01T09:00:00"}, "时区偏移"),
+    ({"category_ids": [str(uuid4())]}, "分类不存在"),
+    ({"tags": [{"name": "误改共享名称", "slug": "engineering"}]}, "沿用其名称"),
+    ({"schedule_at": "2099-01-01T09:00:00+08:00"}, "不支持的修改字段"),
+])
+async def test_agent_invalid_arguments_return_correctable_native_tool_errors(
+    database_session: Session, monkeypatch: pytest.MonkeyPatch,
+    changes: dict[str, object], reason: str,
+) -> None:
+    """无效参数不生成确认卡或写入，修正后同一个工具可继续处理。"""
+    add_blog_content(database_session)
+    owner = database_session.scalar(select(User).where(User.handle == "genesis"))
+    post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "private-draft"))
+    assert owner is not None and post is not None
+    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
+        bind=database_session.get_bind(), expire_on_commit=False,
+    ))
+    tool = next(item for item in blog_agent_tools.build_blog_tools(Settings())
+                if item.name == "update_post")
+    with agent_invocation_context(owner.id, "owner", "blog"):
+        result = await tool.ainvoke({
+            "type": "tool_call", "name": "update_post", "id": "bad", "args": {
+                "post_id": str(post.id), "changes": json.dumps(changes),
+                "expected_updated_at": post.updated_at.replace(tzinfo=UTC).isoformat(),
+            },
+        })
+        assert result.status == "error" and reason in result.content
+        assert post.title == "尚未发布的草稿" and post.scheduled_at is None
+        valid = json.loads(await tool.ainvoke({
+            "post_id": str(post.id), "changes": '{"excerpt":"修正后的摘要"}',
+            "expected_updated_at": post.updated_at.replace(tzinfo=UTC).isoformat(),
+        }))
+        assert valid["type"] == "pending_action" and not valid["executed"]
+
+
+@pytest.mark.anyio
+async def test_agent_search_uses_taxonomies_and_literal_text(
+    database_session: Session, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    add_blog_content(database_session)
+    owner = database_session.scalar(select(User).where(User.handle == "genesis"))
+    post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "private-draft"))
+    assert owner is not None and post is not None
+    post.title = "100% 完成"
+    category = BlogCategory(name="分类关键词", slug="topic")
+    post.categories = [category]
+    database_session.commit()
+    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
+        bind=database_session.get_bind(), expire_on_commit=False,
+    ))
+    with agent_invocation_context(owner.id, "owner", "blog"):
+        assert [item["slug"] for item in json.loads(blog_agent_tools._search_posts("工程"))] == [
+            "published-featured",
+        ]
+        matches = json.loads(blog_agent_tools._search_posts("分类关键词"))
+        assert [item["slug"] for item in matches] == ["private-draft"]
+        assert len(json.loads(blog_agent_tools._search_posts("100%"))) == 1
+        assert json.loads(blog_agent_tools._search_posts("%"))[0]["title"] == "100% 完成"
+        post.deleted_at = datetime.now(UTC)
+        database_session.commit()
+        assert json.loads(blog_agent_tools._search_posts("100%")) == []
 
 
 @pytest.mark.anyio

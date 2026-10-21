@@ -31,6 +31,7 @@ def make_post(*, title: str, status: BlogPostStatus, content: str) -> SimpleName
         excerpt=f"{title} 的摘要",
         content_markdown=content,
         status=status,
+        scheduled_at=None,
         updated_at=datetime(2026, 9, 7, tzinfo=UTC),
         category=SimpleNamespace(name="未分类"),
         categories=[SimpleNamespace(name="未分类")],
@@ -66,7 +67,7 @@ def test_posts_list_context_uses_database_metadata_without_article_bodies(
         "section": "posts",
         "type": "posts_list",
     }
-    assert result["article_summary"] == {"total": 2, "published": 1, "draft": 1}
+    assert result["article_summary"] == {"total": 2, "published": 1, "draft": 1, "scheduled": 0}
     assert result["current_post"] is None
     assert result["articles"] == [
         {
@@ -74,6 +75,7 @@ def test_posts_list_context_uses_database_metadata_without_article_bodies(
             "title": "已发布文章",
             "excerpt": "已发布文章 的摘要",
             "status": "published",
+            "scheduled_at": None,
             "updated_at": "2026-09-07T00:00:00+00:00",
             "category": "未分类",
             "categories": ["未分类"],
@@ -84,6 +86,7 @@ def test_posts_list_context_uses_database_metadata_without_article_bodies(
             "title": "草稿文章",
             "excerpt": "草稿文章 的摘要",
             "status": "draft",
+            "scheduled_at": None,
             "updated_at": "2026-09-07T00:00:00+00:00",
             "category": "未分类",
             "categories": ["未分类"],

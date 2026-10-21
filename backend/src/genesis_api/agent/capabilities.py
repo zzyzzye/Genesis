@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
+from langchain.agents.middleware import AgentMiddleware
 from langchain_core.tools import BaseTool
 from sqlalchemy.orm import Session
 
@@ -24,12 +26,14 @@ class ResolvedAgentCapability:
         name: 创建 Agent 图时使用的名称。
         prompt: 当前模块的系统提示词。
         tools: LangChain 工具列表；冻结数据类不阻止列表内容被修改，调用方应只读使用。
+        middleware: 业务声明的原生流程边界，不替代框架执行循环。
     """
 
     module: str
     name: str
     prompt: str
     tools: list[BaseTool]
+    middleware: tuple[AgentMiddleware[Any, Any], ...] = ()
 
 
 class AgentCapabilityRegistry:
@@ -64,6 +68,7 @@ class AgentCapabilityRegistry:
                 name=self._blog.name,
                 prompt=self._blog.system_prompt(),
                 tools=self._blog.build_tools(settings),
+                middleware=self._blog.middleware(),
             )
         if module == self._media.module:
             return ResolvedAgentCapability(
