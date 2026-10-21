@@ -142,6 +142,7 @@ export interface BlogPostWrite {
   read_time_minutes: number
   tags: BlogTagWrite[]
   expected_updated_at?: string | null
+  scheduled_at?: string | null
 }
 
 export interface BlogPostAdmin extends BlogPostWrite {
@@ -308,8 +309,55 @@ export function updateCurrentUser(token: string, data: ProfileUpdateData): Promi
   })
 }
 
-export function getAdminBlogPosts(token: string): Promise<BlogPostAdmin[]> {
-  return request<BlogPostAdmin[]>('/admin/blog/posts', { headers: authHeaders(token) })
+export function getAdminBlogPosts(token: string, signal?: AbortSignal): Promise<BlogPostAdmin[]> {
+  return request<BlogPostAdmin[]>('/admin/blog/posts', { headers: authHeaders(token), signal })
+}
+
+export interface ArticleImportItem {
+  path: string
+  title: string
+  slug: string
+  categories: string[]
+  tags: string[]
+  issue: string | null
+}
+
+export interface ArticleOperationResult {
+  operation_id: string
+  affected_ids: string[]
+  skipped: string[]
+}
+
+export type ArticleBatchAction = 'publish' | 'unpublish' | 'categories' | 'tags' | 'schedule' | 'cancel_schedule' | 'trash' | 'restore' | 'permanent'
+
+export interface ArticleBatchWrite {
+  operation_id: string
+  action: ArticleBatchAction
+  items: { id: string; expected_updated_at: string }[]
+  category_ids?: string[]
+  tag_ids?: string[]
+  scheduled_at?: string
+}
+
+function importForm(files: File[]) {
+  const data = new FormData()
+  for (const file of files) data.append('files', file)
+  return data
+}
+
+export function previewArticleImport(token: string, files: File[], signal: AbortSignal): Promise<{ items: ArticleImportItem[] }> {
+  return request('/admin/blog/posts/import/preview', { method: 'POST', headers: authHeaders(token), body: importForm(files), signal })
+}
+
+export function importArticles(token: string, files: File[], operationId: string, paths: string[]): Promise<ArticleOperationResult> {
+  const data = importForm(files)
+  data.append('operation_id', operationId)
+  data.append('paths', JSON.stringify(paths))
+  return request('/admin/blog/posts/import', { method: 'POST', headers: authHeaders(token), body: data })
+}
+
+export function batchArticles(token: string, data: ArticleBatchWrite): Promise<ArticleOperationResult> {
+  return request('/admin/blog/posts/bulk', { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
 }
 
 /** 导出服务器已保存内容；整库范围与列表搜索、状态和分页独立。 */

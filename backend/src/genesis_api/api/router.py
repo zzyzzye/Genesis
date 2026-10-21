@@ -9,6 +9,7 @@ from genesis_api.api.routes import (
     blog,
     blog_attachments,
     blog_comments,
+    blog_operations,
     blog_pages,
     health,
     llm,
@@ -28,6 +29,7 @@ api_router.include_router(blog_comments.public_router)
 api_router.include_router(blog_comments.admin_router)
 api_router.include_router(blog_pages.public_router)
 api_router.include_router(blog_pages.admin_router)
+api_router.include_router(blog_operations.router)
 api_router.include_router(admin_blog.router)
 api_router.include_router(llm.router)
 api_router.include_router(ai.router)

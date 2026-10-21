@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from genesis_api.blog.models import BlogPostStatus
 
@@ -123,10 +123,12 @@ class BlogPostWrite(BaseModel):
         if values is not None and len(values) != len(set(values)):
             raise ValueError("分类不能重复")
         return values
+
     status: BlogPostStatus = BlogPostStatus.DRAFT
     is_featured: bool = False
     read_time_minutes: int = Field(default=1, ge=1, le=120)
     published_at: datetime | None = None
+    scheduled_at: AwareDatetime | None = None
     # 由后台路由与数据库版本比对，模型本身不检查并发冲突，也不持久化此字段。
     expected_updated_at: datetime | None = None
     tags: list[BlogTagWrite] = Field(default_factory=list, max_length=10)
@@ -143,10 +145,15 @@ class BlogPostWrite(BaseModel):
                 Pydantic 会将此错误汇总到 ValidationError。
         """
         # 草稿可以暂缺内容；公开发布仍必须具备可阅读的标题、摘要和正文。
-        if self.status is BlogPostStatus.PUBLISHED and not all(
+        if (self.status is BlogPostStatus.PUBLISHED or self.scheduled_at is not None) and not all(
             value.strip() for value in (self.title, self.excerpt, self.content_markdown)
         ):
             raise ValueError("发布前请填写标题、摘要和正文")
+        if self.scheduled_at is not None:
+            if self.status is BlogPostStatus.PUBLISHED:
+                raise ValueError("已发布文章不能同时安排定时发布，请先撤回为草稿")
+            if self.scheduled_at <= datetime.now(UTC):
+                raise ValueError("定时发布时间必须晚于当前时间")
         return self
 
     @field_validator("tags")
@@ -176,6 +183,7 @@ class BlogPostAdminRead(BaseModel):
 
     id: UUID
     deleted_at: datetime | None = None
+    scheduled_at: datetime | None = None
     slug: str
     title: str
     excerpt: str
@@ -193,7 +201,7 @@ class BlogPostAdminRead(BaseModel):
     author: BlogAuthor
     tags: list[BlogTagRead]
 
-    @field_validator("deleted_at", "updated_at", "created_at", "published_at")
+    @field_validator("deleted_at", "scheduled_at", "updated_at", "created_at", "published_at")
     @classmethod
     def timestamps_have_timezone(cls, value: datetime | None) -> datetime | None:
         """数据库驱动丢失时区时按 UTC 返回，使并发版本可原样回传。"""

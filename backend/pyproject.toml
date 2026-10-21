@@ -22,6 +22,7 @@ dependencies = [
     "pwdlib[argon2]>=0.3.1",
     "pydantic-settings>=2.15.0",
     "pyjwt>=2.13.0",
+    "pyyaml>=6.0.3",
     "sqlalchemy>=2.0.52",
     "ua-parser>=1.0.1,<2",
 ]
@@ -32,6 +33,7 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.5",
+    "types-pyyaml>=6.0",
 ]
 
 [[tool.uv.index]]

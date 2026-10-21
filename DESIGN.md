@@ -32,6 +32,12 @@ components:
 
 # Genesis Design System
 
+### 文章导入、批量管理与定时发布
+
+文章管理继续使用 `shell.css` 的中性令牌及 `posts.css` 的扁平列表。`PostManagement.css` 仅拥有导入预览、批量选择与日期字段布局；不新增色板、卡片边框或嵌套面板。选中行使用 `--studio-soft`，标题、路径和冲突原因按文字层级对齐；复用 Lucide 文件、上传和加载图标。导入和批量确认复用 `BlogWorkflowDialog`，导入使用 640px 宽度变体，窄屏保留 16px 外侧空间并自然换行。加载旋转遵循减少动态效果偏好。
+
+日期与批量动作均选择原生控件：浏览器拥有日历与下拉弹出层的语言、尺寸和键盘行为，应用只拥有关闭状态的中性输入底面、关联中文说明、校验与时区展示。支持 `showPicker` 时通过带可访问名称的 CalendarDays 图标按钮打开原生日历，否则保留系统入口。日期输入聚焦时保持原背景，无边框、描边或阴影。分类标签批量替换复用 `TaxonomyPicker` 的只选变体，不提供无效的新建入口。
+
 ### 全站 FPS 监测
 
 `features/performance/FpsMonitor` 在 App 级唯一挂载并提供显示位置上下文；各页面的页头通过同一 `FpsStatusSlot` 显式注册状态位置，React portal 只将读数呈现到该位置，切换路由不重启计数器。偏好由 `preferences.ts` 保存，默认关闭、仅当前浏览器生效、跨标签同步。外观页 `FpsSettings` 使用扁平说明行和原生 button switch。FPS 属于页头状态文字，与导航操作对齐；画布使用已有作品工具栏。读数宽 48px，11px tabular-nums 数字、9px FPS 标签，浅色 #686868；深色影音通过 `--fps-status-ink: #a0a0a0` 适配。无胶囊背景、边框、阴影、固定定位或独立层级；不追踪助手、回顶按钮或控件几何，不使用 MutationObserver / ResizeObserver 避让。开启后延迟加载 stats.js，复用原生 Panel.update 读取 FPS，同步构造结束立即还原面板工厂，不另建计数算法或绘制 Canvas 图表。首次显示「—」，约每秒更新读数，只更新读数组件，不逐帧触发 React 渲染；后台停止帧回调，恢复时重建基线，关闭与卸载清理。统计动画回调 FPS，不宣称为屏幕实际呈现帧率，不上传监测数据。

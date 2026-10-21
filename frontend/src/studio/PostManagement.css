@@ -1,0 +1,41 @@
+.post-import-dialog { width: min(640px, calc(100vw - 32px)); }
+.post-import-files { display: grid; gap: 10px; margin-bottom: 18px; }
+.post-import-files > button { display: inline-flex; align-items: center; justify-self: start; gap: 8px; }
+.post-import-files > span, .post-import-file small, .post-import-item small, .post-schedule-field small { color: var(--studio-muted); font-size: 12px; line-height: 1.7; }
+.post-import-file { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.post-import-file > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.post-import-file > button { padding-inline: 8px; font-size: 12px; }
+.post-import-file > svg { flex: none; color: var(--studio-muted); }
+.post-import-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-block: 18px 10px; }
+.post-import-summary strong { font-size: 13px; }
+.post-import-summary button { font-size: 12px; }
+.post-import-items { max-height: 38dvh; overflow: auto; }
+.post-import-item { display: flex; gap: 12px; align-items: start; padding: 14px 8px; border-radius: var(--studio-control-radius); cursor: pointer; }
+.post-import-item:hover, .post-import-item:has(input:focus-visible) { background: var(--studio-hover); }
+.post-import-item > span { min-width: 0; }
+.post-import-item strong, .post-import-item small { display: block; overflow-wrap: anywhere; }
+.post-import-item strong { font-size: 14px; font-weight: 550; }
+.post-import-item input, .studio-post-select input, .studio-post-bulkbar input { flex: none; width: 16px; height: 16px; accent-color: var(--studio-ink); margin: 4px 0 0; }
+.post-import-item.has-issue { cursor: default; }
+.post-import-item.has-issue strong { color: var(--studio-muted); }
+.post-batch-targets { padding-left: 20px; margin: 0 0 22px; max-height: 160px; overflow: auto; overflow-wrap: anywhere; color: var(--studio-muted); }
+.post-schedule-field { display: grid; gap: 8px; }
+.post-schedule-field__input { display: flex; min-width: 0; align-items: center; background: var(--studio-soft); border-radius: var(--studio-control-radius); }
+.post-schedule-field input, .post-schedule-field input:focus { flex: 1; width: 100%; min-width: 0; box-sizing: border-box; min-height: 44px; padding: 10px 12px; border: 0; outline: 0; box-shadow: none; background: transparent; color: var(--studio-ink); border-radius: var(--studio-control-radius); font: inherit; }
+.post-schedule-field__input:has(> button) input::-webkit-calendar-picker-indicator { display: none; }
+.post-schedule-field__input > button { display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; background: transparent; }
+.post-management-loading { display: flex; align-items: center; gap: 8px; color: var(--studio-muted); }
+.post-management-loading svg { width: 16px; animation: studio-post-export-spin 1s linear infinite; }
+.studio-post-bulkbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0; min-height: 40px; font-size: 12px; color: var(--studio-muted); }
+.studio-post-bulkbar > label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; min-height: 36px; }
+.studio-post-bulkbar input { margin: 0; }
+.studio-post-bulkbar button, .studio-post-bulkbar select { min-height: 36px; padding: 6px 10px; border: 0; outline: 0; box-shadow: none; border-radius: var(--studio-control-radius); background: var(--studio-soft); color: var(--studio-ink); font: inherit; }
+.studio-post-bulkbar button:hover:not(:disabled), .studio-post-bulkbar button:focus-visible { background: var(--studio-hover); }
+.studio-post-select { flex: none; display: grid; place-items: center; width: 28px; min-height: 40px; cursor: pointer; }
+.studio-post-row.is-selected { background: var(--studio-soft); border-radius: var(--studio-control-radius); }
+.studio-post-row > .studio-trash-row { flex: 1; min-width: 0; }
+.studio-post-index__toolbar { flex-wrap: wrap; }
+.studio-post-index__actions { flex-wrap: wrap; }
+.studio-post-refresh { margin-left: auto; }
+@media (max-width: 520px) { .post-import-dialog { padding: 20px; } .post-import-file { flex-wrap: wrap; } .post-import-file small { display: none; } .studio-post-index__actions { justify-content: flex-start; } .studio-post-row > .studio-post-export { width: 30px; } .studio-post-select { width: 24px; } }
+@media (prefers-reduced-motion: reduce) { .post-management-loading svg { animation: none; } }

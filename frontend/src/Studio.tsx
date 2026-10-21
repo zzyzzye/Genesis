@@ -146,6 +146,7 @@ const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; descr
 
 function PostsWorkspace({
   token,
+  onRefresh,
   onRestored,
   onPendingChange,
   attachmentAccess,
@@ -175,6 +176,7 @@ function PostsWorkspace({
   hasVersionConflict,
 }: {
   token: string
+  onRefresh: () => Promise<void>
   onRestored: (post: BlogPostAdmin) => void
   onPendingChange: (pending: boolean) => void
   attachmentAccess: EditorAttachmentAccess
@@ -202,7 +204,7 @@ function PostsWorkspace({
   hasVersionConflict: boolean
 } & ArticleTaxonomyActions) {
   if (view === 'list') {
-    return <PostsIndex token={token} feedback={feedback} onRestored={onRestored} onPendingChange={onPendingChange} onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} />
+    return <PostsIndex token={token} feedback={feedback} onRestored={onRestored} onPendingChange={onPendingChange} onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} categories={categories} tags={tags} onRefresh={onRefresh} />
   }
 
   if (isEditorOpen) {
@@ -289,6 +291,10 @@ function Dashboard({
   const [managedPosts, setManagedPosts] = useState(posts)
   const [tagOptions, setTagOptions] = useState(tags)
   const [categoryOptions, setCategoryOptions] = useState(categories)
+  async function refreshManagedPosts() {
+    const [nextPosts, nextTags, nextCategories] = await Promise.all([getAdminBlogPosts(token), getAdminBlogTags(token), getAdminBlogCategories(token)])
+    setManagedPosts(nextPosts); setTagOptions(nextTags); setCategoryOptions(nextCategories)
+  }
   const [isSaving, setIsSaving] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
   const [baseline, setBaseline] = useState(editor)
@@ -406,7 +412,7 @@ function Dashboard({
       setHasVersionConflict(false)
       loadedResource.current = savedPost.id
       bypassNavigation.current = true
-      setFeedback(status === 'published' ? '已发布到站点。' : '草稿已保存到站点。')
+      setFeedback(status === 'published' ? '已发布到站点。' : savedPost.scheduled_at ? `草稿已保存，计划于 ${new Date(savedPost.scheduled_at).toLocaleString('zh-CN')} 发布。` : '草稿已保存到站点。')
       void navigate(`${studioBasePath}/posts/${encodeURIComponent(savedPost.id)}/edit`)
       return true
     } catch (error) {
@@ -557,6 +563,7 @@ function Dashboard({
           {activeSection === 'posts' && (
             <PostsWorkspace
               token={token}
+              onRefresh={refreshManagedPosts}
               onRestored={post => setManagedPosts(current => [post, ...current.filter(item => item.id !== post.id)])}
               onPendingChange={setLinkPending}
               attachmentAccess={attachmentAccess}
@@ -621,7 +628,7 @@ function Dashboard({
           <button type="button" onClick={() => reconcileVersion(false)}>采用站点版本，丢弃当前修改</button>
         </div>
       </BlogWorkflowDialog>}
-      {!editorAttachmentOpen && activeSection !== 'pages' && activeSection !== 'comments' && activeSection !== 'attachments' && (blocker.state === 'blocked' || logoutRequested) && !(activeSection === 'links' && (linkDirty || linkPending)) && <BlogWorkflowDialog title={activeSection === 'links' ? '离开链接管理' : isSaving ? '正在保存文章' : '还有未保存的内容'} description={activeSection === 'links' ? '链接操作已完成，可以继续离开页面。' : isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel={activeSection === 'links' ? '继续离开' : '离开写作页'} busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
+      {!editorAttachmentOpen && activeSection !== 'pages' && activeSection !== 'comments' && activeSection !== 'attachments' && (blocker.state === 'blocked' || logoutRequested) && !(activeSection === 'links' && (linkDirty || linkPending)) && !(activeSection === 'posts' && postView === 'list' && linkPending) && <BlogWorkflowDialog title={activeSection === 'posts' && postView === 'list' ? '离开文章管理' : activeSection === 'links' ? '离开链接管理' : isSaving ? '正在保存文章' : '还有未保存的内容'} description={activeSection === 'posts' && postView === 'list' ? '文章操作已结束，可以继续离开页面。' : activeSection === 'links' ? '链接操作已完成，可以继续离开页面。' : isSaving ? '请等待保存完成，再离开写作页。' : localDraftSaved ? '内容已暂存在本标签页，返回文章时可以恢复。关闭标签页会清除暂存内容。' : '浏览器无法暂存当前内容，请取消并先保存文章。'} confirmLabel={activeSection === 'links' || (activeSection === 'posts' && postView === 'list') ? '继续离开' : '离开写作页'} busy={isSaving} onCancel={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirm={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
       <BlogAssistant
         userId={user.id}
         onExecuted={() => {

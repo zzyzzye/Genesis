@@ -589,6 +589,7 @@ def restore_admin_post(
     """将回收站文章恢复为草稿，保留内容与评论，不自动重新发布。"""
     post = locked_trashed_post(session, post_id, expected_updated_at)
     post.deleted_at = None
+    post.scheduled_at = None
     post.status = BlogPostStatus.DRAFT
     post.published_at = None
     post.updated_at = datetime.now(UTC)

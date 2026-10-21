@@ -67,6 +67,21 @@ class BlogPostStatus(StrEnum):
     PUBLISHED = "published"
 
 
+class BlogOperation(Base):
+    """记录导入和批量操作回执，网络重试沿用同一标识，不重复写入。"""
+
+    __tablename__ = "blog_operations"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    owner_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(20))
+    digest: Mapped[str] = mapped_column(String(64))
+    result: Mapped[dict[str, object]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+
 class BlogPage(Base):
     """独立页面与文章分表，公开地址及草稿互不干扰。"""
 
@@ -249,6 +264,9 @@ class BlogPost(Base):
     read_time_minutes: Mapped[int] = mapped_column(Integer, default=1)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    scheduled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

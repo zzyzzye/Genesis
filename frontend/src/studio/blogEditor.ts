@@ -15,6 +15,7 @@ export interface EditorState {
   selectedTagSlugs: string[]
   updatedAt: string | null
   creationId?: string
+  scheduledAt?: string | null
 }
 
 export function createEmptyEditor(): EditorState {
@@ -33,6 +34,7 @@ export function toEditor(post: BlogPostAdmin): EditorState {
     categoryId: post.category_id ?? post.category?.id ?? null,
     categoryIds: post.categories?.map(category => category.id) ?? (post.category_id ? [post.category_id] : post.category ? [post.category.id] : []),
     selectedTagSlugs: post.tags.map((tag) => tag.slug), updatedAt: post.updated_at,
+    scheduledAt: post.scheduled_at,
   }
 }
 
@@ -62,6 +64,7 @@ export function toPayload(editor: EditorState, tags: BlogTag[], status = editor.
     excerpt: editor.excerpt.trim() || plainText(content).slice(0, 160),
     content_markdown: content, cover_image_url: editor.coverImageUrl.trim() || null,
     category_id: editor.categoryId, status, is_featured: editor.isFeatured,
+    scheduled_at: status === 'published' ? null : editor.scheduledAt,
     category_ids: editor.categoryIds ?? (editor.categoryId ? [editor.categoryId] : []),
     read_time_minutes: articleStats(content).minutes, expected_updated_at: editor.updatedAt,
     tags: editor.selectedTagSlugs.map((slug) => {

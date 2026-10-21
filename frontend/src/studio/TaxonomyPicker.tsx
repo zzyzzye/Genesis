@@ -10,7 +10,7 @@ export function TaxonomyPicker({ kind, items, selected, onSelect, onCreate, disa
   items: BlogTag[]
   selected: string[]
   onSelect: (item: BlogTag | null) => void
-  onCreate: (name: string) => Promise<BlogTag>
+  onCreate?: (name: string) => Promise<BlogTag>
   disabled?: boolean
 }) {
   const label = kind === 'tags' ? '标签' : '分类'
@@ -36,6 +36,7 @@ export function TaxonomyPicker({ kind, items, selected, onSelect, onCreate, disa
     const name = query.trim()
     if (!name || name.length > 50) { setError('请输入名称，最多 50 个字符。'); inputRef.current?.focus(); return }
     if (exact && (!atLimit || selected.includes(exact.id))) { select(exact); return }
+    if (!onCreate) return
     if (atLimit) { setError('最多选择 10 个标签，请先移除一个。'); return }
     pending.current = true; setBusy(true); setError('')
     try {
@@ -53,7 +54,7 @@ export function TaxonomyPicker({ kind, items, selected, onSelect, onCreate, disa
       {chosen.length ? chosen.map((item) => <button key={item.id} type="button" disabled={disabled || busy} aria-label={'移除' + label + ' ' + item.name} onClick={() => select(item)}>{item.name}<StudioIcon name="close" /></button>) : <span>{kind === 'tags' ? '尚未选择标签' : '暂不分类'}</span>}
     </div>
     <div className="taxonomy-picker__input"><StudioIcon name="search" />
-      <input ref={inputRef} aria-label={'搜索或新建' + label} aria-describedby={id + '-feedback'} aria-invalid={!!error} placeholder={'搜索或输入新' + label + '…'} value={query} maxLength={50} disabled={disabled || busy} onChange={(event) => { setQuery(event.target.value); setError(''); setNotice('') }} onKeyDown={(event) => {
+      <input ref={inputRef} aria-label={(onCreate ? '搜索或新建' : '搜索') + label} aria-describedby={id + '-feedback'} aria-invalid={!!error} placeholder={(onCreate ? '搜索或输入新' : '搜索') + label + '…'} value={query} maxLength={50} disabled={disabled || busy} onChange={(event) => { setQuery(event.target.value); setError(''); setNotice('') }} onKeyDown={(event) => {
         if (event.key === 'Enter') {
           event.preventDefault()
           if (!event.nativeEvent.isComposing && event.keyCode !== 229) void create()
@@ -64,8 +65,8 @@ export function TaxonomyPicker({ kind, items, selected, onSelect, onCreate, disa
     <div className="taxonomy-picker__choices" aria-label={'可选' + label}>
       {kind === 'categories' && !query && <button type="button" aria-pressed={selected.length === 0} disabled={disabled || busy} onClick={() => select(null)}>暂不分类</button>}
       {matches.filter((item) => kind === 'categories' || !selected.includes(item.id)).map((item) => <button key={item.id} type="button" aria-pressed={selected.includes(item.id)} disabled={disabled || busy || (atLimit && !selected.includes(item.id))} onClick={() => select(item)}>{selected.includes(item.id) && <Check />}{item.name}</button>)}
-      {query.trim() && !exact && <button className="taxonomy-picker__new" type="button" disabled={disabled || busy || atLimit} onClick={() => void create()}><StudioIcon name="plus" />{busy ? '创建中…' : `创建「${query.trim()}」`}</button>}
-      {!items.length && !query && <span>输入名称，创建第一个{label}。</span>}
+      {onCreate && query.trim() && !exact && <button className="taxonomy-picker__new" type="button" disabled={disabled || busy || atLimit} onClick={() => void create()}><StudioIcon name="plus" />{busy ? '创建中…' : `创建「${query.trim()}」`}</button>}
+      {!matches.length && <span>{onCreate ? `输入名称，创建${label}。` : `暂无匹配${label}，可先在${label}管理中添加。`}</span>}
     </div>
     <div className="taxonomy-picker__feedback" id={id + '-feedback'}>{error ? <p role="alert">{error}</p> : <p role="status">{notice || (atLimit ? '最多选择 10 个标签，移除一个后可继续添加。' : '')}</p>}</div>
   </section>

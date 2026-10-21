@@ -155,6 +155,7 @@ def get_blog_post_by_id(
 def trash_post(post: BlogPost) -> None:
     """将文章移入回收站，保留正文与关联，重复操作不刷新版本。"""
     if post.deleted_at is None:
+        post.scheduled_at = None
         post.deleted_at = datetime.now(UTC)
         post.updated_at = post.deleted_at
 
@@ -190,6 +191,14 @@ def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> No
     # 保留旧接口的首分类字段，新客户端通过 categories 获取完整分类。
     post.category = post.categories[0] if post.categories else None
     post.status = data.status
+    if data.status is BlogPostStatus.PUBLISHED:
+        post.scheduled_at = None
+    elif "scheduled_at" in data.model_fields_set:
+        post.scheduled_at = data.scheduled_at
+    if post.scheduled_at is not None and not all(
+        value.strip() for value in (data.title, data.excerpt, data.content_markdown)
+    ):
+        raise ValueError("定时文章需要完整的标题、摘要和正文，请先取消计划再清空内容")
     post.is_featured = data.is_featured
     post.read_time_minutes = data.read_time_minutes
     post.tags = resolve_tags(session, data.tags)

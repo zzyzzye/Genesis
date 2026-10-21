@@ -451,7 +451,7 @@ export function MarkdownEditor({
           <button className="text-button" type="button" onClick={onBack}>← 返回{label}列表</button>
           <div className="markdown-editor__title-row">
             <span className="markdown-editor__eyebrow">{label}写作</span>
-            <span className={`post-status post-status--${editor.status}`}>{editor.status === 'published' ? '已发布' : '草稿'}</span>
+            <span className={`post-status post-status--${editor.status}`}>{editor.status === 'published' ? '已发布' : editor.scheduledAt ? `定时发布 · ${new Date(editor.scheduledAt).toLocaleString('zh-CN')}` : '草稿'}</span>
             <span className="markdown-editor__save-state" role="status">{saveState}</span>
           </div>
           <textarea aria-label={`${label}标题`} className="markdown-editor__title resize-none" id="markdown-editor-title" rows={1} disabled={isSaving || recovery !== null} maxLength={200} onChange={(event) => onChange({ ...editor, title: event.currentTarget.value.replace(/\n/g, '') })} placeholder={`输入${label}标题`} value={editor.title} />

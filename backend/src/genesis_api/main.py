@@ -11,6 +11,7 @@ from genesis_api.agent.runtime import embedded_agent_runtime
 from genesis_api.ai.runs import ai_chat_run_manager
 from genesis_api.api.router import api_router
 from genesis_api.blog.agent.guide import refresh_article_guides
+from genesis_api.blog.publication import refresh_scheduled_posts
 from genesis_api.core.config import get_settings
 
 
@@ -29,11 +30,15 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # 先准备 checkpoint，再恢复任务，避免生成流程访问尚未初始化的运行时。
     await ai_chat_run_manager.recover_interrupted_runs(settings)
     guide_task = asyncio.create_task(refresh_article_guides(settings), name="article-guide-cache")
+    publication_task = asyncio.create_task(
+        refresh_scheduled_posts(), name="blog-scheduled-publication"
+    )
     try:
         yield
     finally:
         guide_task.cancel()
-        await asyncio.gather(guide_task, return_exceptions=True)
+        publication_task.cancel()
+        await asyncio.gather(guide_task, publication_task, return_exceptions=True)
         # 等待生成任务退出后才关闭 checkpoint，避免取消过程中仍访问已关闭连接。
         await ai_chat_run_manager.shutdown()
         await embedded_agent_runtime.shutdown()
