@@ -783,7 +783,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
     {isOpen ? <motion.div key="assistant" ref={rootRef} className={`studio-assistant is-open${expanded ? ' is-expanded' : ''}`}
       initial={{ opacity: 0, x: reducedMotion ? 0 : '100%', '--assistant-motion-width': `${panelWidth}px` }} animate={{ opacity: 1, x: 0, '--assistant-motion-width': expanded ? '960px' : `${panelWidth}px` }} exit={{ opacity: 0, x: reducedMotion ? 0 : '100%' }}
       transition={resizing ? { ...transition, duration: 0 } : transition}>
-      {isOpen && !expanded && <button type="button" role="separator" aria-label="调整助手宽度" aria-orientation="vertical" aria-valuemin={340} aria-valuemax={600} aria-valuenow={panelWidth} className="studio-assistant__resize" title="拖动或用左右方向键调整宽度" onPointerDown={(event) => { setResizing(true); resizeStart.current = { x: event.clientX, width: panelWidth }; event.currentTarget.setPointerCapture(event.pointerId) }} onPointerMove={(event) => { const start = resizeStart.current; if (start) setPanelWidth(Math.max(340, Math.min(600, start.width + start.x - event.clientX))) }} onPointerUp={() => { setResizing(false); resizeStart.current = null }} onPointerCancel={() => { setResizing(false); resizeStart.current = null }} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setPanelWidth((width) => Math.max(340, Math.min(600, width + (event.key === 'ArrowLeft' ? 16 : -16)))) } }} />}
+      {isOpen && !expanded && <div tabIndex={0} role="separator" aria-label="调整助手宽度" aria-orientation="vertical" aria-valuemin={340} aria-valuemax={600} aria-valuenow={panelWidth} className="studio-assistant__resize" title="拖动或用左右方向键调整宽度" onPointerDown={(event) => { event.preventDefault(); event.currentTarget.focus({ preventScroll: true }); setResizing(true); resizeStart.current = { x: event.clientX, width: panelWidth }; event.currentTarget.setPointerCapture(event.pointerId) }} onPointerMove={(event) => { const start = resizeStart.current; if (start) setPanelWidth(Math.max(340, Math.min(600, start.width + start.x - event.clientX))) }} onPointerUp={() => { setResizing(false); resizeStart.current = null }} onPointerCancel={() => { setResizing(false); resizeStart.current = null }} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setPanelWidth((width) => Math.max(340, Math.min(600, width + (event.key === 'ArrowLeft' ? 16 : -16)))) } }} />}
         <section className={`studio-assistant__panel${messages.length === 1 && !isBusy ? ' is-empty' : ''}`} aria-label="博客 AI 助手">
           <header className="studio-assistant__header">
             <div className="studio-assistant__identity">
@@ -854,7 +854,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
             {!!attachments.items.length && <BlogAgentAttachments items={attachments.items} disabled={isBusy} onRetry={attachments.retry} onRemove={attachments.remove} onStop={attachments.stop} />}
             <p className="blog-agent-upload-hint">{draggingFiles ? '松开以添加附件' : '文档、图片、视频 · 最多 8 个，共 20 MiB · 上传后保留在私有附件库'}</p>
             {(attachments.error || attachmentModelError) && <p className="blog-agent-upload-error" role="alert">{attachments.error || attachmentModelError}</p>}
-            <textarea
+            <textarea className="resize-none"
               aria-label="向博客助手提问"
               placeholder="告诉我你想完成什么…"
               rows={2}

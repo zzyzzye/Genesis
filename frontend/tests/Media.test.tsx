@@ -46,6 +46,11 @@ describe('作品画布', () => {
     expect(screen.getByRole('spinbutton', { name: '镜头时长' })).toHaveValue(12)
     fireEvent.click(screen.getByRole('button', { name: '撤销' }))
     expect(screen.getByRole('spinbutton', { name: '镜头时长' })).toHaveValue(8)
+    const size = screen.getByRole('group', { name: /调整视频节点大小/ })
+    expect(size).toHaveAttribute('tabindex', '0')
+    fireEvent.keyDown(size, { key: 'ArrowRight' })
+    fireEvent.keyDown(size, { key: 'ArrowDown', shiftKey: true })
+    expect(screen.getByRole('group', { name: /调整视频节点大小/ })).toHaveAccessibleName(/830 × 720/)
   })
   it('编组、取消编组和删除成员会维护画布关系', () => {
     const second = { ...note, id: crypto.randomUUID(), x: 320 }

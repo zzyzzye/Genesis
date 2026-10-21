@@ -114,19 +114,40 @@ function AccountForm({ mode, error, busy, onModeChange, onLogin, onRegister, foc
   </AccountLayout>
 }
 
-function Profile({ user, feedback, onLogout, onSave }: {
+export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
   user: CurrentUser
   feedback: string | null
+  busy: boolean
   onLogout: () => void
   onSave: (displayName: string, bio: string, avatarUrl: string) => void
 }) {
   const [displayName, setDisplayName] = useState(user.display_name)
   const [bio, setBio] = useState(user.bio)
   const [avatarUrl, setAvatarUrl] = useState(user.avatar_url ?? '')
+  const [errors, setErrors] = useState<Partial<Record<'displayName' | 'bio' | 'avatarUrl', string>>>({})
+  const nameInput = useRef<HTMLInputElement>(null)
+  const bioInput = useRef<HTMLTextAreaElement>(null)
+  const avatarInput = useRef<HTMLInputElement>(null)
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    onSave(displayName, bio, avatarUrl)
+    if (busy) return
+    const next: typeof errors = {}
+    if (!displayName.trim()) next.displayName = '请输入昵称。'
+    else if (displayName.length > 100) next.displayName = '昵称最多 100 个字符。'
+    if (bio.length > 1000) next.bio = '个人简介最多 1000 个字符。'
+    if (avatarUrl.trim()) {
+      try {
+        const address = new URL(avatarUrl.trim())
+        if (!['https:', 'http:'].includes(address.protocol)) throw new Error('unsupported')
+      } catch { next.avatarUrl = '请输入 http:// 或 https:// 开头的完整头像地址。' }
+      if (avatarUrl.length > 500) next.avatarUrl = '头像地址最多 500 个字符。'
+    }
+    setErrors(next)
+    if (next.displayName) { nameInput.current?.focus(); return }
+    if (next.bio) { bioInput.current?.focus(); return }
+    if (next.avatarUrl) { avatarInput.current?.focus(); return }
+    onSave(displayName.trim(), bio.trim(), avatarUrl.trim())
   }
 
   return (
@@ -152,23 +173,26 @@ function Profile({ user, feedback, onLogout, onSave }: {
             <span aria-hidden="true">→</span>
           </Link>
         )}
-        <form className="account-form" onSubmit={submit}>
+        <form className="account-form" aria-label="个人资料" noValidate aria-busy={busy} onSubmit={submit} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }}>
           <label htmlFor="profile-display-name">
             <span>昵称</span>
-            <input id="profile-display-name" onChange={(event) => setDisplayName(event.currentTarget.value)} required value={displayName} />
+            <input ref={nameInput} id="profile-display-name" maxLength={100} readOnly={busy} aria-invalid={Boolean(errors.displayName)} aria-describedby={errors.displayName ? 'profile-name-error' : undefined} onChange={(event) => { setDisplayName(event.currentTarget.value); setErrors(current => ({ ...current, displayName: undefined })) }} required value={displayName} />
+            <span className="account-field-help">{errors.displayName && <span id="profile-name-error" className="account-field-error" role="alert">{errors.displayName}</span>}</span>
           </label>
           <label htmlFor="profile-bio">
             <span>个人简介</span>
-            <textarea id="profile-bio" maxLength={1000} onChange={(event) => setBio(event.currentTarget.value)} placeholder="介绍一下你自己" rows={4} value={bio} />
+            <textarea ref={bioInput} className="resize-none" id="profile-bio" readOnly={busy} aria-invalid={Boolean(errors.bio)} aria-describedby={errors.bio ? 'profile-bio-error' : undefined} maxLength={1000} onChange={(event) => { setBio(event.currentTarget.value); setErrors(current => ({ ...current, bio: undefined })) }} placeholder="介绍一下你自己" rows={4} value={bio} />
+            <span className="account-field-help">{errors.bio && <span id="profile-bio-error" className="account-field-error" role="alert">{errors.bio}</span>}</span>
           </label>
           <label htmlFor="profile-avatar-url">
             <span>头像地址</span>
-            <input id="profile-avatar-url" onChange={(event) => setAvatarUrl(event.currentTarget.value)} placeholder="https://example.com/avatar.png" type="url" value={avatarUrl} />
+            <input ref={avatarInput} id="profile-avatar-url" maxLength={500} readOnly={busy} aria-invalid={Boolean(errors.avatarUrl)} aria-describedby={errors.avatarUrl ? 'profile-avatar-error' : undefined} onChange={(event) => { setAvatarUrl(event.currentTarget.value); setErrors(current => ({ ...current, avatarUrl: undefined })) }} placeholder="https://example.com/avatar.png" type="url" value={avatarUrl} />
+            <span className="account-field-help">{errors.avatarUrl && <span id="profile-avatar-error" className="account-field-error" role="alert">{errors.avatarUrl}</span>}</span>
           </label>
           {feedback && <p className="account-feedback" role="status">{feedback}</p>}
-          <button className="primary-button" type="submit">保存资料 <span aria-hidden="true">→</span></button>
+          <button className="primary-button" type="submit" disabled={busy}>{busy ? '正在保存…' : '保存资料'} <span aria-hidden="true">→</span></button>
         </form>
-        <button className="account-logout" onClick={onLogout} type="button">退出登录</button>
+        <button className="account-logout" disabled={busy} onClick={onLogout} type="button">退出登录</button>
       </section>
     </main>
   )
@@ -247,14 +271,17 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
   }
 
   function saveProfile(displayName: string, bio: string, avatarUrl: string) {
-    if (token === null || state.status !== 'ready') return
+    if (token === null || state.status !== 'ready' || pending.current) return
+    pending.current = true; setSubmitting(true)
+    const current = ++attempt.current
     void updateCurrentUser(token, { display_name: displayName, bio, avatar_url: avatarUrl || null })
-      .then((user) => setState({ status: 'ready', user, feedback: '个人资料已保存。' }))
-      .catch(() => setState({ status: 'ready', user: state.user, feedback: '保存失败，请稍后重试。' }))
+      .then((user) => { if (current === attempt.current) setState({ status: 'ready', user, feedback: '个人资料已保存。' }) })
+      .catch(() => { if (current === attempt.current) setState({ status: 'ready', user: state.user, feedback: '保存失败，输入已保留，请稍后重试。' }) })
+      .finally(() => { if (current === attempt.current) { pending.current = false; setSubmitting(false) } })
   }
 
   if (state.status === 'loading') return <AccountLayout><div className="account-auth-loading" role="status"><LoaderCircle className="account-submit-spinner" size={24} aria-hidden="true" /><span>正在加载账户…</span></div></AccountLayout>
-  if (state.status === 'ready') return <Profile feedback={state.feedback} user={state.user} onSave={saveProfile} onLogout={() => {
+  if (state.status === 'ready') return <AccountProfile feedback={state.feedback} busy={submitting} user={state.user} onSave={saveProfile} onLogout={() => {
     clearStoredAuthToken(); clearStoredAuthToken(studioAuthTokenKey)
     setToken(null); setState({ status: 'guest', mode: 'login', error: null })
   }} />

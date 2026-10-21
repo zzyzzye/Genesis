@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
@@ -19,16 +19,18 @@ export function AiChatPanel({
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const pending = useRef(false)
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const content = input.trim()
-    if (!content || busy) return
+    if (!content || pending.current) return
     if (!token) {
       setError('请先登录后使用 Genesis AI。')
       return
     }
     const nextMessages: AiChatMessage[] = [...messages, { role: 'user', content }]
+    pending.current = true
     setMessages([...nextMessages, { role: 'assistant', content: '' }])
     setInput('')
     setError(null)
@@ -45,6 +47,7 @@ export function AiChatPanel({
       setError(caught instanceof Error ? caught.message : 'AI 生成失败，请稍后再试。')
       setMessages((current) => current.filter((message, index) => !(index === current.length - 1 && message.role === 'assistant' && !message.content)))
     } finally {
+      pending.current = false
       setBusy(false)
     }
   }
@@ -64,8 +67,8 @@ export function AiChatPanel({
         ))}
       </div>
       {error && <p className="ai-panel__error" role="alert">{error}</p>}
-      <form className="ai-panel__form" onSubmit={(event) => { void submit(event) }}>
-        <textarea value={input} onChange={(event) => setInput(event.currentTarget.value)} placeholder="和 Genesis AI 说点什么…" rows={3} disabled={busy} />
+      <form noValidate aria-label="Genesis AI 对话" className="ai-panel__form" onSubmit={(event) => { void submit(event) }}>
+        <textarea className="resize-none" aria-label="向 Genesis AI 提问" value={input} onChange={(event) => setInput(event.currentTarget.value)} placeholder="和 Genesis AI 说点什么…" rows={3} disabled={busy} />
         <button className="primary-button" type="submit" disabled={busy || !input.trim()}>{busy ? '生成中…' : '发送'}</button>
       </form>
     </section>

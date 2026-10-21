@@ -4,6 +4,10 @@
 
 ## Canonical UI Map
 
+2026-10-21 修复此前 18 项静态审计发现：个人资料改为业务校验、关联字段错误及首错聚焦，保存中只读并阻止重复提交，失败保留输入；Genesis AI 对话补充表单名称、输入标签和同步提交锁。文本域统一声明 resize-none，仍由原有布局、自动增高与画布尺寸控制；助手分隔条和二维节点尺寸手柄采用对应语义，保留拖动与方向键操作，聚焦仅改变中性底色。原生 select 归属写入 premium-ui.json，不替换系统菜单或屏蔽审计规则。
+
+复用 Compose 5173 服务，在真实写作台检查助手空态、分隔条聚焦和方向键调宽；使用实际组件及隔离数据检查桌面与 390px 资料校验、错误提示、首错聚焦及保存反馈，画布方向键、Shift 加速和缩放后拖动，以及原生思考模式/强度的选中与禁用联动。截图确认输入无聚焦边框、描边或阴影，窄屏表单不重叠，文本域没有浏览器拖拽手柄；系统原生菜单弹层未取得独立截图，不将其弹层几何记为本轮已验证。临时验收入口与合成草稿已清理，未修改真实账户资料或业务内容。前端全量 335 项测试、ESLint、TypeScript/生产构建通过，最终分隔条调整后相关 15 项测试复验通过；strict 设计审计为 0 错误、0 警告、0 未解决项，构建仍保留既有大分块提示。本轮无后端改动。
+
 2026-10-20 AI 导读进入文章后默认展开，切换文章或正文版本重新自动读取；首次以稳定的 40 字符/秒依次呈现要点，支持显示全部，收起重开不重播。展开、收起和箭头统一为 440ms 缓动，字数预算保留小数进度，聊天默认自适应节奏不变；阅读中切换减少动态效果立即展示完整导读并停用过渡。复用 Compose 5173 的真实文章检查 1440px、390px、320px，覆盖自动打开、逐字追加、显示全部、Enter/Space、快速收放反向、加载、暂不可用、待生成、旧版本、503 重试和减少动态效果初始/动态切换，截图确认无裁切、重叠或横向溢出；响应替身已撤销，未修改文章和导读缓存。29 项导读、打字、目录和应用测试及全量 ESLint、TypeScript/生产构建通过；strict 设计审计仍为其他组件的 18 项既有发现，本次文件无新增发现。
 
 2026-10-20 光标性能调整复用既有 CursorEffects / CursorTrail：按帧合并轨迹采样、缓存进入元素时的原生样式判定，去掉磁吸与按钮布局测量；透镜和跟随主造型在移动事件中直接定位。跟随主造型不绘制位图，仅点击时使用 Canvas；共享 drawingSurface 只分配笔迹附近位图，独立拖尾消散后释放，反相与滤镜不再覆盖整个视口。Compose 5173 浏览器以 1440×1000、60 帧、每帧 8 次相同移动事件比较“语境跟随＋流光丝带”：显式 clearRect 面积由 169,920,000 降至 3,952,640 像素（约 97.7%），样式读取 480→1，按钮布局读取 480→0；这不是端到端输入延迟或所有设备帧率的保证。真实鼠标检查八款动态、三种拖尾、原生皮肤、点击、空输入/中文输入/选择、键盘、恢复默认、1440px/390px、DPR 2、暗色影音页和辅助显示回退，截图确认可见且无横向溢出。 全量 ESLint、TypeScript/生产构建与 29 项相关测试通过；strict 设计审计保留其他组件的 18 项既有发现，本次文件无新增发现。
@@ -74,8 +78,8 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | 模块管理入口 / Navigation | React Router、Studio | App.tsx、Studio.tsx、Account.tsx | 所属模块下的 /studio 直接进入管理，旧博客链接保留路径、查询参数与锚点 | 直接访问、旧链接跳转、账户入口、桌面与窄屏 |
 | 文章阅读布局与搜索 | PublicBlog、ArticleDocument、ArticleToc、BlogSearch | BlogPage.tsx、BlogReader.css、BlogDirectory.css、useModalDialog | 复用目录的搜索、焦点管理与 q 查询；正文锚点和评论不变；桌面侧栏只使用公开作者资料，手机目录移到正文前；不增加 Live2D、知识图谱或未接通的订阅表单 | 搜索加载/空态/结果、Escape 与恢复、目录定位/选中/折叠、长标题与代码块、桌面/390/320px |
 | 账户登录 / 注册 Form | AccountLayout、AccountForm、Account、SessionRecovery | Account.tsx/CSS、lib/auth.ts、lib/api.ts、auth.py 的注册约束 | 普通按钮切换模式；noValidate 与关联字段错误、首错聚焦；密码默认隐藏、可切换显示；提交保留表单、同步锁防重、输入只读；失败保留内存输入；离开忽略迟到响应；注册已成功但自动登录失败时回到登录，避免重复创建；返回路径沿用原有规则 | 桌面/390/320px、登录/注册/失效/初始加载、校验、输入法、密码切换、提交中与重试、成功返回及成员/作者资料、离开时的迟到响应 |
-| Select/Listbox | 原生 select | ProjectCanvas.tsx、AssetLibrary.tsx | 系统菜单负责弹出几何与键盘选择；模型选择仍沿用 MediaAssistant 的现有组件 | 浏览器展开、选择、Escape，组件测试 |
-| Form | 画布节点直接编辑、MediaHome 的 ProjectDialog | ProjectCanvas.tsx、MediaHome.tsx | 节点编辑无需提交表单；提交表单使用 noValidate 与内联错误 | 整数时长、保存恢复、失败保留草稿 |
+| Select/Listbox | 原生 select | premium-ui.json、AgentModelPicker、ReasoningEffortControl、BlogAssistant、ProjectCanvas、AssetLibrary | 简单枚举使用系统菜单管理弹出几何与键盘；思考模式/强度、执行方式、素材类型、画布参数维持原生行为；模型目录搜索沿用现有专用面板 | 浏览器展开、选择、Escape，组件测试 |
+| Form | AccountForm、AccountProfile、AiChatPanel、ProjectDialog 与各业务表单 | Account.tsx、AiChatPanel.tsx、ProjectCanvas.tsx、MediaHome.tsx | 提交表单使用 noValidate、业务校验及重复提交锁；个人资料必填/长度/头像地址错误与字段关联并聚焦首错，保存失败保留输入；节点编辑无需表单提交 | 校验、焦点、提交锁、失败重试、整数时长、保存恢复 |
 | CRUD | useCanvas、作品素材 API | useCanvas.ts、api/routes/media.py | 节点修改可撤销；素材删除沿用既有确认流程 | 组件测试、后端权限与素材类型测试 |
 | 博客分类/标签选择 | TaxonomyPicker | TaxonomyPicker.tsx、blog/schemas.py | 直接展示原生按钮组；分类单选、标签多选，不使用弹出式 combobox | 直接选择、创建并选入、输入法、数量上限与窄屏 |
 | 博客分类/标签管理 | TaxonomyWorkspace、TaxonomyEditor | TaxonomyWorkspace.tsx、admin_blog.py | 搜索/新增共用输入，名称块和分类列表；原生 dialog 管理改名和删除 | 模态焦点、取消恢复、失败重试、使用中禁止删除 |
@@ -88,7 +92,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | 工作台行操作菜单 | StudioActionMenu、原生 auto popover、React portal | StudioActionMenu.tsx/CSS、shell.css 中性令牌 | 显式更多入口；旧浏览器兼容回退；屏幕内定位与自动翻转；方向键、Home/End、Escape/Tab、滚动/外部关闭；选择动作后交还既有确认 | 仅一个菜单、焦点恢复、写操作确认、桌面/窄容器/320px、上下翻转、滚动与重试 |
 | 正文插入附件 | MarkdownEditor、EditorAttachmentPicker、useModalDialog、Studio 唯一 blocker | lib/attachments.ts、blog/attachments.py、api/routes/blog_attachments.py | 文章与独立页面共用；富文本/源码原生事务；单选已有文件或上传后选中；私有文件确认公开；位图内嵌，其余下载 | 光标、撤销、权限重取、失败保留、重试 UUID、文件夹搜索分页、单模态导航保护、桌面与窄屏 |
 | 附件缩略图 / 作者预览 | AttachmentThumbnail、AttachmentPreviewContent、AttachmentPreviewDialog、EditorAttachmentPicker | lib/attachments.ts、blog/attachments.py、api/routes/blog_attachments.py | 私有鉴权；按内容识别；8 MiB 内图片按需显示缩略图；64 MiB 内媒体、256 KiB UTF-8 文本；原生 PDF/音视频 | 大图、PDF、播放、文本转义、失败重试、格式回退、焦点恢复、保持选择、单模态、桌面与窄屏 |
-| Scrollbar | 画布编辑器样式 | CanvasNodes.css、MediaPage.css | 参数展开时节点内部滚动，保留预览；深色原生媒体控件 | 桌面与窄屏截图 |
+| Scrollbar | 全局 base.css，画布仅负责滚动归属 | frontend/styles/base.css、CanvasNodes.css、MediaPage.css | 继承全局细滑块；画布节点内部滚动，保留预览；文本域使用 resize-none，尺寸由布局或画布控制 | 桌面与窄屏截图、计算样式 |
 | Toast | 既有页内状态区域 | ProjectCanvas.tsx | 保存冲突与上传失败持续显示，错误不依赖瞬时通知 | 上传重试、保存失败与冲突测试 |
 
 ## 节点与素材

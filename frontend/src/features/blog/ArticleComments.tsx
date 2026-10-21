@@ -107,7 +107,7 @@ export function ArticleComments({ slug }: { slug: string }) {
           <input id="comment-qq" ref={qqInput} type="text" inputMode="email" autoComplete="off" maxLength={64} aria-label="QQ 邮箱（选填）" placeholder="输入 QQ 邮箱自动获取头像" value={qq} disabled={busy} onChange={(event) => { setQq(event.target.value); setQqError(false); setError('') }} aria-invalid={qqError} aria-describedby="comment-error" />
         </div>
         <div className="article-comments__writing">
-          <textarea id="comment-content" ref={input} aria-label="写下评论" placeholder="聊聊你的看法，让讨论从这里开始。" rows={4} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); if (!qqError) setError('') }} aria-describedby="comment-help comment-error" aria-invalid={Boolean(error) && !qqError} />
+          <textarea className="resize-none" id="comment-content" ref={input} aria-label="写下评论" placeholder="聊聊你的看法，让讨论从这里开始。" rows={4} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); if (!qqError) setError('') }} aria-describedby="comment-help comment-error" aria-invalid={Boolean(error) && !qqError} />
           <div className="article-comments__composer-footer">
             <div className="article-comments__composer-meta"><span id="comment-help">审核通过后公开</span><span>{content.length}<span className="article-comments__limit"> / 2000</span></span></div>
             <button type="submit" disabled={busy}>{busy ? '提交中…' : '提交评论'}<ArrowUpRight size={15} aria-hidden="true" /></button>

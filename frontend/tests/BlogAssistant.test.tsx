@@ -28,6 +28,18 @@ function mount(messages: { role: string; content: string }[], activeRun: object 
 }
 
 describe('助手失败后的继续对话', () => {
+  it('宽度分隔器可聚焦并用方向键调整，不充当普通点击按钮', async () => {
+    await act(async () => { mount([]); await Promise.resolve() })
+    const handle = screen.getByRole('separator', { name: '调整助手宽度' })
+    expect(handle).toHaveAttribute('tabindex', '0')
+    expect(handle.tagName).toBe('DIV')
+    expect(handle).toHaveAttribute('aria-valuenow', '540')
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    expect(handle).toHaveAttribute('aria-valuenow', '556')
+    fireEvent.keyDown(handle, { key: 'ArrowRight' })
+    expect(handle).toHaveAttribute('aria-valuenow', '540')
+  })
+
   afterEach(() => {
     cleanup()
     localStorage.clear()

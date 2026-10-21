@@ -59,11 +59,13 @@ type CanvasFlowNode = FlowNode<CanvasNodeData, Node['type']>
 
 function CanvasResizeCorner({ id, data, minWidth, minHeight, label }: { id: string; data: CanvasNodeData; minWidth: number; minHeight: number; label: string }) {
   const resize = useRef<{ x: number; y: number; width: number; height: number; zoom: number } | null>(null)
-  return <button
+  return <div
     className="media-canvas-resize nodrag"
-    type="button"
-    aria-label={label}
-    title="拖动调整节点大小"
+    role="group"
+    tabIndex={0}
+    aria-roledescription="尺寸控制"
+    aria-label={`${label}，${Math.round(data.source.width)} × ${Math.round(data.source.height)}，使用方向键调整，Shift 加速`}
+    title="拖动或用方向键调整节点大小，Shift 加速"
     onKeyDown={(event) => {
       const delta = event.shiftKey ? 50 : 10
       const changes: Record<string, [number, number]> = { ArrowRight: [delta, 0], ArrowLeft: [-delta, 0], ArrowDown: [0, delta], ArrowUp: [0, -delta] }
@@ -76,6 +78,7 @@ function CanvasResizeCorner({ id, data, minWidth, minHeight, label }: { id: stri
     onPointerDown={(event) => {
       event.preventDefault()
       event.stopPropagation()
+      event.currentTarget.focus({ preventScroll: true })
       resize.current = { x: event.clientX, y: event.clientY, width: data.source.width, height: data.source.height, zoom: data.zoom }
       event.currentTarget.setPointerCapture(event.pointerId)
       data.onInteractionStart()
@@ -126,7 +129,7 @@ function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
       {cameraOpen && <div className="media-node-camera-options" aria-label="选择运镜">{['固定镜头', '缓慢推近', '拉远镜头', '跟随拍摄', '镜头上摇', '镜头下摇', '环绕拍摄', '手持拍摄'].map((camera) => <button key={camera} type="button" onClick={() => { appendPromptToken(`运镜：${camera}。`); setCameraOpen(false) }}>{camera}</button>)}</div>}
       {data.references.length > 0 && <div className="media-node-references" aria-label="连入参考">{data.references.map(({ node: source, asset }) => <div key={source.id}><span title={asset?.name || source.name || source.text}>{asset ? `${asset.kind === 'image' ? '图片' : asset.kind === 'audio' ? '音频' : '视频'} · ${asset.name}` : source.name || source.text.slice(0, 40) || '空节点'}</span>{source.text && <button type="button" onClick={() => appendPromptToken(source.text)}>引用文字</button>}<small>{source.asset_id && !asset ? (data.assetsLoading ? '加载中' : '素材不可用') : !asset && !source.text ? '请先补充内容' : '已连接'}</small><button type="button" aria-label={`断开参考：${asset?.name || source.name || '节点'}`} onClick={() => data.onReferenceChange(id, source.id, false)}>断开</button></div>)}</div>}
       <input ref={fileInput} className="media-video-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska" aria-label="导入视频节点预览素材" onChange={(event) => { const file = event.target.files?.[0]; if (file) void data.onUploadPreview(id, file); event.target.value = '' }} />
-      <textarea aria-label="镜头描述" value={node.text} placeholder="描述画面、人物动作与声音，可引用连入节点的文字" maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
+      <textarea className="resize-none" aria-label="镜头描述" value={node.text} placeholder="描述画面、人物动作与声音，可引用连入节点的文字" maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
       <div className="media-video-composer-footer">
         <label className="media-video-asset-picker"><span>预览</span><select aria-label="视频节点预览素材" value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{data.previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
         <span className="media-video-spec">{settings.ratio} · {settings.resolution}</span><label><input key={node.duration_seconds} type="number" aria-label="镜头时长" aria-invalid={Boolean(durationError)} aria-describedby={durationError ? `duration-error-${id}` : undefined} min={1} max={600} step={1} defaultValue={node.duration_seconds ?? 5} onFocus={data.onInteractionStart} onBlur={(event) => {
@@ -193,7 +196,7 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
       ? <div className="media-shape-convert nodrag nowheel nopan"><span>这是旧的形状节点</span><button onClick={() => data.onConvertToVideo(id)}>改为视频节点</button><button className="media-shape-edit" onClick={() => setEditingEmptyShape(true)}>保留形状并编辑文字</button></div>
       : isNote || isText || isShape
       ? <textarea
-          className="nodrag nowheel nopan"
+          className="nodrag nowheel nopan resize-none"
           aria-label={isNote ? '便签内容' : isText ? '文字内容' : '形状文字'}
           value={data.source.text}
           placeholder={isNote ? '写下镜头、情绪或灵感…' : isText ? '点击这里输入文字…' : '输入形状标签…'}

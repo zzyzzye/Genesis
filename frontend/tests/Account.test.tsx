@@ -2,8 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Account } from '../src/Account'
-import { getCurrentUser, login, registerAccount } from '../src/lib/api'
-import { getStoredAuthToken } from '../src/lib/auth'
+import { getCurrentUser, login, registerAccount, updateCurrentUser } from '../src/lib/api'
+import { getStoredAuthToken, storeAuthToken } from '../src/lib/auth'
 
 vi.mock('../src/lib/api', () => ({ getCurrentUser: vi.fn(), login: vi.fn(), registerAccount: vi.fn(), updateCurrentUser: vi.fn() }))
 const user = { id: 'account-ui-reader', handle: 'reader', display_name: '测试读者', bio: '', avatar_url: null, role: 'member' }
@@ -36,8 +36,42 @@ describe('账户登录与注册', () => {
     vi.mocked(login).mockResolvedValue(session)
     vi.mocked(getCurrentUser).mockResolvedValue(user)
     vi.mocked(registerAccount).mockResolvedValue(user)
+    vi.mocked(updateCurrentUser).mockResolvedValue(user)
   })
   afterEach(() => { cleanup(); localStorage.clear(); vi.resetAllMocks() })
+
+  it('资料使用关联错误与首错聚焦，保存防重且失败保留输入', async () => {
+    storeAuthToken(session.access_token)
+    setup()
+    await screen.findByRole('heading', { name: user.display_name })
+    const form = screen.getByRole('form', { name: '个人资料' })
+    const name = screen.getByRole('textbox', { name: '昵称' })
+    const avatar = screen.getByRole('textbox', { name: '头像地址' })
+    expect(form).toHaveAttribute('novalidate')
+    fireEvent.change(name, { target: { value: ' ' } })
+    fireEvent.submit(form)
+    expect(name).toHaveFocus()
+    expect(name).toHaveAttribute('aria-invalid', 'true')
+    expect(updateCurrentUser).not.toHaveBeenCalled()
+    fireEvent.change(name, { target: { value: ' 修改昵称 ' } })
+    fireEvent.change(avatar, { target: { value: '不是网址' } })
+    fireEvent.submit(form)
+    expect(avatar).toHaveFocus()
+    expect(screen.getByRole('alert')).toHaveAttribute('id', avatar.getAttribute('aria-describedby'))
+    fireEvent.change(avatar, { target: { value: '' } })
+    const pending = deferred<Awaited<ReturnType<typeof updateCurrentUser>>>()
+    vi.mocked(updateCurrentUser).mockReturnValueOnce(pending.promise)
+    fireEvent.submit(form); fireEvent.submit(form)
+    expect(updateCurrentUser).toHaveBeenCalledTimes(1)
+    expect(name).toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: /正在保存/ })).toBeDisabled()
+    await act(async () => { pending.reject(new Error('测试保存失败')); await pending.promise.catch(() => {}) })
+    expect(await screen.findByRole('status')).toHaveTextContent('输入已保留')
+    expect(name).toHaveValue(' 修改昵称 ')
+    fireEvent.submit(form)
+    expect(await screen.findByText('个人资料已保存。')).toBeInTheDocument()
+    expect(updateCurrentUser).toHaveBeenLastCalledWith(session.access_token, { display_name: '修改昵称', bio: '', avatar_url: null })
+  })
 
   it('空提交由页面校验并聚焦字段，密码可显示和隐藏', () => {
     setup()

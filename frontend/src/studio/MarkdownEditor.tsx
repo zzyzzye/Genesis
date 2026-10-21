@@ -319,7 +319,7 @@ function PostSettingsModal({
           </div>
           <label className="settings-field" htmlFor="settings-excerpt">
             <span className="settings-field__heading"><span>摘要</span><span className="settings-field__hint">留空时从正文生成</span></span>
-            <textarea id="settings-excerpt" style={{ resize: 'none' }} onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} maxLength={500} rows={3} value={editor.excerpt} />
+            <textarea className="resize-none" id="settings-excerpt" onChange={(event) => onChange({ ...editor, excerpt: event.currentTarget.value })} maxLength={500} rows={3} value={editor.excerpt} />
           </label>
           {feedback && <p className="studio-form-error" role="alert">{feedback}</p>}
         </div>
@@ -454,7 +454,7 @@ export function MarkdownEditor({
             <span className={`post-status post-status--${editor.status}`}>{editor.status === 'published' ? '已发布' : '草稿'}</span>
             <span className="markdown-editor__save-state" role="status">{saveState}</span>
           </div>
-          <textarea aria-label={`${label}标题`} className="markdown-editor__title" id="markdown-editor-title" rows={1} style={{ resize: 'none' }} disabled={isSaving || recovery !== null} maxLength={200} onChange={(event) => onChange({ ...editor, title: event.currentTarget.value.replace(/\n/g, '') })} placeholder={`输入${label}标题`} value={editor.title} />
+          <textarea aria-label={`${label}标题`} className="markdown-editor__title resize-none" id="markdown-editor-title" rows={1} disabled={isSaving || recovery !== null} maxLength={200} onChange={(event) => onChange({ ...editor, title: event.currentTarget.value.replace(/\n/g, '') })} placeholder={`输入${label}标题`} value={editor.title} />
         </div>
         <div className="markdown-editor__actions">
           <FpsStatusSlot />

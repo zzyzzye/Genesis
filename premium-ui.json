@@ -1,0 +1,13 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["frontend/src", "frontend/styles"],
+  "locale": "zh-CN",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": ["Select/Listbox", "Form", "Scrollbar", "CRUD"],
+  "ownership": { "Select/Listbox": "native" },
+  "evidence": {
+    "selectKeyboard": "frontend/tests/ReasoningEffort.test.tsx",
+    "formValidation": "frontend/tests/Account.test.tsx",
+    "crudRecovery": "frontend/tests/PostsIndex.test.tsx"
+  }
+}
