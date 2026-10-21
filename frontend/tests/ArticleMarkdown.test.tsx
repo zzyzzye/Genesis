@@ -72,7 +72,25 @@ it('未知语言和空代码保留可读内容并安全显示标签', () => {
   expect(screen.getByText('纯文本')).toBeInTheDocument()
   expect(screen.getByText('<script>alert(1)</script>')).toBeInTheDocument()
   expect(view.container.querySelector('script')).toBeNull()
-  expect(screen.getAllByRole('button')).toHaveLength(2)
+  expect(screen.getAllByRole('button', { name: /^复制/ })).toHaveLength(2)
+})
+
+it('默认自动换行，可切换横向滚动，复制保留原始长行', async () => {
+  const source = 'echo ' + 'long-command-'.repeat(30)
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('navigator', { clipboard: { writeText } })
+  const view = render(<ArticleMarkdown>{`\`\`\`bash\n${source}\n\`\`\``}</ArticleMarkdown>)
+  const toggle = screen.getByRole('button', { name: '自动换行' })
+  expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  expect(view.container.querySelector('.article-code')).toHaveClass('is-wrapped')
+  fireEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  expect(view.container.querySelector('.article-code')).not.toHaveClass('is-wrapped')
+  fireEvent.click(screen.getByRole('button', { name: '复制 Shell 代码' }))
+  await screen.findByText('已复制')
+  expect(writeText).toHaveBeenCalledWith(source + '\n')
+  fireEvent.click(toggle)
+  expect(toggle).toHaveAttribute('aria-pressed', 'true')
 })
 
 it('超过 20 行默认折叠，展开收起后仍复制完整代码，边界行数不折叠', async () => {

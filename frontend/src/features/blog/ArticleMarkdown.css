@@ -13,6 +13,9 @@
 .article-code__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 14px 0; color: #bbbcc1; font: 12px/1.5 Inter, "PingFang SC", sans-serif; }
 .article-code__language { display: flex; align-items: center; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
 .article-code__language > span { color: #919298; white-space: nowrap; }
+.article-code__actions { display: flex; flex: none; gap: 4px; }
+.article-code__toolbar { flex-wrap: wrap; }
+.article-code__actions { margin-left: auto; }
 .article-content .article-code__toolbar button { display: flex; flex: none; align-items: center; gap: 6px; padding: 5px 7px; border: 0; outline: none; box-shadow: none; border-radius: 4px; background: transparent; color: #bbbcc1; font: inherit; cursor: pointer; }
 .article-content .article-code__toolbar button:is(:hover, :focus-visible) { background: #2c2d30; color: #fff; outline: none; box-shadow: none; }
 .article-code__error { padding: 6px 16px 0; color: #e1bb86; font: 12px/1.5 Inter, "PingFang SC", sans-serif; }
@@ -20,6 +23,9 @@
 .article-content .article-code pre code { display: block; width: max-content; min-width: 100%; padding: 0; background: transparent; color: inherit; font: inherit; white-space: pre; }
 .article-code__line { display: grid; grid-template-columns: calc(var(--code-number-width, 4ch) + 40px) 1fr; min-height: 1.55em; padding-right: 16px; }
 .article-code__number { position: sticky; left: 0; padding-left: 16px; padding-right: 24px; background: var(--code-surface); color: #8c8d94; text-align: right; user-select: none; }
+.article-content .article-code.is-wrapped pre code { width: 100%; min-width: 0; white-space: pre-wrap; }
+.article-code.is-wrapped .article-code__line { grid-template-columns: calc(var(--code-number-width, 4ch) + 40px) minmax(0, 1fr); }
+.article-code.is-wrapped .article-code__line > span:last-child { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .article-content .article-code__toggle { display: flex; justify-content: center; align-items: center; gap: 6px; width: 100%; min-height: 36px; padding: 8px 16px; border: 0; outline: none; box-shadow: none; background: transparent; color: #bbbcc1; font: 12px/1.5 Inter, "PingFang SC", sans-serif; cursor: pointer; }
 .article-content .article-code__toggle:is(:hover, :focus-visible) { background: #2c2d30; color: #fff; outline: none; box-shadow: none; }
 .article-code .tok-keyword, .article-code .tok-bool, .article-code .tok-null { color: #d7a9e3; }

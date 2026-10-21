@@ -2,7 +2,7 @@ import { isValidElement, useEffect, useId, useRef, useState, type CSSProperties,
 import { LanguageDescription } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
 import { classHighlighter, highlightTree } from '@lezer/highlight'
-import { Check, ChevronDown, ChevronUp, Copy, Paperclip } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Copy, Paperclip, WrapText } from 'lucide-react'
 import Markdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
@@ -25,6 +25,7 @@ function CodeBlock({ source, language }: { source: string; language: string }) {
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle')
   const resetTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const [expanded, setExpanded] = useState(false)
+  const [wrapLines, setWrapLines] = useState(true)
   const codeId = useId()
 
   useEffect(() => {
@@ -83,13 +84,14 @@ function CodeBlock({ source, language }: { source: string; language: string }) {
     renderedLines.push(<span className="article-code__line" key={index}><span className="article-code__number" aria-hidden="true">{index + 1}</span><span>{pieces}{index < visibleLines.length - 1 ? '\n' : ''}</span></span>)
   }
 
-  return <div className="article-code" style={{ '--code-number-width': `${Math.max(4, String(lines.length).length)}ch` } as CSSProperties}>
+  return <div className={`article-code${wrapLines ? ' is-wrapped' : ''}`} style={{ '--code-number-width': `${Math.max(4, String(lines.length).length)}ch` } as CSSProperties}>
     <div className="article-code__toolbar">
       <span className="article-code__language">{label}<span>{lines.length} 行</span></span>
+      <div className="article-code__actions"><button type="button" aria-label="自动换行" aria-pressed={wrapLines} title={wrapLines ? '关闭自动换行，改为横向滚动' : '开启自动换行'} onClick={() => setWrapLines(value => !value)}><WrapText size={14} /><span>{wrapLines ? '自动换行' : '横向滚动'}</span></button>
       <button type="button" onClick={() => void copyCode()} disabled={copyState === 'copying'} aria-label={`复制 ${label} 代码`}>
         {copyState === 'copied' ? <Check size={14} /> : <Copy size={14} />}
         <span aria-live="polite">{copyState === 'copied' ? '已复制' : copyState === 'error' ? '重试复制' : '复制'}</span>
-      </button>
+      </button></div>
     </div>
     {copyState === 'error' && <div className="article-code__error" role="status">复制失败，请重试或手动选择代码。</div>}
     <pre id={codeId} tabIndex={0} aria-label={`${label} 代码`}><code>{renderedLines}</code></pre>
