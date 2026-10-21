@@ -10,6 +10,7 @@ from typing import Any, Protocol, cast
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,7 @@ from genesis_api.ai.schemas import (
     AiChatRequest,
     AiChatRunCreated,
     AiChatRunSnapshot,
+    AiConversationTitle,
     AiGenerationMetrics,
 )
 from genesis_api.ai.service import AgentService
@@ -391,9 +393,38 @@ class AiChatRunManager:
         task.add_done_callback(lambda _: self._title_tasks.pop(conversation_id, None))
 
     def _pending_titles_sync(self) -> list[AiChatRequest]:
-        """重启后补做已经回答但尚未命名的会话，始终使用首轮消息。"""
+        """修正旧的无效自动标题，再恢复待命名会话；不改变正文或用户改名。"""
         requests: dict[UUID, AiChatRequest] = {}
         with self._session_factory() as session:
+            for conversation in session.scalars(select(AiConversation).where(
+                AiConversation.title_source == "model",
+            )):
+                try:
+                    AiConversationTitle(title=conversation.title)
+                except ValidationError:
+                    first_run = session.scalar(select(AiChatRun).where(
+                        AiChatRun.conversation_id == conversation.id,
+                    ).order_by(AiChatRun.created_at, AiChatRun.id).limit(1))
+                    if first_run is None:
+                        continue
+                    try:
+                        first_request = _request_from_payload(first_run.request_payload)
+                    except ValidationError:
+                        # 旧请求无法按当前协议恢复时，保留记录，不让标题修复阻止服务启动。
+                        continue
+                    first = first_request.messages[0]
+                    topic = first.content.strip() or "、".join(
+                        item.name for item in first.attachments
+                    )
+                    # 条件更新避免修复过程覆盖用户刚刚手动指定的标题。
+                    session.execute(update(AiConversation).where(
+                        AiConversation.id == conversation.id,
+                        AiConversation.title_source == "model",
+                        AiConversation.title == conversation.title,
+                    ).values(
+                        title=topic.replace("\n", " ")[:32] or "新对话", title_source="fallback",
+                    ))
+            session.commit()
             runs = session.scalars(select(AiChatRun).join(
                 AiConversation, AiChatRun.conversation_id == AiConversation.id,
             ).where(
@@ -418,9 +449,9 @@ class AiChatRunManager:
         source = "fallback"
         title = fallback
         try:
-            title = await asyncio.wait_for(
+            title = AiConversationTitle(title=await asyncio.wait_for(
                 AgentService(settings).generate_title(request), timeout=60,
-            )
+            )).title
             source = "model"
         except asyncio.CancelledError:
             raise

@@ -115,9 +115,9 @@ async def test_title_generation_does_not_overwrite_manual_rename(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("failure", [False, True])
+@pytest.mark.parametrize("failure", ["none", "upstream", "paragraph"])
 async def test_title_success_and_fallback(
-    sessions: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch, failure: bool,
+    sessions: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch, failure: str,
 ) -> None:
     with sessions() as session:
         conversation = AiConversation(user_id=uuid4())
@@ -126,8 +126,10 @@ async def test_title_success_and_fallback(
         conversation_id = conversation.id
 
     async def generate(_: AgentService, __: AiChatRequest) -> str:
-        if failure:
+        if failure == "upstream":
             raise RuntimeError("模拟上游失败")
+        if failure == "paragraph":
+            return "我是 MiMo，由某个团队开发的大语言模型。很高兴为你服务，请问有什么问题？"
         return "博客选题规划"
 
     monkeypatch.setattr(AgentService, "generate_title", generate)
@@ -137,5 +139,43 @@ async def test_title_success_and_fallback(
     ), Settings())
     with sessions() as session:
         stored = cast(AiConversation, session.get(AiConversation, conversation_id))
-        assert stored.title == ("规划博客" if failure else "博客选题规划")
-        assert stored.title_source == ("fallback" if failure else "model")
+        assert stored.title == ("博客选题规划" if failure == "none" else "规划博客")
+        assert stored.title_source == ("model" if failure == "none" else "fallback")
+
+
+def test_recovery_repairs_invalid_generated_title_without_rewriting_messages(
+    sessions: sessionmaker[Session],
+) -> None:
+    """旧长回答会话名恢复为首轮话题，正文、正常标题和用户改名保持原样。"""
+    with sessions() as session:
+        owner = User(handle="title-owner", display_name="作者", role=UserRole.OWNER)
+        session.add(owner)
+        session.commit()
+        entries = []
+        for source, title in [
+            ("model", "我是MiMo，由某个团队开发的大语言模型。很高兴为你服务！"),
+            ("manual", "这是用户指定的长标题，不应被自动修复逻辑修改，即使超过自动标题长度"),
+            ("model", "了解当前模型"),
+        ]:
+            conversation = AiConversation(user_id=owner.id, title=title, title_source=source)
+            session.add(conversation)
+            session.commit()
+            created = create_ai_chat_run(session, user_id=owner.id, request=AiChatRequest(
+                surface="studio", conversation_id=conversation.id,
+                messages=[AiMessage(role="user", content="你是什么模型")],
+            ), settings=Settings())
+            run = cast(AiChatRun, session.get(AiChatRun, created.id))
+            run.status = AiChatRunStatus.COMPLETED
+            run.content = "原来的完整回答"
+            session.commit()
+            entries.append((conversation.id, run.id, title))
+    assert AiChatRunManager(sessions)._pending_titles_sync() == []
+    with sessions() as session:
+        for index, (conversation_id, run_id, original_title) in enumerate(entries):
+            conversation = cast(AiConversation, session.get(AiConversation, conversation_id))
+            assert conversation.title == ("你是什么模型" if index == 0 else original_title)
+            assert conversation.title_source == (
+                "fallback" if index == 0 else "manual" if index == 1 else "model"
+            )
+            assert cast(AiChatRun, session.get(AiChatRun, run_id)).content == "原来的完整回答"
+    assert AiChatRunManager(sessions)._pending_titles_sync() == []

@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from pydantic import SecretStr
 
 from genesis_api.agent.mimo import ChatMiMo
-from genesis_api.agent.runtime import EmbeddedAgentRuntime
+from genesis_api.agent.runtime import EmbeddedAgentRuntime, _message_text
 from genesis_api.ai.runs import _configured_model
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
@@ -183,3 +183,47 @@ async def test_mimo_stream_uses_chat_completions() -> None:
         chunks = [chunk async for chunk in model.astream("你好")]
     assert "".join(str(chunk.content) for chunk in chunks) == "你好"
     assert any(chunk.additional_kwargs.get("reasoning_content") == "思考" for chunk in chunks)
+    assert "".join(text for chunk in chunks for text in _message_text(chunk)) == "你好"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("body", [
+    '{"title":"了解当前模型"}', '{"title":"' + "回答正文" * 12 + '"}',
+])
+async def test_mimo_title_validates_complete_json_not_partial_prefix(
+    monkeypatch: pytest.MonkeyPatch, body: str,
+) -> None:
+    """MiMo 使用官方 JSON 模式；完整流校验失败时不能保留半截合法标题。"""
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        assert payload["stream"] is True
+        assert payload["response_format"] == {"type": "json_object"}
+        assert "JSON" in payload["messages"][0]["content"]
+        assert json.loads(payload["messages"][1]["content"]) == {"用户话题": "你是什么模型"}
+        deltas = [{"role": "assistant", "reasoning_content": "仅用于隔离测试的内部标记"}]
+        deltas.extend({"content": body[index:index + 4]} for index in range(0, len(body), 4))
+        common = {
+            "id": "chatcmpl-title-test", "object": "chat.completion.chunk",
+            "created": 1, "model": "mimo-v2.6-pro",
+        }
+        events = [{**common, "choices": [{"index": 0, "delta": delta}]} for delta in deltas]
+        events.append({**common, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
+        stream = "".join(f"data: {json.dumps(event)}\n\n" for event in events) + "data: [DONE]\n\n"
+        return httpx.Response(200, text=stream, headers={"content-type": "text/event-stream"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        model = ChatMiMo(
+            model="mimo-v2.6-pro", api_key=SecretStr("test-placeholder"),
+            base_url="https://api.xiaomimimo.com/v1", use_responses_api=False,
+            http_async_client=client,
+        )
+        runtime = EmbeddedAgentRuntime()
+        monkeypatch.setattr(runtime, "_build_model", lambda *_: model)
+        request = AiChatRequest(surface="studio", provider="mimo", model="mimo-v2.6-pro", messages=[
+            {"role": "user", "content": "你是什么模型"},
+        ])
+        if "回答正文" in body:
+            with pytest.raises(RuntimeError, match="有效的会话标题"):
+                await runtime.generate_title(request, Settings())
+        else:
+            assert await runtime.generate_title(request, Settings()) == "了解当前模型"

@@ -54,6 +54,21 @@ def test_prompt_and_message_text() -> None:
     assert _message_text(object()) == []
 
 
+def test_visible_text_excludes_reasoning_and_non_text_blocks() -> None:
+    """不同供应商的非正文块即使含 text 字段，也不能进入可见回答。"""
+    message = AIMessageChunk(content=[
+        {"type": "thinking", "thinking": "测试内部标记甲", "text": "测试内部标记乙"},
+        {"type": "reasoning", "reasoning": "测试内部标记丙", "text": "测试内部标记丁"},
+        {"type": "text", "text": "可见正文甲"},
+        {"type": "image", "text": "图片元数据"},
+        "可见正文乙",
+    ], additional_kwargs={"reasoning_content": "测试内部标记戊"})
+    assert _message_text(message) == ["可见正文甲可见正文乙"]
+    assert _message_text(AIMessageChunk(content=[], additional_kwargs={
+        "reasoning_content": "测试内部标记",
+    })) == []
+
+
 def test_automatic_execution_is_scoped_to_trusted_invocation() -> None:
     """自动执行策略只在当前调用有效，嵌套审阅及退出后恢复默认。"""
     actor = uuid4()
@@ -97,9 +112,15 @@ async def test_conversation_checkpoint_keeps_turns_and_replaces_page_context(
     assert "".join([text async for text in runtime.stream(
         request, settings, thread_id="conversation",
     ) if isinstance(text, str)]) == "第一轮回答"
+    first_snapshot = await graph.aget_state({"configurable": {"thread_id": "conversation"}})
+    first_context = next(
+        message for message in first_snapshot.values["messages"] if message.type == "system"
+    )
+    assert '"provider": "openai", "model": "test"' in first_context.content
     await_input = request.model_copy(update={
         "messages": [AiMessage(role="user", content="第二轮问题")],
         "context": AiContext(title="文章乙"),
+        "provider": "mimo", "model": "mimo-v2.6-pro",
     })
     assert "".join([text async for text in runtime.stream(
         await_input, settings, thread_id="conversation",
@@ -113,14 +134,20 @@ async def test_conversation_checkpoint_keeps_turns_and_replaces_page_context(
     assert len(contexts) == 1
     assert "文章乙" in contexts[0].content
     assert "文章甲" not in contexts[0].content
+    assert '"provider": "mimo", "model": "mimo-v2.6-pro"' in contexts[0].content
+    assert '"provider": "openai"' not in contexts[0].content
 
 
 @pytest.mark.anyio
 async def test_title_uses_model_without_agent_tools(monkeypatch: pytest.MonkeyPatch) -> None:
     from langchain_core.language_models.fake_chat_models import FakeListChatModel
+    from langchain_core.output_parsers import PydanticOutputParser
 
     runtime = EmbeddedAgentRuntime()
-    model = FakeListChatModel(responses=['“规划博客选题”', '  '])
+    model = FakeListChatModel(responses=['{"title":"“规划博客选题”"}', '{"title":"  "}'])
+    monkeypatch.setattr(FakeListChatModel, "with_structured_output", lambda self, schema, **_: (
+        self | PydanticOutputParser(pydantic_object=schema)
+    ))
     monkeypatch.setattr(runtime, "_build_model", lambda *_: model)
     request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="规划博客")])
     service = AgentService(Settings(text_openai_model="test"), runtime)

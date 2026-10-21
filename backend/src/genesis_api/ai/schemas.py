@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.ai.models import AiChatRunStatus
@@ -130,6 +130,23 @@ class AiConversationRename(BaseModel):
     """用户指定的新标题；空白标题由服务层拒绝。"""
 
     title: str = Field(min_length=1, max_length=80)
+
+
+class AiConversationTitle(BaseModel):
+    """模型自动命名的独立契约，不将问答正文截断后当作标题。"""
+
+    title: str = Field(
+        min_length=1,
+        max_length=24,
+        pattern=r"^[^\r\n。！？!?]+$",
+        description="概括用户话题的简短标题，建议 6 至 16 字；不能回答用户问题或自我介绍。",
+    )
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def normalize_title(cls, value: object) -> object:
+        """只去掉外层空白和引号，段落或长回答交给校验拒绝。"""
+        return value.strip().strip('"“”').strip() if isinstance(value, str) else value
 
 
 class AiConversationDelete(BaseModel):
