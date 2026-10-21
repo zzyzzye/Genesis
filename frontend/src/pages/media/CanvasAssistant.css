@@ -9,7 +9,8 @@
 .media-agent--styled .media-agent__identity>div { display:flex; align-items:center; gap:10px; }.media-agent--styled .media-agent__identity span { font-size:10px; }.media-agent--styled .media-agent__avatar { width:28px; height:28px; border-radius:7px; }
 .media-agent--styled .media-agent__identity span,.media-agent--styled .media-agent__prompts>span { color:var(--agent-muted); }
 .media-agent--styled .media-agent__identity i { background:var(--agent-accent); }
-.media-agent--styled .media-agent__body { padding:0 18px 18px; gap:18px; scrollbar-width:thin; scrollbar-color:#454545 transparent; }
+.media-agent--styled .media-agent__body { padding:0 18px 18px; gap:18px; scrollbar-width:thin; scrollbar-color:#454545 transparent; scroll-behavior:auto; outline:none; }
+.media-agent__scroll-content { display:flex; flex:none; flex-direction:column; gap:18px; min-width:0; }
 .media-agent--styled .media-agent__context { background:transparent; padding:0; color:var(--agent-muted); }
 .media-agent--styled .media-agent__context svg { color:var(--agent-muted); }
 .media-agent--styled .media-agent__node-context { background:var(--agent-surface); color:var(--agent-text); }

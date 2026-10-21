@@ -76,6 +76,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | 公开文章阅读 | BlogPage、ArticleMarkdown、ArticleComments | BlogPage.css 的 article 变体、ArticleComments.css、公开文章 API | 768px 阅读栏、28–40px 标题；加载与失败保持阅读壳，失败可重试；代码复用原组件；不修改正文数据 | 桌面与 390/320px、无标签摘要、长标题链接、表格宽图、加载失败重试、评论空态聚焦、代码展开收起 |
 | 公开文章 AI 导读 | ArticleGuide、公共结构化模型运行时 | ArticleGuide.tsx/CSS、blog/guide.py、blog/agent/guide.py | 默认展开；黑灰 AI 标识；首次约 40 字符/秒依次打字，可显示全部，重新展开直接全文；三个要点与阅读重点；按正文指纹只读缓存；等待生成手动查看，失败可重试；440ms 平滑高度/透明度/箭头过渡，减少动态效果即时呈现 | 真实生成、逐字追加、跳过/中途收起、收起复用、网络超时与重试、空态/待生成/旧版本、键盘、390/320px、减少动态效果切换、慢请求高度过渡、缓存失效与迟到结果 |
 | 博客助手 / 非模态浮层 | BlogAssistant、既有对话与模型菜单状态 | BlogAssistant.tsx、BlogAssistant.css | 后台常驻，空态紧凑、对话展开；输入保持编辑，执行模式与确认沿用原协议 | 开关、聚焦、模型选择与 Escape、上下文环、长回复与代码块、生成与失败、窄屏 |
+| Agent 消息跟随 | useChatAutoScroll | features/agent/useChatAutoScroll.ts、BlogAssistant、MediaAssistant | 默认在底部；正文增长和布局变化继续跟随；向上浏览暂停，滚回底部恢复；打开、切换对话或发送时回到最新 | 连续增长、容器缩放、上翻保留、回底恢复、滚轮/触摸/键盘/滚动条、重新打开、清理和窄屏 |
 | 写作页助手布局 | BlogAssistant.css 的写作页布局变体 | 实际存在的 .markdown-editor | 默认 380px 从右向左滑入并隐藏目录，不挤压编辑器，收起后恢复目录；其他页面继续并排 | 编辑区开合宽度一致、菜单、展开、桌面与窄屏 |
 | 助手思考设置 | AgentModelPicker、ReasoningEffortControl、useReasoningEffort | 框架原生 profile 与 MiMo 官方协议最小补充 | native select 承担思考模式和强度选择；两者独立；按模型记忆；选完模型保持菜单展开 | 请求参数、恢复、图缓存、菜单保持展开、键盘与窄屏 |
 | 博客 Agent 写入确认 | BlogAssistant 的确认卡片、/ai/actions/confirm | 工具更新事件及服务端任务 proposals | 结构化提议与正文分离；点击确认执行才写入；执行中禁用，失败保留，成功状态恢复；下一轮注入可信执行回执 | 无 JSON 正文、重连、历史恢复、写入成功与失败、桌面与窄屏 |

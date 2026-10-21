@@ -9,6 +9,7 @@ import { Clock3, Gauge, Timer, Zap } from 'lucide-react'
 import { StudioIcon } from '../../../studio/StudioIcon'
 import { TypewriterText } from '../../../studio/TypewriterText'
 import { motionTiming } from '../../../lib/motion'
+import { useChatAutoScroll } from '../../agent/useChatAutoScroll'
 
 function ProviderIcon({ provider }: { provider: AiProvider }) {
   const common = { viewBox: '0 0 24 24', role: 'img' as const, focusable: 'false' as const }
@@ -271,8 +272,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const selectedModels = useRef<Partial<Record<AiProvider, string>>>({ [initialModel.provider]: initialModel.model })
   const modelTriggerRef = useRef<HTMLButtonElement | null>(null)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
-  const bodyRef = useRef<HTMLDivElement | null>(null)
-  const shouldStickToBottomRef = useRef(true)
+  const { bodyRef, contentRef, followOutput, scrollToLatest } = useChatAutoScroll(isOpen && (!historyOpen || expanded), conversationId)
   const streamControllerRef = useRef<AbortController | null>(null)
   const activeReceivedRef = useRef<{ index: number; content: string } | null>(null)
   const [modelMenuOpen, setModelMenuOpen] = useState(false)
@@ -401,7 +401,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
       setConfirmingAction(null)
       setModelMenuOpen(false)
       setDraft(drafts.current[id] ?? '')
-      shouldStickToBottomRef.current = true
+      scrollToLatest()
     } catch (caught) {
       if (version === selectionVersion.current) {
         setHistoryError(caught instanceof Error ? caught.message : '读取对话失败，请重试。')
@@ -410,7 +410,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
     } finally {
       if (version === selectionVersion.current) setConversationLoading(false)
     }
-  }, [])
+  }, [scrollToLatest])
 
   useEffect(() => {
     if (isOpen && conversationId && hydrated.current !== conversationId) void loadConversation(conversationId)
@@ -527,17 +527,6 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   }, [modelMenuOpen, isOpen])
 
   const notifyAutomaticExecution = useEffectEvent(() => onExecuted?.())
-  const followOutput = useCallback(() => {
-    const body = bodyRef.current
-    if (body && shouldStickToBottomRef.current) body.scrollTop = body.scrollHeight
-  }, [])
-
-  useEffect(() => {
-    if (!isOpen) return
-    const frame = requestAnimationFrame(followOutput)
-    return () => cancelAnimationFrame(frame)
-  }, [isOpen, messages, followOutput])
-
   useEffect(() => {
     if (!activeRun || !isOpen) return
     const run = activeRun
@@ -682,7 +671,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
     }
     const retainedMessages = messages.filter((message) => message.content.trim().length > 0 || message.attachments?.length || message.proposals?.length || message.status)
     const assistantMessageIndex = retainedMessages.length + 1
-    shouldStickToBottomRef.current = true
+    scrollToLatest()
     setMessages([...retainedMessages, { role: 'user', content, attachments: selectedAttachments }, { role: 'assistant', content: '', timing: { startedAt: Date.now() } }])
     setDraft('')
     setError(null)
@@ -824,12 +813,11 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
           <div
             className="studio-assistant__body"
             ref={bodyRef}
-            onScroll={(event) => {
-              const element = event.currentTarget
-              const distanceToBottom = element.scrollHeight - element.scrollTop - element.clientHeight
-              shouldStickToBottomRef.current = distanceToBottom <= 32
-            }}
+            tabIndex={0}
+            role="region"
+            aria-label="对话消息"
           >
+            <div className="studio-assistant__scroll-content" ref={contentRef}>
             <div className="studio-assistant__context"><StudioIcon name="spark" /> {editor ? `当前文章：${editor.title || '未命名草稿'}` : `当前页面：${pageLabels[page.pageType]}`}</div>
             <div className="studio-assistant__messages">
               {messages.map((message, index) => {
@@ -851,6 +839,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
                 {suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => handleSuggestion(suggestion)}>{suggestion}<StudioIcon name="arrow-up-right" /></button>)}
               </div>
             )}
+            </div>
           </div>
           <form className={`studio-assistant__composer${draggingFiles ? ' is-dragging' : ''}`} noValidate onSubmit={(event) => { void submit(event) }}
             onDragEnter={event => { if (!event.dataTransfer.types.includes('Files')) return; event.preventDefault(); dragDepth.current += 1; if (!isBusy) setDraggingFiles(true) }}

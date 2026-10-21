@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 
 import { getProviderModels, streamAiChat, type AiChatMessage, type AiProvider, type AvailableModel } from '../../lib/api'
 import { AgentModelPicker } from '../../features/agent/AgentModelPicker'
+import { useChatAutoScroll } from '../../features/agent/useChatAutoScroll'
 import { AgentQuestion } from '../../features/agent/AgentQuestion'
 import { questionAnswers, splitAgentQuestion } from '../../features/agent/questionProtocol'
 import { modelDisplayName } from '../../features/agent/modelDisplayName'
@@ -75,6 +76,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
   onApplyCanvasPlan?: (plan: MediaCanvasPlan) => void
 }) {
   const [open, setOpen] = useState(false)
+  const { bodyRef, contentRef, scrollToLatest } = useChatAutoScroll(open)
   useEffect(() => {
     const openAssistant = () => setOpen(true)
     window.addEventListener('genesis:open-media-assistant', openAssistant)
@@ -158,6 +160,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
     if (!token) { setError('登录后才能使用镜头搭档。'); return }
     const nextMessages: AiChatMessage[] = [...messages, { role: 'user', content: text }]
     if (nextMessages.length > 40) { setError('当前对话已达到 40 条消息上限，请新建对话后继续。'); return }
+    scrollToLatest()
     setMessages([...nextMessages, { role: 'assistant', content: '' }])
     setInput('')
     setError('')
@@ -193,7 +196,8 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
         <div className="media-agent__identity"><span className="media-agent__avatar"><Clapperboard aria-hidden="true" /></span><div><strong>镜头搭档</strong><span>{pageLabels[page]}</span></div></div>
         <div className="media-agent__header-actions"><button type="button" aria-label="新建对话" disabled={busy} onClick={startNewConversation}><Plus aria-hidden="true" /></button><button type="button" className="media-agent__close" aria-label="关闭镜头搭档" onClick={() => setOpen(false)}><X aria-hidden="true" /></button></div>
       </header>
-      <div className="media-agent__body">
+      <div className="media-agent__body" ref={bodyRef} tabIndex={0} role="region" aria-label="对话消息">
+        <div className="media-agent__scroll-content" ref={contentRef}>
         {discussionNode && <div className="media-agent__node-context"><div><span>正在讨论 · {nodeLabel(discussionNode)}</span>{page === 'canvas' && <small>{discussionNode.text.trim() || '还没有镜头描述，可以一起补充。'}</small>}</div><button type="button" aria-label="移除当前讨论节点" onClick={() => setDismissedNodeId(discussionNode.id)}><X aria-hidden="true" /></button></div>}
         <div className="media-agent__messages" aria-live="polite">
           {messages.length === 0 && <div className="media-agent__canvas-empty"><span>镜头与叙事</span><h2>{discussionNode ? '接着这个镜头，往下想。' : page === 'assets' ? '整理素材，再开始拍。' : '下一段，怎么拍？'}</h2><p>{discussionNode ? '细化画面、调整节奏，或继续编排下一个镜头。' : page === 'canvas' ? '写下故事想法，或选中画布上的镜头一起讨论。' : page === 'assets' ? '讨论素材命名、分组与需要补充的画面。' : '写下故事想法，一起规划镜头与素材。'}</p></div>}
@@ -210,6 +214,7 @@ export function MediaAssistant({ token, page, projectId, selectedNode, onApplyCa
           })}
         </div>
         {messages.length === 0 && <div className="media-agent__prompts" aria-label="快捷提问">{prompts.map((prompt, index) => <button type="button" key={prompt} onClick={() => void send(prompt)} disabled={busy}><span className="media-agent__prompt-icon">{index === 0 ? <Clapperboard /> : <WandSparkles />}</span><span className="media-agent__prompt-copy"><strong>{page === 'assets' ? (index === 0 ? '整理素材' : '补充画面') : page === 'project' ? (index === 0 ? '规划节奏' : '补齐素材') : index === 0 ? '拆成分镜' : '检查节奏'}</strong><small>{page === 'assets' ? (index === 0 ? '命名与分组' : '列出拍摄清单') : page === 'project' ? (index === 0 ? '安排镜头与叙事' : '列出素材清单') : index === 0 ? '整理镜头与画面' : '梳理转场与衔接'}</small></span><span>↗</span></button>)}</div>}
+        </div>
       </div>
       <form className="media-agent__form" noValidate onSubmit={submit}>
         <textarea className="resize-none" ref={inputRef} aria-label="向镜头搭档提问" aria-keyshortcuts="Enter" rows={2} value={input} onChange={(event) => setInput(event.currentTarget.value)} onKeyDown={(event) => { if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return; event.preventDefault(); event.currentTarget.form?.requestSubmit() }} disabled={busy} placeholder="描述画面，或说说你想调整的地方…" />
