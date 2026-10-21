@@ -23,6 +23,6 @@
 .blog-workflow-dialog button { min-height: 40px; padding: 6px 14px; border: 0; border-radius: var(--studio-control-radius, 10px); outline: 0; box-shadow: none; background: var(--studio-soft); color: inherit; font: inherit; cursor: pointer; }
 .blog-workflow-dialog button:hover:not(:disabled), .blog-workflow-dialog button:focus-visible { background: var(--studio-editor-hover); }
 .blog-workflow-dialog button.blog-workflow-dialog__confirm { background: var(--studio-ink); color: var(--studio-paper); }
-.blog-workflow-dialog button.blog-workflow-dialog__confirm:hover:not(:disabled), .blog-workflow-dialog button.blog-workflow-dialog__confirm:focus-visible { opacity: .8; }
+.blog-workflow-dialog button.blog-workflow-dialog__confirm:hover:not(:disabled), .blog-workflow-dialog button.blog-workflow-dialog__confirm:focus-visible { background: #373737; color: var(--studio-paper); }
 .blog-workflow-dialog button:disabled { cursor: wait; opacity: .5; }
 .blog-workflow-dialog__error { margin-top: 16px !important; color: var(--studio-accent); }
