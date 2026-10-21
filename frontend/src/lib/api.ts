@@ -1,5 +1,6 @@
 import { handleStudioUnauthorized, rememberSessionUser } from './auth'
 import { collectCommentDeviceHints } from './commentDeviceHints'
+import { downloadBlob } from './download'
 
 export interface BlogAuthor {
   id: string
@@ -309,6 +310,17 @@ export function updateCurrentUser(token: string, data: ProfileUpdateData): Promi
 
 export function getAdminBlogPosts(token: string): Promise<BlogPostAdmin[]> {
   return request<BlogPostAdmin[]>('/admin/blog/posts', { headers: authHeaders(token) })
+}
+
+/** 导出服务器已保存内容；整库范围与列表搜索、状态和分页独立。 */
+export async function downloadBlogArticles(token: string, target: { postId: string } | { trashed: boolean }, signal: AbortSignal): Promise<void> {
+  const single = 'postId' in target
+  const path = single ? `/admin/blog/posts/${encodeURIComponent(target.postId)}/export` : `/admin/blog/posts/export?trashed=${target.trashed}`
+  const response = await requestResponse(path, { headers: authHeaders(token), signal })
+  const blob = await response.blob()
+  signal.throwIfAborted()
+  const filename = response.headers.get('Content-Disposition')?.match(/filename="([a-zA-Z0-9][a-zA-Z0-9._-]*)"/)?.[1] ?? (single ? 'article.md' : 'genesis-articles.zip')
+  downloadBlob(blob, filename)
 }
 
 export function getTrashedBlogPosts(token: string, signal?: AbortSignal): Promise<BlogPostAdmin[]> {

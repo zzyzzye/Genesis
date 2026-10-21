@@ -2,10 +2,10 @@ import { act, fireEvent, render, screen, within, waitFor } from '@testing-librar
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, getTrashedBlogPosts, permanentlyDeleteBlogPost, restoreBlogPost, type BlogPostAdmin } from '../src/lib/api'
+import { ApiError, downloadBlogArticles, getTrashedBlogPosts, permanentlyDeleteBlogPost, restoreBlogPost, type BlogPostAdmin } from '../src/lib/api'
 import { PostsIndex } from '../src/studio/PostsIndex'
 
-vi.mock('../src/lib/api', async (importOriginal) => ({ ...await importOriginal<typeof import('../src/lib/api')>(), getTrashedBlogPosts: vi.fn(), permanentlyDeleteBlogPost: vi.fn(), restoreBlogPost: vi.fn() }))
+vi.mock('../src/lib/api', async (importOriginal) => ({ ...await importOriginal<typeof import('../src/lib/api')>(), downloadBlogArticles: vi.fn(), getTrashedBlogPosts: vi.fn(), permanentlyDeleteBlogPost: vi.fn(), restoreBlogPost: vi.fn() }))
 afterEach(() => vi.resetAllMocks())
 
 const posts: BlogPostAdmin[] = Array.from({ length: 45 }, (_, index) => ({
@@ -26,6 +26,65 @@ function setup(items = posts, path = '/blog/studio/posts') {
 }
 
 describe('PostsIndex', () => {
+  it('整库导出不传搜索和分页，单篇导出不触发编辑，失败保留列表并可重试', async () => {
+    const { onOpenPost, router } = setup(posts, '/blog/studio/posts?q=特别&status=draft')
+    vi.mocked(downloadBlogArticles).mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    fireEvent.click(screen.getByRole('button', { name: '导出全部' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('网络连接中断，请检查网络后重新导出。')
+    expect(downloadBlogArticles).toHaveBeenCalledWith('test', { trashed: false }, expect.any(AbortSignal))
+    expect(router.state.location.search).toBe('?q=特别&status=draft')
+    vi.mocked(downloadBlogArticles).mockResolvedValueOnce()
+    fireEvent.click(screen.getByRole('button', { name: '导出 Markdown：文章 44' }))
+    expect(await screen.findByText('已开始下载「文章 44」的 Markdown。')).toBeInTheDocument()
+    expect(downloadBlogArticles).toHaveBeenLastCalledWith('test', { postId: 'post-44' }, expect.any(AbortSignal))
+    expect(onOpenPost).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('导出中同步防重，取消后可重试且旧请求结束不会解锁新请求', async () => {
+    let finish!: () => void
+    const first = new Promise<void>(resolve => { finish = resolve })
+    const second = new Promise<void>(() => {})
+    vi.mocked(downloadBlogArticles).mockReturnValueOnce(first).mockReturnValueOnce(second)
+    const { router } = setup()
+    fireEvent.click(screen.getByRole('button', { name: '导出全部' }))
+    fireEvent.click(screen.getByRole('button', { name: '导出全部' }))
+    expect(downloadBlogArticles).toHaveBeenCalledTimes(1)
+    const firstSignal = vi.mocked(downloadBlogArticles).mock.calls[0]![2]
+    expect(screen.getByText('正在准备导出，请稍候…')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '取消下载' }))
+    expect(firstSignal.aborted).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '导出全部' }))
+    const secondSignal = vi.mocked(downloadBlogArticles).mock.calls[1]![2]
+    await act(async () => { finish(); await first })
+    expect(screen.getByRole('button', { name: '导出全部' })).toBeDisabled()
+    expect(screen.queryByText('已开始下载全部文章 ZIP。')).not.toBeInTheDocument()
+    await act(() => router.navigate('/blog/studio/posts?status=published'))
+    fireEvent.click(screen.getByRole('button', { name: '取消下载' }))
+    expect(secondSignal.aborted).toBe(true)
+  })
+
+  it('回收站单独导出，空范围禁用整库导出', async () => {
+    vi.mocked(getTrashedBlogPosts).mockResolvedValue([])
+    setup([], '/blog/studio/posts?status=trash')
+    expect(await screen.findByText('回收站是空的')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '导出回收站' })).toBeDisabled()
+  })
+
+  it('导出完成不会打断用户正在输入的搜索', async () => {
+    let finish!: () => void
+    const pending = new Promise<void>(resolve => { finish = resolve })
+    vi.mocked(downloadBlogArticles).mockReturnValueOnce(pending)
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: '导出全部' }))
+    const search = screen.getByRole('textbox', { name: '搜索文章' })
+    search.focus()
+    fireEvent.change(search, { target: { value: '特别' } })
+    await act(async () => { finish(); await pending })
+    expect(search).toHaveFocus()
+    expect(search).toHaveValue('特别')
+  })
+
   it('回收站支持空态、读取失败后重试，恢复成功保留筛选并回调草稿', async () => {
     const trashed = { ...posts[0]!, deleted_at: '2026-10-21T00:00:00Z' }
     vi.mocked(getTrashedBlogPosts).mockRejectedValueOnce(new Error('网络中断')).mockResolvedValueOnce([trashed])

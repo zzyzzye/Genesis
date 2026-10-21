@@ -12,8 +12,11 @@ from pydantic import AwareDatetime
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
+from starlette.responses import StreamingResponse
 
 from genesis_api.api.dependencies import OwnerDependency, SessionDependency
+from genesis_api.blog.export import article_markdown, articles_archive, markdown_filename
 from genesis_api.blog.links import (
     BlogLinkAdminList,
     BlogLinkRead,
@@ -366,6 +369,51 @@ def get_admin_posts(
     ]
 
 
+@router.get("/posts/export")
+def export_admin_posts(
+    session: SessionDependency, _: OwnerDependency, trashed: bool = False
+) -> StreamingResponse:
+    """导出全部普通文章或回收站文章，范围不受前端搜索、筛选及分页影响。
+
+    Args:
+        session: 当前只读数据库会话。
+        _: 所有者权限依赖，成员与访客均不可导出。
+        trashed: true 仅导出回收站；false 包含草稿和已发布文章。
+
+    Returns:
+        分块传输的 ZIP；私有响应禁止缓存，临时文件在传输结束后关闭。
+    """
+    archive = articles_archive(list_admin_posts(session, trashed=trashed), trashed=trashed)
+    name = "genesis-trash.zip" if trashed else "genesis-articles.zip"
+    return StreamingResponse(
+        iter(lambda: archive.read(65536), b""),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+        background=BackgroundTask(archive.close),
+    )
+
+
+@router.get("/posts/{post_id}/export")
+def export_admin_post(post_id: UUID, session: SessionDependency, _: OwnerDependency) -> Response:
+    """下载已保存的单篇文章 Markdown，允许在彻底删除前导出回收站内容。"""
+    post = get_blog_post_by_id(session, post_id, include_deleted=True)
+    if post is None:
+        raise post_not_found()
+    return Response(
+        article_markdown(post),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{markdown_filename(post)}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/posts/{post_id}", response_model=BlogPostAdminRead)
 def get_admin_post(
     post_id: UUID,
@@ -516,9 +564,7 @@ def delete_admin_post(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def locked_trashed_post(
-    session: Session, post_id: UUID, expected_updated_at: datetime
-) -> BlogPost:
+def locked_trashed_post(session: Session, post_id: UUID, expected_updated_at: datetime) -> BlogPost:
     """锁定回收站文章并比较版本，防止旧页面删除已经恢复的内容。"""
     post = get_blog_post_by_id(session, post_id, for_update=True, include_deleted=True)
     if post is None:

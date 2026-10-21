@@ -1,5 +1,6 @@
 import { ApiError } from './api'
 import { handleStudioUnauthorized } from './auth'
+import { downloadBlob } from './download'
 
 const base = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 const admin = '/admin/blog/attachments'
@@ -48,10 +49,7 @@ export function attachmentMarkdown(item: Attachment): string {
 export async function downloadAttachment(token: string, item: Attachment): Promise<void> {
   const response = await fetch(`${base}${admin}/${item.id}/file`, { headers: headers(token) })
   if (!response.ok) { await result(response, token); return }
-  const url = URL.createObjectURL(await response.blob())
-  const anchor = document.createElement('a')
-  anchor.href = url; anchor.download = item.name; anchor.click()
-  window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+  downloadBlob(await response.blob(), item.name)
 }
 
 export async function fetchAttachmentPreview(token: string, item: Attachment, signal: AbortSignal): Promise<{ blob: Blob; truncated: boolean }> {

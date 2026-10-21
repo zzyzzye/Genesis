@@ -4,6 +4,12 @@
 
 ## Canonical UI Map
 
+2026-10-21 增加只读文章导出：PostsIndex 每行提供 Markdown 下载，整库 ZIP 覆盖全部草稿及已发布文章，回收站使用独立范围，均不受前端筛选和分页影响。后端复用所有者鉴权与现有文章查询，禁止响应缓存；正文原样保留，多分类、标签及时间写入 front matter，归档附版本清单与范围说明。共享 downloadBlob 复用附件下载的临时地址生命周期；请求支持同步防重、取消、失败重试与离开取消，完成时不抢占正在编辑搜索的焦点。
+
+复用 Compose 5173 服务的实际 PostsIndex 与隔离数据，在桌面、390px、320px 检查正常内容、长标题、空列表、无结果、回收站、失败、慢速、取消后重试、键盘下载回执及搜索聚焦。截图确认按钮可见、窄屏无横向溢出、输入无聚焦边框/描边/阴影；临时页面模拟了既有工作区的内部滚动结构，未修改真实文章。真实工作台会话已失效，未读取凭据或另行登录；浏览器下载事件未返回保存路径，因此文件正文和 ZIP 结构以真实 API 集成测试的二进制回读为证，未声称验证本机文件落盘。验收入口已删除，视口已恢复。
+
+前端全量 341 项测试通过，补充焦点回归后的相关 25 项复验通过；后端全量 266 项测试、94.73% 覆盖率通过。ESLint、TypeScript/生产构建、Ruff（含改动文件格式检查）、mypy 通过；strict 静态设计审计为 0 项，DESIGN lint 为 0 错误和 7 项既有警告，构建保留既有大分块提示。本轮不修改服务配置或数据库结构；内容导出不包含评论、附件文件、独立页面，也不提供导入恢复。
+
 2026-10-21 修复此前 18 项静态审计发现：个人资料改为业务校验、关联字段错误及首错聚焦，保存中只读并阻止重复提交，失败保留输入；Genesis AI 对话补充表单名称、输入标签和同步提交锁。文本域统一声明 resize-none，仍由原有布局、自动增高与画布尺寸控制；助手分隔条和二维节点尺寸手柄采用对应语义，保留拖动与方向键操作，聚焦仅改变中性底色。原生 select 归属写入 premium-ui.json，不替换系统菜单或屏蔽审计规则。
 
 复用 Compose 5173 服务，在真实写作台检查助手空态、分隔条聚焦和方向键调宽；使用实际组件及隔离数据检查桌面与 390px 资料校验、错误提示、首错聚焦及保存反馈，画布方向键、Shift 加速和缩放后拖动，以及原生思考模式/强度的选中与禁用联动。截图确认输入无聚焦边框、描边或阴影，窄屏表单不重叠，文本域没有浏览器拖拽手柄；系统原生菜单弹层未取得独立截图，不将其弹层几何记为本轮已验证。临时验收入口与合成草稿已清理，未修改真实账户资料或业务内容。前端全量 335 项测试、ESLint、TypeScript/生产构建通过，最终分隔条调整后相关 15 项测试复验通过；strict 设计审计为 0 错误、0 警告、0 未解决项，构建仍保留既有大分块提示。本轮无后端改动。
@@ -81,6 +87,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | Select/Listbox | 原生 select | premium-ui.json、AgentModelPicker、ReasoningEffortControl、BlogAssistant、ProjectCanvas、AssetLibrary | 简单枚举使用系统菜单管理弹出几何与键盘；思考模式/强度、执行方式、素材类型、画布参数维持原生行为；模型目录搜索沿用现有专用面板 | 浏览器展开、选择、Escape，组件测试 |
 | Form | AccountForm、AccountProfile、AiChatPanel、ProjectDialog 与各业务表单 | Account.tsx、AiChatPanel.tsx、ProjectCanvas.tsx、MediaHome.tsx | 提交表单使用 noValidate、业务校验及重复提交锁；个人资料必填/长度/头像地址错误与字段关联并聚焦首错，保存失败保留输入；节点编辑无需表单提交 | 校验、焦点、提交锁、失败重试、整数时长、保存恢复 |
 | CRUD | useCanvas、作品素材 API | useCanvas.ts、api/routes/media.py | 节点修改可撤销；素材删除沿用既有确认流程 | 组件测试、后端权限与素材类型测试 |
+| 文章导出 | PostsIndex、downloadBlogArticles、共享 downloadBlob | blog/export.py、admin_blog.py 的所有者只读导出接口 | 单篇 Markdown 可读回收站；整库 ZIP 只含普通文章，回收站独立导出，均不受前端筛选分页影响；含原正文与 front matter，不含评论/附件/页面，不提供导入；请求取消、同步防重、失败保留列表，响应 no-store | 授权与 404、正文和多分类保真、删除范围、归档路径、临时文件关闭、重复点击/取消竞态、失败重试、空态、桌面与窄屏 |
 | 博客分类/标签选择 | TaxonomyPicker | TaxonomyPicker.tsx、blog/schemas.py | 直接展示原生按钮组；分类单选、标签多选，不使用弹出式 combobox | 直接选择、创建并选入、输入法、数量上限与窄屏 |
 | 博客分类/标签管理 | TaxonomyWorkspace、TaxonomyEditor | TaxonomyWorkspace.tsx、admin_blog.py | 搜索/新增共用输入，名称块和分类列表；原生 dialog 管理改名和删除 | 模态焦点、取消恢复、失败重试、使用中禁止删除 |
 | 博客写作 Form / CRUD | blogEditor.ts、Studio 的 Dashboard | blog/schemas.py、admin_blog.py | 草稿允许缺少正文；公开发布校验完整性，发布与更新公开内容均先检查确认 | 草稿保存、首次发布、更新发布、失败重试、版本冲突 |

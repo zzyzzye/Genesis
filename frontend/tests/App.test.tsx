@@ -357,7 +357,7 @@ describe('App', () => {
     expect(screen.queryByText('三级')).not.toBeInTheDocument()
     expect(screen.getByRole('region', { name: '文章列表' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /从一个完整模块开始/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^从一个完整模块开始/ }))
 
     expect(window.location.pathname).toBe('/blog/studio/posts/post-1/edit')
     expect(screen.getByRole('region', { name: '文章列表' }).closest('.studio-workspace')).toHaveAttribute('inert')
