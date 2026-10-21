@@ -1,8 +1,8 @@
-import { useRef, type ReactNode } from 'react'
+import { useRef, type ReactNode, type RefObject } from 'react'
 import { useModalDialog } from './useModalDialog'
 import './BlogWorkflowDialog.css'
 
-export function BlogWorkflowDialog({ title, description, children, confirmLabel, onConfirm, onCancel, busy = false, confirmDisabled = false, error }: {
+export function BlogWorkflowDialog({ title, description, children, confirmLabel, onConfirm, onCancel, busy = false, confirmDisabled = false, error, returnFocus }: {
   title: string
   description: string
   children?: ReactNode
@@ -12,9 +12,10 @@ export function BlogWorkflowDialog({ title, description, children, confirmLabel,
   busy?: boolean
   confirmDisabled?: boolean
   error?: string | null
+  returnFocus?: RefObject<HTMLElement | null>
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null)
-  const dialogRef = useModalDialog(cancelRef)
+  const dialogRef = useModalDialog(cancelRef, returnFocus)
   return <dialog ref={dialogRef} className="blog-workflow-dialog" aria-labelledby="blog-workflow-title" aria-describedby="blog-workflow-description" aria-busy={busy} onCancel={(event) => { event.preventDefault(); if (!busy) onCancel() }}>
     <h2 id="blog-workflow-title">{title}</h2>
     <p id="blog-workflow-description">{description}</p>

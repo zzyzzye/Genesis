@@ -1,7 +1,8 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useEffectEvent, useRef, type RefObject } from 'react'
 
-export function useModalDialog(initialFocus?: RefObject<HTMLElement | null>) {
+export function useModalDialog(initialFocus?: RefObject<HTMLElement | null>, returnFocus?: RefObject<HTMLElement | null>) {
   const dialog = useRef<HTMLDialogElement>(null)
+  const returnTarget = useEffectEvent(() => returnFocus?.current ?? null)
   useEffect(() => {
     const surface = dialog.current
     if (!surface) return
@@ -23,8 +24,11 @@ export function useModalDialog(initialFocus?: RefObject<HTMLElement | null>) {
     surface.addEventListener('keydown', trapFocus)
     return () => {
       surface.removeEventListener('keydown', trapFocus)
+      const target = returnTarget() ?? trigger
       surface.close()
-      requestAnimationFrame(() => { if (trigger?.isConnected) trigger.focus() })
+      requestAnimationFrame(() => {
+        if (target?.isConnected) target.focus()
+      })
     }
   }, [initialFocus])
   return dialog

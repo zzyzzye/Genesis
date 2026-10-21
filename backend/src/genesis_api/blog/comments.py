@@ -173,7 +173,7 @@ def list_comments(
     if slug is not None:
         stmt = stmt.where(
             BlogPost.slug == slug,
-            BlogPost.status == BlogPostStatus.PUBLISHED,
+            BlogPost.status == BlogPostStatus.PUBLISHED, BlogPost.deleted_at.is_(None),
             BlogComment.state == BlogCommentState.PUBLIC,
         )
     elif state is not None:

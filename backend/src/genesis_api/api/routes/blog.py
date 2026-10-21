@@ -34,7 +34,7 @@ def get_blog_tags(session: SessionDependency) -> list[PublicBlogTag]:
         select(BlogTag.id, BlogTag.name, BlogTag.slug, func.count(BlogPost.id))
         .select_from(BlogPost)
         .join(BlogPost.tags)
-        .where(BlogPost.status == BlogPostStatus.PUBLISHED)
+        .where(BlogPost.status == BlogPostStatus.PUBLISHED, BlogPost.deleted_at.is_(None))
         .group_by(BlogTag.id, BlogTag.name, BlogTag.slug)
         .order_by(BlogTag.name, BlogTag.id)
     )

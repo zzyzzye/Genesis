@@ -38,7 +38,9 @@ def list_published_posts(
     Returns:
         当前页文章与筛选后的总数，关联作者、分类和标签已批量加载。
     """
-    statement = select(BlogPost).where(BlogPost.status == BlogPostStatus.PUBLISHED)
+    statement = select(BlogPost).where(
+        BlogPost.status == BlogPostStatus.PUBLISHED, BlogPost.deleted_at.is_(None)
+    )
     if tag_slug:
         statement = statement.join(BlogPost.tags).where(BlogTag.slug == tag_slug)
     if query.strip():
@@ -82,6 +84,7 @@ def get_published_post(session: Session, slug: str) -> BlogPost | None:
         .where(
             BlogPost.slug == slug,
             BlogPost.status == BlogPostStatus.PUBLISHED,
+            BlogPost.deleted_at.is_(None),
         )
         .options(
             selectinload(BlogPost.author),
@@ -92,19 +95,21 @@ def get_published_post(session: Session, slug: str) -> BlogPost | None:
     return session.scalar(statement)
 
 
-def list_admin_posts(session: Session) -> list[BlogPost]:
+def list_admin_posts(session: Session, *, trashed: bool = False) -> list[BlogPost]:
     """读取所有状态的文章，供后台列表与 Agent 使用。
 
     调用方必须先检查后台权限；此查询不分页，也不按作者过滤。
 
     Args:
         session: 调用方提供的数据库会话。
+        trashed: 仅查询回收站；默认仅返回未删除文章。
 
     Returns:
         按更新时间倒序的文章列表，包含草稿与已发布文章。
     """
     statement = (
         select(BlogPost)
+        .where(BlogPost.deleted_at.is_not(None) if trashed else BlogPost.deleted_at.is_(None))
         .options(
             selectinload(BlogPost.author),
             selectinload(BlogPost.category),
@@ -116,7 +121,7 @@ def list_admin_posts(session: Session) -> list[BlogPost]:
 
 
 def get_blog_post_by_id(
-    session: Session, post_id: UUID, *, for_update: bool = False
+    session: Session, post_id: UUID, *, for_update: bool = False, include_deleted: bool = False
 ) -> BlogPost | None:
     """按内部 ID 读取任意状态文章，不在此函数内执行权限校验。
 
@@ -126,6 +131,7 @@ def get_blog_post_by_id(
         session: 调用方提供的数据库会话。
         post_id: 文章内部 UUID，不是公开地址 slug。
         for_update: 是否申请行锁，供读后写流程使用；默认不锁定。
+        include_deleted: 回收站操作可读取已删除文章；普通编辑默认排除。
 
     Returns:
         任意状态的文章及其关联数据；不存在时返回 None。
@@ -141,7 +147,16 @@ def get_blog_post_by_id(
     )
     if for_update:
         statement = statement.with_for_update()
+    if not include_deleted:
+        statement = statement.where(BlogPost.deleted_at.is_(None))
     return session.scalar(statement)
+
+
+def trash_post(post: BlogPost) -> None:
+    """将文章移入回收站，保留正文与关联，重复操作不刷新版本。"""
+    if post.deleted_at is None:
+        post.deleted_at = datetime.now(UTC)
+        post.updated_at = post.deleted_at
 
 
 def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> None:

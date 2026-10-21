@@ -144,6 +144,7 @@ export interface BlogPostWrite {
 }
 
 export interface BlogPostAdmin extends BlogPostWrite {
+  deleted_at?: string | null
   id: string
   published_at: string | null
   created_at: string
@@ -310,6 +311,20 @@ export function getAdminBlogPosts(token: string): Promise<BlogPostAdmin[]> {
   return request<BlogPostAdmin[]>('/admin/blog/posts', { headers: authHeaders(token) })
 }
 
+export function getTrashedBlogPosts(token: string, signal?: AbortSignal): Promise<BlogPostAdmin[]> {
+  return request<BlogPostAdmin[]>('/admin/blog/posts?trashed=true', { headers: authHeaders(token), signal })
+}
+
+export function restoreBlogPost(token: string, post: BlogPostAdmin): Promise<BlogPostAdmin> {
+  const query = new URLSearchParams({ expected_updated_at: post.updated_at })
+  return request<BlogPostAdmin>(`/admin/blog/posts/${encodeURIComponent(post.id)}/restore?${query}`, { method: 'POST', headers: authHeaders(token) })
+}
+
+export async function permanentlyDeleteBlogPost(token: string, post: BlogPostAdmin): Promise<void> {
+  const query = new URLSearchParams({ expected_updated_at: post.updated_at })
+  await request<unknown>(`/admin/blog/posts/${encodeURIComponent(post.id)}/permanent?${query}`, { method: 'DELETE', headers: authHeaders(token) })
+}
+
 export function getAdminBlogPost(token: string, postId: string): Promise<BlogPostAdmin> {
   return request<BlogPostAdmin>(`/admin/blog/posts/${encodeURIComponent(postId)}`, { headers: authHeaders(token) })
 }
@@ -368,8 +383,9 @@ export function updateAdminBlogPost(
   })
 }
 
-export async function deleteAdminBlogPost(token: string, id: string): Promise<void> {
-  const response = await fetch(`${apiBaseUrl}/admin/blog/posts/${encodeURIComponent(id)}`, {
+export async function deleteAdminBlogPost(token: string, id: string, expectedUpdatedAt?: string | null): Promise<void> {
+  const query = expectedUpdatedAt ? `?${new URLSearchParams({ expected_updated_at: expectedUpdatedAt })}` : ''
+  const response = await fetch(`${apiBaseUrl}/admin/blog/posts/${encodeURIComponent(id)}${query}`, {
     method: 'DELETE',
     headers: authHeaders(token),
   })

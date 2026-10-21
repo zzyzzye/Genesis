@@ -16,6 +16,7 @@ from genesis_api.blog.service import (
     apply_post_data,
     get_blog_post_by_id,
     get_blog_post_by_slug,
+    trash_post,
 )
 from genesis_api.identity.models import User
 
@@ -102,12 +103,12 @@ def confirm_blog_action(
         raise HTTPException(status_code=422, detail="博客操作类型无效")
     if action == "delete_post":
         post_id = _payload_uuid(payload, "post_id")
-        post = get_blog_post_by_id(session, post_id)
+        post = get_blog_post_by_id(session, post_id, for_update=True, include_deleted=True)
         if post is None:
             raise HTTPException(status_code=404, detail="文章不存在")
-        session.delete(post)
+        trash_post(post)
         session.commit()
-        return {"action": action, "post_id": str(post_id), "status": "deleted"}
+        return {"action": action, "post_id": str(post_id), "status": "trashed"}
 
     if action in {"update_post", "publish_post"}:
         post_id = _payload_uuid(payload, "post_id")

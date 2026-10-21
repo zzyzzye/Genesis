@@ -1,9 +1,12 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { BlogPostAdmin } from '../src/lib/api'
+import { ApiError, getTrashedBlogPosts, permanentlyDeleteBlogPost, restoreBlogPost, type BlogPostAdmin } from '../src/lib/api'
 import { PostsIndex } from '../src/studio/PostsIndex'
+
+vi.mock('../src/lib/api', async (importOriginal) => ({ ...await importOriginal<typeof import('../src/lib/api')>(), getTrashedBlogPosts: vi.fn(), permanentlyDeleteBlogPost: vi.fn(), restoreBlogPost: vi.fn() }))
+afterEach(() => vi.resetAllMocks())
 
 const posts: BlogPostAdmin[] = Array.from({ length: 45 }, (_, index) => ({
   id: `post-${index}`, slug: `article-${index}`, title: `文章 ${index}`, excerpt: index === 44 ? '特别选题' : '记录想法',
@@ -16,12 +19,50 @@ const posts: BlogPostAdmin[] = Array.from({ length: 45 }, (_, index) => ({
 function setup(items = posts, path = '/blog/studio/posts') {
   const onOpenPost = vi.fn()
   const onCreatePost = vi.fn()
-  const router = createMemoryRouter([{ path: '/blog/studio/posts', element: <PostsIndex posts={items} onCreatePost={onCreatePost} onOpenPost={onOpenPost} /> }], { initialEntries: [path] })
+  const onRestored = vi.fn()
+  const router = createMemoryRouter([{ path: '/blog/studio/posts', element: <PostsIndex token="test" onRestored={onRestored} onPendingChange={vi.fn()} posts={items} onCreatePost={onCreatePost} onOpenPost={onOpenPost} /> }], { initialEntries: [path] })
   render(<RouterProvider router={router} />)
-  return { router, onOpenPost, onCreatePost }
+  return { router, onOpenPost, onCreatePost, onRestored }
 }
 
 describe('PostsIndex', () => {
+  it('回收站支持空态、读取失败后重试，恢复成功保留筛选并回调草稿', async () => {
+    const trashed = { ...posts[0]!, deleted_at: '2026-10-21T00:00:00Z' }
+    vi.mocked(getTrashedBlogPosts).mockRejectedValueOnce(new Error('网络中断')).mockResolvedValueOnce([trashed])
+    const restored = { ...trashed, status: 'draft' as const, deleted_at: null }
+    vi.mocked(restoreBlogPost).mockResolvedValue(restored)
+    const { onRestored, router } = setup(posts, '/blog/studio/posts?status=trash')
+    expect(await screen.findByRole('alert')).toHaveTextContent('网络中断')
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' }))
+    fireEvent.click(await screen.findByRole('button', { name: '恢复为草稿' }))
+    const dialog = screen.getByRole('dialog', { name: '恢复文章' })
+    expect(within(dialog).getByRole('button', { name: '取消' })).toHaveFocus()
+    fireEvent.click(within(dialog).getByRole('button', { name: '恢复为草稿' }))
+    expect(await screen.findByText('回收站是空的')).toBeInTheDocument()
+    expect(onRestored).toHaveBeenCalledWith(restored)
+    await waitFor(() => expect(screen.getByRole('textbox', { name: '搜索文章' })).toHaveFocus())
+    expect(router.state.location.search).toBe('?status=trash')
+  })
+
+  it('彻底删除先确认，失败可重试，重复点击只发送一次，版本冲突刷新列表', async () => {
+    const trashed = { ...posts[0]!, deleted_at: '2026-10-21T00:00:00Z' }
+    vi.mocked(getTrashedBlogPosts).mockResolvedValue([trashed])
+    setup(posts, '/blog/studio/posts?status=trash')
+    fireEvent.click(await screen.findByRole('button', { name: '彻底删除' }))
+    expect(permanentlyDeleteBlogPost).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('dialog', { name: '彻底删除文章' })
+    vi.mocked(permanentlyDeleteBlogPost).mockRejectedValueOnce(new Error('暂时不可用'))
+    fireEvent.click(within(dialog).getByRole('button', { name: '彻底删除' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: '彻底删除' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('暂时不可用')
+    expect(permanentlyDeleteBlogPost).toHaveBeenCalledTimes(1)
+    vi.mocked(permanentlyDeleteBlogPost).mockRejectedValueOnce(new ApiError(409, '文章已恢复'))
+    vi.mocked(getTrashedBlogPosts).mockResolvedValue([])
+    fireEvent.click(within(dialog).getByRole('button', { name: '彻底删除' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(await screen.findByText('回收站是空的')).toBeInTheDocument()
+  })
+
   it('分页限制列表长度，筛选回到第一页并保留 URL 查询，文章仍可打开', async () => {
     const { router, onOpenPost } = setup()
     const list = screen.getByRole('region', { name: '文章列表' })

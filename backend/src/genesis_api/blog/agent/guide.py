@@ -45,7 +45,11 @@ def claim_guide(session_factory: SessionFactory) -> GuideJob | None:
         missing = session.scalars(
             select(BlogPost)
             .outerjoin(BlogArticleGuide)
-            .where(BlogPost.status == BlogPostStatus.PUBLISHED, BlogArticleGuide.post_id.is_(None))
+            .where(
+                BlogPost.status == BlogPostStatus.PUBLISHED,
+                BlogPost.deleted_at.is_(None),
+                BlogArticleGuide.post_id.is_(None),
+            )
             .order_by(BlogPost.published_at.desc())
             .limit(20)
             .with_for_update(of=BlogPost, skip_locked=True)
@@ -59,7 +63,7 @@ def claim_guide(session_factory: SessionFactory) -> GuideJob | None:
             select(BlogArticleGuide)
             .join(BlogPost)
             .where(
-                BlogPost.status == BlogPostStatus.PUBLISHED,
+                BlogPost.status == BlogPostStatus.PUBLISHED, BlogPost.deleted_at.is_(None),
                 or_(
                     BlogArticleGuide.state == "pending",
                     (BlogArticleGuide.state == "running")
@@ -105,7 +109,7 @@ def finish_guide(
                 select(BlogPost.id)
                 .where(
                     BlogPost.id == job.post_id,
-                    BlogPost.status == BlogPostStatus.PUBLISHED,
+                    BlogPost.status == BlogPostStatus.PUBLISHED, BlogPost.deleted_at.is_(None),
                 )
                 .exists(),
             )

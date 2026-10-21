@@ -3,7 +3,7 @@
 各路由通过 OwnerDependency 校验权限；service.py 负责文章字段与关联写入。
 """
 
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -23,7 +23,7 @@ from genesis_api.blog.links import (
     list_links,
     locked_link,
 )
-from genesis_api.blog.models import BlogCategory, BlogLink, BlogPost, BlogTag
+from genesis_api.blog.models import BlogCategory, BlogLink, BlogPost, BlogPostStatus, BlogTag
 from genesis_api.blog.schemas import (
     BlogCategoryRead,
     BlogCategoryWrite,
@@ -38,6 +38,7 @@ from genesis_api.blog.service import (
     list_admin_categories,
     list_admin_posts,
     list_admin_tags,
+    trash_post,
 )
 
 router = APIRouter(prefix="/admin/blog", tags=["博客管理"])
@@ -346,17 +347,23 @@ def delete_admin_category(
 
 
 @router.get("/posts", response_model=list[BlogPostAdminRead])
-def get_admin_posts(session: SessionDependency, _: OwnerDependency) -> list[BlogPostAdminRead]:
+def get_admin_posts(
+    session: SessionDependency, _: OwnerDependency, trashed: bool = False
+) -> list[BlogPostAdminRead]:
     """读取包含草稿的完整后台文章列表。
 
     Args:
         session: 当前请求的数据库会话。
         _: 所有者权限依赖，不以当前用户过滤文章作者。
+        trashed: 为 true 时仅返回回收站文章。
 
     Returns:
         按更新时间倒序排列的文章管理数据，当前接口不分页。
     """
-    return [BlogPostAdminRead.model_validate(post) for post in list_admin_posts(session)]
+    return [
+        BlogPostAdminRead.model_validate(post)
+        for post in list_admin_posts(session, trashed=trashed)
+    ]
 
 
 @router.get("/posts/{post_id}", response_model=BlogPostAdminRead)
@@ -477,13 +484,15 @@ def delete_admin_post(
     post_id: UUID,
     session: SessionDependency,
     _: OwnerDependency,
+    expected_updated_at: Annotated[AwareDatetime | None, Query()] = None,
 ) -> Response:
-    """删除文章并提交，关联表由数据库外键清理，共享分类和标签保留。
+    """将文章移入回收站，保留正文与评论，重复请求保持幂等。
 
     Args:
         post_id: 待删除文章 UUID。
         session: 当前请求会话。
         _: 所有者权限依赖，用户确认由调用方界面负责。
+        expected_updated_at: 可选版本；新客户端必须携带，旧客户端保留兼容。
 
     Returns:
         204 无内容响应。
@@ -491,9 +500,65 @@ def delete_admin_post(
     Raises:
         HTTPException: 文章不存在时返回 404。
     """
-    post = get_blog_post_by_id(session, post_id)
+    post = get_blog_post_by_id(session, post_id, for_update=True, include_deleted=True)
     if post is None:
         raise post_not_found()
+    if expected_updated_at is not None and post.deleted_at is None:
+        current = post.updated_at
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=UTC)
+        if current != expected_updated_at:
+            raise HTTPException(
+                status_code=409, detail="文章已变更，请核对最新内容后再移入回收站。"
+            )
+    trash_post(post)
+    session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+def locked_trashed_post(
+    session: Session, post_id: UUID, expected_updated_at: datetime
+) -> BlogPost:
+    """锁定回收站文章并比较版本，防止旧页面删除已经恢复的内容。"""
+    post = get_blog_post_by_id(session, post_id, for_update=True, include_deleted=True)
+    if post is None:
+        raise post_not_found()
+    if post.deleted_at is None:
+        raise HTTPException(status_code=409, detail="文章已不在回收站，请刷新后重试。")
+    current = (
+        post.updated_at.replace(tzinfo=UTC) if post.updated_at.tzinfo is None else post.updated_at
+    )
+    if current != expected_updated_at:
+        raise HTTPException(status_code=409, detail="回收站文章已变更，请刷新后核对。")
+    return post
+
+
+@router.post("/posts/{post_id}/restore", response_model=BlogPostAdminRead)
+def restore_admin_post(
+    post_id: UUID,
+    expected_updated_at: Annotated[AwareDatetime, Query()],
+    session: SessionDependency,
+    _: OwnerDependency,
+) -> BlogPostAdminRead:
+    """将回收站文章恢复为草稿，保留内容与评论，不自动重新发布。"""
+    post = locked_trashed_post(session, post_id, expected_updated_at)
+    post.deleted_at = None
+    post.status = BlogPostStatus.DRAFT
+    post.published_at = None
+    post.updated_at = datetime.now(UTC)
+    session.commit()
+    return BlogPostAdminRead.model_validate(post)
+
+
+@router.delete("/posts/{post_id}/permanent", status_code=status.HTTP_204_NO_CONTENT)
+def permanently_delete_admin_post(
+    post_id: UUID,
+    expected_updated_at: Annotated[AwareDatetime, Query()],
+    session: SessionDependency,
+    _: OwnerDependency,
+) -> Response:
+    """彻底删除已在回收站且版本匹配的文章；界面须明确确认不可恢复。"""
+    post = locked_trashed_post(session, post_id, expected_updated_at)
     session.delete(post)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

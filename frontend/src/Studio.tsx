@@ -145,6 +145,9 @@ const sectionMeta: Record<StudioSection, { eyebrow: string; title: string; descr
 
 
 function PostsWorkspace({
+  token,
+  onRestored,
+  onPendingChange,
   attachmentAccess,
   categories,
   editor,
@@ -171,6 +174,9 @@ function PostsWorkspace({
   onCompareVersion,
   hasVersionConflict,
 }: {
+  token: string
+  onRestored: (post: BlogPostAdmin) => void
+  onPendingChange: (pending: boolean) => void
   attachmentAccess: EditorAttachmentAccess
   categories: BlogCategory[]
   editor: EditorState
@@ -196,7 +202,7 @@ function PostsWorkspace({
   hasVersionConflict: boolean
 } & ArticleTaxonomyActions) {
   if (view === 'list') {
-    return <PostsIndex onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} />
+    return <PostsIndex token={token} feedback={feedback} onRestored={onRestored} onPendingChange={onPendingChange} onCreatePost={onCreatePost} onOpenPost={onOpenPost} posts={posts} />
   }
 
   if (isEditorOpen) {
@@ -307,6 +313,7 @@ function Dashboard({
   const resource = postView === 'preview' ? postId ?? 'new' : null
   const hasUnsavedChanges = resource !== null && JSON.stringify(activeEditor) !== JSON.stringify(baseline)
   const blocker = useBlocker(({ nextLocation }) => {
+    if (linkPending) return true
     if (editorAttachmentOpen) return true
     if (pages.bypassNavigation.current) return false
     if (pages.active && (pages.dirty || pages.busy)) {
@@ -457,12 +464,12 @@ function Dashboard({
     setIsSaving(true)
     setFeedback(null)
     try {
-      await deleteAdminBlogPost(token, activeEditor.id)
+      await deleteAdminBlogPost(token, activeEditor.id, activeEditor.updatedAt)
       setManagedPosts((currentPosts) => currentPosts.filter((post) => post.id !== activeEditor.id))
       setEditor(createEmptyEditor())
       clearBlogDraft(user.id, activeEditor.id)
       setDeleteRequested(false)
-      setFeedback('文章已删除。')
+      setFeedback('文章已移入回收站，可恢复为草稿。')
       bypassNavigation.current = true
       void navigate(`${studioBasePath}/posts`)
     } catch (error) {
@@ -549,6 +556,9 @@ function Dashboard({
           )}
           {activeSection === 'posts' && (
             <PostsWorkspace
+              token={token}
+              onRestored={post => setManagedPosts(current => [post, ...current.filter(item => item.id !== post.id)])}
+              onPendingChange={setLinkPending}
               attachmentAccess={attachmentAccess}
               onCreateTaxonomy={createArticleTaxonomy}
               onSelectTaxonomy={selectArticleTaxonomy}
@@ -603,7 +613,7 @@ function Dashboard({
           <div><dt>正文</dt><dd>{articleStats(publication.contentMarkdown).count} 字 · 预计阅读 {articleStats(publication.contentMarkdown).minutes} 分钟</dd></div>
         </dl>
       </BlogWorkflowDialog>}
-      {deleteRequested && <BlogWorkflowDialog title="删除文章" description={`删除「${activeEditor.title || '未命名文章'}」后，文章及本标签页的暂存内容均无法恢复。`} confirmLabel="删除文章" busy={isSaving} error={feedback} onCancel={() => setDeleteRequested(false)} onConfirm={() => { void deletePost() }} />}
+      {deleteRequested && <BlogWorkflowDialog title="移入回收站" description={`将「${activeEditor.title || '未命名文章'}」移入回收站后，文章停止公开，可恢复为草稿。本标签页尚未保存的修改不会保留，请先保存需要保留的内容。`} confirmLabel="移入回收站" busy={isSaving} error={feedback} onCancel={() => setDeleteRequested(false)} onConfirm={() => { void deletePost() }} />}
       {comparison && <BlogWorkflowDialog title="核对文章版本" description="保留当前内容后，下次保存会替换下面展示的站点版本；也可以采用站点版本并丢弃当前修改。" confirmLabel="保留当前内容继续编辑" onCancel={() => setComparison(null)} onConfirm={() => reconcileVersion(true)}>
         <div className="blog-version-comparison">
           <details open><summary>当前输入：{activeEditor.title || '未命名文章'}</summary><pre>{activeEditor.contentMarkdown || '正文为空'}</pre></details>
@@ -615,7 +625,17 @@ function Dashboard({
       <BlogAssistant
         userId={user.id}
         onExecuted={() => {
-          void getAdminBlogPosts(token).then(setManagedPosts).catch(() => {
+          void getAdminBlogPosts(token).then(items => {
+            setManagedPosts(items)
+            if (activeSection === 'posts' && postId && !items.some(post => post.id === postId)) {
+              clearBlogDraft(user.id, postId)
+              setEditor(createEmptyEditor())
+              setBaseline(createEmptyEditor())
+              bypassNavigation.current = true
+              setFeedback('文章已移入回收站，可恢复为草稿。')
+              void navigate(`${studioBasePath}/posts`)
+            }
+          }).catch(() => {
             setFeedback('操作已执行，但文章列表刷新失败，请刷新页面查看。')
           })
         }}

@@ -9,7 +9,7 @@ const actionLabels = {
   create_and_publish: { name: '创建并发布文章', button: '确认发布', done: '文章已发布', hint: '一次确认后创建文章并公开发布', icon: Send },
   update_post: { name: '更新文章', button: '确认更新', done: '文章已更新', hint: '将修改保存到目标文章', icon: FilePenLine },
   publish_post: { name: '发布文章', button: '确认发布', done: '文章已发布', hint: '通过校验后公开发布', icon: Send },
-  delete_post: { name: '删除文章', button: '确认删除', done: '文章已删除', hint: '删除目标文章，此操作无法撤销', icon: Trash2 },
+  delete_post: { name: '移入回收站', button: '确认移入回收站', done: '文章已移入回收站', hint: '文章将停止公开，可在文章回收站中恢复为草稿', icon: Trash2 },
 }
 
 function proposalChanges(action: AiActionProposal): Record<string, unknown> {
@@ -30,7 +30,8 @@ function proposalChanges(action: AiActionProposal): Record<string, unknown> {
 export function BlogActionProposal({ action, executed, busy, disabled, targetPost, onConfirm }: {
   action: AiActionProposal; executed: boolean; busy: boolean; disabled: boolean; targetPost?: { id: string | null; title: string } | null; onConfirm: () => void
 }) {
-  const labels = actionLabels[action.action] ?? { name: '确认操作', button: '确认执行', done: '操作已完成', hint: action.summary, icon: FilePenLine }
+  const historicalDelete = action.action === 'delete_post' && executed && action.execution_result?.status !== 'trashed'
+  const labels = historicalDelete ? { ...actionLabels.delete_post, done: action.execution_result?.status === 'deleted' ? '文章已彻底删除' : '删除操作已完成', hint: action.execution_result?.status === 'deleted' ? '历史永久删除操作，无法恢复' : '请到文章回收站查看可恢复的文章' } : actionLabels[action.action] ?? { name: '确认操作', button: '确认执行', done: '操作已完成', hint: action.summary, icon: FilePenLine }
   const Icon = executed ? Check : labels.icon
   const changes = proposalChanges(action)
   const targetTitle = typeof action.payload.target_title === 'string' ? action.payload.target_title : targetPost?.id && targetPost.id === action.payload.post_id ? targetPost.title : ''

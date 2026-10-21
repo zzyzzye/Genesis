@@ -56,7 +56,9 @@ def get_comments(
     if (
         session.scalar(
             select(BlogPost.id).where(
-                BlogPost.slug == slug, BlogPost.status == BlogPostStatus.PUBLISHED
+                BlogPost.slug == slug,
+                BlogPost.status == BlogPostStatus.PUBLISHED,
+                BlogPost.deleted_at.is_(None),
             )
         )
         is None
@@ -79,7 +81,11 @@ def submit_comment(
     session.scalar(select(User).where(User.id == user.id).with_for_update())
     post = session.scalar(
         select(BlogPost)
-        .where(BlogPost.slug == slug, BlogPost.status == BlogPostStatus.PUBLISHED)
+        .where(
+            BlogPost.slug == slug,
+            BlogPost.status == BlogPostStatus.PUBLISHED,
+            BlogPost.deleted_at.is_(None),
+        )
         .with_for_update()
     )
     if post is None:
@@ -148,7 +154,7 @@ def get_comment_avatar(item_id: UUID, session: SessionDependency) -> Response:
         .where(
             BlogComment.id == item_id,
             BlogComment.state == BlogCommentState.PUBLIC,
-            BlogPost.status == BlogPostStatus.PUBLISHED,
+            BlogPost.status == BlogPostStatus.PUBLISHED, BlogPost.deleted_at.is_(None),
         )
     )
     if item is None or item.qq_number is None:

@@ -449,6 +449,17 @@ async def test_member_cannot_access_blog_management(
     assert login_response.status_code == 200
     assert response.status_code == 403
     member_headers = {"Authorization": f"Bearer {token}"}
+    assert (await client.get(
+        "/api/v1/admin/blog/posts?trashed=true", headers=member_headers
+    )).status_code == 403
+    trash_path = "/api/v1/admin/blog/posts/00000000-0000-0000-0000-000000000000"
+    version = {"expected_updated_at": "2026-10-21T00:00:00Z"}
+    assert (await client.post(
+        f"{trash_path}/restore", headers=member_headers, params=version
+    )).status_code == 403
+    assert (await client.delete(
+        f"{trash_path}/permanent", headers=member_headers, params=version
+    )).status_code == 403
     assert (await client.get("/api/v1/admin/blog/links", headers=member_headers)).status_code == 403
     assert (
         await client.post(
@@ -464,6 +475,77 @@ async def test_member_cannot_access_blog_management(
             await client.put(path, headers=headers, json={"name": "无权修改", "slug": "denied"})
         ).status_code == 403
         assert (await client.delete(path, headers=headers)).status_code == 403
+
+
+@pytest.mark.anyio
+async def test_post_trash_restore_and_permanent_delete(
+    client: AsyncClient, database_session: Session
+) -> None:
+    """回收站隐藏所有公开入口，恢复为草稿，彻底删除需匹配版本。"""
+    add_blog_content(database_session)
+    headers = {"Authorization": f"Bearer {await authenticate_owner(client, database_session)}"}
+    data = {
+        "slug": "trash-lifecycle", "title": "回收站验收", "excerpt": "保留这段摘要",
+        "content_markdown": "# 保留正文", "status": "published",
+        "tags": [{"name": "回收站专属", "slug": "trash-only"}],
+    }
+    created = await client.post("/api/v1/admin/blog/posts", headers=headers, json=data)
+    assert created.status_code == 201
+    post_id = created.json()["id"]
+    path = f"/api/v1/admin/blog/posts/{post_id}"
+    public = "/api/v1/blog/posts/trash-lifecycle"
+    assert (await client.get(public)).status_code == 200
+    assert (await client.delete(
+        path, headers=headers, params={"expected_updated_at": "2020-01-01T00:00:00Z"}
+    )).status_code == 409
+    assert (await client.post(f"{path}/restore", headers=headers)).status_code == 422
+    assert (await client.delete(
+        f"{path}/permanent", headers=headers,
+        params={"expected_updated_at": created.json()["updated_at"]},
+    )).status_code == 409
+    assert (await client.delete(path, headers=headers)).status_code == 204
+    trash = (await client.get("/api/v1/admin/blog/posts?trashed=true", headers=headers)).json()
+    assert len(trash) == 1 and trash[0]["id"] == post_id
+    version = trash[0]["updated_at"]
+    assert trash[0]["content_markdown"] == data["content_markdown"]
+    assert trash[0]["deleted_at"] is not None
+    assert (await client.delete(path, headers=headers)).status_code == 204
+    repeated = (await client.get("/api/v1/admin/blog/posts?trashed=true", headers=headers)).json()
+    assert repeated[0]["updated_at"] == version
+    assert (await client.get(public)).status_code == 404
+    assert (await client.get(f"{public}/comments")).status_code == 404
+    assert (await client.get(f"{public}/guide")).status_code == 404
+    assert (await client.get(path, headers=headers)).status_code == 404
+    assert (await client.put(path, headers=headers, json=data)).status_code == 404
+    assert (await client.get("/api/v1/blog/posts?q=回收站验收")).json()["total"] == 0
+    tags = (await client.get("/api/v1/blog/tags")).json()
+    assert not any(tag["slug"] == "trash-only" for tag in tags)
+    params = {"expected_updated_at": version}
+    assert (await client.get("/api/v1/admin/blog/posts?trashed=true")).status_code == 401
+    assert (await client.post(f"{path}/restore", params=params)).status_code == 401
+    assert (await client.delete(f"{path}/permanent", params=params)).status_code == 401
+    stale = {"expected_updated_at": created.json()["updated_at"]}
+    assert (await client.post(f"{path}/restore", headers=headers, params=stale)).status_code == 409
+    restored = await client.post(f"{path}/restore", headers=headers, params=params)
+    assert restored.status_code == 200
+    assert restored.json()["status"] == "draft"
+    assert restored.json()["deleted_at"] is None
+    assert restored.json()["published_at"] is None
+    assert restored.json()["tags"][0]["slug"] == "trash-only"
+    assert (await client.get(public)).status_code == 404
+    assert (await client.delete(
+        f"{path}/permanent", headers=headers, params=params
+    )).status_code == 409
+    assert (await client.delete(path, headers=headers)).status_code == 204
+    current = (await client.get("/api/v1/admin/blog/posts?trashed=true", headers=headers)).json()[0]
+    assert (await client.delete(
+        f"{path}/permanent", headers=headers,
+        params={"expected_updated_at": current["updated_at"]},
+    )).status_code == 204
+    assert (await client.delete(
+        f"{path}/permanent", headers=headers, params=params
+    )).status_code == 404
+    assert (await client.get("/api/v1/admin/blog/posts?trashed=true", headers=headers)).json() == []
 
 
 @pytest.mark.anyio
@@ -566,6 +648,14 @@ async def test_owner_taxonomy_crud_preserves_articles(
     assert linked_item["id"] == item_id
     assert linked_item["slug"] == "linked-renamed"
     assert (await client.delete(post_path, headers=headers)).status_code == 204
+    assert (await client.delete(path, headers=headers)).status_code == 409
+    trashed = (await client.get(
+        "/api/v1/admin/blog/posts?trashed=true", headers=headers
+    )).json()[0]
+    assert (await client.delete(
+        f"{post_path}/permanent", headers=headers,
+        params={"expected_updated_at": trashed["updated_at"]},
+    )).status_code == 204
     assert (await client.delete(path, headers=headers)).status_code == 204
     assert (await client.delete(path, headers=headers)).status_code == 404
     assert (
@@ -668,7 +758,7 @@ def test_agent_create_and_publish_is_one_operation(
     monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
         bind=database_session.get_bind(), expire_on_commit=False,
     ))
-    payload = {
+    payload: dict[str, object] = {
         "title": "直接发布", "excerpt": "摘要",
         "content_markdown": "完整正文", "slug": "direct-publish",
     }
@@ -690,6 +780,7 @@ def test_agent_create_and_publish_is_one_operation(
         result = proposal["execution_result"]
     post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "direct-publish"))
     assert post is not None and post.status is BlogPostStatus.PUBLISHED
+    assert isinstance(result, dict)
     assert post.published_at is not None and result["status"] == "published"
     with pytest.raises(HTTPException):
         confirm_blog_action(

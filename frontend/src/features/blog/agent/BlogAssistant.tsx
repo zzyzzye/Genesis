@@ -764,11 +764,11 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
     setConfirmingAction(messageIndex)
     setError(null)
     try {
-      await confirmAiAction(token, action.proposal_token)
+      const result = await confirmAiAction(token, action.proposal_token)
       onExecuted?.()
       if (selection !== selectionVersion.current) return
       setMessages((current) => current.map((message, index) => index === messageIndex
-        ? { ...message, executedProposals: [...(message.executedProposals ?? []), action.proposal_id], content: `${message.content}\n\n已确认并执行。` }
+        ? { ...message, proposals: message.proposals?.map(item => item.proposal_id === action.proposal_id ? { ...item, executed: true, execution_result: { ...result } } : item), executedProposals: [...(message.executedProposals ?? []), action.proposal_id], content: `${message.content}\n\n已确认并执行。` }
         : message))
     } catch (caught) {
       if (selection !== selectionVersion.current) return

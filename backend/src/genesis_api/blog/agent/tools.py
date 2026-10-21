@@ -139,6 +139,7 @@ def _search_posts(query: str) -> str:
         posts = session.scalars(
             select(BlogPost)
             .where(
+                BlogPost.deleted_at.is_(None),
                 or_(
                     BlogPost.title.ilike(pattern),
                     BlogPost.excerpt.ilike(pattern),
@@ -362,13 +363,13 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
 
     @tool
     async def delete_post(post_id: str) -> str:
-        """生成删除文章的待确认操作，不直接写入数据库。
+        """将文章移入回收站，保留正文和评论，可在文章管理中恢复为草稿。
 
         Args:
             post_id: 待删除文章的 UUID 字符串。
 
         Returns:
-            删除文章的签名提议 JSON；删除必须由用户确认。
+            审阅模式返回签名提议；自动模式返回已移入回收站的执行回执。
         """
         return await asyncio.to_thread(
             _preview, "delete_post", {"post_id": post_id}, runtime_settings

@@ -295,8 +295,9 @@ def test_confirm_agent_action_executes_all_blog_mutations() -> None:
             session,
             settings,
         )
-        assert isinstance(deleted, dict) and deleted["status"] == "deleted"
-        assert session.scalar(select(BlogPost).where(BlogPost.id == post_id)) is None
+        assert isinstance(deleted, dict) and deleted["status"] == "trashed"
+        trashed = session.get(BlogPost, post_id)
+        assert trashed is not None and trashed.deleted_at is not None
 
 
 @pytest.mark.anyio

@@ -1,6 +1,6 @@
 """博客 API 数据契约；复用 Pydantic 校验，ORM 实体通过 from_attributes 转换。"""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -175,6 +175,7 @@ class BlogPostAdminRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    deleted_at: datetime | None = None
     slug: str
     title: str
     excerpt: str
@@ -191,3 +192,9 @@ class BlogPostAdminRead(BaseModel):
     updated_at: datetime
     author: BlogAuthor
     tags: list[BlogTagRead]
+
+    @field_validator("deleted_at", "updated_at", "created_at", "published_at")
+    @classmethod
+    def timestamps_have_timezone(cls, value: datetime | None) -> datetime | None:
+        """数据库驱动丢失时区时按 UTC 返回，使并发版本可原样回传。"""
+        return value.replace(tzinfo=UTC) if value is not None and value.tzinfo is None else value

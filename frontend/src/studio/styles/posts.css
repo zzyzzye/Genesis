@@ -29,5 +29,12 @@
 .studio-post-empty p { margin: 0; color: var(--studio-muted); font-size: 12px; }
 .studio-post-empty button, .studio-post-pagination button { padding: 8px 12px; border: 0; border-radius: var(--studio-control-radius); background: var(--studio-soft); color: var(--studio-ink); font-size: 12px; }
 .studio-post-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 24px; color: var(--studio-muted); font-size: 12px; }
+.studio-post-notice { margin: 12px 0; color: var(--studio-muted); font-size: 12px; line-height: 1.7; }
+.studio-trash-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 20px 12px; }
+.studio-trash-row > svg { width: 17px; height: 17px; margin-top: 4px; color: var(--studio-muted); }
+.studio-trash-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.studio-trash-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 8px 10px; border: 0; border-radius: var(--studio-control-radius); background: var(--studio-soft); color: var(--studio-ink); font-size: 12px; }
+.studio-trash-actions button:hover:not(:disabled), .studio-trash-actions button:focus-visible { background: var(--studio-hover); }
+@media (max-width: 800px) { .studio-trash-row { grid-template-columns: 18px minmax(0, 1fr); padding-inline: 4px; } .studio-trash-actions { grid-column: 2; } }
 .studio-post-search button:hover, .studio-post-search button:focus-visible, .studio-post-index__filters button:hover, .studio-post-index__filters button:focus-visible, .studio-content-list__item:hover, .studio-content-list__item:focus-visible, .studio-post-empty button:hover, .studio-post-empty button:focus-visible, .studio-post-pagination button:hover:not(:disabled), .studio-post-pagination button:focus-visible { background: var(--studio-hover); }
 @media (max-width: 680px) { .studio-post-index__toolbar { gap: 10px; } .studio-post-search { gap: 6px; padding-inline: 10px; } .new-post-button { padding-inline: 10px; } .studio-post-count { flex: 1 0 100%; margin-top: 6px; } .studio-content-list__item { gap: 10px; padding-inline: 4px; } }
