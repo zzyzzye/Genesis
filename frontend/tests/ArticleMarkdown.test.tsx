@@ -2,8 +2,35 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { ArticleMarkdown } from '../src/features/blog/ArticleMarkdown'
+import { getArticleHeadings } from '../src/features/blog/articleOutline'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+
+it('支持安全 HTML、上下标与高亮，代码中的标签保持字面内容', () => {
+  const view = render(<ArticleMarkdown>{'<details>\n<summary>展开说明</summary>\n\n**正文**\n\n</details>\n\n<kbd>Ctrl</kbd> <abbr title="说明">HTML</abbr> <center>居中</center>\n\nH~2~O 2^10^ ==重点== `==原样==` ~~过时~~\n\n<script>alert(1)</script><img src="x" onerror="alert(1)"><a href="javascript:alert(1)">危险</a><iframe src="https://example.com"></iframe>'}</ArticleMarkdown>)
+  expect(view.container.querySelector('details summary')).toHaveTextContent('展开说明')
+  expect(view.container.querySelector('details strong')).toHaveTextContent('正文')
+  expect(view.container.querySelector('kbd')).toHaveTextContent('Ctrl')
+  expect(view.container.querySelector('abbr')).toHaveAttribute('title', '说明')
+  expect(view.container.querySelector('sub')).toHaveTextContent('2')
+  expect(view.container.querySelector('sup')).toHaveTextContent('10')
+  expect(view.container.querySelector('mark')).toHaveTextContent('重点')
+  expect(view.container.querySelector('code')).toHaveTextContent('==原样==')
+  expect(view.container.querySelector('del')).toHaveTextContent('过时')
+  expect(view.container.querySelector('script, iframe, [onerror]')).toBeNull()
+  expect(screen.getByText('危险')).not.toHaveAttribute('href', expect.stringContaining('javascript:'))
+})
+
+it('渲染行内与块级数学，目录不包含公式伪标题，手写锚点指向实际章节', () => {
+  const source = '[跳到代码](#代码)\n\n## 五、代码\n\n$E=mc^2$\n\n$$\n\\begin{pmatrix}a & b\\\\ c & d\\end{pmatrix}\n=\n1\n$$\n\n脚注[^1]\n\n[^1]: 补充说明'
+  const view = render(<ArticleMarkdown>{source}</ArticleMarkdown>)
+  expect(view.container.querySelectorAll('.katex')).toHaveLength(2)
+  expect(view.container.querySelector('.katex-error')).toBeNull()
+  expect(getArticleHeadings(source).map(heading => heading.text)).toEqual(['五、代码'])
+  expect(screen.getByRole('link', { name: '跳到代码' })).toHaveAttribute('href', '#section-五代码')
+  expect(screen.getByRole('heading', { name: '五、代码' })).toHaveAttribute('id', 'section-五代码')
+  expect(screen.getByRole('heading', { name: '脚注' })).toBeInTheDocument()
+})
 
 it('正文附件以可下载链接显示，普通文章链接保持原语义', () => {
   render(<ArticleMarkdown>{'[资料.zip](/api/v1/blog/attachments/12345678-1234-1234-1234-123456789abc/file)\n\n[普通链接](/blog)'}</ArticleMarkdown>)

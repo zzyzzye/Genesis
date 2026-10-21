@@ -4,8 +4,12 @@ import { languages } from '@codemirror/language-data'
 import { classHighlighter, highlightTree } from '@lezer/highlight'
 import { Check, ChevronDown, ChevronUp, Copy, Paperclip } from 'lucide-react'
 import Markdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import { remarkHeadingIds } from './articleOutline'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
+import rehypeKatex from 'rehype-katex'
+import { getArticleHeadings, remarkHeadingIds, resolveArticleAnchor } from './articleOutline'
+import { articleRemarkPlugins } from './articleMarkdownPlugins'
+import 'katex/dist/katex.min.css'
 
 import './ArticleMarkdown.css'
 
@@ -104,8 +108,23 @@ function CodePre({ children }: { children?: ReactNode }) {
 }
 
 export function ArticleMarkdown({ children }: { children: string }) {
-  return <Markdown remarkPlugins={[remarkGfm, remarkHeadingIds]} components={{ pre: CodePre, a: ({ href, title, children: label }) => {
+  const headings = getArticleHeadings(children)
+  return <Markdown remarkPlugins={[...articleRemarkPlugins, remarkHeadingIds]} remarkRehypeOptions={{ footnoteLabel: '脚注', footnoteBackLabel: '返回正文' }} rehypePlugins={[rehypeRaw, [rehypeSanitize, articleHtmlSchema], [rehypeKatex, { trust: false, strict: 'warn' }]]} components={{ pre: CodePre, table: ({ children: rows }) => <div className="article-table-scroll" tabIndex={0} role="region" aria-label="文章表格"><table>{rows}</table></div>, a: ({ href, title, children: label }) => {
     const attachment = /\/blog\/attachments\/[0-9a-f-]{36}\/file(?:[?#]|$)/i.test(href ?? '')
-    return <a href={href} title={title} className={attachment ? 'article-attachment-link' : undefined} download={attachment ? '' : undefined}>{attachment && <Paperclip size={16} aria-hidden="true" />}{label}</a>
+    return <a href={resolveArticleAnchor(href, headings)} title={title} className={attachment ? 'article-attachment-link' : undefined} download={attachment ? '' : undefined}>{attachment && <Paperclip size={16} aria-hidden="true" />}{label}</a>
   } }}>{children}</Markdown>
+}
+
+// 只放行排版标签与必要属性；数学 HTML 在过滤之后由 KaTeX 生成。
+const articleHtmlSchema = {
+  ...defaultSchema,
+  clobber: ['name'],
+  tagNames: [...(defaultSchema.tagNames ?? []), 'mark', 'u', 'center', 'kbd', 'abbr', 'sub', 'sup', 'details', 'summary'],
+  attributes: {
+    ...defaultSchema.attributes,
+    '*': [...(defaultSchema.attributes?.['*'] ?? []).filter(attribute => attribute !== 'id'), ['id', /^section-/, /^user-content-fn/, 'footnote-label']],
+    code: [...(defaultSchema.attributes?.code ?? []), ['className', /^language-/, 'math-inline', 'math-display']],
+    details: ['open'],
+    abbr: ['title'],
+  },
 }

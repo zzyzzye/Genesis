@@ -31,3 +31,23 @@
 .article-content a.article-attachment-link { border: 0; outline: 0; box-shadow: none; text-decoration: none; overflow-wrap: anywhere; border-radius: 3px; }
 .article-content a.article-attachment-link svg { display: inline; margin-right: 5px; vertical-align: -.15em; }
 .article-content a.article-attachment-link:is(:hover, :focus-visible) { border: 0; outline: 0; box-shadow: none; text-decoration: none; background: rgb(128 128 128 / 8%); }
+.article-content details { margin: 20px 0; padding: 12px 16px; border-radius: 8px; background: var(--portal-soft, #f5f5f5); }
+.article-content summary { cursor: pointer; font-weight: 600; line-height: 1.7; }
+.article-content details[open] > summary { margin-bottom: 12px; }
+.article-content details > :last-child { margin-bottom: 0; }
+.article-content mark { padding: .08em .2em; border-radius: 3px; background: #f3e8b8; color: inherit; }
+.article-content u { text-decoration: none; font-weight: 600; }
+.article-content kbd { padding: .15em .4em; border-radius: 4px; background: var(--portal-soft, #eee); font: .85em ui-monospace, monospace; }
+.article-content abbr[title] { text-decoration: none; cursor: help; }
+.article-content center { display: block; text-align: center; }
+.article-content :is(sub, sup) { font-size: .75em; line-height: 0; position: relative; vertical-align: baseline; }
+.article-content sub { bottom: -.25em; }
+.article-content sup { top: -.5em; }
+.article-content .katex :is(sub, sup) { position: static; }
+.article-content .katex-display { margin: 20px 0; padding: 8px 0; overflow-x: auto; overflow-y: hidden; }
+.article-content .katex { font-size: 1.1em; }
+.article-content .article-table-scroll { max-width: 100%; margin: 20px 0; overflow-x: auto; outline: 0; }
+.article-content .article-table-scroll table { display: table; width: 100%; margin: 0; }
+.article-content .contains-task-list { list-style: none; padding-left: 0; }
+.article-content .task-list-item input { appearance: auto; width: 14px; height: 14px; margin: 0 7px 0 0; accent-color: #777; vertical-align: baseline; }
+.article-content .footnotes { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--blog-rule, #e5e5e5); font-size: .85em; }
