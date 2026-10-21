@@ -60,6 +60,7 @@ def _summary(post: BlogPost) -> dict[str, object]:
         "status": post.status.value,
         "updated_at": post.updated_at.isoformat(),
         "category": post.category.name if post.category else None,
+        "categories": [category.name for category in getattr(post, "categories", [])],
         "tags": [tag.slug for tag in post.tags],
     }
 

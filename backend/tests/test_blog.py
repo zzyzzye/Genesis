@@ -464,6 +464,48 @@ async def test_member_cannot_access_blog_management(
 
 
 @pytest.mark.anyio
+async def test_post_multiple_categories_round_trip(
+    client: AsyncClient, database_session: Session
+) -> None:
+    """验证多分类保存、单项移除、清空和旧客户端兼容。"""
+    add_blog_content(database_session)
+    token = await authenticate_owner(client, database_session)
+    headers = {"Authorization": f"Bearer {token}"}
+    category_ids = []
+    for name, slug in (("工程", "engineering"), ("产品", "product")):
+        response = await client.post(
+            "/api/v1/admin/blog/categories", headers=headers, json={"name": name, "slug": slug}
+        )
+        assert response.status_code == 201
+        category_ids.append(response.json()["id"])
+    payload = {
+        "title": "多分类文章", "slug": "multiple-categories",
+        "content_markdown": "正文", "excerpt": "摘要", "category_ids": category_ids,
+    }
+    created = await client.post("/api/v1/admin/blog/posts", headers=headers, json=payload)
+    assert created.status_code == 201
+    path = f"/api/v1/admin/blog/posts/{created.json()['id']}"
+    saved = await client.get(path, headers=headers)
+    assert {item["id"] for item in saved.json()["categories"]} == set(category_ids)
+    for category_id in category_ids:
+        assert (await client.delete(
+            f"/api/v1/admin/blog/categories/{category_id}", headers=headers
+        )).status_code == 409
+    payload["category_ids"] = category_ids[1:]
+    updated = await client.put(path, headers=headers, json=payload)
+    assert updated.status_code == 200
+    assert [item["id"] for item in updated.json()["categories"]] == category_ids[1:]
+    payload["category_ids"] = []
+    cleared = await client.put(path, headers=headers, json=payload)
+    assert cleared.json()["categories"] == []
+    assert cleared.json()["category"] is None
+    del payload["category_ids"]
+    payload["category_id"] = category_ids[0]
+    legacy = await client.put(path, headers=headers, json=payload)
+    assert [item["id"] for item in legacy.json()["categories"]] == category_ids[:1]
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("kind", ["tags", "categories"])
 async def test_owner_taxonomy_crud_preserves_articles(
     client: AsyncClient, database_session: Session, kind: str

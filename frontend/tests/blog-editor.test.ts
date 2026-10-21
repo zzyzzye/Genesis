@@ -21,6 +21,15 @@ describe('博客草稿与发布数据', () => {
     expect(() => toPayload(editor, [])).toThrow('所选标签已被移除')
   })
 
+  it('多分类随草稿保存，兼容旧单分类并支持清空', () => {
+    const editor = { ...createEmptyEditor(), categoryId: 'one', categoryIds: ['one', 'two'] }
+    expect(toPayload(editor, []).category_ids).toEqual(['one', 'two'])
+    writeBlogDraft('author', editor)
+    expect(readBlogDraft('author', null)?.editor.categoryIds).toEqual(['one', 'two'])
+    expect(toPayload({ ...editor, categoryIds: [] }, []).category_ids).toEqual([])
+    expect(toPayload({ ...createEmptyEditor(), categoryId: 'legacy' }, []).category_ids).toEqual(['legacy'])
+  })
+
   it('暂存按用户、文章隔离，清除只影响当前文章', () => {
     const editor = { ...createEmptyEditor(), title: '当前标签页', contentMarkdown: '尚未保存' }
     expect(writeBlogDraft('author-1', editor)).toBe(true)

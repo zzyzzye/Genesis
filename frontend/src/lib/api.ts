@@ -103,6 +103,7 @@ export interface BlogPostPreview {
   excerpt: string
   cover_image_url: string | null
   category: BlogCategory | null
+  categories?: BlogCategory[]
   is_featured: boolean
   read_time_minutes: number
   published_at: string
@@ -134,6 +135,7 @@ export interface BlogPostWrite {
   content_markdown: string
   cover_image_url: string | null
   category_id: string | null
+  category_ids?: string[]
   status: BlogPostStatus
   is_featured: boolean
   read_time_minutes: number
@@ -148,6 +150,7 @@ export interface BlogPostAdmin extends BlogPostWrite {
   updated_at: string
   author: BlogAuthor
   category: BlogCategory | null
+  categories?: BlogCategory[]
   tags: BlogTag[]
 }
 

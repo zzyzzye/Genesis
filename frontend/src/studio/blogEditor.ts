@@ -11,6 +11,7 @@ export interface EditorState {
   isFeatured: boolean
   readTimeMinutes: number
   categoryId: string | null
+  categoryIds?: string[]
   selectedTagSlugs: string[]
   updatedAt: string | null
   creationId?: string
@@ -30,6 +31,7 @@ export function toEditor(post: BlogPostAdmin): EditorState {
     contentMarkdown: post.content_markdown, coverImageUrl: post.cover_image_url ?? '',
     status: post.status, isFeatured: post.is_featured, readTimeMinutes: post.read_time_minutes,
     categoryId: post.category_id ?? post.category?.id ?? null,
+    categoryIds: post.categories?.map(category => category.id) ?? (post.category_id ? [post.category_id] : post.category ? [post.category.id] : []),
     selectedTagSlugs: post.tags.map((tag) => tag.slug), updatedAt: post.updated_at,
   }
 }
@@ -60,6 +62,7 @@ export function toPayload(editor: EditorState, tags: BlogTag[], status = editor.
     excerpt: editor.excerpt.trim() || plainText(content).slice(0, 160),
     content_markdown: content, cover_image_url: editor.coverImageUrl.trim() || null,
     category_id: editor.categoryId, status, is_featured: editor.isFeatured,
+    category_ids: editor.categoryIds ?? (editor.categoryId ? [editor.categoryId] : []),
     read_time_minutes: articleStats(content).minutes, expected_updated_at: editor.updatedAt,
     tags: editor.selectedTagSlugs.map((slug) => {
       const tag = tags.find((item) => item.slug === slug)
@@ -85,6 +88,7 @@ export function readBlogDraft(userId: string, postId: string | null, kind: 'post
       || !['slug', 'title', 'excerpt', 'contentMarkdown', 'coverImageUrl'].every((field) => typeof editor[field as keyof EditorState] === 'string')
       || typeof editor.isFeatured !== 'boolean' || typeof editor.readTimeMinutes !== 'number'
       || !(editor.categoryId === null || typeof editor.categoryId === 'string')
+      || (editor.categoryIds !== undefined && (!Array.isArray(editor.categoryIds) || !editor.categoryIds.every(id => typeof id === 'string')))
       || !(editor.updatedAt === null || typeof editor.updatedAt === 'string')
       || !Array.isArray(editor.selectedTagSlugs) || !editor.selectedTagSlugs.every((slug) => typeof slug === 'string')) return null
     return { editor, savedAt: draft.savedAt }

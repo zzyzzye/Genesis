@@ -64,6 +64,7 @@ class BlogPostPreview(BaseModel):
     excerpt: str
     cover_image_url: str | None
     category: BlogCategoryRead | None
+    categories: list[BlogCategoryRead] = Field(default_factory=list)
     is_featured: bool
     read_time_minutes: int
     published_at: datetime
@@ -103,7 +104,7 @@ class BlogPostWrite(BaseModel):
     """完整文章写入契约，供人工编辑和 Agent 确认写入共同校验。
 
     局部更新须由调用方先合并已有字段；草稿允许不完整内容，发布时校验正文。
-    category_id 引用已有分类；tags 按 slug 解析共享标签。此模型只校验输入，
+    category_ids 引用已有分类；兼容旧版 category_id；tags 按 slug 解析共享标签。
     不检查数据库中的唯一性、引用存在性或 expected_updated_at 并发版本。
     """
 
@@ -113,6 +114,15 @@ class BlogPostWrite(BaseModel):
     content_markdown: str
     cover_image_url: str | None = Field(default=None, max_length=500)
     category_id: UUID | None = None
+    category_ids: list[UUID] | None = None
+
+    @field_validator("category_ids")
+    @classmethod
+    def unique_categories(cls, values: list[UUID] | None) -> list[UUID] | None:
+        """拒绝重复分类，旧客户端可继续传 category_id。"""
+        if values is not None and len(values) != len(set(values)):
+            raise ValueError("分类不能重复")
+        return values
     status: BlogPostStatus = BlogPostStatus.DRAFT
     is_featured: bool = False
     read_time_minutes: int = Field(default=1, ge=1, le=120)
@@ -172,6 +182,7 @@ class BlogPostAdminRead(BaseModel):
     cover_image_url: str | None
     category_id: UUID | None
     category: BlogCategoryRead | None
+    categories: list[BlogCategoryRead] = Field(default_factory=list)
     status: BlogPostStatus
     is_featured: bool
     read_time_minutes: int

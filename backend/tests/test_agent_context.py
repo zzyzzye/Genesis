@@ -33,6 +33,7 @@ def make_post(*, title: str, status: BlogPostStatus, content: str) -> SimpleName
         status=status,
         updated_at=datetime(2026, 9, 7, tzinfo=UTC),
         category=SimpleNamespace(name="未分类"),
+        categories=[SimpleNamespace(name="未分类")],
         tags=[SimpleNamespace(slug="notes")],
     )
 
@@ -75,6 +76,7 @@ def test_posts_list_context_uses_database_metadata_without_article_bodies(
             "status": "published",
             "updated_at": "2026-09-07T00:00:00+00:00",
             "category": "未分类",
+            "categories": ["未分类"],
             "tags": ["notes"],
         },
         {
@@ -84,6 +86,7 @@ def test_posts_list_context_uses_database_metadata_without_article_bodies(
             "status": "draft",
             "updated_at": "2026-09-07T00:00:00+00:00",
             "category": "未分类",
+            "categories": ["未分类"],
             "tags": ["notes"],
         },
     ]

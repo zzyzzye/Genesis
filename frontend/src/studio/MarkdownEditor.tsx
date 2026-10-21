@@ -303,7 +303,7 @@ function PostSettingsModal({
         </header>
         <div className="markdown-settings-modal__body">
           {kind === 'post' && onSelectTaxonomy && onCreateTaxonomy && <div className="settings-taxonomy-grid">
-            <TaxonomyPicker kind="categories" items={categories} selected={editor.categoryId ? [editor.categoryId] : []} onSelect={(item) => onSelectTaxonomy('categories', item)} onCreate={(name) => onCreateTaxonomy('categories', name)} disabled={isSaving} />
+            <TaxonomyPicker kind="categories" items={categories} selected={editor.categoryIds ?? (editor.categoryId ? [editor.categoryId] : [])} onSelect={(item) => onSelectTaxonomy('categories', item)} onCreate={(name) => onCreateTaxonomy('categories', name)} disabled={isSaving} />
             <TaxonomyPicker kind="tags" items={tags} selected={tags.filter((tag) => editor.selectedTagSlugs.includes(tag.slug)).map((tag) => tag.id)} onSelect={(item) => onSelectTaxonomy('tags', item)} onCreate={(name) => onCreateTaxonomy('tags', name)} disabled={isSaving} />
           </div>}
           <div className="settings-fields-grid">

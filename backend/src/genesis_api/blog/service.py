@@ -163,9 +163,17 @@ def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> No
     post.excerpt = data.excerpt
     post.content_markdown = data.content_markdown
     post.cover_image_url = data.cover_image_url
-    post.category = session.get(BlogCategory, data.category_id) if data.category_id else None
-    if data.category_id and post.category is None:
+    category_ids = (
+        data.category_ids
+        if data.category_ids is not None
+        else ([data.category_id] if data.category_id else [])
+    )
+    categories = [session.get(BlogCategory, category_id) for category_id in category_ids]
+    if any(category is None for category in categories):
         raise ValueError("所选分类不存在")
+    post.categories = [category for category in categories if category is not None]
+    # 保留旧接口的首分类字段，新客户端通过 categories 获取完整分类。
+    post.category = post.categories[0] if post.categories else None
     post.status = data.status
     post.is_featured = data.is_featured
     post.read_time_minutes = data.read_time_minutes

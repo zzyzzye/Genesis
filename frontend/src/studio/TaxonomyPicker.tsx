@@ -48,9 +48,9 @@ export function TaxonomyPicker({ kind, items, selected, onSelect, onCreate, disa
   }
 
   return <section className="taxonomy-picker" aria-labelledby={id + '-title'}>
-    <div className="taxonomy-picker__heading"><h3 id={id + '-title'}>{label}</h3><span>{kind === 'tags' ? `${selected.length} / 10` : '单选'}</span></div>
+    <div className="taxonomy-picker__heading"><h3 id={id + '-title'}>{label}</h3><span>{kind === 'tags' ? `${selected.length} / 10` : `多选 · 已选 ${selected.length}`}</span></div>
     <div className="taxonomy-picker__selected" aria-label={'已选' + label}>
-      {chosen.length ? chosen.map((item) => <button key={item.id} type="button" disabled={disabled || busy} aria-label={'移除' + label + ' ' + item.name} onClick={() => select(kind === 'categories' ? null : item)}>{item.name}<StudioIcon name="close" /></button>) : <span>{kind === 'tags' ? '尚未选择标签' : '暂不分类'}</span>}
+      {chosen.length ? chosen.map((item) => <button key={item.id} type="button" disabled={disabled || busy} aria-label={'移除' + label + ' ' + item.name} onClick={() => select(item)}>{item.name}<StudioIcon name="close" /></button>) : <span>{kind === 'tags' ? '尚未选择标签' : '暂不分类'}</span>}
     </div>
     <div className="taxonomy-picker__input"><StudioIcon name="search" />
       <input ref={inputRef} aria-label={'搜索或新建' + label} aria-describedby={id + '-feedback'} aria-invalid={!!error} placeholder={'搜索或输入新' + label + '…'} value={query} maxLength={50} disabled={disabled || busy} onChange={(event) => { setQuery(event.target.value); setError(''); setNotice('') }} onKeyDown={(event) => {

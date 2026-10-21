@@ -17,7 +17,7 @@ export function PostsIndex({ posts, onCreatePost, onOpenPost }: {
   const inputRef = useRef<HTMLInputElement>(null)
   const query = params.get('q') ?? ''
   const status = ['draft', 'published'].includes(params.get('status') ?? '') ? params.get('status')! : 'all'
-  const filtered = posts.filter((post) => (status === 'all' || post.status === status) && `${post.title} ${post.excerpt} ${post.category?.name ?? ''}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+  const filtered = posts.filter((post) => (status === 'all' || post.status === status) && `${post.title} ${post.excerpt} ${(post.categories ?? (post.category ? [post.category] : [])).map(category => category.name).join(' ')}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const page = Math.min(pages, Math.max(1, Math.floor(Number(params.get('page')) || 1)))
@@ -59,7 +59,7 @@ export function PostsIndex({ posts, onCreatePost, onOpenPost }: {
             <span className="studio-content-list__body">
               <strong>{post.title}</strong>
               <small>{post.excerpt || '暂无摘要'}</small>
-              <span className="studio-content-list__details"><em>{post.status === 'published' ? '已发布' : '草稿'}</em><span>{post.category?.name ?? '未分类'}</span><time dateTime={post.updated_at}>{post.updated_at.slice(0, 10)}</time></span>
+              <span className="studio-content-list__details"><em>{post.status === 'published' ? '已发布' : '草稿'}</em><span>{(post.categories ?? (post.category ? [post.category] : [])).map(category => category.name).join('、') || '未分类'}</span><time dateTime={post.updated_at}>{post.updated_at.slice(0, 10)}</time></span>
             </span>
             <StudioIcon name="chevron" />
           </button>

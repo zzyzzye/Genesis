@@ -178,10 +178,20 @@ class BlogTag(Base):
     )
 
 
-class BlogCategory(Base):
-    """文章的可选分类；删除分类时文章保留，category_id 置空。
+blog_post_categories = Table(
+    "blog_post_categories",
+    Base.metadata,
+    Column("post_id", Uuid, ForeignKey("blog_posts.id", ondelete="CASCADE"), primary_key=True),
+    Column(
+        "category_id", Uuid, ForeignKey("blog_categories.id", ondelete="CASCADE"), primary_key=True
+    ),
+)
 
-    一篇文章最多关联一个分类；名称与 slug 均有数据库唯一约束。
+
+class BlogCategory(Base):
+    """文章的共享分类，通过多对多关系关联文章。
+
+    一篇文章可关联多个分类；名称与 slug 均有数据库唯一约束。
     外键描述数据库行为，后台接口仍单独检查分类是否正在被文章使用。
     """
 
@@ -191,7 +201,9 @@ class BlogCategory(Base):
     name: Mapped[str] = mapped_column(String(50), unique=True)
     slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
 
-    posts: Mapped[list[BlogPost]] = relationship(back_populates="category")
+    posts: Mapped[list[BlogPost]] = relationship(
+        secondary=blog_post_categories, back_populates="categories"
+    )
 
 
 class BlogPost(Base):
@@ -242,7 +254,13 @@ class BlogPost(Base):
     )
 
     author: Mapped[User] = relationship(back_populates="blog_posts")
-    category: Mapped[BlogCategory | None] = relationship(back_populates="posts")
+    category: Mapped[BlogCategory | None] = relationship()
+    categories: Mapped[list[BlogCategory]] = relationship(
+        secondary=blog_post_categories,
+        back_populates="posts",
+        lazy="selectin",
+        order_by="BlogCategory.name",
+    )
     tags: Mapped[list[BlogTag]] = relationship(
         secondary=blog_post_tags,
         back_populates="posts",

@@ -137,6 +137,12 @@ def confirm_blog_action(
                 "content_markdown": changes.get("content_markdown", post.content_markdown),
                 "cover_image_url": changes.get("cover_image_url", post.cover_image_url),
                 "category_id": changes.get("category_id", post.category_id),
+                "category_ids": changes.get(
+                    "category_ids",
+                    [str(category.id) for category in post.categories]
+                    if "category_id" not in changes
+                    else None,
+                ),
                 "status": changes.get("status", post.status),
                 "is_featured": changes.get("is_featured", post.is_featured),
                 "read_time_minutes": changes.get("read_time_minutes", post.read_time_minutes),

@@ -479,8 +479,8 @@ function Dashboard({
     const update = (items: BlogTag[]) => saved ? [...items.filter((item) => item.id !== saved.id), saved] : items.filter((item) => item.id !== previous?.id)
     if (kind === 'categories') {
       setCategoryOptions(update)
-      if (previous && saved) setManagedPosts((current) => current.map((post) => post.category?.id === previous.id ? { ...post, category: saved } : post))
-      if (previous && !saved) setEditor((current) => ({ ...current, categoryId: current.categoryId === previous.id ? null : current.categoryId }))
+      if (previous && saved) setManagedPosts((current) => current.map((post) => ({ ...post, category: post.category?.id === previous.id ? saved : post.category, categories: post.categories?.map(category => category.id === previous.id ? saved : category) })))
+      if (previous && !saved) setEditor((current) => ({ ...current, categoryId: current.categoryId === previous.id ? null : current.categoryId, categoryIds: current.categoryIds?.filter(id => id !== previous.id) }))
     } else {
       setTagOptions(update)
       if (previous && saved) {
@@ -492,7 +492,11 @@ function Dashboard({
   }
 
   function selectArticleTaxonomy(kind: TaxonomyKind, item: BlogTag | null) {
-    if (kind === 'categories') { changeEditor({ ...activeEditor, categoryId: item?.id ?? null }); return }
+    if (kind === 'categories') {
+      const selected = activeEditor.categoryIds ?? (activeEditor.categoryId ? [activeEditor.categoryId] : [])
+      const categoryIds = item ? selected.includes(item.id) ? selected.filter(id => id !== item.id) : [...selected, item.id] : []
+      changeEditor({ ...activeEditor, categoryIds, categoryId: categoryIds[0] ?? null }); return
+    }
     if (!item) return
     const selected = activeEditor.selectedTagSlugs.includes(item.slug)
     if (!selected && activeEditor.selectedTagSlugs.length >= 10) return
@@ -506,7 +510,8 @@ function Dashboard({
     taxonomyChanged(kind, saved, null)
     setEditor((current) => {
       if (current.id !== targetId || mutationLock.current) return current
-      const next = kind === 'categories' ? { ...current, categoryId: saved.id } : { ...current, selectedTagSlugs: current.selectedTagSlugs.includes(saved.slug) ? current.selectedTagSlugs : [...current.selectedTagSlugs, saved.slug].slice(0, 10) }
+      const categoryIds = [...new Set([...(current.categoryIds ?? (current.categoryId ? [current.categoryId] : [])), saved.id])]
+      const next = kind === 'categories' ? { ...current, categoryIds, categoryId: categoryIds[0] ?? null } : { ...current, selectedTagSlugs: current.selectedTagSlugs.includes(saved.slug) ? current.selectedTagSlugs : [...current.selectedTagSlugs, saved.slug].slice(0, 10) }
       writeBlogDraft(user.id, next)
       return next
     })
@@ -576,7 +581,7 @@ function Dashboard({
             kind={activeSection}
             token={token}
             items={activeSection === 'categories' ? categoryOptions : tagOptions}
-            usage={Object.fromEntries((activeSection === 'categories' ? categoryOptions : tagOptions).map((item) => [item.id, managedPosts.filter((post) => activeSection === 'categories' ? post.category?.id === item.id : post.tags.some((tag) => tag.id === item.id)).length]))}
+            usage={Object.fromEntries((activeSection === 'categories' ? categoryOptions : tagOptions).map((item) => [item.id, managedPosts.filter((post) => activeSection === 'categories' ? (post.categories ?? (post.category ? [post.category] : [])).some(category => category.id === item.id) : post.tags.some((tag) => tag.id === item.id)).length]))}
             onChanged={(saved, previous) => taxonomyChanged(activeSection, saved, previous)}
           />}
           {activeSection === 'links' && <LinksWorkspace token={token} onDirtyChange={setLinkDirty} onPendingChange={setLinkPending} navigationBlocked={blocker.state === 'blocked' || logoutRequested} onCancelNavigation={() => { if (blocker.state === 'blocked') blocker.reset(); setLogoutRequested(false) }} onConfirmNavigation={() => { if (logoutRequested) onLogout(); else if (blocker.state === 'blocked') blocker.proceed(); setLogoutRequested(false) }} />}
@@ -593,7 +598,7 @@ function Dashboard({
           <div><dt>标题</dt><dd>{publication.title}</dd></div>
           <div><dt>地址</dt><dd>/articles/{publication.slug}</dd></div>
           <div><dt>摘要</dt><dd>{toPayload(publication, tagOptions, 'published').excerpt}</dd></div>
-          <div><dt>分类</dt><dd>{categoryOptions.find((item) => item.id === publication.categoryId)?.name ?? '未分类'}</dd></div>
+          <div><dt>分类</dt><dd>{categoryOptions.filter(item => (publication.categoryIds ?? (publication.categoryId ? [publication.categoryId] : [])).includes(item.id)).map(item => item.name).join('、') || '未分类'}</dd></div>
           <div><dt>标签</dt><dd>{tagOptions.filter((tag) => publication.selectedTagSlugs.includes(tag.slug)).map((tag) => tag.name).join('、') || '未设置'}</dd></div>
           <div><dt>正文</dt><dd>{articleStats(publication.contentMarkdown).count} 字 · 预计阅读 {articleStats(publication.contentMarkdown).minutes} 分钟</dd></div>
         </dl>

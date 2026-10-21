@@ -9,7 +9,7 @@ const create = vi.fn<(name: string) => Promise<BlogTag>>()
 function Harness({ kind = 'tags', initialItems = options, initialSelected = [] }: { kind?: 'categories' | 'tags'; initialItems?: BlogTag[]; initialSelected?: string[] }) {
   const [items, setItems] = useState(initialItems)
   const [selected, setSelected] = useState(initialSelected)
-  return <TaxonomyPicker kind={kind} items={items} selected={selected} onSelect={(item) => setSelected((current) => kind === 'categories' ? item ? [item.id] : [] : item ? current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id] : current)} onCreate={(name) => create(name).then((saved) => { setItems((current) => [...current, saved]); setSelected((current) => kind === 'categories' ? [saved.id] : [...current, saved.id]); return saved })} />
+  return <TaxonomyPicker kind={kind} items={items} selected={selected} onSelect={(item) => setSelected((current) => item ? current.includes(item.id) ? current.filter((id) => id !== item.id) : [...current, item.id] : [])} onCreate={(name) => create(name).then((saved) => { setItems((current) => [...current, saved]); setSelected((current) => [...current, saved.id]); return saved })} />
 }
 
 describe('文章内分类与标签选择', () => {
@@ -27,11 +27,13 @@ describe('文章内分类与标签选择', () => {
     expect(create).not.toHaveBeenCalled()
   })
 
-  it('分类保持单选，可直接切换和清空', () => {
+  it('分类支持多选，移除一项保留其他分类，并可清空', () => {
     render(<Harness kind="categories" />)
     fireEvent.click(screen.getByRole('button', { name: '工程' }))
     fireEvent.click(screen.getByRole('button', { name: '产品' }))
-    expect(screen.queryByRole('button', { name: '移除分类 工程' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '移除分类 工程' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '移除分类 产品' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '移除分类 工程' }))
     expect(screen.getByRole('button', { name: '移除分类 产品' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '暂不分类' }))
     expect(screen.queryByRole('button', { name: '移除分类 产品' })).not.toBeInTheDocument()
