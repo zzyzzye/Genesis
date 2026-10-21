@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { ArticleDocument, ArticleToc } from '../features/blog/ArticleToc'
 import { FpsStatusSlot } from '../features/performance/FpsMonitor'
 import { getArticleHeadings, type ArticleHeading } from '../features/blog/articleOutline'
 import { EditorView } from '@codemirror/view'
+import { Compartment, EditorState as CodeMirrorState, Transaction } from '@codemirror/state'
+import { markdown } from '@codemirror/lang-markdown'
+import { basicSetup } from 'codemirror'
 import {
   BlockTypeSelect,
   BoldItalicUnderlineToggles,
@@ -52,6 +55,7 @@ import { useModalDialog } from './useModalDialog'
 import { articleStats, type BlogDraft, type EditorState } from './blogEditor'
 import { attachmentMarkdown, type Attachment } from '../lib/attachments'
 import { EditorAttachmentPicker, type EditorAttachmentAccess } from './EditorAttachmentPicker'
+import { requiresMarkdownSource } from './markdownCompatibility'
 
 const genesisCodeBlockTheme = EditorView.theme({
   '&': {
@@ -110,7 +114,33 @@ const genesisCodeBlockTheme = EditorView.theme({
     boxShadow: '0 .6rem 1.5rem rgba(15, 23, 42, .12)',
   },
 }, { dark: false })
-const GenesisToolbar = ({ onAttachment, disabled }: { onAttachment?: () => void; disabled: boolean }) => {
+
+function MarkdownSourceEditor({ content, readOnly, onChange }: { content: string; readOnly: boolean; onChange: (content: string) => void }) {
+  const host = useRef<HTMLDivElement>(null)
+  const view = useRef<EditorView | null>(null)
+  const [initial] = useState(content)
+  const [editable] = useState(() => new Compartment())
+  const notifyChange = useEffectEvent(onChange)
+  useEffect(() => {
+    if (!host.current) return
+    const instance = new EditorView({ parent: host.current, doc: initial, extensions: [
+      genesisCodeBlockTheme, basicSetup, markdown(), EditorView.lineWrapping,
+      editable.of([CodeMirrorState.readOnly.of(false), EditorView.editable.of(true)]),
+      EditorView.contentAttributes.of({ 'aria-label': 'Markdown 源码' }),
+      EditorView.updateListener.of(update => { if (update.docChanged) notifyChange(update.state.doc.toString()) }),
+    ] })
+    view.current = instance
+    return () => { view.current = null; instance.destroy() }
+  }, [initial, editable])
+  useEffect(() => {
+    const instance = view.current
+    if (instance && instance.state.doc.toString() !== content) instance.dispatch({ changes: { from: 0, to: instance.state.doc.length, insert: content }, annotations: Transaction.addToHistory.of(false) })
+  }, [content])
+  useEffect(() => { view.current?.dispatch({ effects: editable.reconfigure([CodeMirrorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]) }) }, [editable, readOnly])
+  return <div className="mdxeditor-source-editor genesis-source-editor" ref={host} />
+}
+const GenesisToolbar = ({ onAttachment, disabled, sourceOnly = false }: { onAttachment?: () => void; disabled: boolean; sourceOnly?: boolean }) => {
+  if (sourceOnly) return <div className="editor-tools-primary"><span>Markdown 源码</span>{onAttachment && <button type="button" className="editor-attachment-trigger" disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={onAttachment}><StudioIcon name="attachment" />插入附件</button>}</div>
   return (
   <DiffSourceToggleWrapper SourceToolbar={<>{onAttachment && <button type="button" className="editor-attachment-trigger" disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={onAttachment}><StudioIcon name="attachment" />插入附件</button>}</>}>
     <div className="editor-tools-primary">
@@ -354,6 +384,9 @@ export function MarkdownEditor({
   const sourceInsertion = useRef<{ view: EditorView; from: number; to: number } | null>(null)
   const editorWorkspaceRef = useRef<HTMLDivElement>(null)
   const markdownRef = useRef<MDXEditorMethods>(null)
+  const sourcePreferred = useMemo(() => requiresMarkdownSource(editor.contentMarkdown), [editor.contentMarkdown])
+  const [sourceFallback, setSourceFallback] = useState<{ id: string | null; enabled: boolean }>(() => ({ id: editor.id, enabled: sourcePreferred }))
+  const sourceOnly = sourceFallback.id === editor.id ? sourceFallback.enabled : sourcePreferred
   const outlineItems = useMemo(() => getArticleHeadings(editor.contentMarkdown), [editor.contentMarkdown])
   const [activeHeading, setActiveHeading] = useState('')
   const stats = articleStats(editor.contentMarkdown)
@@ -440,16 +473,24 @@ export function MarkdownEditor({
         <button type="button" onClick={onDiscardDraft}>丢弃本地内容</button>
       </div>}
       <div className="markdown-editor__workspace markdown-editor__workspace--mdx" ref={editorWorkspaceRef}>
-        <section className="markdown-editor__source markdown-editor__source--mdx" aria-label="Markdown 编辑区">
-          <MDXEditor
+        <section className={`markdown-editor__source markdown-editor__source--mdx${sourceOnly ? ' is-source-compatible' : ''}`} aria-label="Markdown 编辑区">
+          {sourceOnly && <p className="markdown-editor__compatibility" role="status">本文使用扩展语法，已切换为源码编辑以完整保留内容。点击“预览”查看排版效果。</p>}
+          {sourceOnly ? <div className="genesis-mdx-editor">
+            <div className="genesis-source-toolbar"><GenesisToolbar sourceOnly disabled={isSaving || recovery !== null} onAttachment={attachmentAccess ? openAttachments : undefined} /></div>
+            <MarkdownSourceEditor key={editor.id ?? 'new'} content={editor.contentMarkdown} readOnly={isSaving || recovery !== null} onChange={contentMarkdown => { if (contentMarkdown !== editor.contentMarkdown) onChange({ ...editor, contentMarkdown }) }} />
+          </div> : <MDXEditor
             ref={markdownRef}
-            key={editor.id ?? 'new'}
+            key={`${editor.id ?? 'new'}:${sourceOnly ? 'source' : 'rich'}`}
             className="genesis-mdx-editor"
             contentEditableClassName="genesis-mdx-content"
             markdown={editor.contentMarkdown}
+            trim={false}
             placeholder={kind === 'page' ? '撰写关于、说明或专题内容。' : '写下你的想法，或打开博客助手一起构思。'}
             readOnly={isSaving || recovery !== null}
-            onChange={(contentMarkdown) => onChange({ ...editor, contentMarkdown })}
+            onChange={(contentMarkdown, initialMarkdownNormalize) => {
+              if (!initialMarkdownNormalize && contentMarkdown !== editor.contentMarkdown) onChange({ ...editor, contentMarkdown })
+            }}
+            onError={() => { if (!sourceOnly) queueMicrotask(() => setSourceFallback({ id: editor.id, enabled: true })) }}
             translation={mdxEditorChineseTranslation}
             plugins={[
               headingsPlugin(),
@@ -462,12 +503,12 @@ export function MarkdownEditor({
               imagePlugin(),
               codeBlockPlugin({ defaultCodeBlockLanguage: 'text' }),
               codeMirrorPlugin({ codeBlockLanguages: { text: '纯文本', javascript: 'JavaScript', typescript: 'TypeScript', python: 'Python', json: 'JSON', bash: 'Bash', css: 'CSS', html: 'HTML' }, codeMirrorExtensions: [genesisCodeBlockTheme] }),
-              diffSourcePlugin({ viewMode: 'rich-text' }),
+              diffSourcePlugin({ viewMode: sourceOnly ? 'source' : 'rich-text', codeMirrorExtensions: [genesisCodeBlockTheme] }),
               markdownShortcutPlugin(),
-              toolbarPlugin({ toolbarContents: () => <GenesisToolbar onAttachment={attachmentAccess ? openAttachments : undefined} disabled={isSaving || recovery !== null} /> }),
+              toolbarPlugin({ toolbarContents: () => <GenesisToolbar sourceOnly={sourceOnly} onAttachment={attachmentAccess ? openAttachments : undefined} disabled={isSaving || recovery !== null} /> }),
             ]}
             spellCheck={false}
-          />
+          />}
         </section>
       </div>
       <footer className="markdown-editor__writing-meta"><span>{stats.count.toLocaleString('zh-CN')} 字 · 预计阅读 {stats.minutes} 分钟</span><span>未保存内容仅保留在本标签页</span></footer>

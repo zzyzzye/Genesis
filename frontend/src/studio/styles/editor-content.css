@@ -165,3 +165,8 @@
 .genesis-mdx-content [data-lexical-decorator]:has(.cm-editor) [role="combobox"] > span:first-child {
   flex: 0 0 auto;
 }
+.markdown-editor__compatibility { margin: 0; padding: 10px 24px; color: var(--studio-editor-muted, #777); background: var(--studio-soft, #f5f5f5); font-size: 12px; line-height: 1.7; }
+.genesis-source-toolbar { display: flex; justify-content: flex-end; padding: 8px 24px; }
+.genesis-source-toolbar .editor-tools-primary { display: flex; align-items: center; gap: 12px; color: var(--studio-editor-muted, #777); font-size: 12px; }
+.genesis-source-editor .cm-editor { min-height: 320px; }
+.genesis-source-editor .cm-content span { text-decoration: none !important; }

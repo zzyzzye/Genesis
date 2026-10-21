@@ -6,6 +6,12 @@ import { getArticleHeadings } from '../src/features/blog/articleOutline'
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
+it('转义的上下标与高亮保持字面内容，不损伤文件名', () => {
+  const view = render(<ArticleMarkdown>{'\\~\\~ \\^原样\\^ \\=\\=原样\\=\\='}</ArticleMarkdown>)
+  expect(view.container).toHaveTextContent('~~ ^原样^ ==原样==')
+  expect(view.container.querySelector('sub, sup, mark')).toBeNull()
+})
+
 it('支持安全 HTML、上下标与高亮，代码中的标签保持字面内容', () => {
   const view = render(<ArticleMarkdown>{'<details>\n<summary>展开说明</summary>\n\n**正文**\n\n</details>\n\n<kbd>Ctrl</kbd> <abbr title="说明">HTML</abbr> <center>居中</center>\n\nH~2~O 2^10^ ==重点== `==原样==` ~~过时~~\n\n<script>alert(1)</script><img src="x" onerror="alert(1)"><a href="javascript:alert(1)">危险</a><iframe src="https://example.com"></iframe>'}</ArticleMarkdown>)
   expect(view.container.querySelector('details summary')).toHaveTextContent('展开说明')
