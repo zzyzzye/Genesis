@@ -44,7 +44,7 @@ class BlogAgentCapability:
             settings: 提议签名与有效期等工具配置。
 
         Returns:
-            LangChain 工具列表；写工具仅生成待确认提议。
+            LangChain 工具列表；写工具遵循可信上下文的审阅或自动执行策略。
         """
         return build_blog_tools(settings)
 

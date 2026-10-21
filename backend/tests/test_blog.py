@@ -1,5 +1,6 @@
 """验证博客公开查询、后台写入、分类标签与共享账号权限。"""
 
+import json
 from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -12,8 +13,10 @@ from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from genesis_api.agent.context import agent_invocation_context
 from genesis_api.api.routes.blog import router
 from genesis_api.blog.agent import actions as blog_actions
+from genesis_api.blog.agent import tools as blog_agent_tools
 from genesis_api.blog.agent.actions import confirm_blog_action
 from genesis_api.blog.models import BlogComment, BlogPost, BlogPostStatus, BlogTag
 from genesis_api.core.config import Settings
@@ -653,6 +656,68 @@ async def test_stale_editor_cannot_overwrite_a_newer_article(
     assert (await client.get("/api/v1/blog/posts/versioned-writing")).status_code == 404
 
 
+@pytest.mark.parametrize("automatic", [False, True])
+def test_agent_create_and_publish_is_one_operation(
+    database_session: Session, monkeypatch: pytest.MonkeyPatch, automatic: bool
+) -> None:
+    """审阅只需确认一次，自动模式直接发布，重复请求不能创建第二篇。"""
+    add_blog_content(database_session)
+    owner = database_session.scalar(select(User).where(User.handle == "genesis"))
+    assert owner is not None
+    owner_id = owner.id
+    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
+        bind=database_session.get_bind(), expire_on_commit=False,
+    ))
+    payload = {
+        "title": "直接发布", "excerpt": "摘要",
+        "content_markdown": "完整正文", "slug": "direct-publish",
+    }
+    with agent_invocation_context(
+        owner_id, "owner", "blog",
+        execution_mode="automatic" if automatic else "approval_required",
+    ):
+        proposal = json.loads(blog_agent_tools._preview("create_and_publish", payload, Settings(
+            agent_action_secret=SecretStr("x" * 32),
+        )))
+    assert proposal["executed"] is automatic
+    post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "direct-publish"))
+    if not automatic:
+        assert post is None
+        result = confirm_blog_action(
+            "create_and_publish", payload, current_user=owner, session=database_session
+        )
+    else:
+        result = proposal["execution_result"]
+    post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "direct-publish"))
+    assert post is not None and post.status is BlogPostStatus.PUBLISHED
+    assert post.published_at is not None and result["status"] == "published"
+    with pytest.raises(HTTPException):
+        confirm_blog_action(
+            "create_and_publish", payload, current_user=owner, session=database_session
+        )
+    assert len(list(database_session.scalars(
+        select(BlogPost).where(BlogPost.slug == "direct-publish")
+    ))) == 1
+
+
+def test_agent_create_and_publish_rejects_invalid_content_without_draft(
+    database_session: Session,
+) -> None:
+    """发布校验失败不产生草稿，也不留下待提交记录。"""
+    add_blog_content(database_session)
+    owner = database_session.scalar(select(User).where(User.handle == "genesis"))
+    assert owner is not None
+    with pytest.raises(ValidationError):
+        confirm_blog_action(
+            "create_and_publish",
+            {"title": " ", "excerpt": "摘要", "content_markdown": "正文", "slug": "invalid-direct"},
+            current_user=owner, session=database_session,
+        )
+    assert database_session.scalar(
+        select(BlogPost).where(BlogPost.slug == "invalid-direct")
+    ) is None
+
+
 def test_agent_publication_checks_content_and_sets_publish_time(database_session: Session) -> None:
     add_blog_content(database_session)
     owner = database_session.scalar(select(User).where(User.handle == "genesis"))
@@ -687,7 +752,7 @@ def test_agent_publication_checks_content_and_sets_publish_time(database_session
     assert published_post.updated_at != previous_version
 
 
-@pytest.mark.parametrize("action", ["create_draft", "update_post"])
+@pytest.mark.parametrize("action", ["create_draft", "create_and_publish", "update_post"])
 @pytest.mark.parametrize("concurrent_conflict", [False, True])
 def test_agent_slug_conflicts_rollback_without_changing_articles(
     database_session: Session,
@@ -715,7 +780,8 @@ def test_agent_slug_conflicts_rollback_without_changing_articles(
         "content_markdown": "不应被保存的正文",
     }
     payload: dict[str, object] = (
-        changes if action == "create_draft" else {"post_id": str(target.id), "changes": changes}
+        changes if action in {"create_draft", "create_and_publish"}
+        else {"post_id": str(target.id), "changes": changes}
     )
     with pytest.raises(HTTPException) as raised:
         confirm_blog_action(action, payload, current_user=owner, session=database_session)

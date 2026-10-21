@@ -6,6 +6,7 @@ import type { AiActionProposal } from '../../../lib/api'
 
 const actionLabels = {
   create_draft: { name: '创建新草稿', button: '确认创建', done: '草稿已创建', hint: '保存为一篇新的草稿', icon: FilePlus2 },
+  create_and_publish: { name: '创建并发布文章', button: '确认发布', done: '文章已发布', hint: '一次确认后创建文章并公开发布', icon: Send },
   update_post: { name: '更新文章', button: '确认更新', done: '文章已更新', hint: '将修改保存到目标文章', icon: FilePenLine },
   publish_post: { name: '发布文章', button: '确认发布', done: '文章已发布', hint: '通过校验后公开发布', icon: Send },
   delete_post: { name: '删除文章', button: '确认删除', done: '文章已删除', hint: '删除目标文章，此操作无法撤销', icon: Trash2 },
@@ -32,7 +33,7 @@ export function BlogActionProposal({ action, executed, busy, disabled, targetPos
   const labels = actionLabels[action.action] ?? { name: '确认操作', button: '确认执行', done: '操作已完成', hint: action.summary, icon: FilePenLine }
   const Icon = executed ? Check : labels.icon
   const changes = proposalChanges(action)
-  const targetTitle = targetPost?.id && targetPost.id === action.payload.post_id ? targetPost.title : ''
+  const targetTitle = typeof action.payload.target_title === 'string' ? action.payload.target_title : targetPost?.id && targetPost.id === action.payload.post_id ? targetPost.title : ''
   const title = typeof changes.title === 'string' ? changes.title : typeof action.payload.title === 'string' ? action.payload.title : targetTitle || (typeof action.payload.post_id === 'string' ? `目标文章 ${action.payload.post_id.slice(0, 8)}` : '')
   const excerpt = typeof changes.excerpt === 'string' ? changes.excerpt : ''
   const content = typeof changes.content_markdown === 'string' ? changes.content_markdown : ''

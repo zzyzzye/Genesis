@@ -324,7 +324,11 @@ class EmbeddedAgentRuntime:
             files = []
         messages: list[BaseMessage | dict[str, object]] = [
             SystemMessage(
-                content="可信页面上下文："
+                content=(
+                    "执行策略：自动执行用户已请求的写操作，依据真实回执报告结果，不要求点击确认。\n"
+                    if request.execution_mode == "automatic"
+                    else "执行策略：审阅模式，写操作生成提议后等待用户确认。\n"
+                ) + "可信页面上下文："
                 + str(request.context.model_dump() if request.context else {}),
                 id="current-page-context" if request.conversation_id else None,
             ),
@@ -338,7 +342,9 @@ class EmbeddedAgentRuntime:
             # 已有 checkpoint 时不重复读取原文件或提交消息，由框架恢复执行状态。
             graph_input = None
         with (
-            agent_invocation_context(request.actor_id, request.actor_role, module),
+            agent_invocation_context(
+                request.actor_id, request.actor_role, module, execution_mode=request.execution_mode
+            ),
             agent_files_context(files),
         ):
             async for mode, event in graph.astream(

@@ -20,11 +20,19 @@ function setup() {
 }
 
 describe('博客历史批量删除', () => {
+  it('单独删除先确认且只提交对应 ID，不打开对话', async () => {
+    const { props } = setup()
+    fireEvent.click(screen.getByRole('button', { name: '删除对话：第二段改写' }))
+    expect(props.onDelete).not.toHaveBeenCalled()
+    expect(props.onOpen).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '确认删除' }))
+    await waitFor(() => expect(props.onDelete).toHaveBeenCalledWith({ scope: 'selected', ids: ['history-1'] }))
+  })
   it('逐条选择只删除指定历史，确认先聚焦取消，取消不发起请求', async () => {
     const { props } = setup()
     fireEvent.click(screen.getByRole('button', { name: '批量删除' }))
     expect(screen.getByRole('button', { name: '删除所选' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: /第一段规划/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^第一段规划/ }))
     expect(screen.getByRole('checkbox', { name: '选择对话：第一段规划' })).toBeChecked()
     expect(props.onOpen).not.toHaveBeenCalled()
     expect(screen.getByRole('checkbox', { name: '全选全部历史对话' })).toBePartiallyChecked()

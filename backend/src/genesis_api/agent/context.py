@@ -18,6 +18,7 @@ class AgentInvocation:
     actor_id: UUID
     actor_role: str
     module: str
+    execution_mode: str = "approval_required"
 
 
 _invocation: contextvars.ContextVar[AgentInvocation | None] = contextvars.ContextVar(
@@ -27,7 +28,7 @@ _invocation: contextvars.ContextVar[AgentInvocation | None] = contextvars.Contex
 
 @contextmanager
 def agent_invocation_context(
-    actor_id: UUID, actor_role: str, module: str
+    actor_id: UUID, actor_role: str, module: str, *, execution_mode: str = "approval_required"
 ) -> Iterator[None]:
     """在当前执行上下文中绑定可信身份，退出时恢复外层绑定。
 
@@ -35,16 +36,23 @@ def agent_invocation_context(
         actor_id: 服务端认证的用户 UUID。
         actor_role: 数据库中的用户角色，不接受模型参数授予权限。
         module: 本次执行所属的业务模块。
+        execution_mode: 来自已认证请求的执行策略，默认逐项审阅。
 
     Yields:
         不产出业务值；with 块及传播上下文的工作线程可读取该绑定。
     """
-    token = _invocation.set(AgentInvocation(actor_id, actor_role, module))
+    token = _invocation.set(AgentInvocation(actor_id, actor_role, module, execution_mode))
     try:
         yield
     finally:
         # 即使工具异常或执行取消，也恢复外层上下文，避免身份泄漏到后续调用。
         _invocation.reset(token)
+
+
+def automatic_actions_allowed() -> bool:
+    """读取可信运行上下文的自动执行选择，不接受模型参数授予权限。"""
+    invocation = _invocation.get()
+    return invocation is not None and invocation.execution_mode == "automatic"
 
 
 def require_owner(*, module: str | None = None) -> UUID:

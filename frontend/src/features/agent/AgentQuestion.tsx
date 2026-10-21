@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Check, ChevronDown, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react'
+import { Check, CircleCheck, ChevronDown, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react'
 
 import { questionAnswers, type QuestionRequest } from './questionProtocol'
 import './AgentQuestion.css'
@@ -39,10 +39,11 @@ export function AgentQuestion({ request, disabled, answered, answerContent, onAn
   if (answered) {
     const submitted = questionAnswers(request, answerContent)
     return <details className="agent-question agent-question--answered" open>
-      <summary><MessageSquare aria-hidden="true" /><span>已询问</span><ChevronDown className="agent-question__chevron" aria-hidden="true" /></summary>
+      <summary>{submitted ? <CircleCheck aria-hidden="true" /> : <MessageSquare aria-hidden="true" />}<span>已询问</span><span className="agent-question__answer-count">{request.questions.length} 项</span><ChevronDown className="agent-question__chevron" aria-hidden="true" /></summary>
       <ul className="agent-question__answers">{request.questions.map((question, index) => <li key={index}>
-        <p>{question.question}</p>
-        <p>{submitted?.[index] ?? '未单独回答，可在聊天中补充。'}</p>
+        {submitted ? <Check className="agent-question__answer-icon" aria-hidden="true" /> : <MessageSquare className="agent-question__answer-icon" aria-hidden="true" />}
+        <div><p>{question.question}</p>
+        <p>{submitted?.[index] ?? '未单独回答，可在聊天中补充。'}</p></div>
       </li>)}</ul>
     </details>
   }
@@ -73,6 +74,7 @@ export function AgentQuestion({ request, disabled, answered, answerContent, onAn
         {question.options.map((option) => <button type="button" key={option.label} aria-pressed={!custom[index]?.trim() && answers[index] === option.label} onClick={() => {
           setAnswers((current) => ({ ...current, [index]: option.label }))
           setCustom((current) => ({ ...current, [index]: '' }))
+          if (index < request.questions.length - 1) showQuestion(index + 1, true)
         }}><span>{option.label}{option.recommended && <small>推荐</small>}{!custom[index]?.trim() && answers[index] === option.label && <Check className="agent-question__selected" aria-hidden="true" />}</span><span>{option.description}</span></button>)}
       </div>}
       <label><span>{question.options.length ? '或自行填写' : '你的回答'}</span><textarea className="resize-none" aria-label={`自定义回答：${question.question}`} rows={2} maxLength={2000} placeholder="写下你的想法…" value={custom[index] ?? ''} onChange={(event) => {

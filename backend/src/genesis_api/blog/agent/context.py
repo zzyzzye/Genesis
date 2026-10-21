@@ -28,6 +28,7 @@ def tool_manifest() -> list[dict[str, str | bool]]:
             ("analyze_post", "分析文章结构、表达和内容质量", "read", False),
             ("suggest_revision", "生成文章优化建议或完整修改稿", "read", False),
             ("create_draft", "创建一篇新的文章草稿", "write", True),
+            ("create_and_publish", "一次创建并发布新文章", "write", True),
             ("update_post", "修改现有文章内容或元数据", "write", True),
             ("delete_post", "删除文章", "write", True),
             ("publish_post", "发布文章", "write", True),

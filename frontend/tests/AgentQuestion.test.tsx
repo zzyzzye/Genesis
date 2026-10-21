@@ -19,8 +19,8 @@ it('完整选择后才提交，自定义回答优先且不会默认选择推荐�
   expect(screen.getByRole('button', { name: /入门读者/ })).toHaveAttribute('aria-pressed', 'false')
   fireEvent.click(screen.getByRole('button', { name: /入门读者/ }))
   expect(submit).toBeDisabled()
-  expect(screen.queryByRole('textbox', { name: '自定义回答：想突出什么？' })).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: '下一题' }))
+  expect(screen.getByRole('textbox', { name: '自定义回答：想突出什么？' })).toHaveFocus()
+  expect(onAnswer).not.toHaveBeenCalled()
   fireEvent.change(screen.getByRole('textbox', { name: '自定义回答：想突出什么？' }), { target: { value: '可持续写作' } })
   fireEvent.click(screen.getByRole('button', { name: '上一题' }))
   fireEvent.change(screen.getByRole('textbox', { name: '自定义回答：文章面向谁？' }), { target: { value: '有一定基础的创作者' } })
@@ -57,7 +57,6 @@ it('仅回答后面的题目时说明缺题数量，并能定位到前面未回�
 it('清空自由回答后恢复缺题提示，定位到自由回答输入框且生成中不能定位', () => {
   const view = render(<AgentQuestion request={request} disabled={false} answered={false} onAnswer={vi.fn()} />)
   fireEvent.click(screen.getByRole('button', { name: /专业读者/ }))
-  fireEvent.click(screen.getByRole('button', { name: '下一题' }))
   const input = screen.getByRole('textbox', { name: '自定义回答：想突出什么？' })
   fireEvent.change(input, { target: { value: '案例' } })
   expect(screen.getByRole('button', { name: '继续' })).toBeEnabled()

@@ -14,7 +14,7 @@ import pytest
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 from pydantic import SecretStr
 
-from genesis_api.agent.context import agent_invocation_context
+from genesis_api.agent.context import agent_invocation_context, automatic_actions_allowed
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.runtime import (
     EmbeddedAgentRuntime,
@@ -52,6 +52,18 @@ def test_prompt_and_message_text() -> None:
     assert _message_text(AIMessage(content=[{"type": "text", "text": "分块"}])) == ["分块"]
     assert _message_text(HumanMessage(content="问题")) == []
     assert _message_text(object()) == []
+
+
+def test_automatic_execution_is_scoped_to_trusted_invocation() -> None:
+    """自动执行策略只在当前调用有效，嵌套审阅及退出后恢复默认。"""
+    actor = uuid4()
+    assert not automatic_actions_allowed()
+    with agent_invocation_context(actor, "owner", "blog", execution_mode="automatic"):
+        assert automatic_actions_allowed()
+        with agent_invocation_context(actor, "owner", "blog"):
+            assert not automatic_actions_allowed()
+        assert automatic_actions_allowed()
+    assert not automatic_actions_allowed()
 
 
 @pytest.mark.anyio
@@ -452,6 +464,14 @@ async def test_blog_tools_keep_invocation_context_isolated(
             )
         )
         assert update["action"] == "update_post"
+        deletion = json.loads(
+            agent_tools._preview(
+                "delete_post",
+                {"post_id": str(post.id), "target_title": "不可信标题"},
+                Settings(agent_action_secret=SecretStr("x" * 32)),
+            )
+        )
+        assert deletion["payload"]["target_title"] == post.title
         with pytest.raises(ValueError, match="必要字段"):
             agent_tools._preview(
                 "create_draft",
@@ -492,6 +512,9 @@ async def test_built_tools_delegate_without_http(monkeypatch: pytest.MonkeyPatch
     assert await tools["create_draft"].ainvoke(
         {"title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s"}
     ) == "create_draft"
+    assert await tools["create_and_publish"].ainvoke(
+        {"title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s"}
+    ) == "create_and_publish"
     assert await tools["update_post"].ainvoke({"post_id": "1", "changes": "{}"}) == "update_post"
     assert await tools["delete_post"].ainvoke({"post_id": "1"}) == "delete_post"
     assert await tools["publish_post"].ainvoke({"post_id": "1"}) == "publish_post"

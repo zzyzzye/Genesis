@@ -19,7 +19,7 @@ from genesis_api.blog.service import (
 )
 from genesis_api.identity.models import User
 
-BLOG_ACTIONS = {"create_draft", "update_post", "delete_post", "publish_post"}
+BLOG_ACTIONS = {"create_draft", "create_and_publish", "update_post", "delete_post", "publish_post"}
 
 
 def _save_post(session: Session, post: BlogPost, data: BlogPostWrite) -> None:
@@ -86,7 +86,7 @@ def confirm_blog_action(
     与事务提交，不应作为模型可直接调用的工具注册。
 
     Args:
-        action: create_draft、update_post、delete_post 或 publish_post。
+        action: 创建草稿、创建并发布、更新、删除或发布现有文章。
         payload: 操作载荷；更新可包含 JSON 字符串或对象形式的 changes。
         current_user: 公共 API 已认证并校验权限的用户，也是新草稿的作者。
         session: 写入会话；成功时在此提交，字段应用的 ValueError 会触发回滚。
@@ -162,17 +162,22 @@ def confirm_blog_action(
     required = ("title", "excerpt", "content_markdown", "slug")
     if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
         raise HTTPException(status_code=422, detail="创建草稿缺少必要字段")
-    post = BlogPost(author=current_user)
-    session.add(post)
-    # 创建提议只落为草稿，公开发布仍须单独确认。
+    # 创建并发布共用同一事务，不先提交草稿，也不要求第二次确认。
     data = BlogPostWrite.model_validate(
         {
             "title": payload["title"],
             "excerpt": payload["excerpt"],
             "content_markdown": payload["content_markdown"],
             "slug": payload["slug"],
-            "status": BlogPostStatus.DRAFT,
+            "status": (
+                BlogPostStatus.PUBLISHED if action == "create_and_publish" else BlogPostStatus.DRAFT
+            ),
         }
     )
+    post = BlogPost(author=current_user)
+    session.add(post)
     _save_post(session, post, data)
-    return {"action": action, "post_id": str(post.id), "status": "created"}
+    return {
+        "action": action, "post_id": str(post.id),
+        "status": "published" if action == "create_and_publish" else "created",
+    }

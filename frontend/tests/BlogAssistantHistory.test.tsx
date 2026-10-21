@@ -27,7 +27,7 @@ async function setup() {
   render(<BlogAssistant page={{ route: '/blog/studio', section: 'overview', pageType: 'overview' }} editor={null} />)
   await screen.findByText('当前对话中保存的正文')
   fireEvent.click(screen.getByRole('button', { name: '聊天历史' }))
-  await screen.findByRole('button', { name: /其他历史/ })
+  await screen.findByRole('button', { name: /^其他历史/ })
   fireEvent.click(screen.getByRole('button', { name: '批量删除' }))
 }
 
@@ -42,7 +42,7 @@ describe('博客助手删除后的会话恢复', () => {
     await screen.findByText('已删除 1 段历史对话。')
     expect(screen.queryByText('当前对话中保存的正文')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重命名' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: /其他历史/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^其他历史/ })).toBeInTheDocument()
     await waitFor(() => expect(storedConversationId()).toBeNull())
     expect(deleteAiConversations).toHaveBeenCalledWith('test-placeholder', { scope: 'selected', ids: ['history-0'] })
   })

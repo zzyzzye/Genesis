@@ -533,10 +533,11 @@ export function renameAiConversation(token: string, id: string, title: string): 
   })
 }
 
-export type AiAction = 'create_draft' | 'update_post' | 'delete_post' | 'publish_post'
+export type AiAction = 'create_draft' | 'create_and_publish' | 'update_post' | 'delete_post' | 'publish_post'
 
 export interface AiActionProposal {
   executed?: boolean
+  execution_result?: Record<string, unknown> | null
   module: string
   type: 'pending_action'
   proposal_id: string

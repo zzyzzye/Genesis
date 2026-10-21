@@ -1,4 +1,4 @@
-"""博客 Agent 的 LangChain 工具：读取文章或生成签名提议，不直接写库。
+"""博客 Agent 的 LangChain 工具：按可信策略审阅或执行博客操作。
 
 带 @tool 的函数文档也会提供给模型作为工具说明，参数含义与权限边界须准确。
 同步数据库操作在独立工作线程中执行，每次调用创建自己的会话。
@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID, uuid4
 
 from jwt import encode
@@ -17,8 +17,9 @@ from langchain_core.tools import BaseTool, tool
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
-from genesis_api.agent.context import require_owner
+from genesis_api.agent.context import automatic_actions_allowed, require_owner
 from genesis_api.agent.contracts import AgentActionProposal
+from genesis_api.blog.agent.actions import confirm_blog_action
 from genesis_api.blog.models import BlogPost
 from genesis_api.blog.service import (
     POST_SLUG_CONFLICT_MESSAGE,
@@ -28,8 +29,11 @@ from genesis_api.blog.service import (
 )
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.database.session import SessionLocal
+from genesis_api.identity.models import User, UserRole
 
-BlogAgentAction = Literal["create_draft", "update_post", "delete_post", "publish_post"]
+BlogAgentAction = Literal[
+    "create_draft", "create_and_publish", "update_post", "delete_post", "publish_post"
+]
 
 
 def _owner_id() -> UUID:
@@ -149,7 +153,7 @@ def _search_posts(query: str) -> str:
 
 
 def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Settings) -> str:
-    """检查提议基本条件并签名，将实际写入留给用户确认流程。
+    """校验并签名博客操作，按可信上下文审阅或自动执行。
 
     此处检查目标是否存在及创建所需字段，不替代确认阶段的完整业务校验。
     令牌绑定用户、操作及载荷；不得在日志中输出令牌。
@@ -160,7 +164,7 @@ def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Sett
         settings: 提议签名配置与有效期。
 
     Returns:
-        AgentActionProposal JSON，包含摘要、过期时间与确认令牌。
+        操作提议 JSON；自动模式额外包含真实执行回执。
 
     Raises:
         RuntimeError: 当前调用不具备博客所有者身份。
@@ -173,10 +177,13 @@ def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Sett
                 post_id = UUID(str(payload.get("post_id")))
             except (TypeError, ValueError) as exc:
                 raise ValueError("post_id 无效") from exc
-            if get_blog_post_by_id(session, post_id) is None:
+            post = get_blog_post_by_id(session, post_id)
+            if post is None:
                 raise ValueError("文章不存在")
+            # 在操作前保留可信标题，删除后与历史恢复时仍能识别目标文章。
+            payload = {**payload, "target_title": post.title}
         required = ("title", "excerpt", "content_markdown", "slug")
-        if action == "create_draft":
+        if action in {"create_draft", "create_and_publish"}:
             if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
                 raise ValueError("创建草稿缺少必要字段")
             if get_blog_post_by_slug(session, str(payload["slug"])) is not None:
@@ -207,6 +214,14 @@ def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Sett
         expires_at=expires_at,
         proposal_token=proposal_token,
     )
+    if automatic_actions_allowed():
+        with SessionLocal() as session:
+            owner = session.get(User, actor_id)
+            if owner is None or owner.role != UserRole.OWNER:
+                raise RuntimeError("自动执行需要有效的站点所有者身份")
+            result = confirm_blog_action(action, payload, current_user=owner, session=session)
+            proposal.executed = True
+            proposal.execution_result = cast(dict[str, object], result)
     return proposal.model_dump_json()
 
 
@@ -220,7 +235,7 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         settings: 可选工具配置；None 时使用应用配置。
 
     Returns:
-        九个可调用工具，包含只读工具与仅生成待确认提议的写工具。
+        十个可调用工具，写操作按可信执行策略审阅或自动执行。
     """
     runtime_settings = settings or get_settings()
 
@@ -300,7 +315,7 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             slug: 未被任何文章或草稿占用的地址标识，完整格式由确认阶段校验。
 
         Returns:
-            创建草稿的签名提议 JSON，必须交给用户确认后才能写入。
+            审阅模式返回签名提议，自动模式返回执行回执。
         """
         payload: dict[str, object] = {
             "title": title,
@@ -309,6 +324,25 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             "slug": slug,
         }
         return await asyncio.to_thread(_preview, "create_draft", payload, runtime_settings)
+
+    @tool
+    async def create_and_publish(
+        title: str, excerpt: str, content_markdown: str, slug: str
+    ) -> str:
+        """一次创建并发布全新文章；用户要求直接发布时使用，不要拆成创建草稿和再次发布。
+
+        Args:
+            title: 最终文章标题。
+            excerpt: 最终文章摘要。
+            content_markdown: 完整 Markdown 正文。
+            slug: 尚未占用的文章地址标识。
+
+        Returns:
+            审阅模式返回一次性发布提议；自动模式返回已执行的发布结果。
+        """
+        return await asyncio.to_thread(_preview, "create_and_publish", {
+            "title": title, "excerpt": excerpt, "content_markdown": content_markdown, "slug": slug,
+        }, runtime_settings)
 
     @tool
     async def update_post(post_id: str, changes: str) -> str:
@@ -348,7 +382,7 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             post_id: 待发布文章的 UUID 字符串。
 
         Returns:
-            发布文章的签名提议 JSON；确认时仍须通过完整发布校验。
+            审阅模式返回签名提议；自动模式直接执行，均须通过完整发布校验。
         """
         return await asyncio.to_thread(
             _preview, "publish_post", {"post_id": post_id}, runtime_settings
@@ -361,6 +395,7 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         analyze_post,
         suggest_revision,
         create_draft,
+        create_and_publish,
         update_post,
         delete_post,
         publish_post,

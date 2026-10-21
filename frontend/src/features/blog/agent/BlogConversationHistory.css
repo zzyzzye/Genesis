@@ -1,6 +1,13 @@
 .blog-history-actions { display: flex; align-items: center; gap: 4px; }
 .blog-history-row { display: flex; align-items: center; min-width: 0; flex: none; }
 .blog-history-row .studio-assistant__history-item { min-width: 0; flex: 1; }
+.blog-history-delete { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; border: 0; outline: 0; box-shadow: none; border-radius: 6px; color: var(--assistant-muted); background: transparent; cursor: pointer; }
+.blog-history-delete:is(:hover,:focus-visible):not(:disabled) { background: var(--assistant-hover); color: var(--assistant-ink); }
+.blog-history-delete:disabled { opacity: .5; cursor: default; }
+.blog-history-empty { display: grid; justify-items: center; gap: 8px; padding: 36px 16px 24px; text-align: center; color: var(--assistant-muted); }
+.studio-assistant .blog-history-empty__art { width: 144px; height: 108px; margin-bottom: 8px; }
+.blog-history-empty strong { color: var(--assistant-ink); font-size: 13px; font-weight: 500; }
+.blog-history-empty p { max-width: 240px; margin: 0; font-size: 12px; line-height: 1.8; }
 .blog-history-selection { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 0 4px 10px; }
 .blog-history-selection > p { flex-basis: 100%; margin: 0; color: var(--assistant-muted); font-size: 11px; line-height: 1.7; }
 .blog-history-selection > button { min-height: 32px; padding: 6px; border-radius: 6px; background: transparent; color: var(--assistant-ink); font-size: 11px; }

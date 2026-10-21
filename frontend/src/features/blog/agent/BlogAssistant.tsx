@@ -1,9 +1,10 @@
 import './BlogAssistant.css'
 
-import { type FormEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type FormEvent, memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Clock3, Gauge, Timer, Zap } from 'lucide-react'
 
 import { StudioIcon } from '../../../studio/StudioIcon'
 import { TypewriterText } from '../../../studio/TypewriterText'
@@ -168,20 +169,21 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
   const suffix = source === 'estimated' ? '（估算）' : ''
   const waiting = streaming && !firstToken && metrics?.first_token_seconds == null
   if (waiting) return <div className="studio-assistant__timing" aria-label="生成耗时">
-    <span>等待首字 <span className="studio-assistant__duration">{formatDuration(timing ? end - timing.startedAt : (metrics?.total_seconds ?? 0) * 1000)}</span></span>
+    <span><Timer aria-hidden="true" />等待首字 <span className="studio-assistant__duration">{formatDuration(timing ? end - timing.startedAt : (metrics?.total_seconds ?? 0) * 1000)}</span></span>
     {timing && end - timing.startedAt >= 15000 && <span className="studio-assistant__wait-hint">模型尚未返回正文，可继续等待，或停止后切换模型。</span>}
   </div>
   return <div className="studio-assistant__timing" aria-label="生成耗时" title="首字是开始执行到首次正文输出的等待时间；输出是首次到最后一次正文输出的时间，包含中途工具调用与模型等待；总计为首字与输出之和，不包含输出结束后的收尾处理。">
     {metrics && !streaming ? <>
-      <span>首字 <span className="studio-assistant__duration">{metrics.first_token_seconds === null ? '未输出' : formatDuration(metrics.first_token_seconds * 1000)}</span></span>
-      <span>输出 <span className="studio-assistant__duration">{metrics.output_seconds === null ? '—' : formatDuration(metrics.output_seconds * 1000)}</span></span>
-      <span>总计 <span className="studio-assistant__duration">{formatDuration(metrics.total_seconds * 1000)}</span></span>
+      <span><Zap aria-hidden="true" />首字 <span className="studio-assistant__duration">{metrics.first_token_seconds === null ? '未输出' : formatDuration(metrics.first_token_seconds * 1000)}</span></span>
+      <span><Timer aria-hidden="true" />输出 <span className="studio-assistant__duration">{metrics.output_seconds === null ? '—' : formatDuration(metrics.output_seconds * 1000)}</span></span>
+      <span><Clock3 aria-hidden="true" />总计 <span className="studio-assistant__duration">{formatDuration(metrics.total_seconds * 1000)}</span></span>
     </> : timing && <>
-      <span>首字 <span className="studio-assistant__duration">{firstToken ? formatDuration(firstToken - timing.startedAt) : '未输出'}</span></span>
-      <span>输出 <span className="studio-assistant__duration">{firstToken ? formatDuration(end - firstToken) : '—'}</span></span>
-      <span>总计 <span className="studio-assistant__duration">{formatDuration(end - timing.startedAt)}</span></span>
+      <span><Zap aria-hidden="true" />首字 <span className="studio-assistant__duration">{firstToken ? formatDuration(firstToken - timing.startedAt) : '未输出'}</span></span>
+      <span><Timer aria-hidden="true" />输出 <span className="studio-assistant__duration">{firstToken ? formatDuration(end - firstToken) : '—'}</span></span>
+      <span><Clock3 aria-hidden="true" />总计 <span className="studio-assistant__duration">{formatDuration(end - timing.startedAt)}</span></span>
     </>}
     {showMetrics && <span className="studio-assistant__speed" title="平均输出速度 = 输出 token 数 ÷ 界面显示的输出时长（两位小数）。汇总整条回复所有有正文输出的模型调用，用量来自供应商并扣除明确报告的推理 token，可能包含工具参数；输出时长包含中途工具调用与等待。任一调用缺少真实用量时标记为估算；单片段或缺少耗时时速度不可用。">
+      <Gauge aria-hidden="true" />
       {count !== null && count !== undefined ? `${count.toLocaleString('zh-CN')} tokens${suffix} · ` : ''}
       {speed !== null && Number.isFinite(speed) ? `${speed.toFixed(1)} tokens/s${suffix}` : `tokens/s ${streaming ? '等待统计' : '不可用'}`}
     </span>}
@@ -220,7 +222,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const [initialSession] = useState(() => readAssistantSession(storageKey))
   const [initialModel] = useState(() => readModelChoice(`${storageKey}:model-choice`))
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const [panelWidth, setPanelWidth] = useState(380)
+  const [panelWidth, setPanelWidth] = useState(540)
   const [resizing, setResizing] = useState(false)
   const resizeStart = useRef<{ x: number; width: number } | null>(null)
   const drafts = useRef<Record<string, string>>({})
@@ -292,7 +294,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
   const contextPercent = contextWindow && contextWindow > 0 ? Math.min(100, contextTokens / contextWindow * 100) : null
   const contextDescription = contextPercent === null
     ? `上下文容量未知 · 估算 ${formatTokens(contextTokens)} token`
-    : `上下文已用约 ${Math.round(contextPercent)}% · 估算 ${formatTokens(contextTokens)} / ${formatTokens(contextWindow)} token`
+    : `上下文已用${contextPercent > 0 && contextPercent < 1 ? '不足 1' : `约 ${Math.round(contextPercent)}`}％ · 估算 ${formatTokens(contextTokens)} / ${formatTokens(contextWindow)} token`
   const suggestions = editor ? ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '为当前文章生成更好的标题'] : defaultSuggestions
 
   useEffect(() => {
@@ -518,6 +520,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
     }
   }, [modelMenuOpen, isOpen])
 
+  const notifyAutomaticExecution = useEffectEvent(() => onExecuted?.())
   const followOutput = useCallback(() => {
     const body = bodyRef.current
     if (body && shouldStickToBottomRef.current) body.scrollTop = body.scrollHeight
@@ -537,6 +540,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
 
     let cancelled = false
     const controller = new AbortController()
+    const notifiedExecutions = new Set<string>()
     const selection = selectionVersion.current
     streamControllerRef.current = controller
     let received = sessionRef.current.messages[run.assistantMessageIndex]?.content ?? ''
@@ -566,6 +570,12 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
           const result = await streamAiChatRun(token!, run.id, {
             onProposals: (proposals) => {
               if (cancelled || selection !== selectionVersion.current) return
+              for (const proposal of proposals) {
+                if (proposal.executed && !notifiedExecutions.has(proposal.proposal_id)) {
+                  notifiedExecutions.add(proposal.proposal_id)
+                  notifyAutomaticExecution()
+                }
+              }
               setMessages((current) => current.map((message, index) => index === run.assistantMessageIndex
                 ? { ...message, proposals } : message))
             },
@@ -792,7 +802,7 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
             </div>
           </header>
           <div className={`studio-assistant__workspace${historyOpen ? ' is-history' : ''}`}>
-          {(historyOpen || expanded) && <motion.nav className="studio-assistant__history" aria-label="历史对话" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={transition}>
+          {(historyOpen || expanded) && <motion.nav className="studio-assistant__history" aria-label="历史对话" initial={{ opacity: 0, x: reducedMotion ? 0 : 8 }} animate={{ opacity: 1, x: 0 }} transition={transition}>
             <BlogConversationHistory history={history} currentId={conversationId} loading={historyLoading} error={historyError} hasMore={hasMoreHistory} disabled={isStarting || conversationLoading || renameBusy || historyDeleting} expanded={expanded} onReload={() => { void loadHistory() }} onLoadMore={() => { void loadHistory(history.length) }} onOpen={id => { void loadConversation(id) }} onBack={() => setHistoryOpen(false)} onDelete={deleteHistory} />
           </motion.nav>}
           <motion.div className="studio-assistant__chat" animate={{ opacity: historyOpen && !expanded ? 0 : 1 }} transition={transition}>

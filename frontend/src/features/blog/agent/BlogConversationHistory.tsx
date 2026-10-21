@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Trash2 } from 'lucide-react'
 import { BlogWorkflowDialog } from '../../../studio/BlogWorkflowDialog'
 import { conversationIsSelected, type AiConversation, type AiConversationSelection } from '../../../lib/api'
 import './BlogConversationHistory.css'
@@ -86,12 +87,22 @@ export function BlogConversationHistory({ history, currentId, loading, error, ha
       <p>全选包含尚未加载的历史，也可取消勾选保留个别对话。</p>
     </div>}
     {error && <div role="alert"><p>{error}</p><button type="button" disabled={blocked || loading} onClick={onReload}>重试</button></div>}
-    {!loading && !error && !history.length && <p className="studio-assistant__history-empty">还没有历史对话。发送第一条消息后，会自动保存在这里。</p>}
+    {!loading && !error && !history.length && <div className="blog-history-empty" role="status">
+      <svg className="blog-history-empty__art" viewBox="0 0 160 120" fill="none" aria-hidden="true">
+        <rect x="22" y="18" width="102" height="70" rx="16" fill="currentColor" opacity=".06" />
+        <path d="M47 34h68a12 12 0 0 1 12 12v35a12 12 0 0 1-12 12H79l-18 13V93H47a12 12 0 0 1-12-12V46a12 12 0 0 1 12-12Z" fill="var(--assistant-paper)" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M53 54h55M53 66h39M53 78h25M129 18v12m-6-6h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity=".5" />
+        <circle cx="24" cy="99" r="3" fill="currentColor" opacity=".25" />
+      </svg>
+      <strong>还没有历史对话</strong>
+      <p>发送第一条消息后，对话会自动保存在这里。</p>
+    </div>}
     {history.map(item => <div className="blog-history-row" key={item.id}>
       {selecting && <label className="blog-history-check blog-history-row-check"><input type="checkbox" aria-label={`选择对话：${item.title}`} checked={conversationIsSelected(selection, item.id)} disabled={blocked || loading} onChange={() => toggle(item.id)} /></label>}
       <button type="button" className={`studio-assistant__history-item${item.id === currentId ? ' is-selected' : ''}`} aria-current={item.id === currentId ? 'true' : undefined} aria-pressed={selecting ? conversationIsSelected(selection, item.id) : undefined} disabled={blocked || (selecting && loading)} onClick={() => selecting ? toggle(item.id) : onOpen(item.id)}>
         <span>{item.title}</span><small>{new Date(item.updated_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}{item.title_source === 'pending' ? ' · 待命名' : ''}</small>
       </button>
+      {!selecting && <button type="button" className="blog-history-delete" aria-label={`删除对话：${item.title}`} title="删除这段对话" disabled={blocked || loading} onClick={() => { setDeleteError(null); setConfirmation({ scope: 'selected', ids: [item.id] }) }}><Trash2 size={14} aria-hidden="true" /></button>}
     </div>)}
     {loading && <p role="status">正在读取历史…</p>}
     {hasMore && <button type="button" disabled={blocked || loading} onClick={onLoadMore}>加载更多</button>}

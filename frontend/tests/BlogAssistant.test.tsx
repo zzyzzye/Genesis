@@ -21,10 +21,10 @@ vi.mock('../src/lib/api', async (importOriginal) => ({
 const page = { route: '/blog/studio/posts', section: 'posts', pageType: 'posts_list' as const }
 const sessionKey = 'genesis-blog-ai-conversation'
 
-function mount(messages: { role: string; content: string }[], activeRun: object | null = null) {
+function mount(messages: { role: string; content: string }[], activeRun: object | null = null, onExecuted?: () => void) {
   localStorage.setItem(studioAuthTokenKey, 'test-placeholder')
   sessionStorage.setItem(sessionKey, JSON.stringify({ isOpen: true, messages, activeRun }))
-  return render(<BlogAssistant page={page} editor={null} />)
+  return render(<BlogAssistant page={page} editor={null} onExecuted={onExecuted} />)
 }
 
 describe('助手失败后的继续对话', () => {
@@ -102,6 +102,26 @@ describe('助手失败后的继续对话', () => {
     expect(trigger).toHaveFocus()
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     await act(async () => { await Promise.resolve() })
+  })
+
+  it('自动发布回执直接显示已完成并刷新内容，不再请求手动确认', async () => {
+    const proposal: AiActionProposal = { type: 'pending_action', module: 'blog', action: 'create_and_publish', proposal_id: 'auto-publish', payload: { title: '已自动发布', content_markdown: '正文' }, summary: '发布', requires_confirmation: true, executed: true, execution_result: { status: 'published' }, expires_at: '2099-01-01T00:00:00Z', proposal_token: 'test' }
+    vi.mocked(createAiChatRun).mockResolvedValue({ id: 'automatic-run', status: 'pending' })
+    vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
+      callbacks.onProposals?.([proposal])
+      callbacks.onProposals?.([proposal])
+      callbacks.onToken('发布成功。', 1)
+      return Promise.resolve('completed')
+    })
+    const onExecuted = vi.fn()
+    mount([{ role: 'assistant', content: '你好' }], null, onExecuted)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Agent 执行方式' }), { target: { value: 'automatic' } })
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '直接发布' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
+    expect(await screen.findByRole('button', { name: '已完成' })).toBeDisabled()
+    expect(onExecuted).toHaveBeenCalledOnce()
+    expect(confirmAiAction).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: '确认发布' })).not.toBeInTheDocument()
   })
 
   it('同帧多段 token 合并后，完成事件仍保留全部文字', async () => {
@@ -198,7 +218,7 @@ describe('助手失败后的继续对话', () => {
     })
     mount([{ role: 'assistant', content: '你好' }])
     fireEvent.click(screen.getByRole('button', { name: '聊天历史' }))
-    fireEvent.click(await screen.findByRole('button', { name: /已保存的博客规划/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /^已保存的博客规划/ }))
     expect(await screen.findByText('历史回答')).toBeInTheDocument()
     expect(screen.getByText('3.00 秒').parentElement).toHaveTextContent('输出 3.00 秒')
     expect(screen.getByText('120 tokens · 40.0 tokens/s')).toBeInTheDocument()
@@ -226,7 +246,7 @@ describe('助手失败后的继续对话', () => {
     })
     mount([{ role: 'assistant', content: '你好' }])
     fireEvent.click(screen.getByRole('button', { name: '聊天历史' }))
-    fireEvent.click(await screen.findByRole('button', { name: /已保存的博客规划/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /^已保存的博客规划/ }))
     expect(await screen.findByText('已停止，未收到模型正文。')).toBeInTheDocument()
     expect(screen.getByText('35.00 秒')).toBeInTheDocument()
     expect(screen.getByText('未输出')).toBeInTheDocument()
