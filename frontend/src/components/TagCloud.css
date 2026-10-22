@@ -15,10 +15,18 @@
   min-width: 0;
   height: var(--tag-cloud-height);
 }
+.tag-cloud__scene { position: absolute; inset: 0; }
 .tag-cloud__chart { position: absolute; inset: 0; overflow: hidden; opacity: 0; }
 .tag-cloud .tag-cloud__chart svg { width: 100%; height: 100%; max-width: none; }
 .tag-cloud--ready .tag-cloud__chart { opacity: 1; animation: tag-cloud-reveal 600ms ease-out; }
 @keyframes tag-cloud-reveal { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  .tag-cloud--ready .tag-cloud__scene {
+    offset-path: ellipse(7px 4px at 0 0);
+    offset-anchor: 0 0;
+    offset-rotate: 0deg;
+  }
+}
 .tag-cloud__list {
   position: absolute;
   inset: 0;

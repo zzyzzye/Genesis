@@ -1,4 +1,5 @@
-import { useEffect, useEffectEvent, useId, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useEffectEvent, useId, useRef, useState, type CSSProperties } from 'react'
+import { animate } from 'motion/react'
 import type { EChartsType } from 'echarts/core'
 import type { CloudTag } from './tagCloudChart'
 import { useLiveReducedMotion } from '../lib/motion'
@@ -21,6 +22,9 @@ export function TagCloud({ items, label, onSelect, itemLabel, selectedId, highli
   const id = useId()
   const root = useRef<HTMLDivElement>(null)
   const canvas = useRef<HTMLDivElement>(null)
+  const scene = useRef<HTMLDivElement>(null)
+  const drift = useRef<Animation | null>(null)
+  const acceleration = useRef<{ stop: () => void } | null>(null)
   const chart = useRef<EChartsType | null>(null)
   const renderer = useRef<typeof import('./tagCloudChart') | null>(null)
   const [ready, setReady] = useState(false)
@@ -29,6 +33,35 @@ export function TagCloud({ items, label, onSelect, itemLabel, selectedId, highli
   const maximum = Math.max(2, maximumCount ?? 0, ...items.map(item => Math.max(0, item.count)))
   const signature = JSON.stringify([items, maximum, label, compact, selectedId, highlightedId, disabled, reducedMotion])
   const height = !items.length ? 0 : compact ? Math.max(140, Math.min(280, 80 + items.length * 9)) : Math.max(180, Math.min(420, 120 + items.length * 7))
+
+  const changeSpeed = useCallback((moving: boolean) => {
+    const animation = drift.current
+    if (!animation) return
+    acceleration.current?.stop()
+    // 只改变时间流速，暂停与恢复都沿原轨迹继续，不重置位置。
+    acceleration.current = animate(animation.playbackRate, moving ? 1 : 0, {
+      duration: 0.8,
+      ease: 'easeInOut',
+      onUpdate: speed => animation.updatePlaybackRate(speed),
+    })
+  }, [])
+
+  useEffect(() => {
+    const element = scene.current
+    if (!ready || reducedMotion || !element?.animate) return
+    // 浏览器沿连续椭圆移动整幅图，不修改单词布局或 ECharts 的点击坐标。
+    const animation = element.animate({ offsetDistance: ['0%', '100%'] }, { duration: 24000, iterations: Infinity, easing: 'linear' })
+    drift.current = animation
+    return () => {
+      acceleration.current?.stop()
+      animation.cancel()
+      drift.current = null
+    }
+  }, [ready, reducedMotion])
+
+  useEffect(() => {
+    changeSpeed(!disabled && !root.current?.matches(':hover, :focus-within'))
+  }, [changeSpeed, ready, disabled, reducedMotion])
 
   const selectWord = useEffectEvent((event: unknown) => {
     if (disabled || !event || typeof event !== 'object' || !('dataIndex' in event) || typeof event.dataIndex !== 'number') return
@@ -89,8 +122,13 @@ export function TagCloud({ items, label, onSelect, itemLabel, selectedId, highli
     chart.current?.dispatchAction({ type: focused ? 'showTip' : 'hideTip', seriesIndex: 0, dataIndex: index })
   }
 
-  return <div ref={root} className={`tag-cloud${compact ? ' tag-cloud--compact' : ''}${ready ? ' tag-cloud--ready' : ''}`} style={{ '--tag-cloud-height': `${height}px` } as CSSProperties}>
-    <div ref={canvas} className="tag-cloud__chart" aria-hidden="true" />
+  return <div ref={root} className={`tag-cloud${compact ? ' tag-cloud--compact' : ''}${ready ? ' tag-cloud--ready' : ''}`} style={{ '--tag-cloud-height': `${height}px` } as CSSProperties}
+    onPointerEnter={() => changeSpeed(false)}
+    onPointerLeave={() => { if (!disabled && !root.current?.contains(document.activeElement)) changeSpeed(true) }}
+    onFocusCapture={() => changeSpeed(false)}
+    onBlurCapture={event => { if (!disabled && !event.currentTarget.contains(event.relatedTarget) && !event.currentTarget.matches(':hover')) changeSpeed(true) }}
+  >
+    <div ref={scene} className="tag-cloud__scene"><div ref={canvas} className="tag-cloud__chart" aria-hidden="true" /></div>
     <ul className="tag-cloud__list" aria-label={label}>
     {items.map((item, index) => {
       const count = Math.max(0, item.count)

@@ -7,10 +7,11 @@ const mocks = vi.hoisted(() => {
     on: vi.fn<(name: string, listener: (event: unknown) => void) => void>(),
     setOption: vi.fn(), resize: vi.fn(), dispose: vi.fn(), dispatchAction: vi.fn(),
   }
-  return { chart, createCloudChart: vi.fn(() => chart), cloudOption: vi.fn(() => ({})) }
+  return { chart, createCloudChart: vi.fn(() => chart), cloudOption: vi.fn(() => ({})), animateSpeed: vi.fn(() => ({ stop: vi.fn() })) }
 })
 
 vi.mock('../src/components/tagCloudChart', () => ({ createCloudChart: mocks.createCloudChart, cloudOption: mocks.cloudOption }))
+vi.mock('motion/react', () => ({ animate: mocks.animateSpeed }))
 
 describe('ECharts 标签词云', () => {
   beforeEach(() => {
@@ -53,5 +54,30 @@ describe('ECharts 标签词云', () => {
     expect(mocks.chart.dispatchAction).toHaveBeenCalledWith({ type: 'showTip', seriesIndex: 0, dataIndex: 0 })
     fireEvent.click(button)
     expect(select).toHaveBeenCalledWith('tag')
+  })
+
+  it('整团运动只创建一次，交互调整流速，减少动态效果时取消', async () => {
+    const animation = { playbackRate: 1, updatePlaybackRate: vi.fn(), cancel: vi.fn() }
+    const createAnimation = vi.fn(() => animation)
+    Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: createAnimation })
+    try {
+      const props = { label: '标签', items: [{ id: 'tag', name: 'MCP', count: 3 }], onSelect: vi.fn() }
+      const view = render(<TagCloud {...props} />)
+      await waitFor(() => expect(createAnimation).toHaveBeenCalledTimes(1))
+      expect(createAnimation).toHaveBeenCalledWith({ offsetDistance: ['0%', '100%'] }, { duration: 24000, iterations: Infinity, easing: 'linear' })
+      const root = view.container.firstElementChild!
+      fireEvent.pointerEnter(root)
+      expect(mocks.animateSpeed).toHaveBeenLastCalledWith(1, 0, expect.objectContaining({ duration: 0.8 }))
+      fireEvent.pointerLeave(root)
+      expect(mocks.animateSpeed).toHaveBeenLastCalledWith(1, 1, expect.objectContaining({ duration: 0.8 }))
+      view.rerender(<TagCloud {...props} selectedId="tag" />)
+      expect(createAnimation).toHaveBeenCalledTimes(1)
+      vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+      view.rerender(<TagCloud {...props} selectedId="tag" />)
+      expect(animation.cancel).toHaveBeenCalledTimes(1)
+      view.unmount()
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, 'animate')
+    }
   })
 })
