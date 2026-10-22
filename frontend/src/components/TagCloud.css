@@ -1,0 +1,60 @@
+.tag-cloud {
+  --tag-cloud-min-size: 14px;
+  --tag-cloud-max-size: 34px;
+  --tag-cloud-ink: #151515;
+  --tag-cloud-muted: #686868;
+  --tag-cloud-hover: #ededed;
+  --tag-cloud-paper: #fff;
+  position: relative;
+  min-width: 0;
+  height: var(--tag-cloud-height);
+}
+.tag-cloud__chart { position: absolute; inset: 0; overflow: hidden; opacity: 0; }
+.tag-cloud .tag-cloud__chart svg { width: 100%; height: 100%; max-width: none; }
+.tag-cloud--ready .tag-cloud__chart { opacity: 1; }
+.tag-cloud__list {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 12px;
+  margin: 0;
+  padding: 8px 0;
+  overflow: auto;
+  list-style: none;
+}
+.tag-cloud--ready .tag-cloud__list { width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); clip-path: inset(50%); }
+.tag-cloud__list > li { min-width: 0; max-width: 100%; }
+.tag-cloud .tag-cloud__word {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  min-height: 44px;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  outline: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--tag-cloud-ink);
+  font-family: inherit;
+  font-size: calc(var(--tag-cloud-min-size) + (var(--tag-cloud-max-size) - var(--tag-cloud-min-size)) * var(--tag-cloud-weight));
+  font-weight: calc(450 + 150 * var(--tag-cloud-weight));
+  line-height: 1.5;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.tag-cloud__name { min-width: 0; overflow-wrap: anywhere; }
+.tag-cloud__count { flex: none; color: var(--tag-cloud-muted); font-size: 10px; font-weight: 400; }
+.tag-cloud .tag-cloud__word:is(:hover, :focus-visible, [aria-pressed="true"], .is-highlighted) { background: var(--tag-cloud-hover); }
+.tag-cloud .tag-cloud__word[aria-pressed="true"] .tag-cloud__name { font-weight: 650; }
+.tag-cloud .tag-cloud__word:disabled { opacity: .45; cursor: not-allowed; }
+.tag-cloud--compact { --tag-cloud-min-size: 12px; --tag-cloud-max-size: 20px; }
+.tag-cloud--compact .tag-cloud__list { gap: 2px 4px; justify-content: flex-start; }
+.tag-cloud--compact .tag-cloud__word { min-height: 36px; padding-inline: 6px; }
+@media (prefers-reduced-motion: reduce) { .tag-cloud .tag-cloud__word { transition: none; } }

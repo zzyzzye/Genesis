@@ -21,11 +21,9 @@
 .studio-taxonomy__feedback p { margin:0; }
 .studio-taxonomy__feedback [role=alert],.taxonomy-editor__feedback [role=alert] { color:#a13a2c; }
 .studio-taxonomy__items { list-style:none; padding:0; margin:4px 0 0; }
-.studio-taxonomy__items--tags { display:flex; flex-wrap:wrap; gap:10px; }
+.studio-taxonomy > .tag-cloud { --tag-cloud-ink:var(--taxonomy-ink); --tag-cloud-muted:var(--taxonomy-muted); --tag-cloud-hover:var(--taxonomy-hover); --tag-cloud-paper:var(--studio-paper); max-width:640px; margin:12px auto; }
 .studio-taxonomy__items button { display:flex; align-items:center; gap:12px; min-height:38px; max-width:100%; padding:8px 13px; border-radius:var(--studio-control-radius); background:var(--taxonomy-surface); text-align:left; }
 .studio-taxonomy__item-name { overflow-wrap:anywhere; min-width:0; }
-.studio-taxonomy__items--tags li { max-width:100%; }
-.studio-taxonomy__items--tags .studio-taxonomy__count { padding-left:9px; color:var(--taxonomy-muted); font-size:11px; }
 .studio-taxonomy__items button:hover:not(:disabled),.studio-taxonomy__items button:focus-visible,.studio-taxonomy__items button.is-highlighted { background:var(--taxonomy-hover); }
 .studio-taxonomy__items--categories { display:grid; gap:3px; }
 .studio-taxonomy__items--categories button { width:100%; padding:13px 10px; background:transparent; }
@@ -60,4 +58,4 @@
 .taxonomy-editor__remove>div { justify-content:flex-end; margin-top:20px; }
 .taxonomy-editor__feedback { min-height:18px; margin-top:10px; font-size:11px; line-height:1.7; }
 .taxonomy-editor__feedback p { margin:0; }
-@media(max-width:600px) { .studio-taxonomy { padding:20px 0 24px; }.studio-taxonomy__tip { display:none; }.studio-taxonomy__header { margin-bottom:16px; }.studio-taxonomy__add { min-width:82px; padding-inline:10px; }.studio-taxonomy__items--tags { gap:8px; } }
+@media(max-width:600px) { .studio-taxonomy { padding:20px 0 24px; }.studio-taxonomy__tip { display:none; }.studio-taxonomy__header { margin-bottom:16px; }.studio-taxonomy__add { min-width:82px; padding-inline:10px; } }

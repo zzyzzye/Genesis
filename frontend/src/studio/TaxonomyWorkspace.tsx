@@ -5,6 +5,7 @@ import { deleteAdminBlogTaxonomy, updateAdminBlogTaxonomy, type BlogTag } from '
 import { StudioIcon } from './StudioIcon'
 import { createTaxonomy, taxonomyError, type TaxonomyKind } from './taxonomy'
 import { useModalDialog } from './useModalDialog'
+import { TagCloud } from '../components/TagCloud'
 
 function TaxonomyEditor({ item, kind, items, count, token, onSaved, onDeleted, onClose }: {
   item: BlogTag
@@ -126,13 +127,23 @@ export function TaxonomyWorkspace({ kind, items, usage, token, onChanged }: {
   }
 
   return <section className="studio-taxonomy" aria-label={label + '管理'}>
-    <header className="studio-taxonomy__header"><div><h2>{kind === 'tags' ? '所有标签' : '所有分类'}<span>{items.length}</span></h2><p>{kind === 'tags' ? '关键词可以自由组合，一篇文章可选多个标签。' : '用主题整理文章，每篇文章选择一个分类。'}</p></div><span className="studio-taxonomy__tip">点击名称管理</span></header>
+    <header className="studio-taxonomy__header"><div><h2>{kind === 'tags' ? '所有标签' : '所有分类'}<span>{items.length}</span></h2><p>{kind === 'tags' ? '字号随文章使用数量变化，点击标签即可管理。' : '用主题整理文章，每篇文章选择一个分类。'}</p></div><span className="studio-taxonomy__tip">点击名称管理</span></header>
     <form className="studio-taxonomy__command" noValidate onSubmit={(event) => void create(event)}>
       <div className="studio-taxonomy__input"><StudioIcon name="search" /><input ref={input} aria-label={'搜索或新建' + label} aria-invalid={!!error} aria-describedby={id + '-feedback'} value={query} maxLength={50} disabled={busy} placeholder={'搜索' + label + '，或输入新名称…'} onChange={(event) => changeQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault() }} />{query && <button type="button" disabled={busy} aria-label={'清空' + label + '搜索'} onClick={() => { changeQuery(''); input.current?.focus() }}><StudioIcon name="close" /></button>}</div>
       <button className="studio-taxonomy__add" type="submit" disabled={busy || !query.trim()}>{busy ? '创建中…' : exact ? '定位' : '新建' + label}</button>
     </form>
     <div id={id + '-feedback'} className="studio-taxonomy__feedback">{error ? <p role="alert">{error}</p> : <p role="status">{notice || (query.trim() && !exact ? '按 Enter 创建「' + query.trim() + '」' : '')}</p>}</div>
-    {matches.length ? <ul className={'studio-taxonomy__items studio-taxonomy__items--' + kind} aria-label={label + '列表'}>
+    {matches.length ? kind === 'tags' ? <TagCloud
+      label="标签列表"
+      items={matches.slice(0, limit).map(item => ({ ...item, count: usage[item.id] ?? 0 }))}
+      maximumCount={Math.max(0, ...items.map(item => usage[item.id] ?? 0))}
+      itemLabel={item => '编辑标签：' + item.name}
+      highlightedId={highlighted}
+      opensDialog
+      disabled={busy}
+      buttonRef={(itemId, element) => { if (element) buttons.current.set(itemId, element); else buttons.current.delete(itemId) }}
+      onSelect={itemId => { const item = items.find(item => item.id === itemId); if (item) { setEditing(item); setNotice('') } }}
+    /> : <ul className={'studio-taxonomy__items studio-taxonomy__items--' + kind} aria-label={label + '列表'}>
       {matches.slice(0, limit).map((item) => <li key={item.id}><button ref={(element) => { if (element) buttons.current.set(item.id, element); else buttons.current.delete(item.id) }} type="button" className={highlighted === item.id ? 'is-highlighted' : ''} aria-label={'编辑' + label + '：' + item.name} aria-haspopup="dialog" disabled={busy} onClick={() => { setEditing(item); setNotice('') }}>
         {kind === 'categories' && <StudioIcon name="folder" />}<span className="studio-taxonomy__item-name">{item.name}</span><span className="studio-taxonomy__count" title={(usage[item.id] ?? 0) + ' 篇文章'}>{usage[item.id] ?? 0}{kind === 'categories' && ' 篇文章'}</span>{kind === 'categories' && <StudioIcon name="chevron" />}
       </button></li>)}

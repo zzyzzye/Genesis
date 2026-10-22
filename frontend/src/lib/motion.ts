@@ -26,6 +26,9 @@ export const motionTiming = {
   studioExit: 0.18,
   articleGuide: 0.44,
   articleGuideEase: [0.25, 0.1, 0.25, 1] as const,
+  blogReveal: 0.42,
+  blogStagger: 0.055,
+  blogSidebar: 0.28,
 }
 
 export const pageTransition: Variants = {
