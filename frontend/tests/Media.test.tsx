@@ -39,12 +39,17 @@ describe('作品画布', () => {
     const document: Document = { ...emptyDocument(), nodes: [note, video], edges: [{ id: crypto.randomUUID(), source: note.id, target: video.id }] }
     vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
     render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    const videoNode = await screen.findByTestId(`rf__node-${video.id}`)
+    expect(screen.queryByRole('textbox', { name: '镜头描述' })).not.toBeInTheDocument()
+    fireEvent.click(videoNode)
     fireEvent.click(await screen.findByRole('button', { name: '引用文字' }))
     expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveValue('镜头一')
+    fireEvent.click(screen.getByRole('button', { name: '画布参考 · 1' }))
     fireEvent.click(screen.getByRole('button', { name: '断开参考：节点' }))
     expect(screen.queryByRole('button', { name: '引用文字' })).not.toBeInTheDocument()
     fireEvent.change(screen.getByRole('combobox', { name: '添加参考节点' }), { target: { value: note.id } })
     expect(screen.getByRole('button', { name: '引用文字' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     const duration = screen.getByRole('spinbutton', { name: '镜头时长' })
     fireEvent.change(duration, { target: { value: '2.5' } }); fireEvent.blur(duration)
     expect(duration).toHaveValue(8)
@@ -58,6 +63,8 @@ describe('作品画布', () => {
     fireEvent.keyDown(size, { key: 'ArrowRight' })
     fireEvent.keyDown(size, { key: 'ArrowDown', shiftKey: true })
     expect(screen.getByRole('group', { name: /调整视频节点大小/ })).toHaveAccessibleName(/830 × 720/)
+    fireEvent.click(screen.getByRole('button', { name: '关闭节点编辑' }))
+    expect(screen.queryByRole('textbox', { name: '镜头描述' })).not.toBeInTheDocument()
   })
   it('编组、取消编组和删除成员会维护画布关系', () => {
     const second = { ...note, id: crypto.randomUUID(), x: 320 }
@@ -250,9 +257,9 @@ describe('作品画布', () => {
     fireEvent.click(screen.getByRole('button', { name: '运镜' }))
     fireEvent.click(screen.getByRole('button', { name: '缓慢推近' }))
     expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveValue('雨夜街道，缓慢推进 运镜：缓慢推近。')
+    fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     fireEvent.change(screen.getByRole('spinbutton', { name: '镜头时长' }), { target: { value: '10' } })
     fireEvent.blur(screen.getByRole('spinbutton', { name: '镜头时长' }))
-    fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     fireEvent.change(screen.getByRole('combobox', { name: '画面比例' }), { target: { value: '9:16' } })
     fireEvent.change(screen.getByRole('combobox', { name: '生成声音' }), { target: { value: 'off' } })
     fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
@@ -262,13 +269,39 @@ describe('作品画布', () => {
       expect(saved?.[2]).toMatchObject({ document: { nodes: [{ type: 'video', name: '开场镜头', text: '雨夜街道，缓慢推进 运镜：缓慢推近。', duration_seconds: 10, generation: { ratio: '9:16', sound: false } }] } })
     })
     fireEvent.click(screen.getByRole('button', { name: '新增下一段视频' }))
+    expect(screen.getAllByRole('textbox', { name: '视频节点名称' })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '视频' }))
     expect(screen.getAllByRole('textbox', { name: '视频节点名称' })).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
     fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
     await waitFor(() => expect(request.mock.calls.some(([path, method, body]) => {
       if (path !== '/projects/project/canvas' || method !== 'PUT') return false
       const document = (body as { document: Document }).document
       return document.nodes.length === 2 && document.edges.length === 1 && document.edges[0]?.source === document.nodes[0]?.id && document.edges[0]?.target === document.nodes[1]?.id
     })).toBe(true))
+  })
+  it('右键原位创建、节点菜单副本与撤销保留内容和连接', async () => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
+    const { container } = render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    await screen.findByRole('button', { name: '＋ 添加视频节点' })
+    await waitFor(() => {
+      fireEvent.contextMenu(container.querySelector('.react-flow__pane')!, { clientX: 250, clientY: 240 })
+      expect(screen.getByRole('dialog', { name: '添加节点' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '视频' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '镜头描述' }), { target: { value: '保持雨夜提示词' } })
+    fireEvent.contextMenu(container.querySelector('.react-flow__node-video')!, { clientX: 250, clientY: 240 })
+    fireEvent.click(screen.getByRole('button', { name: '创建副本' }))
+    expect(screen.getAllByRole('textbox', { name: '视频节点名称' })).toHaveLength(2)
+    expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveValue('保持雨夜提示词')
+    fireEvent.click(screen.getByRole('button', { name: '缩小画布' }))
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    expect(screen.getAllByRole('textbox', { name: '视频节点名称' })).toHaveLength(1)
+    fireEvent.keyDown(window, { key: 'h' })
+    expect(screen.getByRole('button', { name: '平移' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.keyDown(window, { key: 'v' })
+    expect(screen.getByRole('button', { name: '选择' })).toHaveAttribute('aria-pressed', 'true')
   })
   it('视频节点可直接上传预览素材，失败后重试原文件', async () => {
     vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
@@ -283,6 +316,28 @@ describe('作品画布', () => {
     await waitFor(() => expect(uploader).toHaveBeenCalledTimes(2))
     expect(uploader).toHaveBeenLastCalledWith('/projects/project/assets', file, expect.any(Function))
     await waitFor(() => expect(screen.getByRole('combobox', { name: '视频节点预览素材' })).toHaveValue(assetId))
+  })
+  it('节点素材在画布内选择，引用失败保留弹窗并可重试', async () => {
+    const asset = { id: crypto.randomUUID(), name: '镜头参考.png', kind: 'image' as const, mime_type: 'image/png', size: 4, in_library: true }
+    let failReference = true
+    vi.spyOn(media, 'fileBlob').mockRejectedValue(new Error('预览不可用'))
+    const request = vi.spyOn(media, 'api').mockImplementation((path, method) => {
+      if (path.endsWith('/assets/reference')) {
+        if (failReference) { failReference = false; return Promise.reject(new Error('引用失败，请重试')) }
+        return Promise.resolve(undefined)
+      }
+      return Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [asset], total: 1 } : { id: 'project', name: '测试作品', version: 0, method })
+    })
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: '＋ 添加视频节点' }))
+    fireEvent.click(screen.getByRole('button', { name: '作品素材' }))
+    expect(await screen.findByRole('dialog', { name: '选择节点素材' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: '用于当前节点' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('引用失败，请重试')
+    fireEvent.click(screen.getByRole('button', { name: '用于当前节点' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '选择节点素材' })).not.toBeInTheDocument())
+    expect(screen.getByRole('combobox', { name: '视频节点预览素材' })).toHaveValue(asset.id)
+    expect(request).toHaveBeenCalledWith('/projects/project/assets/reference', 'POST', { asset_id: asset.id })
   })
   it('上传失败显示原因并可在原作品内重试', async () => {
     vi.spyOn(media, 'api').mockResolvedValue({ items: [], total: 0 })
