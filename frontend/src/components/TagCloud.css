@@ -18,16 +18,7 @@
 .tag-cloud__chart { position: absolute; inset: 0; overflow: hidden; opacity: 0; }
 .tag-cloud .tag-cloud__chart svg { width: 100%; height: 100%; max-width: none; }
 .tag-cloud--ready .tag-cloud__chart { opacity: 1; animation: tag-cloud-reveal 600ms ease-out; }
-.tag-cloud__chart svg text {
-  --word-delay: 0ms;
-  animation: tag-word-float 4.8s ease-in-out var(--word-delay) infinite;
-}
-.tag-cloud__chart svg text:nth-of-type(3n + 2) { --word-delay: 110ms; animation-direction: reverse; }
-.tag-cloud__chart svg text:nth-of-type(3n) { --word-delay: 220ms; }
-/* 独立 translate 不覆盖 ECharts 为每个词计算的位置矩阵。 */
-@keyframes tag-cloud-reveal { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
-@keyframes tag-word-float { 0%, 100% { translate: 0 2px; } 50% { translate: 0 -2px; } }
-.tag-cloud:is(:hover, :focus-within, [data-disabled]) .tag-cloud__chart svg text { animation-play-state: paused; }
+@keyframes tag-cloud-reveal { from { opacity: 0; } to { opacity: 1; } }
 .tag-cloud__list {
   position: absolute;
   inset: 0;
@@ -76,5 +67,4 @@
 @media (prefers-reduced-motion: reduce) {
   .tag-cloud .tag-cloud__word { transition: none; }
   .tag-cloud--ready .tag-cloud__chart { animation: none; }
-  .tag-cloud__chart svg text { animation: none; translate: none; }
 }

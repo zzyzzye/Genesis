@@ -89,7 +89,7 @@ export function TagCloud({ items, label, onSelect, itemLabel, selectedId, highli
     chart.current?.dispatchAction({ type: focused ? 'showTip' : 'hideTip', seriesIndex: 0, dataIndex: index })
   }
 
-  return <div ref={root} className={`tag-cloud${compact ? ' tag-cloud--compact' : ''}${ready ? ' tag-cloud--ready' : ''}`} data-disabled={disabled || undefined} style={{ '--tag-cloud-height': `${height}px` } as CSSProperties}>
+  return <div ref={root} className={`tag-cloud${compact ? ' tag-cloud--compact' : ''}${ready ? ' tag-cloud--ready' : ''}`} style={{ '--tag-cloud-height': `${height}px` } as CSSProperties}>
     <div ref={canvas} className="tag-cloud__chart" aria-hidden="true" />
     <ul className="tag-cloud__list" aria-label={label}>
     {items.map((item, index) => {
