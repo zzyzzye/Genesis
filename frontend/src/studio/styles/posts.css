@@ -1,11 +1,12 @@
 .studio-post-index { min-height: 100%; padding: 12px var(--studio-gutter) 48px; background: var(--studio-paper); }
+.studio-article-index { container: article-index / inline-size; padding-bottom: 32px; }
 .studio-post-index__toolbar { display: flex; align-items: center; gap: 16px; justify-content: space-between; }
 .studio-post-index__actions { display: flex; flex: none; gap: 8px; }
 .studio-post-export-all { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; padding: 10px 14px; border: 0; border-radius: var(--studio-control-radius); background: var(--studio-soft); color: var(--studio-ink); font-size: 12px; }
 .studio-post-export-all svg { width: 14px; height: 14px; }
 .studio-post-export-hint { margin: 10px 0 0; color: var(--studio-muted); font-size: 11px; line-height: 1.7; }
-.studio-post-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.studio-post-row .studio-content-list__item { flex: 1; min-width: 0; }
+.studio-post-row { display: flex; align-items: center; gap: 4px; min-width: 0; border-bottom: 1px solid var(--studio-line); }
+.studio-post-row .studio-content-list__item { display: block; flex: 1; min-width: 0; padding: 12px 8px; border-radius: 6px; }
 .studio-post-export { display: grid; place-items: center; flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: var(--studio-control-radius); background: transparent; color: var(--studio-muted); }
 .studio-post-export svg { width: 16px; height: 16px; }
 .studio-post-export-retry { padding: 4px 8px; border: 0; border-radius: 6px; background: var(--studio-soft); color: var(--studio-ink); font: inherit; }
@@ -35,6 +36,32 @@
 .studio-content-list__details { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; color: var(--studio-muted); font-size: 11px; }
 .studio-content-list__details em { color: var(--studio-accent); font-size: 11px; font-style: normal; }
 .studio-content-list__details time { font-variant-numeric: tabular-nums; }
+.studio-article-index .studio-post-index__toolbar { gap: 12px; }
+.studio-article-index .studio-post-search { flex: 1 1 180px; width: auto; min-height: 36px; padding: 8px 10px; }
+.studio-article-index .studio-post-index__actions { gap: 6px; flex-wrap: nowrap; }
+.studio-article-index .studio-post-export-all, .studio-article-index .new-post-button { min-height: 36px; padding: 8px 10px; }
+.studio-article-index .studio-post-index__filters { margin: 14px 0 6px; gap: 4px; }
+.studio-article-index .studio-post-index__filters button { min-height: 32px; padding: 6px 10px; }
+.studio-article-index .studio-post-bulkbar { min-height: 36px; margin: 0 0 4px; }
+.studio-article-index .studio-post-refresh { display: grid; place-items: center; width: 32px; min-height: 32px; padding: 0; background: transparent; }
+.studio-article-index .studio-post-refresh svg { width: 14px; height: 14px; }
+.studio-article-index .studio-content-list { gap: 0; border-top: 1px solid var(--studio-line); }
+.studio-article-index .studio-content-list__body { display: block; }
+.studio-article-index .studio-content-list__body strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; line-height: 1.5; }
+.studio-article-index .studio-content-list__body small { -webkit-line-clamp: 1; margin-top: 3px; line-height: 1.5; }
+.studio-article-index .studio-content-list__details { gap: 6px 10px; margin-top: 6px; line-height: 1.5; }
+.studio-article-index .studio-content-list__details time { margin-left: auto; }
+.studio-article-index .studio-post-select { width: 24px; align-self: stretch; }
+.studio-article-index .studio-post-select input { margin: 0; }
+.studio-article-index .studio-post-row.is-selected { border-radius: 0; }
+.studio-article-index .studio-trash-row { padding-block: 12px; }
+.studio-article-index .studio-post-export-hint { margin-top: 14px; line-height: 1.6; }
+@container article-index (max-width: 520px) {
+  .studio-post-index__toolbar .studio-post-search { flex-basis: 100%; }
+  .studio-post-index__toolbar .studio-post-index__actions { width: 100%; }
+  .studio-post-index__actions > button { flex: 1; }
+  .studio-post-index__filters .studio-post-count { flex-basis: 100%; margin-top: 4px; }
+}
 .studio-page-index .studio-content-list__details > span { min-width: 0; overflow-wrap: anywhere; }
 .studio-post-empty { display: grid; justify-items: center; gap: 12px; padding: 64px 20px; text-align: center; }
 .studio-post-empty > svg { width: 24px; height: 24px; color: var(--studio-muted); }
