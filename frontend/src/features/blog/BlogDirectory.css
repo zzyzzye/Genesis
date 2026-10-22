@@ -73,7 +73,7 @@ body:has(.blog-portal) { min-width: 0; }
 /* 同排卡片共享五段高度，长标题和缺失摘要都不再挤乱后续内容。 */
 .portal-post-link { display: grid; grid-row: 1 / -1; grid-template-rows: subgrid; row-gap: 0; min-width: 0; border-radius: 10px; }
 .portal-post-cover { position: relative; grid-row: 1; align-self: start; overflow: hidden; border-radius: 14px; background: var(--portal-soft); }
-.portal-post-cover > img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; transition: transform var(--portal-motion-duration) var(--portal-motion-ease); }
+.portal-post-cover > img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; }
 .portal-post-topic { position: absolute; bottom: 9px; left: 10px; max-width: calc(100% - 20px); overflow: hidden; padding: 4px 7px; border-radius: 5px; background: rgb(255 255 255 / 94%); color: #333; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .portal-post-link h3 { grid-row: 2; margin: 15px 0 9px; font-size: 17px; font-weight: 650; letter-spacing: -.015em; line-height: 1.6; overflow-wrap: anywhere; }
 .portal-post-link > p { display: -webkit-box; grid-row: 3; align-self: start; margin: 0 0 12px; overflow: hidden; color: var(--portal-muted); font-size: 12px; line-height: 1.85; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
@@ -81,14 +81,7 @@ body:has(.blog-portal) { min-width: 0; }
 .portal-post-tags:empty { min-height: 0; margin-bottom: 0; }
 .portal-post-link footer { display: flex; grid-row: 5; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 7px; }
 .portal-post-link footer > time { color: var(--portal-muted); font-size: 10px; }
-.portal-post-link { transition: transform var(--portal-motion-duration) var(--portal-motion-ease); }
 .portal-post-link h3 { transition: color var(--portal-motion-duration) ease; }
-.portal-post-link:focus-visible { transform: translateY(-4px); }
-.portal-post-link:focus-visible .portal-post-cover > img { transform: scale(1.035); }
-@media (hover: hover) and (pointer: fine) {
-  .portal-post-link:hover { transform: translateY(-4px); }
-  .portal-post-link:hover .portal-post-cover > img { transform: scale(1.035); }
-}
 .portal-post-link:hover h3, .portal-post-link:focus-visible h3 { color: #666; }
 .portal-post-link:focus-visible { background: var(--portal-soft); }
 .portal-post-link:active h3 { color: #111; }

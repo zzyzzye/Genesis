@@ -30,25 +30,14 @@ export function ArticleToc({ items, activeId, onNavigate, label = '文章目录'
       aria-hidden={!expanded}
       initial={false}
       animate={{ height: expanded ? 'auto' : 0, opacity: expanded ? 1 : 0 }}
-      transition={reducedMotion ? { duration: 0 } : {
-        height: { duration: expanded ? 0.28 : 0.22, ease: motionTiming.ease },
-        opacity: { duration: expanded ? 0.18 : 0.12 },
-      }}
+      transition={{ duration: reducedMotion ? 0 : motionTiming.panel, ease: motionTiming.ease }}
     >
-      <motion.div
-        initial={false}
-        animate={{ y: expanded ? 0 : -12 }}
-        transition={reducedMotion ? { duration: 0 } : expanded
-          ? { type: 'spring', stiffness: 320, damping: 22, mass: 0.8 }
-          : { duration: 0.22, ease: motionTiming.ease }}
-      >
       {items.length ? <nav aria-label={`${label}导航`}><ol>{items.map((item, index) => <li key={item.id} style={{ '--toc-indent': `${Math.min(item.level - minLevel, 3) * 12}px` } as CSSProperties}>
         {onNavigate ? <button type="button" aria-current={activeId === item.id ? 'location' : undefined} onClick={() => onNavigate(item, index)}>{item.text}</button>
           : <Link to={`#${item.id}`} state={linkState} preventScrollReset aria-current={activeId === item.id ? 'location' : undefined} onClick={event => {
             if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) requestAnimationFrame(() => document.getElementById(item.id)?.scrollIntoView({ block: 'start' }))
           }}>{item.text}</Link>}
       </li>)}</ol></nav> : <p className="article-toc__empty">暂无章节标题</p>}
-      </motion.div>
     </motion.div>
   </aside>
 }

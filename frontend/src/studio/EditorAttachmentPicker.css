@@ -1,4 +1,4 @@
-.editor-attachment-picker { width: min(680px, calc(100vw - 32px)); padding: 24px; animation: attachment-picker-enter .22s ease-out; }
+.editor-attachment-picker { width: min(680px, calc(100vw - 32px)); padding: 24px; animation: attachment-picker-enter var(--motion-panel-duration) var(--motion-layout-ease); }
 .editor-attachment-picker header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .editor-attachment-picker h2 { margin-bottom: 4px; }
 .editor-attachment-picker p { overflow-wrap: anywhere; }
@@ -19,7 +19,6 @@
 .editor-attachment-picker__row > button[aria-pressed="true"] { background: var(--studio-soft); }
 .editor-attachment-picker__row .editor-attachment-picker__preview-trigger { flex-shrink: 0; padding: 8px; background: transparent; }
 .editor-attachment-picker__preview h3 { margin: 12px 0 4px; overflow-wrap: anywhere; font-size: 15px; font-weight: 550; }
-.editor-attachment-picker__preview { animation: attachment-preview-enter .22s ease-out; }
 .editor-attachment-picker__preview .attachment-preview-stage > img, .editor-attachment-picker__preview .attachment-preview-stage > video, .editor-attachment-picker__preview .attachment-preview-stage > pre { max-height: 42dvh; }
 .editor-attachment-picker__preview .attachment-preview-stage > iframe { height: 42dvh; }
 .editor-attachment-picker__list strong, .editor-attachment-picker__list small { display: block; overflow-wrap: anywhere; }
@@ -37,6 +36,6 @@
 .genesis-mdx-editor .editor-attachment-trigger { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 3px 8px; border: 0; outline: 0; box-shadow: none; border-radius: 4px; background: transparent; color: var(--studio-ink); font: inherit; cursor: pointer; }
 .genesis-mdx-editor .editor-attachment-trigger:hover, .genesis-mdx-editor .editor-attachment-trigger:focus-visible { background: var(--studio-soft); }
 .editor-attachment-trigger svg { width: 16px; height: 16px; }
-@keyframes attachment-picker-enter { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes attachment-picker-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (max-width: 680px) { .editor-attachment-picker { padding: 18px; } .editor-attachment-picker__tools { flex-wrap: wrap; } .editor-attachment-picker__tools .blog-links__search { flex-basis: 100%; } .editor-attachment-picker__selection { flex-basis: 100%; } .editor-attachment-picker footer { gap: 8px; } }
 @media (prefers-reduced-motion: reduce) { .editor-attachment-picker, .editor-attachment-picker__preview { animation: none; } }

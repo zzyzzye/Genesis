@@ -9,7 +9,7 @@ import { PublicBlog } from './pages/blog/BlogPage'
 import { PublicPages } from './pages/blog/PublicPages'
 import { MediaPage } from './pages/media/MediaPage'
 import { ToolboxPage } from './pages/toolbox/ToolboxPage'
-import { pageTransition } from './lib/motion'
+import { motionCssVariables, pageTransition } from './lib/motion'
 import { SessionRecovery } from './SessionRecovery'
 import { CursorEffects } from './features/cursor/CursorEffects'
 import { CursorTrail } from './features/cursor/CursorTrail'
@@ -49,6 +49,7 @@ function PageRoutes({ location }: { location: Location }) {
     <motion.div
       key={getRouteMotionKey(location.pathname)}
       className="app-route-transition"
+      style={motionCssVariables}
       initial={reducedMotion ? false : 'initial'}
       animate="enter"
       exit={reducedMotion ? undefined : 'exit'}

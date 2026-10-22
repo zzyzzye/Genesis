@@ -40,6 +40,8 @@ it('影音发送复用持久化任务与账户会话，停止生成保留已收�
     messages: [{ role: 'user', content: '规划雨夜开场' }],
   }))
   expect(vi.mocked(createAiChatRun).mock.calls[0]?.[1].context).toMatchObject({ module: 'media', page_type: 'projects' })
+  // 停止按钮出现时流连接可能尚未开始，先确认正文实际到达。
+  await screen.findByText('先从雨夜空镜开始。')
   fireEvent.click(screen.getByRole('button', { name: '停止生成' }))
   expect(cancelAiChatRun).toHaveBeenCalledWith('media-test-session', 'media-run')
   expect(await screen.findByText('先从雨夜空镜开始。')).toBeInTheDocument()
