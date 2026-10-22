@@ -911,12 +911,12 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             onDragLeave={() => { dragDepth.current -= 1; if (dragDepth.current <= 0) setDraggingFiles(false) }}
             onDrop={event => { event.preventDefault(); dragDepth.current = 0; setDraggingFiles(false); if (!isBusy && attachmentsAllowed) attachments.add(Array.from(event.dataTransfer.files)) }}>
             {!!attachments.items.length && <BlogAgentAttachments items={attachments.items} disabled={isBusy} onRetry={attachments.retry} onRemove={attachments.remove} onStop={attachments.stop} />}
-            <p className="blog-agent-upload-hint">{draggingFiles ? '松开以添加附件' : '文档、图片、视频 · 最多 8 个，共 20 MiB · 上传后保留在私有附件库'}</p>
+            {(!media || draggingFiles) && <p className="blog-agent-upload-hint">{draggingFiles ? '松开以添加附件' : '文档、图片、视频 · 最多 8 个，共 20 MiB · 上传后保留在私有附件库'}</p>}
             {(attachments.error || attachmentModelError) && <p className="blog-agent-upload-error" role="alert">{attachments.error || attachmentModelError}</p>}
             <textarea className="resize-none"
               ref={inputRef}
               aria-label={`向${name}提问`}
-              placeholder={media ? '描述画面，或说说你想调整的地方…' : '告诉我你想完成什么…'}
+              placeholder={media ? undefined : '告诉我你想完成什么…'}
               rows={2}
               value={draft}
               disabled={conversationLoading}
