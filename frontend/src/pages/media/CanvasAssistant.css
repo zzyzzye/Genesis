@@ -1,17 +1,18 @@
 /* 两个业务共用助手交互；此处仅拥有影音的暗色与悬浮几何。 */
 .media-assistant.studio-assistant {
-  --studio-line:#484848;
-  --studio-navigation:#343434;
-  --assistant-paper:#292929;
-  --assistant-surface:#363636;
-  --assistant-composer:#383838;
-  --assistant-hover:#464646;
-  --assistant-ink:#f0f0f0;
-  --assistant-muted:#bcbcbc;
-  --assistant-accent:#b7cfbd;
-  --assistant-line:#484848;
-  --assistant-menu:#3b3b3b;
-  --assistant-history:#232323;
+  --studio-line:var(--assistant-line);
+  --studio-navigation:#2e2b26;
+  --assistant-paper:#24221f;
+  --assistant-surface:#302d28;
+  --assistant-composer:#312d27;
+  --assistant-hover:#3e3a33;
+  --assistant-ink:#e8e4dc;
+  --assistant-muted:#b7b0a3;
+  --assistant-accent:#9fb9a5;
+  --assistant-accent-hover:#b0cbb4;
+  --assistant-line:#3c3933;
+  --assistant-menu:#34312c;
+  --assistant-history:#1d1c19;
   --assistant-error:#f2b4a8;
   --studio-paper:var(--assistant-paper);
   --studio-ink:var(--assistant-ink);
@@ -20,9 +21,9 @@
   --studio-editor-hover:var(--assistant-hover);
   --studio-accent:var(--assistant-accent);
   --studio-ui:Inter,"PingFang SC","Microsoft YaHei",sans-serif;
-  --scroll-thumb:#666;
-  --scroll-hover:#888;
-  --scroll-active:#aaa;
+  --scroll-thumb:#625e55;
+  --scroll-hover:#827c70;
+  --scroll-active:#a39b8d;
   color-scheme:dark;
 }
 .media-assistant.studio-assistant.is-open {
@@ -51,19 +52,19 @@
 .media-assistant .studio-assistant__conversation-heading { color:var(--assistant-muted); }
 .media-assistant .studio-assistant__conversation-heading>strong { font-size:11px; }
 .media-assistant .studio-assistant__resize { left:-5px; }
-.media-assistant .studio-assistant__ring-track { stroke:#626262; }
+.media-assistant .studio-assistant__ring-track { stroke:#625e55; }
 .media-assistant .blog-workflow-dialog::backdrop { background:#0009; }
 .media-assistant .blog-workflow-dialog button.blog-workflow-dialog__confirm { background:var(--assistant-accent); color:#19251c; }
-.media-assistant .blog-workflow-dialog button.blog-workflow-dialog__confirm:is(:hover,:focus-visible):not(:disabled) { background:#cbdccf; color:#19251c; }
+.media-assistant .blog-workflow-dialog button.blog-workflow-dialog__confirm:is(:hover,:focus-visible):not(:disabled) { background:var(--assistant-accent-hover); color:#19251c; }
 .media-assistant .studio-assistant__markdown pre { border-color:var(--assistant-line); }
 .media-assistant .studio-assistant__composer-tools>button[type=submit],
 .media-assistant .studio-assistant__composer-tools>.studio-assistant__stop { background:var(--assistant-accent); color:#19251c; }
 .media-assistant .studio-assistant__composer-tools>button[type=submit]:disabled { background:transparent; color:var(--assistant-muted); }
 .media-assistant .studio-assistant__composer-tools>button[type=submit]:is(:hover,:focus-visible):not(:disabled),
-.media-assistant .studio-assistant__composer-tools>.studio-assistant__stop:is(:hover,:focus-visible):not(:disabled) { background:#cbdccf; color:#19251c; }
+.media-assistant .studio-assistant__composer-tools>.studio-assistant__stop:is(:hover,:focus-visible):not(:disabled) { background:var(--assistant-accent-hover); color:#19251c; }
 .media-assistant .studio-assistant__launcher { background:var(--assistant-accent); }
 .media-assistant .studio-assistant__launcher-icon { color:#19251c; }
-.media-assistant .studio-assistant__launcher:is(:hover,:focus-visible):not(:disabled) { background:#cbdccf; }
+.media-assistant .studio-assistant__launcher:is(:hover,:focus-visible):not(:disabled) { background:var(--assistant-accent-hover); }
 .media-assistant .studio-assistant__tool-button[aria-label="添加附件"] { margin-left:0; flex:none; }
 .media-assistant .blog-agent-upload-hint { font-size:10px; }
 .media-assistant__welcome { padding:18px 0 12px; }
