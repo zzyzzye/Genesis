@@ -1,0 +1,28 @@
+.agent-tool-history { min-width: 0; color: var(--assistant-muted); font-size: 11px; }
+.agent-tool-history summary { display: flex; align-items: center; gap: 7px; min-height: 30px; padding: 4px 0; list-style: none; cursor: pointer; outline: none; border: 0; box-shadow: none; border-radius: 4px; }
+.agent-tool-history summary::-webkit-details-marker { display: none; }
+.agent-tool-history summary:is(:hover, :focus-visible) { color: var(--assistant-ink); background: var(--assistant-hover); }
+.studio-assistant .agent-tool-history summary > svg { flex: none; width: 12px; height: 12px; }
+.agent-tool-history__label { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.6; }
+.agent-tool-history__state { flex: none; font-size: 10px; }
+.agent-tool-history__duration { flex: none; color: var(--assistant-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.agent-tool-history__summary > .agent-tool-history__label { flex: 0 1 auto; }
+.agent-tool-history__summary > .agent-tool-history__state { margin-left: auto; }
+.agent-tool-history__chevron { transition: transform 140ms ease; }
+.agent-tool-history[open] > summary > .agent-tool-history__chevron,
+.agent-tool-history__call[open] > summary > .agent-tool-history__chevron { transform: rotate(90deg); }
+.agent-tool-history__list { display: grid; gap: 2px; max-height: min(340px, 45dvh); overflow: auto; margin: 4px 0 0; padding: 0 0 0 14px; list-style: none; }
+.agent-tool-history__list > li { min-width: 0; }
+.agent-tool-history__detail { display: grid; gap: 6px; margin: 4px 0 8px; padding: 0 19px; font-size: 11px; }
+.agent-tool-history__detail > div { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
+.agent-tool-history__detail :is(dt, dd) { margin: 0; line-height: 1.7; overflow-wrap: anywhere; }
+.agent-tool-history__detail dt { opacity: .8; }
+.agent-tool-history__detail code { color: var(--assistant-ink); font: 10px/1.7 ui-monospace, monospace; }
+.agent-tool-history__parameters { display: block; font-size: 10px; overflow-wrap: anywhere; }
+.agent-tool-history.has-issues > summary > .agent-tool-history__state { color: var(--assistant-ink); }
+.agent-tool-history__spinner { animation: agent-tool-spin 1s linear infinite; }
+@keyframes agent-tool-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .agent-tool-history__spinner { animation: none; }
+  .agent-tool-history__chevron { transition: none; }
+}

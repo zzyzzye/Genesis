@@ -554,6 +554,20 @@ export interface AiChatRunSnapshot {
   error: string | null
   metrics?: AiGenerationMetrics | null
   proposals?: AiActionProposal[]
+  tool_calls?: AiToolCall[]
+}
+
+export interface AiToolCall {
+  id: string
+  name: string
+  label: string
+  status: 'running' | 'succeeded' | 'failed' | 'awaiting_confirmation' | 'interrupted'
+  started_at: string
+  duration_ms: number | null
+  input_summary: string
+  result_summary: string | null
+  parameter_names: string[]
+  proposal_id: string | null
 }
 
 export interface AiGenerationMetrics {
@@ -576,7 +590,7 @@ export interface AiConversation {
 }
 
 export interface AiConversationDetail extends AiConversation {
-  messages: (AiChatMessage & { run_id: string; status: AiChatRunStatus; error: string | null; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[] })[]
+  messages: (AiChatMessage & { run_id: string; status: AiChatRunStatus; error: string | null; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; tool_calls?: AiToolCall[] })[]
 }
 
 export function listAiConversations(token: string, offset = 0, surface: 'studio' | 'media' = 'studio'): Promise<AiConversation[]> {
@@ -668,6 +682,7 @@ export async function streamAiChatRun(
     onToken: (content: string, sequence: number) => void
     onMetrics?: (metrics: AiGenerationMetrics | null) => void
     onProposals?: (proposals: AiActionProposal[]) => void
+    onToolCalls?: (calls: AiToolCall[]) => void
   },
   signal?: AbortSignal,
 ): Promise<'completed' | 'disconnected'> {
@@ -706,10 +721,12 @@ export async function streamAiChatRun(
         sequence?: number
         metrics?: AiGenerationMetrics | null
         proposals?: AiActionProposal[]
+        tool_calls?: AiToolCall[]
       }
       const sequence = payload.sequence ?? 0
       if ('metrics' in payload) handlers.onMetrics?.(payload.metrics ?? null)
       if (payload.type === 'proposals') handlers.onProposals?.(payload.proposals ?? [])
+      if ('tool_calls' in payload) handlers.onToolCalls?.(payload.tool_calls ?? [])
       if (payload.type === 'snapshot') handlers.onSnapshot(payload.content ?? '', sequence)
       if (payload.type === 'token' && payload.content) handlers.onToken(payload.content, sequence)
       if (payload.type === 'error') {

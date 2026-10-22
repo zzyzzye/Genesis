@@ -240,7 +240,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
     """
 
     async def events() -> AsyncIterator[str]:
-        """产出完整快照、文本增量、终态及心跳，内容重置时重发完整快照。
+        """产出完整快照、文本及工具记录更新、终态和心跳。
 
         Yields:
             已编码的 SSE 事件或心跳注释，终态与断开连接后停止轮询。
@@ -248,6 +248,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
         last_sequence = -1
         last_content = ""
         last_proposals: list[dict[str, object]] = []
+        last_tool_calls: list[dict[str, object]] = []
         last_heartbeat = monotonic()
 
         while True:
@@ -263,6 +264,9 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                         "type": "snapshot",
                         "run_id": str(snapshot.id),
                         "content": snapshot.content,
+                        "tool_calls": [
+                            item.model_dump(mode="json") for item in snapshot.tool_calls
+                        ],
                         "sequence": snapshot.sequence,
                         "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
                     },
@@ -289,6 +293,9 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                             "type": "snapshot",
                             "run_id": str(snapshot.id),
                             "content": snapshot.content,
+                            "tool_calls": [
+                                item.model_dump(mode="json") for item in snapshot.tool_calls
+                            ],
                             "sequence": snapshot.sequence,
                             "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
                         },
@@ -297,6 +304,11 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
 
             last_sequence = snapshot.sequence
             last_content = snapshot.content
+
+            tool_calls = [item.model_dump(mode="json") for item in snapshot.tool_calls]
+            if tool_calls != last_tool_calls:
+                yield _encode_event({"type": "tool_calls", "tool_calls": tool_calls})
+                last_tool_calls = tool_calls
 
             proposals = [item.model_dump(mode="json") for item in snapshot.proposals]
             if proposals != last_proposals:

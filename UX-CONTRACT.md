@@ -81,6 +81,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | 公开文章 AI 导读 | ArticleGuide、公共结构化模型运行时 | ArticleGuide.tsx/CSS、blog/guide.py、blog/agent/guide.py | 默认展开；黑灰 AI 标识；首次约 40 字符/秒依次打字，可显示全部，重新展开直接全文；三个要点与阅读重点；按正文指纹只读缓存；等待生成手动查看，失败可重试；440ms 平滑高度/透明度/箭头过渡，减少动态效果即时呈现 | 真实生成、逐字追加、跳过/中途收起、收起复用、网络超时与重试、空态/待生成/旧版本、键盘、390/320px、减少动态效果切换、慢请求高度过渡、缓存失效与迟到结果 |
 | 博客助手 / 非模态浮层 | BlogAssistant、既有对话与模型菜单状态 | BlogAssistant.tsx、BlogAssistant.css | 后台常驻，空态紧凑、对话展开；输入保持编辑，执行模式与确认沿用原协议 | 开关、聚焦、模型选择与 Escape、上下文环、长回复与代码块、生成与失败、窄屏 |
 | Agent 消息跟随 | useChatAutoScroll | features/agent/useChatAutoScroll.ts、BlogAssistant、MediaAssistant | 默认在底部；正文增长和布局变化继续跟随；向上浏览暂停，滚回底部恢复；打开、切换对话或发送时回到最新 | 连续增长、容器缩放、上翻保留、回底恢复、滚轮/触摸/键盘/滚动条、重新打开、清理和窄屏 |
+| Agent 工具调用历史 | LangChain 原生工具回调、ToolCallHistory、AgentToolHistory | agent/tool_history.py、AiChatRun.tool_calls、现有 SSE 与会话详情 | 每轮独立记录真实调用；参数仅存名称与数量，结果仅存状态及数量摘要；回调 ID 更新单项、行锁合并并行记录；重连替换完整列表；旧对话没有记录时不显示入口；待确认不等于已执行；取消或重启将未结束记录标记中断，不伪造跨进程耗时 | 原生并行工具、工具错误/提议、权限隔离、持久化与 SSE 重放、取消/恢复、确认回执、键盘展开收起、窄屏长列表、减少动态效果 |
 | 文章管理表格 | PostsIndex、原生 table | posts.css 的 studio-article-index 变体、文章管理现有 API | 标题编辑、选择与导出分开；表头全选当前页，选中后显示批量区；窄容器合并元信息，q/status/page 和版本确认不变；回收站共用同一表格 | 列语义、选择与编辑隔离、分页、导出取消/失败、恢复与删除确认、搜索空态、助手布局、桌面/390/320px |
 | 写作页助手布局 | BlogAssistant.css 的写作页布局变体 | 实际存在的 .markdown-editor | 默认 380px 从右向左滑入并隐藏目录，不挤压编辑器，收起后恢复目录；其他页面继续并排 | 编辑区开合宽度一致、菜单、展开、桌面与窄屏 |
 | 助手思考设置 | AgentModelPicker、ReasoningEffortControl、useReasoningEffort | 框架原生 profile 与 MiMo 官方协议最小补充 | native select 承担思考模式和强度选择；两者独立；按模型记忆；选完模型保持菜单展开 | 请求参数、恢复、图缓存、菜单保持展开、键盘与窄屏 |

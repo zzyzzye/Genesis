@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, cleanup, act } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { BlogAssistant } from '../src/features/blog/agent/BlogAssistant'
-import { AiChatRunTerminalError, cancelAiChatRun, confirmAiAction, createAiChatRun, streamAiChatRun, getAiConversation, renameAiConversation, type AiActionProposal } from '../src/lib/api'
+import { AiChatRunTerminalError, cancelAiChatRun, confirmAiAction, createAiChatRun, streamAiChatRun, getAiConversation, renameAiConversation, type AiActionProposal, type AiToolCall } from '../src/lib/api'
 import { studioAuthTokenKey } from '../src/lib/auth'
 
 vi.mock('../src/lib/api', async (importOriginal) => ({
@@ -28,6 +28,40 @@ function mount(messages: { role: string; content: string }[], activeRun: object 
 }
 
 describe('助手失败后的继续对话', () => {
+  it('实时工具记录不重复，重新读取服务器历史后仍保留', async () => {
+    const call: AiToolCall = {
+      id: 'recorded-tool', name: 'list_posts', label: '列出文章', status: 'succeeded',
+      started_at: '2026-10-22T00:00:00Z', duration_ms: 120,
+      input_summary: '无参数', parameter_names: [], result_summary: '返回 2 项结果', proposal_id: null,
+    }
+    vi.mocked(createAiChatRun).mockResolvedValue({ id: 'tool-run', status: 'pending' })
+    vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
+      callbacks.onToolCalls?.([{ ...call, status: 'running', duration_ms: null }])
+      callbacks.onToolCalls?.([call])
+      callbacks.onToken('已读取文章。', 1)
+      return Promise.resolve('completed')
+    })
+    mount([{ role: 'assistant', content: '你好' }])
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '查看文章' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
+    expect(await screen.findByText('调用了 1 个工具')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('全部完成')).toBeInTheDocument())
+    const stored = JSON.parse(sessionStorage.getItem(sessionKey) ?? '{}') as { conversationId?: string; messages?: unknown }
+    expect(stored.conversationId).toBe('conversation-1')
+    expect(stored.messages).toBeUndefined()
+    cleanup()
+    sessionStorage.setItem(sessionKey, JSON.stringify({ isOpen: true, conversationId: 'saved-tools' }))
+    vi.mocked(getAiConversation).mockResolvedValue({
+      id: 'saved-tools', title: '工具历史', title_source: 'manual', created_at: '', updated_at: '',
+      messages: [{ role: 'assistant', content: '服务器保存的结果', run_id: 'tool-run', status: 'completed', error: null, tool_calls: [call] }],
+    })
+    render(<BlogAssistant page={page} editor={null} />)
+    await screen.findByText('服务器保存的结果')
+    expect(screen.getByText('调用了 1 个工具')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('调用了 1 个工具'))
+    expect(screen.getAllByText('列出文章')).toHaveLength(1)
+  })
+
   it('宽度分隔器可聚焦并用方向键调整，不充当普通点击按钮', async () => {
     await act(async () => { mount([]); await Promise.resolve() })
     const handle = screen.getByRole('separator', { name: '调整助手宽度' })

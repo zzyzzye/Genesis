@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from genesis_api.agent.contracts import AgentActionProposal
+from genesis_api.agent.tool_history import AgentToolCall
 from genesis_api.ai.models import AiChatRunStatus
 
 AiSurface = Literal["blog", "studio", "toolbox", "media"]
@@ -195,6 +196,7 @@ class AiConversationMessage(BaseModel):
     error: str | None = None
     metrics: AiGenerationMetrics | None = None
     proposals: list[AgentActionProposal] = Field(default_factory=list)
+    tool_calls: list[AgentToolCall] = Field(default_factory=list)
     attachments: list[AiAttachment] = Field(default_factory=list, exclude_if=lambda v: not v)
 
 
@@ -205,13 +207,13 @@ class AiConversationDetail(AiConversationSummary):
 
 
 class AiChatRunSnapshot(BaseModel):
-    """完整文本快照；SSE 根据内容及修订序号判断追加输出或替换旧内容。
+    """正文与工具调用的完整展示快照，供 SSE 续传及历史恢复。
 
     Attributes:
         id: 后台任务标识。
         status: 任务执行状态，终态也可能没有新增文本。
         content: 当前累计文本；恢复任务时可能重置，不能始终假定只增不减。
-        sequence: 内容提交修订号，不是 token 数或 SSE 事件总数。
+        sequence: 任务展示修订号，不是 token 数或 SSE 事件总数。
         error: 失败时展示的错误说明，正常情况下为 None。
     """
 
@@ -222,6 +224,7 @@ class AiChatRunSnapshot(BaseModel):
     error: str | None = None
     metrics: AiGenerationMetrics | None = None
     proposals: list[AgentActionProposal] = Field(default_factory=list)
+    tool_calls: list[AgentToolCall] = Field(default_factory=list)
 
 
 class AiError(BaseModel):

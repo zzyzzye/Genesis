@@ -109,6 +109,7 @@ def conversation_detail(session: Session, conversation: AiConversation) -> AiCon
             role="assistant", content=run.content, run_id=run.id,
             status=run.status, error=run.error,
             proposals=run.proposals or [],
+            tool_calls=run.tool_calls or [],
             metrics=AiGenerationMetrics.model_validate(run.generation_metrics)
             if run.generation_metrics is not None else None,
         ))

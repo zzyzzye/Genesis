@@ -53,6 +53,8 @@ import {
   type AiAttachment,
 } from '../../lib/api'
 import { AgentModelPicker } from './AgentModelPicker'
+import { AgentToolHistory } from './AgentToolHistory'
+import type { AiToolCall } from '../../lib/api'
 import { BlogConversationHistory } from '../blog/agent/BlogConversationHistory'
 import { BlogAgentAttachments, BlogMessageAttachments } from '../blog/agent/BlogAgentAttachments'
 import { agentAttachmentAccept, useBlogAttachments } from '../blog/agent/useBlogAttachments'
@@ -64,7 +66,7 @@ import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from './u
 import { getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
 
 type AssistantTiming = { startedAt: number; firstTokenAt?: number; completedAt?: number }
-type AssistantMessage = { role: 'assistant' | 'user'; content: string; attachments?: AiAttachment[]; status?: string; error?: string | null; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; executedProposals?: string[] }
+type AssistantMessage = { role: 'assistant' | 'user'; content: string; attachments?: AiAttachment[]; status?: string; error?: string | null; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; executedProposals?: string[]; tool_calls?: AiToolCall[] }
 export type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string; status: 'draft' | 'published' }
 export type AssistantPageContext = { route: string; section: string; pageType: 'overview' | 'posts_list' | 'post_editor' | 'post_preview' | 'section' }
 type ActiveAssistantRun = { id: string; assistantMessageIndex: number }
@@ -112,7 +114,7 @@ function readAssistantSession(key = assistantSessionKey): AssistantSession {
     ) ? activeCandidate as ActiveAssistantRun : null
     const restoredMessages = activeRun
       ? normalizedMessages
-      : normalizedMessages.filter((message) => message.content.trim().length > 0 || message.attachments?.length || message.proposals?.length || message.status)
+      : normalizedMessages.filter((message) => message.content.trim().length > 0 || message.attachments?.length || message.proposals?.length || message.tool_calls?.length || message.status)
     return {
       isOpen: value.isOpen === true,
       messages: restoredMessages.length ? restoredMessages : initialAssistantMessages(),
@@ -196,15 +198,16 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
   </div>
 })
 
-const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, timing, metrics, proposals, executedProposals, index, onConfirm, confirming, streaming, onProgress, onAnswer, questionDisabled, questionAnswer, targetPost }: AssistantMessage & { index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void; onAnswer: (answer: string) => void; questionDisabled: boolean; questionAnswer?: string; targetPost: AssistantEditorContext | null }) {
+const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, timing, metrics, proposals, executedProposals, tool_calls, index, onConfirm, confirming, streaming, onProgress, onAnswer, questionDisabled, questionAnswer, targetPost }: AssistantMessage & { index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void; onAnswer: (answer: string) => void; questionDisabled: boolean; questionAnswer?: string; targetPost: AssistantEditorContext | null }) {
   const legacyAction = streaming ? null : parsePendingAction(content)
   const actions = proposals?.length ? proposals : legacyAction ? [legacyAction] : []
-  const operationOnly = actions.length > 0 && !timing?.firstTokenAt && metrics?.first_token_seconds == null
+  const operationOnly = (actions.length > 0 || Boolean(tool_calls?.length)) && !timing?.firstTokenAt && metrics?.first_token_seconds == null
   const question = splitAgentQuestion(content)
   return <div className="studio-assistant__response">
+    <AgentToolHistory calls={tool_calls ?? []} proposals={actions} executedProposals={executedProposals} streaming={streaming} />
     {question.text && <div className="studio-assistant__markdown">{streaming ? <TypewriterText content={question.text} onProgress={onProgress} /> : <Markdown remarkPlugins={[remarkGfm]}>{question.text}</Markdown>}</div>}
     {!streaming && error && <p className="studio-assistant__message-status">{error.includes('停止') && !content.trim() ? '已停止，未收到模型正文。' : error}</p>}
-    {!streaming && !error && status === 'completed' && !content.trim() && !actions.length && <p className="studio-assistant__message-status">本轮未返回正文，请重试或切换模型。</p>}
+    {!streaming && !error && status === 'completed' && !content.trim() && !actions.length && !tool_calls?.length && <p className="studio-assistant__message-status">本轮未返回正文，请重试或切换模型。</p>}
     {!streaming && !error && !content.trim() && actions.length > 0 && <p className="studio-assistant__stream-text">{actions.every(action => action.executed || executedProposals?.includes(action.proposal_id)) ? '操作已执行，结果如下。' : '操作提议已准备，请核对后确认。'}</p>}
     {question.request && <AgentQuestion key={question.request.id} request={question.request} disabled={questionDisabled} answered={questionAnswer !== undefined} answerContent={questionAnswer} onAnswer={onAnswer} />}
     <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} operationOnly={operationOnly} />
@@ -437,8 +440,8 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
       setConversation(result)
       const restored: AssistantMessage[] = [
         ...welcomeMessages(),
-        ...result.messages.map(({ role, content, metrics, proposals, status, error, attachments }) => ({
-          role, content, metrics, proposals, status, error, attachments,
+        ...result.messages.map(({ role, content, metrics, proposals, status, error, attachments, tool_calls }) => ({
+          role, content, metrics, proposals, status, error, attachments, tool_calls,
           ...((status === 'pending' || status === 'running') ? {
             timing: { startedAt: Date.now() - (metrics?.total_seconds ?? 0) * 1000 },
           } : {}),
@@ -617,6 +620,11 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
       while (!cancelled) {
         try {
           const result = await streamAiChatRun(token!, run.id, {
+            onToolCalls: (tool_calls) => {
+              if (cancelled || selection !== selectionVersion.current) return
+              setMessages(current => current.map((message, index) => index === run.assistantMessageIndex
+                ? { ...message, tool_calls } : message))
+            },
             onProposals: (proposals) => {
               if (cancelled || selection !== selectionVersion.current) return
               for (const proposal of proposals) {

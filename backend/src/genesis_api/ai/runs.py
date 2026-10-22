@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.metrics import GenerationMetrics
+from genesis_api.agent.tool_history import AgentToolCall, ToolCallHistory
 from genesis_api.ai.conversations import prepare_conversation_run
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
 from genesis_api.ai.schemas import (
@@ -145,6 +146,7 @@ def get_ai_chat_run_snapshot(
         sequence=run.sequence,
         error=run.error,
         proposals=run.proposals or [],
+        tool_calls=run.tool_calls or [],
         metrics=AiGenerationMetrics.model_validate(run.generation_metrics)
         if run.generation_metrics is not None else None,
     )
@@ -229,7 +231,7 @@ class AiChatRunManager:
     def _cancel_sync(self, run_id: UUID) -> None:
         """在独立会话中将未完成任务标记为失败，保留已生成内容。"""
         with self._session_factory() as session:
-            run = session.get(AiChatRun, run_id)
+            run = session.scalar(select(AiChatRun).where(AiChatRun.id == run_id).with_for_update())
             if run is None or run.status not in (
                 AiChatRunStatus.PENDING,
                 AiChatRunStatus.RUNNING,
@@ -237,6 +239,7 @@ class AiChatRunManager:
                 return
             run.status = AiChatRunStatus.FAILED
             run.error = "生成已由用户停止。"
+            run.tool_calls = _interrupt_tool_calls(run.tool_calls)
             run.completed_at = datetime.now(UTC)
             session.commit()
 
@@ -281,6 +284,13 @@ class AiChatRunManager:
             metrics = GenerationMetrics()
             try:
                 streamer = self._chat_service_factory(settings)
+                history = getattr(streamer, "tool_history", None)
+                if isinstance(history, ToolCallHistory):
+                    async def save_tool_call(call: AgentToolCall) -> None:
+                        """接收原生回调的安全投影，不接触原始工具载荷。"""
+                        await asyncio.to_thread(self._persist_tool_call_sync, run_id, call)
+
+                    history.on_change = save_tool_call
                 service_metrics = getattr(streamer, "metrics", None)
                 if isinstance(service_metrics, GenerationMetrics):
                     metrics = service_metrics
@@ -344,10 +354,37 @@ class AiChatRunManager:
                     metrics=metrics.snapshot(),
                 )
 
+    def _persist_tool_call_sync(self, run_id: UUID, call: AgentToolCall) -> None:
+        """按回调 ID 更新单项快照，行锁避免并行工具覆盖彼此的记录。"""
+        with self._session_factory() as session:
+            run = session.scalar(select(AiChatRun).where(AiChatRun.id == run_id).with_for_update())
+            if run is None:
+                return
+            item = call.model_dump(mode="json")
+            if (
+                run.status in (AiChatRunStatus.COMPLETED, AiChatRunStatus.FAILED)
+                and item["status"] == "running"
+            ):
+                item.update(status="interrupted", result_summary="调用已中断")
+            calls = run.tool_calls or []
+            if any(entry.get("id") == item["id"] for entry in calls):
+                run.tool_calls = [
+                    item if entry.get("id") == item["id"] else entry for entry in calls
+                ]
+            else:
+                run.tool_calls = [*calls, item]
+            # 并行回调的数据库提交顺序可能不同，展示顺序以真实开始时间为准。
+            run.tool_calls = sorted(
+                run.tool_calls,
+                key=lambda entry: (str(entry.get("started_at", "")), str(entry.get("id", ""))),
+            )
+            run.sequence += 1
+            session.commit()
+
     def _persist_proposal_sync(self, run_id: UUID, proposal: AgentActionProposal) -> None:
         """保存可信工具提议并递增修订号，恢复重放时按提议 ID 去重。"""
         with self._session_factory() as session:
-            run = session.get(AiChatRun, run_id)
+            run = session.scalar(select(AiChatRun).where(AiChatRun.id == run_id).with_for_update())
             if run is None:
                 return
             proposals = run.proposals or []
@@ -482,7 +519,7 @@ class AiChatRunManager:
             error: 可选错误文本；None 不清除已有错误。
         """
         with self._session_factory() as session:
-            run = session.get(AiChatRun, run_id)
+            run = session.scalar(select(AiChatRun).where(AiChatRun.id == run_id).with_for_update())
             if run is None:
                 return
             if append_content:
@@ -493,6 +530,7 @@ class AiChatRunManager:
                 run.status = status
                 if status in (AiChatRunStatus.COMPLETED, AiChatRunStatus.FAILED):
                     run.completed_at = datetime.now(UTC)
+                    run.tool_calls = _interrupt_tool_calls(run.tool_calls)
             if error is not None:
                 run.error = error
             if metrics is not None:
@@ -516,6 +554,7 @@ class AiChatRunManager:
                 )
             )
             for run in runs:
+                run.tool_calls = _interrupt_tool_calls(run.tool_calls)
                 try:
                     request = _request_from_payload(run.request_payload)
                 except ValueError:
@@ -535,6 +574,19 @@ class AiChatRunManager:
                 )
             session.commit()
         return recovered
+
+
+def _interrupt_tool_calls(
+    calls: list[dict[str, object]] | None,
+) -> list[dict[str, object]] | None:
+    """保留已结束调用，只将未收到结束回调的记录标为中断，不伪造耗时。"""
+    if calls is None:
+        return None
+    return [
+        {**call, "status": "interrupted", "result_summary": "调用已中断"}
+        if call.get("status") == "running" else call
+        for call in calls
+    ]
 
 
 def _request_payload(request: AiChatRequest) -> dict[str, object]:

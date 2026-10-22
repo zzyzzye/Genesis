@@ -26,6 +26,7 @@ from genesis_api.agent.files import AttachmentFilesMiddleware, agent_files_conte
 from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.mimo import ChatMiMo
 from genesis_api.agent.questions import COLLABORATION_PROMPT, ask_user_question
+from genesis_api.agent.tool_history import ToolCallHistory
 from genesis_api.ai.schemas import AiChatRequest, AiConversationTitle
 from genesis_api.core.config import Settings
 from genesis_api.llm.capabilities import model_capabilities_for
@@ -279,6 +280,7 @@ class EmbeddedAgentRuntime:
     async def stream(
         self, request: AiChatRequest, settings: Settings, *, thread_id: str,
         metrics: GenerationMetrics | None = None,
+        tool_history: ToolCallHistory | None = None,
     ) -> AsyncIterator[str | AgentActionProposal]:
         """在独立用户身份上下文中执行图，产出正文及待确认工具提议。
 
@@ -290,6 +292,7 @@ class EmbeddedAgentRuntime:
             settings: 提供默认模型配置与业务能力配置。
             thread_id: checkpoint 的任务标识，用于隔离与恢复执行状态。
             metrics: 当前任务独立的统计回调；None 不采集用量。
+            tool_history: 原生工具回调观察器；None 不采集展示历史。
 
         Yields:
             模型消息中的非空文本片段，或业务工具返回的结构化待确认提议。
@@ -348,6 +351,8 @@ class EmbeddedAgentRuntime:
         ]
         if metrics is not None:
             config["callbacks"] = [metrics]
+        if tool_history is not None:
+            config["callbacks"] = [metrics, tool_history] if metrics else [tool_history]
         # 图缓存不包含对话状态；thread_id 用于区分各次任务的 checkpoint。
         graph_input: dict[str, object] | None = {"messages": messages}
         if resuming:
