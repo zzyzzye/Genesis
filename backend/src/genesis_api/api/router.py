@@ -10,7 +10,6 @@ from genesis_api.api.routes import (
     blog_attachments,
     blog_comments,
     blog_operations,
-    blog_pages,
     health,
     llm,
     media,
@@ -27,8 +26,6 @@ api_router.include_router(blog_attachments.public_router)
 api_router.include_router(blog_attachments.admin_router)
 api_router.include_router(blog_comments.public_router)
 api_router.include_router(blog_comments.admin_router)
-api_router.include_router(blog_pages.public_router)
-api_router.include_router(blog_pages.admin_router)
 api_router.include_router(blog_operations.router)
 api_router.include_router(admin_blog.router)
 api_router.include_router(llm.router)

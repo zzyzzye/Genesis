@@ -2,7 +2,7 @@ import './BlogDirectory.css'
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { motion } from 'motion/react'
-import { ArrowLeft, ArrowRight, BookOpen, ChevronLeft, ChevronRight, CornerUpLeft, FileText, Home, Menu, Search, Tag, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, ChevronLeft, ChevronRight, CornerUpLeft, Home, Menu, Search, Tag, UserRound, X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { getBlogPosts, getPublicBlogTags, type BlogPostPreview, type PublicBlogTag } from '../../lib/api'
 import { useModalDialog } from '../../studio/useModalDialog'
@@ -39,7 +39,6 @@ function Navigation({ tags, activeTag, error, onTag, onRetry, onNavigate }: { ta
     <nav className="portal-navigation" aria-label="博客导航">
       <Link to="/blog" className="is-active" aria-label="博客首页" onClick={onNavigate}><Home size={19} /><span>首页</span></Link>
       <a href="#articles" aria-label="文章" title="文章" onClick={onNavigate}><BookOpen size={19} /><span>文章</span></a>
-      <Link to="/blog/pages" aria-label="页面" title="页面" onClick={onNavigate}><FileText size={19} /><span>页面</span></Link>
       <Link to="/account" aria-label="我的账户" title="我的账户" onClick={onNavigate}><UserRound size={19} /><span>我的账户</span></Link>
       <Link to="/" aria-label="返回 Genesis" title="返回 Genesis" onClick={onNavigate}><CornerUpLeft size={19} /><span>返回 Genesis</span></Link>
     </nav>

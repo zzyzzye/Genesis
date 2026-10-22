@@ -83,7 +83,7 @@ class BlogOperation(Base):
 
 
 class BlogPage(Base):
-    """独立页面与文章分表，公开地址及草稿互不干扰。"""
+    """保留已停用页面功能的历史数据映射，避免迁移误删旧表。"""
 
     __tablename__ = "blog_pages"
 

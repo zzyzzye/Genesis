@@ -77,11 +77,11 @@ export function toPayload(editor: EditorState, tags: BlogTag[], status = editor.
 
 export type BlogDraft = { editor: EditorState; savedAt: number }
 const draftLifetime = 7 * 24 * 60 * 60 * 1000
-export const blogDraftKey = (userId: string, postId: string | null, kind: 'post' | 'page' = 'post') => `genesis-blog${kind === 'page' ? '-page' : ''}-draft:${userId}:${postId ?? 'new'}`
+export const blogDraftKey = (userId: string, postId: string | null) => `genesis-blog-draft:${userId}:${postId ?? 'new'}`
 
-export function readBlogDraft(userId: string, postId: string | null, kind: 'post' | 'page' = 'post'): BlogDraft | null {
+export function readBlogDraft(userId: string, postId: string | null): BlogDraft | null {
   try {
-    const raw = sessionStorage.getItem(blogDraftKey(userId, postId, kind))
+    const raw = sessionStorage.getItem(blogDraftKey(userId, postId))
     if (!raw) return null
     const draft = JSON.parse(raw) as Partial<BlogDraft>
     const editor = draft.editor
@@ -98,13 +98,13 @@ export function readBlogDraft(userId: string, postId: string | null, kind: 'post
   } catch { return null }
 }
 
-export function writeBlogDraft(userId: string, editor: EditorState, kind: 'post' | 'page' = 'post'): boolean {
+export function writeBlogDraft(userId: string, editor: EditorState): boolean {
   try {
-    sessionStorage.setItem(blogDraftKey(userId, editor.id, kind), JSON.stringify({ editor, savedAt: Date.now() }))
+    sessionStorage.setItem(blogDraftKey(userId, editor.id), JSON.stringify({ editor, savedAt: Date.now() }))
     return true
   } catch { return false }
 }
 
-export function clearBlogDraft(userId: string, postId: string | null, kind: 'post' | 'page' = 'post') {
-  try { sessionStorage.removeItem(blogDraftKey(userId, postId, kind)) } catch { /* 存储被浏览器禁用时，仍允许继续编辑。 */ }
+export function clearBlogDraft(userId: string, postId: string | null) {
+  try { sessionStorage.removeItem(blogDraftKey(userId, postId)) } catch { /* 存储被浏览器禁用时，仍允许继续编辑。 */ }
 }

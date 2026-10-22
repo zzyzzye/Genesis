@@ -52,7 +52,7 @@ def articles_archive(posts: Iterable[BlogPost], *, trashed: bool) -> SpooledTemp
 
     Returns:
         已回到起点的二进制文件；超过 8 MiB 时转为系统临时文件，减少内存占用。
-        清单仅记录文件与原始标识，不包含附件、评论或独立页面。
+        清单仅记录文件与原始标识，不包含附件或评论。
 
     Raises:
         Exception: 序列化或写入失败时关闭临时文件并继续抛出原异常。
@@ -84,7 +84,7 @@ def articles_archive(posts: Iterable[BlogPost], *, trashed: bool) -> SpooledTemp
                 + ("范围：回收站内的全部文章。\n" if trashed else "范围：全部草稿和已发布文章。\n")
                 + "\narticles/ 中每篇文章包含原样 Markdown 正文，以及分类、标签、作者公开资料、"
                 "发布状态和时间等 front matter 元数据。manifest.json 提供文件索引与格式版本。\n"
-                "\n仅导出服务器已保存版本，不包含评论、附件文件和独立页面；"
+                "\n仅导出服务器已保存版本，不包含评论和附件文件；"
                 "正文中的图片与附件地址保持原样，迁移站点时需要另行迁移对应文件。\n"
                 "\n可在文章管理中导入此 ZIP：先预览，再将所选条目创建为草稿，"
                 "同路径文章不会覆盖，原作者、标识、发布状态与定时计划不会恢复。"

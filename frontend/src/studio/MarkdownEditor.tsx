@@ -263,8 +263,6 @@ const mdxEditorChineseTranslation: Translation = (key, defaultValue, interpolati
 }
 
 function PostSettingsModal({
-  kind = 'post',
-  onUnpublish,
   categories,
   editor,
   feedback,
@@ -277,8 +275,6 @@ function PostSettingsModal({
   onCreateTaxonomy,
   onSelectTaxonomy,
 }: {
-  kind?: 'post' | 'page'
-  onUnpublish?: () => void
   categories: BlogCategory[]
   editor: EditorState
   feedback: string | null
@@ -290,7 +286,7 @@ function PostSettingsModal({
   tags: BlogTag[]
 } & Partial<ArticleTaxonomyActions>) {
   const dialogRef = useModalDialog()
-  const label = kind === 'page' ? '页面' : '文章'
+  const label = '文章'
 
   return (
     <dialog ref={dialogRef} className="markdown-settings-modal" aria-labelledby="markdown-settings-title" onCancel={(event) => { event.preventDefault(); if (!isSaving) onClose() }} onClick={(event) => { if (!isSaving && event.target === event.currentTarget) onClose() }}>
@@ -302,7 +298,7 @@ function PostSettingsModal({
           <button className="markdown-settings-modal__close" disabled={isSaving} type="button" aria-label={`关闭${label}设置`} onClick={onClose}><StudioIcon name="close" /></button>
         </header>
         <div className="markdown-settings-modal__body">
-          {kind === 'post' && onSelectTaxonomy && onCreateTaxonomy && <div className="settings-taxonomy-grid">
+          {onSelectTaxonomy && onCreateTaxonomy && <div className="settings-taxonomy-grid">
             <TaxonomyPicker kind="categories" items={categories} selected={editor.categoryIds ?? (editor.categoryId ? [editor.categoryId] : [])} onSelect={(item) => onSelectTaxonomy('categories', item)} onCreate={(name) => onCreateTaxonomy('categories', name)} disabled={isSaving} />
             <TaxonomyPicker kind="tags" items={tags} selected={tags.filter((tag) => editor.selectedTagSlugs.includes(tag.slug)).map((tag) => tag.id)} onSelect={(item) => onSelectTaxonomy('tags', item)} onCreate={(name) => onCreateTaxonomy('tags', name)} disabled={isSaving} />
           </div>}
@@ -310,12 +306,12 @@ function PostSettingsModal({
             <label className="settings-field" htmlFor="settings-slug">
               {label}地址
               <input id="settings-slug" aria-label={`${label}地址`} onChange={(event) => onChange({ ...editor, slug: event.currentTarget.value })} maxLength={160} aria-describedby="settings-slug-help" pattern="[a-z0-9]+(-[a-z0-9]+)*" required value={editor.slug} />
-              <small id="settings-slug-help">{kind === 'page' ? '/blog/pages/' : '/articles/'}{editor.slug} · 小写字母、数字与连接号</small>
+              <small id="settings-slug-help">/articles/{editor.slug} · 小写字母、数字与连接号</small>
             </label>
-            {kind === 'post' && <label className="settings-field" htmlFor="settings-cover">
+            <label className="settings-field" htmlFor="settings-cover">
               <span className="settings-field__heading"><span>封面链接</span><span className="settings-field__hint">可选</span></span>
               <input id="settings-cover" onChange={(event) => onChange({ ...editor, coverImageUrl: event.currentTarget.value })} type="url" value={editor.coverImageUrl} />
-            </label>}
+            </label>
           </div>
           <label className="settings-field" htmlFor="settings-excerpt">
             <span className="settings-field__heading"><span>摘要</span><span className="settings-field__hint">留空时从正文生成</span></span>
@@ -326,7 +322,6 @@ function PostSettingsModal({
         <footer className="markdown-settings-modal__footer">
           <button className="text-button text-button--danger" disabled={!editor.id || isSaving} type="button" onClick={() => { onClose(); onDelete() }}>删除{label}</button>
           <div>
-            {kind === 'page' && editor.status === 'published' && <button className="secondary-button" disabled={isSaving} type="button" onClick={() => { onClose(); onUnpublish?.() }}>撤回发布</button>}
             {editor.status === 'draft' && <button className="secondary-button" disabled={isSaving} type="button" onClick={() => onSave('draft')}>保存草稿</button>}
             <button className="primary-button" disabled={isSaving} type="button" onClick={() => { onClose(); onSave('published') }}>{editor.status === 'published' ? '检查并更新发布' : '检查并发布'}</button>
           </div>
@@ -338,8 +333,6 @@ function PostSettingsModal({
 
 export function MarkdownEditor({
   attachmentAccess,
-  kind = 'post',
-  onUnpublish,
   categories,
   editor,
   feedback,
@@ -359,9 +352,7 @@ export function MarkdownEditor({
   onCompareVersion,
   hasVersionConflict,
 }: {
-  kind?: 'post' | 'page'
   attachmentAccess?: EditorAttachmentAccess
-  onUnpublish?: () => void
   categories: BlogCategory[]
   editor: EditorState
   feedback: string | null
@@ -390,7 +381,7 @@ export function MarkdownEditor({
   const outlineItems = useMemo(() => getArticleHeadings(editor.contentMarkdown), [editor.contentMarkdown])
   const [activeHeading, setActiveHeading] = useState('')
   const stats = articleStats(editor.contentMarkdown)
-  const label = kind === 'page' ? '页面' : '文章'
+  const label = '文章'
   const onAttachmentOpenChange = attachmentAccess?.onOpenChange
 
   function navigateHeading(item: ArticleHeading, index: number) {
@@ -458,7 +449,6 @@ export function MarkdownEditor({
         </div>
         <div className="markdown-editor__actions">
           <FpsStatusSlot />
-          {kind === 'page' && editor.status === 'published' && <a className="page-public-link" href={'/blog/pages/' + encodeURIComponent(editor.slug)} target="_blank" rel="noopener noreferrer">查看公开页面 ↗</a>}
           <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" onClick={onPreview}><StudioIcon name="eye" /> 预览</button>
           <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" aria-label={`打开${label}设置`} onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" /> 设置</button>
           {editor.status === 'draft' && <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('draft')}>保存草稿</button>}
@@ -485,7 +475,7 @@ export function MarkdownEditor({
             contentEditableClassName="genesis-mdx-content"
             markdown={editor.contentMarkdown}
             trim={false}
-            placeholder={kind === 'page' ? '撰写关于、说明或专题内容。' : '写下你的想法，或打开博客助手一起构思。'}
+            placeholder="写下你的想法，或打开博客助手一起构思。"
             readOnly={isSaving || recovery !== null}
             onChange={(contentMarkdown, initialMarkdownNormalize) => {
               if (!initialMarkdownNormalize && contentMarkdown !== editor.contentMarkdown) onChange({ ...editor, contentMarkdown })
@@ -515,31 +505,29 @@ export function MarkdownEditor({
       </div>
       <div className="markdown-editor__toc"><ArticleToc items={outlineItems} activeId={activeHeading} label={`${label}目录`} onNavigate={navigateHeading} /></div>
       {isAttachmentOpen && attachmentAccess && <EditorAttachmentPicker access={attachmentAccess} onClose={closeAttachments} onInsert={insertAttachment} />}
-      {isSettingsOpen && <PostSettingsModal kind={kind} onUnpublish={onUnpublish} categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} />}
+      {isSettingsOpen && <PostSettingsModal categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onChange={onChange} onClose={() => setIsSettingsOpen(false)} onDelete={onDelete} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} />}
     </section>
   )
 }
 
 export function ArticleReader({
-  kind = 'post',
   editor,
   onBack,
   onEdit,
 }: {
-  kind?: 'post' | 'page'
   editor: EditorState
   onBack: () => void
   onEdit: () => void
 }) {
-  const label = kind === 'page' ? '页面' : '文章'
+  const label = '文章'
   return (
     <section className="article-reader" aria-labelledby="article-reader-title">
       <header className="article-reader__header">
         <div className="article-reader__heading">
           <button className="text-button article-reader__back" type="button" onClick={onBack}>← 返回{label}列表</button>
-          <div className="article-reader__eyebrow">{editor.status === 'published' ? 'PUBLISHED' : 'DRAFT'} {kind === 'page' ? 'PAGE' : 'ARTICLE'}</div>
+          <div className="article-reader__eyebrow">{editor.status === 'published' ? 'PUBLISHED' : 'DRAFT'} ARTICLE</div>
           <h1 id="article-reader-title">{editor.title || `未命名${label}`}</h1>
-          {(editor.excerpt || kind === 'post') && <p>{editor.excerpt || '还没有摘要，打开编辑设置补充文章信息。'}</p>}
+          <p>{editor.excerpt || '还没有摘要，打开编辑设置补充文章信息。'}</p>
           {editor.selectedTagSlugs.length > 0 && <div className="article-reader__meta"><span>{editor.selectedTagSlugs.join(' · ')}</span></div>}
         </div>
         <div className="article-reader__actions">

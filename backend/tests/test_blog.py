@@ -18,7 +18,14 @@ from genesis_api.api.routes.blog import router
 from genesis_api.blog.agent import actions as blog_actions
 from genesis_api.blog.agent import tools as blog_agent_tools
 from genesis_api.blog.agent.actions import confirm_blog_action
-from genesis_api.blog.models import BlogCategory, BlogComment, BlogPost, BlogPostStatus, BlogTag
+from genesis_api.blog.models import (
+    BlogCategory,
+    BlogComment,
+    BlogPage,
+    BlogPost,
+    BlogPostStatus,
+    BlogTag,
+)
 from genesis_api.blog.operations import touch_post
 from genesis_api.blog.publication import publish_due_posts
 from genesis_api.core.config import Settings
@@ -1438,143 +1445,56 @@ async def test_comment_drafts_rate_limits_and_unpublishing(
 
 
 @pytest.mark.anyio
-async def test_independent_pages_lifecycle_and_public_boundaries(
-    client: AsyncClient, database_session: Session
+@pytest.mark.parametrize("method", ["GET", "POST", "PUT", "DELETE"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/blog/pages",
+        "/api/v1/blog/pages/about",
+        "/api/v1/admin/blog/pages",
+        "/api/v1/admin/blog/pages/00000000-0000-0000-0000-000000000001",
+    ],
+)
+async def test_retired_page_endpoints_are_unavailable(
+    client: AsyncClient, method: str, path: str
 ) -> None:
-    """页面完整生命周期独立于文章，重试、版本与公开字段均受服务端约束。"""
-    add_blog_content(database_session)
-    token = await authenticate_owner(client, database_session)
-    headers = {"Authorization": f"Bearer {token}"}
-    base = "/api/v1/admin/blog/pages"
-    public = "/api/v1/blog/pages"
-    data = {
-        "id": str(uuid4()),
-        "slug": "published-featured",
-        "title": "关于站点",
-        "excerpt": "页面摘要",
-        "content_markdown": "# 关于\n\n独立页面正文",
-        "status": "draft",
-    }
-    assert (await client.get(base)).status_code == 401
-    assert (await client.post(base, json=data)).status_code == 401
-    created = await client.post(base, headers=headers, json=data)
-    assert created.status_code == 201
-    item = created.json()
-    assert item["id"] == data["id"]
-    assert "author_id" not in item and item["published_at"] is None
-    assert (await client.post(base, headers=headers, json=data)).json()["id"] == item["id"]
-    assert (await client.get(base, headers=headers)).json()["total"] == 1
-    assert (await client.get(public)).json() == {"items": [], "total": 0}
-    assert (await client.get(public + "/" + data["slug"])).status_code == 404
-    assert (await client.get("/api/v1/blog/posts/published-featured")).status_code == 200
-    assert (
-        await client.post(base, headers=headers, json={**data, "title": "不同内容"})
-    ).status_code == 409
-    assert (
-        await client.post(base, headers=headers, json={**data, "id": str(uuid4())})
-    ).status_code == 409
-    url = base + "/" + item["id"]
-    write = {key: value for key, value in data.items() if key != "id"}
-    assert (await client.put(url, headers=headers, json=write)).status_code == 422
-    assert (
-        await client.put(
-            url, headers=headers, json={**write, "expected_updated_at": "2026-01-01T00:00:00"}
-        )
-    ).status_code == 422
-    version = item["updated_at"]
-    published = await client.put(
-        url, headers=headers, json={**write, "status": "published", "expected_updated_at": version}
-    )
-    assert published.status_code == 200
-    item = published.json()
-    assert item["published_at"] is not None and item["updated_at"] != version
-    visible = (await client.get(public)).json()
-    assert visible["total"] == 1 and set(visible["items"][0]) == {"id", "slug", "title", "excerpt"}
-    detail = (await client.get(public + "/" + data["slug"])).json()
-    assert set(detail) == {"id", "slug", "title", "excerpt", "content_markdown", "published_at"}
-    assert (
-        await client.get(base, headers=headers, params={"q": "关于", "status": "published"})
-    ).json()["total"] == 1
-    assert (await client.get(base, headers=headers, params={"q": "%"})).json()["total"] == 0
-    assert (await client.get(base, headers=headers, params={"offset": 1})).json()["items"] == []
-    assert (
-        await client.put(url, headers=headers, json={**write, "expected_updated_at": version})
-    ).status_code == 409
-    assert (
-        await client.delete(url, headers=headers, params={"expected_updated_at": version})
-    ).status_code == 409
-    withdrawn = await client.put(
-        url, headers=headers, json={**write, "expected_updated_at": item["updated_at"]}
-    )
-    assert withdrawn.status_code == 200 and withdrawn.json()["published_at"] is None
-    assert (await client.get(public)).json()["total"] == 0
-    assert (await client.get(public + "/" + data["slug"])).status_code == 404
-    assert (
-        await client.delete(
-            url, headers=headers, params={"expected_updated_at": withdrawn.json()["updated_at"]}
-        )
-    ).status_code == 204
-    assert (await client.get(url, headers=headers)).status_code == 404
-    assert (await client.get("/api/v1/blog/posts/published-featured")).status_code == 200
+    """停用页面功能后，公开与管理接口均不再接受请求。"""
+    assert (await client.request(method, path)).status_code == 404
 
 
 @pytest.mark.anyio
-async def test_independent_pages_validation_and_member_permissions(
+async def test_retired_pages_keep_historical_data(
     client: AsyncClient, database_session: Session
 ) -> None:
-    """非法地址、超长正文和空发布被拒绝；普通读者不能管理页面。"""
+    """保留旧页面记录，但即使已发布也不再通过接口公开或删除。"""
     add_blog_content(database_session)
-    token = await authenticate_owner(client, database_session)
-    owner = {"Authorization": f"Bearer {token}"}
-    base = "/api/v1/admin/blog/pages"
-    data = {
-        "id": str(uuid4()),
-        "slug": "about",
-        "title": "",
-        "content_markdown": "",
-        "status": "draft",
-    }
-    item = (await client.post(base, headers=owner, json=data)).json()
-    for change in (
-        {"slug": "../private"},
-        {"slug": "x" * 161},
-        {"title": "x" * 201},
-        {"excerpt": "x" * 501},
-        {"content_markdown": "x" * 200001},
-        {"status": "published"},
-        {"author_id": str(uuid4())},
-    ):
-        assert (
-            await client.post(base, headers=owner, json={**data, **change, "id": str(uuid4())})
-        ).status_code == 422
-    assert (await client.get(base, headers=owner, params={"limit": 51})).status_code == 422
-    assert (await client.get(base, headers=owner, params={"offset": -1})).status_code == 422
-    database_session.add(
-        User(
-            handle="pages-reader",
-            display_name="页面读者",
-            role=UserRole.MEMBER,
-            credential=UserCredential(password_hash=hash_password("pages-test-placeholder")),
-        )
+    owner = database_session.scalar(select(User).where(User.handle == "genesis"))
+    assert owner is not None
+    now = datetime.now(UTC)
+    page = BlogPage(
+        id=uuid4(),
+        author_id=owner.id,
+        slug="retired-about",
+        title="历史页面",
+        excerpt="保留已有内容",
+        content_markdown="# 历史正文",
+        status=BlogPostStatus.PUBLISHED,
+        published_at=now,
+        created_at=now,
+        updated_at=now,
     )
     database_session.commit()
-    login_response = await client.post(
-        "/api/v1/auth/login",
-        data={"username": "pages-reader", "password": "pages-test-placeholder"},
-    )
-    member = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
-    url = base + "/" + item["id"]
-    assert (await client.get(base, headers=member)).status_code == 403
-    assert (await client.get(url, headers=member)).status_code == 403
+
+    assert (await client.get("/api/v1/blog/pages/retired-about")).status_code == 404
+    token = await authenticate_owner(client, database_session)
+    database_session.add(page)
     assert (
-        await client.post(base, headers=member, json={**data, "id": str(uuid4())})
-    ).status_code == 403
-    update = {key: value for key, value in data.items() if key != "id"}
-    assert (
-        await client.put(
-            url, headers=member, json={**update, "expected_updated_at": item["updated_at"]}
+        await client.delete(
+            f"/api/v1/admin/blog/pages/{page.id}",
+            headers={"Authorization": f"Bearer {token}"},
         )
-    ).status_code == 403
-    assert (
-        await client.delete(url, headers=member, params={"expected_updated_at": item["updated_at"]})
-    ).status_code == 403
+    ).status_code == 404
+    database_session.expire_all()
+    retained = database_session.get(BlogPage, page.id)
+    assert retained is not None and retained.content_markdown == "# 历史正文"
+    assert (await client.get("/api/v1/blog/posts/published-featured")).status_code == 200

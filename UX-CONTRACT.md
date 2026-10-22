@@ -103,13 +103,12 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | 博客分类/标签管理 | TaxonomyWorkspace、TaxonomyEditor、TagCloud | TaxonomyWorkspace.tsx、admin_blog.py | 搜索/新增共用输入，标签词云和分类列表；原生 dialog 管理改名和删除 | 模态焦点、取消恢复、失败重试、使用中禁止删除 |
 | 标签词云 | TagCloud、ECharts + echarts-wordcloud | TagCloud.tsx/CSS、tagCloudChart.ts、公开标签 API、TaxonomyWorkspace 的文章使用计数 | ECharts 词云负责排布与点击；原生按钮保留键盘和读屏，聚焦同步图中强调和完整提示；加载失败显示原生列表；博客左侧栏 URL 筛选，管理页进入既有 dialog，字号按全量比例计算 | 图表真实点击、数量相等/为零、长名称提示、搜索清空、焦点恢复、窄屏、空态、实例释放 |
 | 博客写作 Form / CRUD | blogEditor.ts、Studio 的 Dashboard | blog/schemas.py、admin_blog.py | 草稿允许缺少正文；公开发布校验完整性，发布与更新公开内容均先检查确认 | 草稿保存、首次发布、更新发布、失败重试、版本冲突 |
-| 博客独立页面 Form / CRUD | PagesWorkspace、usePagesWorkspace、共享 MarkdownEditor、BlogWorkflowDialog | blog/pages.py、api/routes/blog_pages.py | 独立草稿与公开目录；创建使用稳定 UUID，更新与删除必须核对版本；恢复与文章隔离 | 编辑预览保留、创建重试、发布/撤回/删除确认、公开边界、导航拦截、窄屏 |
 | 博客链接 Form / CRUD | LinksWorkspace、useModalDialog、BlogWorkflowDialog | blog/links.py、admin_blog.py、BlogLinks.tsx | 默认隐藏；明确勾选公开；更新与删除携带版本，复用 OwnerDependency | 增删改、筛选分页、失败重试、并发冲突、模态焦点、窄屏与公开边界 |
 | 博客评论 Form / CRUD | ArticleComments、CommentsWorkspace、BlogWorkflowDialog | blog/comments.py、api/routes/blog_comments.py | 登录提交待审核，作者公开/隐藏/删除；公开查询同时校验文章状态；审核与删除校验版本 | 提交重试、频率限制、权限、过滤分页、并发冲突、离开提醒、模态焦点与窄屏 |
 | 博客流程 Dialog / Feedback | BlogWorkflowDialog、useModalDialog、写作页状态区 | Studio.tsx、writing.css | 单层原生 dialog；状态明确区分标签页暂存与站点保存 | Escape、Tab、焦点恢复、窄屏与长内容 |
 | 博客附件 / 文件夹 / 上传 | AttachmentsWorkspace、useModalDialog、BlogWorkflowDialog | blog/attachments.py、api/routes/blog_attachments.py、core/uploads.py | 原生表格、紧凑工具栏与窄容器双列；任意类型与空文件；逐文件上传保留相对目录；默认私有，逐文件确认公开；版本校验、稳定上传 UUID 与摘要核对 | 目录创建/移动/改名/删除、循环与同名拒绝、大小上限、失败重试、停止、权限、桌面与窄屏 |
 | 工作台行操作菜单 | StudioActionMenu、原生 auto popover、React portal | StudioActionMenu.tsx/CSS、shell.css 中性令牌 | 显式更多入口；旧浏览器兼容回退；屏幕内定位与自动翻转；方向键、Home/End、Escape/Tab、滚动/外部关闭；选择动作后交还既有确认 | 仅一个菜单、焦点恢复、写操作确认、桌面/窄容器/320px、上下翻转、滚动与重试 |
-| 正文插入附件 | MarkdownEditor、EditorAttachmentPicker、useModalDialog、Studio 唯一 blocker | lib/attachments.ts、blog/attachments.py、api/routes/blog_attachments.py | 文章与独立页面共用；富文本/源码原生事务；单选已有文件或上传后选中；私有文件确认公开；位图内嵌，其余下载 | 光标、撤销、权限重取、失败保留、重试 UUID、文件夹搜索分页、单模态导航保护、桌面与窄屏 |
+| 正文插入附件 | MarkdownEditor、EditorAttachmentPicker、useModalDialog、Studio 唯一 blocker | lib/attachments.ts、blog/attachments.py、api/routes/blog_attachments.py | 文章编辑使用；富文本/源码原生事务；单选已有文件或上传后选中；私有文件确认公开；位图内嵌，其余下载 | 光标、撤销、权限重取、失败保留、重试 UUID、文件夹搜索分页、单模态导航保护、桌面与窄屏 |
 | 附件缩略图 / 作者预览 | AttachmentThumbnail、AttachmentPreviewContent、AttachmentPreviewDialog、EditorAttachmentPicker | lib/attachments.ts、blog/attachments.py、api/routes/blog_attachments.py | 私有鉴权；按内容识别；8 MiB 内图片按需显示缩略图；64 MiB 内媒体、256 KiB UTF-8 文本；原生 PDF/音视频 | 大图、PDF、播放、文本转义、失败重试、格式回退、焦点恢复、保持选择、单模态、桌面与窄屏 |
 | Scrollbar | 全局 base.css，画布仅负责滚动归属 | frontend/styles/base.css、CanvasNodes.css、MediaPage.css | 继承全局细滑块；画布节点内部滚动，保留预览；文本域使用 resize-none，尺寸由布局或画布控制 | 桌面与窄屏截图、计算样式 |
 | Toast | 既有页内状态区域 | ProjectCanvas.tsx | 保存冲突与上传失败持续显示，错误不依赖瞬时通知 | 上传重试、保存失败与冲突测试 |
@@ -162,19 +161,15 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 
 文章列表由 `PostsIndex` 增加 `status=trash` 筛选，沿用 q/status/page 与每页 40 项的客户端分页。回收站只返回所有者可见的已删除文章，搜索、空态、读取失败与重试仍使用文章列表的样式；恢复与彻底删除复用 `BlogWorkflowDialog`，默认聚焦取消，失败保留目标与错误，版本冲突刷新列表，成功后焦点回到搜索框。提交期间禁止离开和重复操作。
 
-普通删除及 Agent 的 delete_post 均移入回收站，保留正文、分类、标签和评论，不设置自动清理期限。公开列表、详情、标签统计、评论与头像入口、AI 导读和普通 Agent 读取排除回收站文章。地址仍被原文章占用。恢复始终保存为草稿并清除原发布时间，不自动公开；彻底删除只接受仍在回收站且 expected_updated_at 匹配的文章，清除关联评论，保留独立附件、共享分类和标签。恢复与彻底删除只通过所有者后台接口提供，Agent 无永久删除工具。独立页面、评论和附件原有删除规则保持不变。
+普通删除及 Agent 的 delete_post 均移入回收站，保留正文、分类、标签和评论，不设置自动清理期限。公开列表、详情、标签统计、评论与头像入口、AI 导读和普通 Agent 读取排除回收站文章。地址仍被原文章占用。恢复始终保存为草稿并清除原发布时间，不自动公开；彻底删除只接受仍在回收站且 expected_updated_at 匹配的文章，清除关联评论，保留独立附件、共享分类和标签。恢复与彻底删除只通过所有者后台接口提供，Agent 无永久删除工具。评论和附件原有删除规则保持不变。
 
 2026-10-21 复用 Compose 5173 页面验收桌面与 390px 回收站：空态、普通删除、恢复为草稿、彻底删除确认与取消、成功后的搜索焦点均通过，临时入口与验收数据已清理。实际 PostgreSQL 验证软删除及恢复保留评论、彻底删除级联清理。后端 261 项测试通过（覆盖率 94.66%），Ruff 与 mypy（含测试）通过；前端全量 331 项及最后修正后的 29 项相关回归、ESLint、类型检查与构建通过。静态设计审计保留 18 项既有发现，本次回收站组件无新增发现。
 
-## 博客独立页面
+## 独立页面停用
 
-页面使用独立的 `blog_pages` 表与 `/api/v1/admin/blog/pages` 接口，管理数据仅站点作者可访问，不混入文章、分类、标签、评论或文章 Agent 的编辑上下文。标题最多 200 字符，地址最多 160 字符，只允许小写字母、数字和连字符，摘要最多 500 字符，Markdown 正文最多 200000 字符。草稿允许空标题和正文；发布必须有标题和正文，空摘要可由共享编辑器从正文生成。后台每页 20 项，q/status/page 保存在 URL，搜索防抖 300ms 并避开输入法组合，返回列表保留查询，删除后校正越界页。公开目录每次加载 20 项，可继续加载，只返回已发布页面；草稿与不存在的公开地址均为 404。
+2026-10-22 移除后台页面管理与公开页面入口、专用编辑与 API。旧公开地址返回博客首页，旧管理地址返回工作台首页；后端原公开和管理接口均返回 404。历史表映射和迁移保留，不删除已有内容，也不再读取或修改这些记录。
 
-编辑、预览使用同一份输入，页面共享文章的 Markdown、代码块和设置能力。发布、更新发布、撤回与永久删除均先确认，默认聚焦取消；撤回会把当前修改保存为草稿并停止公开访问。失败保留输入和实际错误，可在原位置重试；保存期间禁止重复操作与离开。首次创建沿用客户端生成的 UUID，网络重试返回相同记录而不重复创建；若该 ID 已有不同内容，返回冲突供作者核对。PUT 与 DELETE 必须携带带时区的 expected_updated_at，服务端行锁检查版本，冲突时可核对站点正文并明确选择保留输入或采用站点版本。
-
-页面恢复复用 blogEditor 的 7 天标签页暂存规则，以用户、页面 ID 和 page 类型隔离；恢复前不覆盖站点内容，保存或删除后清除。页面流程复用 Dashboard 的唯一 useBlocker，同一页面编辑/预览切换不拦截，跨页面导航、退出登录与浏览器返回先提醒，卸载使用 beforeunload；不把标签页暂存描述成站点保存。发布后从编辑页可打开公开地址，目录与正文均提供返回入口。
-
-工作台分区与文章/页面的列表、编辑、预览统一使用 studioWorkspaceTransition 的顺序退场和入场位移。旧视图退场期间不可操作，输入状态由外层保留；减少动态效果时直接呈现最终位置与透明度。桌面及窄屏逐帧验收确认存在持续变化的 transform 和 opacity，最终恢复 transform:none；查询参数变化不重播工作区动画。基础动效的时序由 lib/motion.ts 唯一拥有：布局缓动保留起步过程；文章筛选不逐项入场，卡片悬停不改变位置或封面尺寸；目录只过渡高度与透明度，助手正文不叠加入场动画，附件预览内部切换直接呈现。普通按钮反馈、拖动跟手及真实等待状态继续保留。
+工作台分区与文章的列表、编辑、预览统一使用 studioWorkspaceTransition 的顺序退场和入场位移。旧视图退场期间不可操作，输入状态由外层保留；减少动态效果时直接呈现最终位置与透明度。桌面及窄屏逐帧验收确认存在持续变化的 transform 和 opacity，最终恢复 transform:none；查询参数变化不重播工作区动画。基础动效的时序由 lib/motion.ts 唯一拥有：布局缓动保留起步过程；文章筛选不逐项入场，卡片悬停不改变位置或封面尺寸；目录只过渡高度与透明度，助手正文不叠加入场动画，附件预览内部切换直接呈现。普通按钮反馈、拖动跟手及真实等待状态继续保留。
 
 ## 博客站点链接
 

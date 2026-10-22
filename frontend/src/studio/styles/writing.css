@@ -16,8 +16,6 @@
 .markdown-editor__actions .primary-button:focus-visible,
 .markdown-editor__actions .secondary-button:focus-visible { border: 0; outline: 0; box-shadow: none; }
 .markdown-editor__actions button:disabled { cursor: default; opacity: .5; }
-.markdown-editor__actions .page-public-link { display: inline-flex; align-items: center; min-height: 36px; padding: 8px 12px; border: 0; border-radius: var(--studio-control-radius); outline: 0; box-shadow: none; background: var(--studio-soft); color: var(--studio-ink); font-size: 13px; text-decoration: none; }
-.markdown-editor__actions .page-public-link:hover, .markdown-editor__actions .page-public-link:focus-visible { background: var(--studio-editor-hover); }
 .markdown-editor__feedback { border: 0; background: var(--studio-soft); color: var(--studio-ink); }
 .markdown-editor__recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 24px; background: var(--studio-soft); font-size: 13px; }
 .markdown-editor__recovery > span { flex: 1 1 220px; }
