@@ -579,8 +579,8 @@ export interface AiConversationDetail extends AiConversation {
   messages: (AiChatMessage & { run_id: string; status: AiChatRunStatus; error: string | null; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[] })[]
 }
 
-export function listAiConversations(token: string, offset = 0): Promise<AiConversation[]> {
-  return request<AiConversation[]>(`/ai/chat/conversations?offset=${offset}&limit=30`, { headers: authHeaders(token) })
+export function listAiConversations(token: string, offset = 0, surface: 'studio' | 'media' = 'studio'): Promise<AiConversation[]> {
+  return request<AiConversation[]>(`/ai/chat/conversations?offset=${offset}&limit=30&surface=${surface}`, { headers: authHeaders(token) })
 }
 
 export type AiConversationSelection = { scope: 'selected'; ids: string[] } | { scope: 'all'; excluded_ids: string[] }
@@ -589,22 +589,22 @@ export function conversationIsSelected(selection: AiConversationSelection, id: s
   return selection.scope === 'all' ? !selection.excluded_ids.includes(id) : selection.ids.includes(id)
 }
 
-export function deleteAiConversations(token: string, selection: AiConversationSelection): Promise<{ deleted_count: number }> {
-  return request('/ai/chat/conversations/bulk-delete', {
+export function deleteAiConversations(token: string, selection: AiConversationSelection, surface: 'studio' | 'media' = 'studio'): Promise<{ deleted_count: number }> {
+  return request(`/ai/chat/conversations/bulk-delete?surface=${surface}`, {
     method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify(selection),
   })
 }
 
-export function createAiConversation(token: string): Promise<AiConversation> {
-  return request<AiConversation>('/ai/chat/conversations', { method: 'POST', headers: authHeaders(token) })
+export function createAiConversation(token: string, surface: 'studio' | 'media' = 'studio'): Promise<AiConversation> {
+  return request<AiConversation>(`/ai/chat/conversations?surface=${surface}`, { method: 'POST', headers: authHeaders(token) })
 }
 
-export function getAiConversation(token: string, id: string): Promise<AiConversationDetail> {
-  return request<AiConversationDetail>(`/ai/chat/conversations/${encodeURIComponent(id)}`, { headers: authHeaders(token) })
+export function getAiConversation(token: string, id: string, surface: 'studio' | 'media' = 'studio'): Promise<AiConversationDetail> {
+  return request<AiConversationDetail>(`/ai/chat/conversations/${encodeURIComponent(id)}?surface=${surface}`, { headers: authHeaders(token) })
 }
 
-export function renameAiConversation(token: string, id: string, title: string): Promise<AiConversation> {
-  return request<AiConversation>(`/ai/chat/conversations/${encodeURIComponent(id)}`, {
+export function renameAiConversation(token: string, id: string, title: string, surface: 'studio' | 'media' = 'studio'): Promise<AiConversation> {
+  return request<AiConversation>(`/ai/chat/conversations/${encodeURIComponent(id)}?surface=${surface}`, {
     method: 'PATCH', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ title }),
   })
 }

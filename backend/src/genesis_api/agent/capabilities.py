@@ -124,9 +124,10 @@ class AgentCapabilityRegistry:
         self, module: str, request: AiChatRequest,
     ) -> tuple[list[dict[str, object]], list[tuple[str, bytes]]]:
         """由业务能力核验附件并准备输入，公共运行时不访问业务文件库。"""
-        if module != self._blog.module:
-            raise RuntimeError("当前模块尚不支持附件输入")
-        return self._blog.load_attachments(request)
+        if module in (self._blog.module, self._media.module):
+            # 两个入口复用已有私有附件库及其所有者校验，不授予博客写工具。
+            return self._blog.load_attachments(request)
+        raise RuntimeError("当前模块尚不支持附件输入")
 
 
 agent_capabilities = AgentCapabilityRegistry()

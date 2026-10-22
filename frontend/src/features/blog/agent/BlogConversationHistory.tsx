@@ -6,7 +6,8 @@ import './BlogConversationHistory.css'
 
 const emptySelection = (): AiConversationSelection => ({ scope: 'selected', ids: [] })
 
-export function BlogConversationHistory({ history, currentId, loading, error, hasMore, disabled, expanded, onReload, onLoadMore, onOpen, onBack, onDelete }: {
+export function BlogConversationHistory({ history, currentId, loading, error, hasMore, disabled, expanded, surface = 'studio', onReload, onLoadMore, onOpen, onBack, onDelete }: {
+  surface?: 'studio' | 'media'
   history: AiConversation[]
   currentId: string | null
   loading: boolean
@@ -64,7 +65,7 @@ export function BlogConversationHistory({ history, currentId, loading, error, ha
   }
 
   const scopeDescription = confirmation?.scope === 'all'
-    ? `将永久删除全部博客助手历史对话，包括尚未加载的记录${confirmation.excluded_ids.length ? `，保留你已取消勾选的 ${confirmation.excluded_ids.length} 段` : ''}。`
+    ? `将永久删除全部${surface === 'media' ? '影音' : '博客'}助手历史对话，包括尚未加载的记录${confirmation.excluded_ids.length ? `，保留你已取消勾选的 ${confirmation.excluded_ids.length} 段` : ''}。`
     : `将永久删除所选的 ${confirmation?.ids.length ?? 0} 段历史对话。`
 
   return <>
@@ -107,6 +108,6 @@ export function BlogConversationHistory({ history, currentId, loading, error, ha
     {loading && <p role="status">正在读取历史…</p>}
     {hasMore && <button type="button" disabled={blocked || loading} onClick={onLoadMore}>加载更多</button>}
     {!expanded && <button type="button" className="studio-assistant__history-back" disabled={busy} onClick={onBack}>返回当前对话</button>}
-    {confirmation && <BlogWorkflowDialog title={confirmation.scope === 'all' && !confirmation.excluded_ids.length ? '删除全部历史对话？' : '删除所选历史对话？'} description={`${scopeDescription}对话与回复无法恢复，正在生成的对话须先停止。此操作不会删除文章，也不会撤销已经执行的操作。`} confirmLabel={busy ? '正在删除…' : '确认删除'} busy={busy} error={deleteError} onConfirm={() => { void remove() }} onCancel={() => { setConfirmation(null); setDeleteError(null) }} />}
+    {confirmation && <BlogWorkflowDialog title={confirmation.scope === 'all' && !confirmation.excluded_ids.length ? '删除全部历史对话？' : '删除所选历史对话？'} description={`${scopeDescription}对话与回复无法恢复，正在生成的对话须先停止。此操作不会删除${surface === 'media' ? '作品或素材' : '文章'}，也不会撤销已经执行的操作。`} confirmLabel={busy ? '正在删除…' : '确认删除'} busy={busy} error={deleteError} onConfirm={() => { void remove() }} onCancel={() => { setConfirmation(null); setDeleteError(null) }} />}
   </>
 }

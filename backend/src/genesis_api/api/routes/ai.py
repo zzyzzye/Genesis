@@ -7,7 +7,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from time import monotonic
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -48,14 +48,23 @@ from genesis_api.identity.models import User, UserRole
 router = APIRouter(prefix="/ai", tags=["ai"])
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
 logger = logging.getLogger(__name__)
+ConversationSurface = Literal["studio", "media"]
+
+
+def _check_conversation_access(user: User, surface: ConversationSurface) -> None:
+    """影音历史属于当前用户，博客后台继续仅允许所有者。"""
+    if surface == "studio" and user.role is not UserRole.OWNER:
+        raise HTTPException(403, "博客后台 AI 仅限站点所有者使用")
 
 
 @router.post("/chat/conversations", response_model=AiConversationSummary, status_code=201)
 def create_conversation(
-    current_user: OwnerDependency, session: SessionDependency,
+    current_user: CurrentUserDependency, session: SessionDependency,
+    surface: ConversationSurface = "studio",
 ) -> AiConversationSummary:
-    """为博客所有者创建空会话；模型生成仍通过现有任务接口执行。"""
-    conversation = AiConversation(user_id=current_user.id)
+    """在指定模块创建私有会话，复用现有生成任务。"""
+    _check_conversation_access(current_user, surface)
+    conversation = AiConversation(user_id=current_user.id, surface=surface)
     session.add(conversation)
     session.commit()
     session.refresh(conversation)
@@ -64,12 +73,15 @@ def create_conversation(
 
 @router.get("/chat/conversations", response_model=list[AiConversationSummary])
 def list_conversations(
-    current_user: OwnerDependency, session: SessionDependency,
+    current_user: CurrentUserDependency, session: SessionDependency,
     offset: int = Query(default=0, ge=0), limit: int = Query(default=30, ge=1, le=100),
+    surface: ConversationSurface = "studio",
 ) -> list[AiConversationSummary]:
-    """分页列出当前所有者的博客会话，按最近活动排序。"""
+    """分页列出当前用户在指定模块的会话。"""
+    _check_conversation_access(current_user, surface)
     conversations = session.scalars(select(AiConversation).where(
         AiConversation.user_id == current_user.id,
+        AiConversation.surface == surface,
     ).order_by(
         AiConversation.updated_at.desc(), AiConversation.id.desc()
     ).offset(offset).limit(limit))
@@ -79,34 +91,40 @@ def list_conversations(
 @router.post("/chat/conversations/bulk-delete", response_model=AiConversationDeleteResult)
 def bulk_delete_conversations(
     payload: AiConversationDelete,
-    current_user: OwnerDependency,
+    current_user: CurrentUserDependency,
     session: SessionDependency,
+    surface: ConversationSurface = "studio",
 ) -> AiConversationDeleteResult:
-    """删除已认证所有者的博客历史；全选包括尚未加载的分页。"""
+    """只删除当前模块的私有历史，全选包括尚未加载的分页。"""
+    _check_conversation_access(current_user, surface)
     return AiConversationDeleteResult(
-        deleted_count=delete_conversations(session, current_user.id, payload),
+        deleted_count=delete_conversations(session, current_user.id, payload, surface),
     )
 
 
 @router.get("/chat/conversations/{conversation_id}", response_model=AiConversationDetail)
 def get_conversation(
-    conversation_id: UUID, current_user: OwnerDependency, session: SessionDependency,
+    conversation_id: UUID, current_user: CurrentUserDependency, session: SessionDependency,
+    surface: ConversationSurface = "studio",
 ) -> AiConversationDetail:
     """读取会话正文及任务状态，以便刷新后继续订阅未完成回答。"""
-    conversation = owned_conversation(session, current_user.id, conversation_id)
+    _check_conversation_access(current_user, surface)
+    conversation = owned_conversation(session, current_user.id, conversation_id, surface)
     return conversation_detail(session, conversation)
 
 
 @router.patch("/chat/conversations/{conversation_id}", response_model=AiConversationSummary)
 def rename_conversation(
     conversation_id: UUID, payload: AiConversationRename,
-    current_user: OwnerDependency, session: SessionDependency,
+    current_user: CurrentUserDependency, session: SessionDependency,
+    surface: ConversationSurface = "studio",
 ) -> AiConversationSummary:
     """手动命名后标记来源，后台自动标题不能覆盖用户选择。"""
+    _check_conversation_access(current_user, surface)
     title = payload.title.strip()
     if not title:
         raise HTTPException(422, "请输入对话标题")
-    conversation = owned_conversation(session, current_user.id, conversation_id)
+    conversation = owned_conversation(session, current_user.id, conversation_id, surface)
     conversation.title = title
     conversation.title_source = "manual"
     session.commit()

@@ -1,4 +1,4 @@
-"""博客会话目录、归属校验与任务正文投影。"""
+"""业务会话目录、模块与归属校验及任务正文投影。"""
 
 from datetime import UTC, datetime
 from uuid import UUID
@@ -18,7 +18,9 @@ from genesis_api.ai.schemas import (
 )
 
 
-def delete_conversations(session: Session, user_id: UUID, selection: AiConversationDelete) -> int:
+def delete_conversations(
+    session: Session, user_id: UUID, selection: AiConversationDelete, surface: str = "studio",
+) -> int:
     """原子删除当前用户选中的历史、回复快照与框架执行记录。
 
     会话锁与创建生成任务共用，阻止校验后插入新任务。存在待执行或
@@ -28,6 +30,7 @@ def delete_conversations(session: Session, user_id: UUID, selection: AiConversat
         session: 当前业务事务，清理 checkpoint 也复用此连接。
         user_id: 已认证的对话所有者。
         selection: 明确的选择范围，全部历史不受前端分页影响。
+        surface: 历史所属模块，全选也仅影响该模块。
 
     Returns:
         实际删除的对话数量。
@@ -35,7 +38,9 @@ def delete_conversations(session: Session, user_id: UUID, selection: AiConversat
     Raises:
         HTTPException: 任务仍在运行时返回 409；存储失败时返回 503。
     """
-    query = select(AiConversation).where(AiConversation.user_id == user_id)
+    query = select(AiConversation).where(
+        AiConversation.user_id == user_id, AiConversation.surface == surface
+    )
     if selection.scope == "selected":
         query = query.where(AiConversation.id.in_(set(selection.ids)))
     else:
@@ -61,11 +66,17 @@ def delete_conversations(session: Session, user_id: UUID, selection: AiConversat
     return len(ids)
 
 
-def owned_conversation(session: Session, user_id: UUID, conversation_id: UUID) -> AiConversation:
+def owned_conversation(
+    session: Session, user_id: UUID, conversation_id: UUID, surface: str = "studio",
+) -> AiConversation:
     """按登录用户读取并锁定会话，隐藏其他用户记录是否存在。"""
     conversation = session.scalar(
         select(AiConversation)
-        .where(AiConversation.id == conversation_id, AiConversation.user_id == user_id)
+        .where(
+            AiConversation.id == conversation_id,
+            AiConversation.user_id == user_id,
+            AiConversation.surface == surface,
+        )
         .with_for_update()
     )
     if conversation is None:
@@ -111,9 +122,9 @@ def prepare_conversation_run(
     session: Session, user_id: UUID, conversation_id: UUID, surface: str,
 ) -> None:
     """串行创建同一会话的任务，避免并发写入同一个 checkpoint。"""
-    if surface != "studio":
-        raise HTTPException(422, "历史对话目前仅用于博客工作台")
-    conversation = owned_conversation(session, user_id, conversation_id)
+    if surface not in ("studio", "media"):
+        raise HTTPException(422, "当前模块尚不支持历史对话")
+    conversation = owned_conversation(session, user_id, conversation_id, surface)
     active = session.scalar(select(AiChatRun.id).where(
         AiChatRun.conversation_id == conversation.id,
         AiChatRun.status.in_([AiChatRunStatus.PENDING, AiChatRunStatus.RUNNING]),

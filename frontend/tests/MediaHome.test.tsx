@@ -59,7 +59,7 @@ describe('影音首页', () => {
     request.mockResolvedValueOnce(projects)
     fireEvent.click(screen.getByRole('button', { name: '重新加载' }))
     await waitFor(() => expect(screen.getByText('雨后的城市')).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'AI 创作助手' }))
+    fireEvent.click(screen.getByRole('button', { name: /镜头搭档.*讨论剧本与分镜.*打开助手/ }))
     expect(listener).toHaveBeenCalledOnce()
     window.removeEventListener('genesis:open-media-assistant', listener)
   })

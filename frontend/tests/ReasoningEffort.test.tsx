@@ -1,9 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 
 import { BlogAssistant } from '../src/features/blog/agent/BlogAssistant'
 import { MediaAssistant } from '../src/pages/media/MediaAssistant'
-import { createAiChatRun, getProviderModels, streamAiChat, streamAiChatRun } from '../src/lib/api'
+import { createAiChatRun, getProviderModels, streamAiChatRun } from '../src/lib/api'
 import { studioAuthTokenKey } from '../src/lib/auth'
 import { ReasoningEffortControl } from '../src/features/agent/ReasoningEffortControl'
 import { AgentModelPicker } from '../src/features/agent/AgentModelPicker'
@@ -12,10 +12,15 @@ vi.mock('../src/lib/api', async (importOriginal) => ({
   ...await importOriginal<typeof import('../src/lib/api')>(),
   getProviderModels: vi.fn(),
   createAiChatRun: vi.fn(),
-  createAiConversation: vi.fn().mockResolvedValue({ id: 'test-conversation', title: '新对话', title_source: 'pending' }),
+  createAiConversation: vi.fn().mockResolvedValue({ id: 'test-conversation', title: '新对话', title_source: 'manual' }),
   streamAiChat: vi.fn().mockResolvedValue(undefined),
   streamAiChatRun: vi.fn().mockResolvedValue('completed'),
 }))
+
+beforeEach(() => {
+  localStorage.setItem('genesis-account-token', 'test-placeholder')
+  vi.mocked(createAiChatRun).mockResolvedValue({ id: 'effort-run', status: 'pending' })
+})
 
 afterEach(() => {
   cleanup()
@@ -42,7 +47,7 @@ it('选择 MiMo 后菜单保持展开，开关按模型记忆并随请求发送'
       { id: 'unknown', name: '未知模型', created: null, context_window: null },
     ],
   }))
-  render(<MediaAssistant token="test-placeholder" page="projects" selectedNode={null} />)
+  render(<MediaAssistant userId="media-user" attachmentsAllowed page="projects" selectedNode={null} />)
   fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
   const trigger = screen.getByRole('button', { name: '选择模型' })
   fireEvent.click(trigger)
@@ -56,13 +61,12 @@ it('选择 MiMo 后菜单保持展开，开关按模型记忆并随请求发送'
   expect(screen.queryByRole('combobox', { name: '思考模式' })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'MiMo' }))
   expect(screen.getByRole('combobox', { name: '思考模式' })).toHaveValue('disabled')
-  fireEvent.keyDown(window, { key: 'Escape' })
+  fireEvent.keyDown(document, { key: 'Escape' })
   fireEvent.change(screen.getByRole('textbox', { name: '向镜头搭档提问' }), { target: { value: '开始' } })
   fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
-  await waitFor(() => expect(streamAiChat).toHaveBeenCalledWith(
+  await waitFor(() => expect(createAiChatRun).toHaveBeenCalledWith(
     'test-placeholder', expect.objectContaining({ thinking_mode: 'disabled', reasoning_effort: undefined }),
-    expect.any(Function),
-  ))
+      ))
 })
 
 it('博客按模型记忆档位，未知模型用默认，请求携带当前强度', async () => {
@@ -93,21 +97,21 @@ it('博客按模型记忆档位，未知模型用默认，请求携带当前强�
 
 it('影音使用相同控件，默认不传档位，选择后发送强度', async () => {
   setupModels()
-  render(<MediaAssistant token="test-placeholder" page="projects" selectedNode={null} />)
+  render(<MediaAssistant userId="media-user" attachmentsAllowed page="projects" selectedNode={null} />)
   fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
   fireEvent.click(screen.getByRole('button', { name: '选择模型' }))
   await waitFor(() => expect(screen.getByRole('combobox', { name: '思考强度' })).toBeEnabled())
   const input = screen.getByRole('textbox', { name: '向镜头搭档提问' })
-  fireEvent.keyDown(window, { key: 'Escape' })
+  fireEvent.keyDown(document, { key: 'Escape' })
   fireEvent.change(input, { target: { value: '默认任务' } })
   fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
-  await waitFor(() => expect(streamAiChat).toHaveBeenCalledWith('test-placeholder', expect.objectContaining({ reasoning_effort: undefined }), expect.any(Function)))
+  await waitFor(() => expect(createAiChatRun).toHaveBeenCalledWith('test-placeholder', expect.objectContaining({ reasoning_effort: undefined })))
   fireEvent.click(screen.getByRole('button', { name: '选择模型' }))
   fireEvent.change(screen.getByRole('combobox', { name: '思考强度' }), { target: { value: 'high' } })
-  fireEvent.keyDown(window, { key: 'Escape' })
+  fireEvent.keyDown(document, { key: 'Escape' })
   fireEvent.change(input, { target: { value: '认真规划' } })
   fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
-  await waitFor(() => expect(streamAiChat).toHaveBeenLastCalledWith('test-placeholder', expect.objectContaining({ surface: 'media', reasoning_effort: 'high' }), expect.any(Function)))
+  await waitFor(() => expect(createAiChatRun).toHaveBeenLastCalledWith('test-placeholder', expect.objectContaining({ surface: 'media', reasoning_effort: 'high' })))
 })
 
 it('强度选择支持恢复默认，执行期间禁用，无模型时隐藏控件', () => {

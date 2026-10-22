@@ -20,13 +20,13 @@ export function BlogAgentAttachments({ items, disabled, onRetry, onRemove, onSto
   </li>)}</ul>
 }
 
-export function BlogMessageAttachments({ items }: { items: AiAttachment[] }) {
+export function BlogMessageAttachments({ items, authKey = studioAuthTokenKey }: { items: AiAttachment[]; authKey?: string }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const pending = useRef(false)
   async function download(item: AiAttachment) {
     if (pending.current) return
-    const token = getStoredAuthToken(studioAuthTokenKey)
+    const token = getStoredAuthToken(authKey)
     if (!token) { setError('登录已失效，请重新登录。'); return }
     pending.current = true; setBusy(item.id); setError('')
     try {

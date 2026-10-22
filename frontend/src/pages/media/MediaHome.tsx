@@ -47,7 +47,7 @@ export function MediaHome() {
   const create = (title = '', canvas = true) => { setMobileNav(false); setAction({ kind: 'create', title, canvas }) }
   const changeView = (all: boolean) => { setParams(all ? { view: 'projects' } : {}); setMobileNav(false) }
   const filtered = projects.filter((project) => project.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
-  const visible = allProjects || query ? filtered : filtered.slice(0, 4)
+  const visible = allProjects || query ? filtered : filtered.slice(0, 6)
   const shortcuts = [
     { label: '视频画布', icon: Clapperboard, title: '视频创作' },
     { label: '图片画布', icon: Image, title: '视觉创作' },
@@ -74,15 +74,14 @@ export function MediaHome() {
     {mobileNav && <button className="media-home-nav-scrim" aria-label="收起导航" onClick={() => setMobileNav(false)} />}
     <main className="media-home-main">
       <header className="media-home-topbar"><button className="media-home-mobile-toggle" aria-label={mobileNav ? '收起导航' : '展开导航'} aria-expanded={mobileNav} onClick={() => setMobileNav(!mobileNav)}><Menu /></button><span>创作空间</span><div><FpsStatusSlot /><Link to="/media/assets"><Layers3 />账户素材库</Link><Link className="media-home-account" to="/account" aria-label="账户设置"><UserRound /></Link></div></header>
+      <div className="media-home-intro"><div><h1>{allProjects ? '项目' : '创作空间'}</h1><p>{allProjects ? '管理作品，或回到画布继续编排。' : '从一个想法开始，让镜头、声音与灵感在这里相遇。'}</p></div>{!loading && !error && <span>{projects.length} 个项目</span>}</div>
       {!allProjects && <>
         <div className="media-home-launch">
-          <button className="media-home-hero" onClick={() => create()}><h1>新建画布创作</h1><span className="media-home-hero-hint">编排视频、图片、音频和便签</span><span className="media-home-hero-action">新建画布<Plus /></span></button>
+          <button className="media-home-hero" onClick={() => create()}><h2>新建画布创作</h2><span className="media-home-hero-hint">在一张画布里编排视频、图片、音频和便签</span><span className="media-home-hero-action">新建画布<ArrowUpRight /></span><Clapperboard className="media-home-hero-icon" aria-hidden="true" /></button>
           <button className="media-home-companion" onClick={() => window.dispatchEvent(new Event('genesis:open-media-assistant'))}><Sparkles /><strong>镜头搭档</strong><span>讨论剧本与分镜</span><span className="media-home-companion-action">打开助手<ArrowUpRight /></span></button>
         </div>
         <section className="media-home-shortcuts" aria-label="创作工具">
           {shortcuts.map(({ label, icon: Icon, title }) => <button key={label} onClick={() => create(title)}><span><Icon /></span>{label}</button>)}
-          <Link to="/media/assets"><span><Layers3 /></span>素材管理</Link>
-          <button onClick={() => window.dispatchEvent(new Event('genesis:open-media-assistant'))}><span><Sparkles /></span>AI 创作助手</button>
         </section>
       </>}
       <section className="media-home-projects" aria-labelledby="media-home-projects-heading">
@@ -92,7 +91,7 @@ export function MediaHome() {
           {allProjects && <button className="media-home-primary" onClick={() => create('', false)}><Plus />新建项目</button>}
         </div></div>
         {loading ? <div className="media-home-list-state" role="status">正在加载项目…</div> : error ? <div className="media-home-list-state" role="alert"><p>{error}</p><button onClick={() => { setLoading(true); setRefresh((value) => value + 1) }}>重新加载</button></div> : visible.length === 0 ? <div className="media-home-list-state"><FolderOpen /><div><h3>{query ? '没有找到匹配的项目' : '还没有项目，先开启一个新故事'}</h3><p>{query ? '换个关键词，或清空搜索查看全部项目。' : '视频、图片、声音与灵感，都可以从这里开始。'}</p></div><button onClick={() => query ? (setParams(allProjects ? { view: 'projects' } : {})) : create()}>{query ? '清空搜索' : '创建第一个作品'}{query ? <X /> : <Plus />}</button></div> : <div className="media-home-project-grid">{visible.map((project) => <article className="media-home-project" key={project.id}>
-          <Link to={`/media/projects/${project.id}`}><span className="media-home-project-thumbnail"><Clapperboard /></span><span className="media-home-project-copy"><strong>{project.name}</strong><time dateTime={project.updated_at}>{new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(project.updated_at)).replaceAll('/', '-')}</time></span></Link>
+          <Link to={`/media/projects/${project.id}`}><span className="media-home-project-thumbnail"><Clapperboard /><span>创作项目</span><span className="media-home-project-open">打开项目<ArrowUpRight /></span></span><span className="media-home-project-copy"><strong>{project.name}</strong><span>最近编辑 <time dateTime={project.updated_at}>{new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(project.updated_at)).replaceAll('/', '-')}</time></span></span></Link>
           <div className="media-home-project-menu"><button aria-label={`管理项目：${project.name}`} aria-expanded={openMenu === project.id} onClick={() => setOpenMenu(openMenu === project.id ? null : project.id)}><MoreHorizontal /></button>{openMenu === project.id && <div className="media-home-menu"><button onClick={() => { setAction({ kind: 'rename', project }); setOpenMenu(null) }}><Pencil />重命名</button><button onClick={() => { setAction({ kind: 'delete', project }); setOpenMenu(null) }}><Trash2 />删除项目</button></div>}</div>
         </article>)}</div>}
       </section>

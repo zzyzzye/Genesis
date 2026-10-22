@@ -1,6 +1,6 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { useCanvas } from '../src/pages/media/useCanvas'
 import { ProjectCanvas } from '../src/pages/media/ProjectCanvas'
 import { MediaAssistant, type MediaCanvasPlan } from '../src/pages/media/MediaAssistant'
@@ -9,11 +9,18 @@ import { emptyDocument, type Document, MediaError } from '../src/pages/media/api
 import * as media from '../src/pages/media/api'
 import * as ai from '../src/lib/api'
 import { groupSelection, removeSelection, resizedNodeDimensions, ungroupSelection } from '../src/pages/media/canvasOperations'
+import { accountAuthTokenKey } from '../src/lib/auth'
 import { incomingReferences } from '../src/pages/media/canvasReferences'
 
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
 
 describe('作品画布', () => {
+  beforeEach(() => {
+    localStorage.setItem(accountAuthTokenKey, 'test-token')
+    sessionStorage.clear()
+    vi.spyOn(ai, 'createAiConversation').mockResolvedValue({ id: 'media-conversation', title: '新对话', title_source: 'manual', created_at: '', updated_at: '' })
+    vi.spyOn(ai, 'createAiChatRun').mockResolvedValue({ id: 'media-run', status: 'pending' })
+  })
   afterEach(() => { localStorage.clear(); vi.restoreAllMocks() })
   it('参考只取直接连入节点，保持连线顺序并过滤重复、自连和失效连线', () => {
     const image = { ...note, id: crypto.randomUUID(), type: 'image' as const, asset_id: 'image' }
@@ -309,22 +316,24 @@ describe('作品画布', () => {
     expect(screen.getByRole('button', { name: /^视频$/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: '＋ 导入账户素材' })).toBeInTheDocument()
   })
-  it('助手会把当前选中节点作为可移除的讨论上下文', () => {
-    render(<MediaAssistant token={null} page="canvas" projectId="project" selectedNode={{ id: 'node-1', type: 'note', name: '', text: '雨夜开场', assetId: null }} />)
+  it('助手会把当前选中节点作为可移除的讨论上下文', async () => {
+    vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })
+    render(<MediaAssistant userId="media-user" attachmentsAllowed={false} page="canvas" projectId="project" selectedNode={{ id: 'node-1', type: 'note', name: '', text: '雨夜开场', assetId: null }} />)
     fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
     expect(screen.getByText('正在讨论 · 雨夜开场')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '移除当前讨论节点' }))
     expect(screen.queryByText('正在讨论 · 雨夜开场')).not.toBeInTheDocument()
+    await act(async () => { await Promise.resolve() })
   })
   it('助手模型菜单使用供应商标签与统一模型项，并支持点击外部关闭', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
       provider: 'openai',
       models: [{ id: 'gpt-6-sol', name: 'gpt-6-sol', created: null, context_window: 1050000 }],
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
-    render(<MediaAssistant token="test-token" page="canvas" projectId="project" selectedNode={null} />)
+    render(<MediaAssistant userId="media-user" attachmentsAllowed page="canvas" projectId="project" selectedNode={null} />)
     fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
     const trigger = screen.getByRole('button', { name: '选择模型' })
-    await waitFor(() => expect(trigger).toHaveTextContent('OpenAI'))
+    await waitFor(() => expect(trigger).toHaveTextContent('GPT 6 Sol'))
     fireEvent.click(trigger)
     expect(await screen.findByRole('button', { name: '切换到 OpenAI 模型' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /GPT 6 Sol\s*1.05M/ })).toBeInTheDocument()
@@ -332,7 +341,7 @@ describe('作品画布', () => {
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(trigger)
     screen.getByRole('button', { name: '切换到 OpenAI 模型' }).focus()
-    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.keyDown(document, { key: 'Escape' })
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     expect(trigger).toHaveFocus()
     fireEvent.click(trigger)
@@ -343,37 +352,37 @@ describe('作品画布', () => {
     let finish!: (value: Awaited<ReturnType<typeof ai.getProviderModels>>) => void
     const pending = new Promise<Awaited<ReturnType<typeof ai.getProviderModels>>>((resolve) => { finish = resolve })
     vi.spyOn(ai, 'getProviderModels').mockImplementation((_token, provider) => provider === 'grok' ? pending : Promise.resolve({ provider: 'openai', models: [{ id: 'gpt-test', name: 'gpt-test', created: null, context_window: null }] }))
-    render(<MediaAssistant token="test-token" page="projects" selectedNode={null} />)
+    render(<MediaAssistant userId="media-user" attachmentsAllowed page="projects" selectedNode={null} />)
     fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
     fireEvent.click(screen.getByRole('button', { name: '选择模型' }))
     expect(await screen.findByRole('button', { name: 'GPT Test' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '切换到 Grok 模型' }))
-    expect(screen.getByRole('status')).toHaveTextContent('正在加载模型')
+    expect(screen.getByText('正在加载模型…')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'GPT Test' })).not.toBeInTheDocument()
     await act(async () => { finish({ provider: 'grok', models: [] }); await pending })
     expect(screen.getByText('当前服务商没有可用模型。')).toBeInTheDocument()
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByText('正在加载模型…')).not.toBeInTheDocument()
   })
-  it('Enter 发送并将用户和助手消息作为 Markdown 展示', async () => {
+  it('Enter 发送保留用户原文，并将助手回复作为 Markdown 展示', async () => {
     vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })
-    const chat = vi.spyOn(ai, 'streamAiChat').mockImplementation((_token, _request, onChunk) => { onChunk('**助手标记**'); return Promise.resolve() })
-    render(<MediaAssistant token="test-token" page="canvas" projectId="project" selectedNode={null} />)
+    const chat = vi.spyOn(ai, 'streamAiChatRun').mockImplementation((_token, _id, callbacks) => { callbacks.onToken('**助手标记**', 1); return Promise.resolve('completed') })
+    render(<MediaAssistant userId="media-user" attachmentsAllowed page="canvas" projectId="project" selectedNode={null} />)
     fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
     const input = screen.getByRole('textbox', { name: '向镜头搭档提问' })
     fireEvent.change(input, { target: { value: '**用户标记**' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     await waitFor(() => expect(chat).toHaveBeenCalledTimes(1))
-    expect(await screen.findByText('用户标记', { selector: 'strong' })).toBeInTheDocument()
+    expect(await screen.findByText('**用户标记**')).toBeInTheDocument()
     expect(screen.getByText('助手标记', { selector: 'strong' })).toBeInTheDocument()
   })
   it('助手方案需由用户点击后才应用到画布', async () => {
     vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })
     const applyPlan = vi.fn<(plan: MediaCanvasPlan) => void>()
-    vi.spyOn(ai, 'streamAiChat').mockImplementation((_token, _request, onChunk) => {
-      onChunk('我整理了两个镜头。\n```canvas-plan\n{"title":"雨夜开场","operations":[{"action":"add_video","name":"开场空镜","text":"雨夜街道","duration_seconds":4},{"action":"add_note","text":"雨声先入"}]}\n```')
-      return Promise.resolve()
+    vi.spyOn(ai, 'streamAiChatRun').mockImplementation((_token, _id, callbacks) => {
+      callbacks.onToken('我整理了两个镜头。\n```canvas-plan\n{"title":"雨夜开场","operations":[{"action":"add_video","name":"开场空镜","text":"雨夜街道","duration_seconds":4},{"action":"add_note","text":"雨声先入"}]}\n```', 1)
+      return Promise.resolve('completed')
     })
-    render(<MediaAssistant token="test-token" page="canvas" projectId="project" selectedNode={null} onApplyCanvasPlan={applyPlan} />)
+    render(<MediaAssistant userId="media-user" attachmentsAllowed page="canvas" projectId="project" selectedNode={null} onApplyCanvasPlan={applyPlan} />)
     fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
     const input = screen.getByRole('textbox', { name: '向镜头搭档提问' })
     fireEvent.change(input, { target: { value: '帮我添加雨夜开场分镜' } })

@@ -259,7 +259,7 @@ describe('助手失败后的继续对话', () => {
     fireEvent.change(screen.getByRole('textbox', { name: '对话标题' }), { target: { value: '我的写作计划' } })
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
     expect(await screen.findByText('我的写作计划')).toBeInTheDocument()
-    expect(renameAiConversation).toHaveBeenCalledWith('test-placeholder', 'saved-conversation', '我的写作计划')
+    expect(renameAiConversation).toHaveBeenCalledWith('test-placeholder', 'saved-conversation', '我的写作计划', 'studio')
     fireEvent.click(screen.getByRole('button', { name: '新建对话' }))
     expect(screen.queryByText('历史回答')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '聊天历史' })).toBeInTheDocument()

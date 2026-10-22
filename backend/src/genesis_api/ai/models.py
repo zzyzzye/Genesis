@@ -22,12 +22,15 @@ class AiChatRunStatus(StrEnum):
 
 
 class AiConversation(Base):
-    """博客会话目录；正文复用生成任务，执行状态由 LangGraph 保存。"""
+    """按业务模块隔离的会话目录，正文与恢复复用生成任务。"""
 
     __tablename__ = "ai_conversations"
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id"), index=True)
+    surface: Mapped[str] = mapped_column(
+        String(20), default="studio", server_default="studio", index=True
+    )
     title: Mapped[str] = mapped_column(String(80), default="新对话")
     title_source: Mapped[str] = mapped_column(String(20), default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

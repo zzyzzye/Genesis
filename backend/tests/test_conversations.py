@@ -73,7 +73,7 @@ def test_conversation_ownership_history_and_rename(sessions: sessionmaker[Sessio
                 session, user_id=owner.id,
                 request=request.model_copy(update={"surface": "media"}), settings=Settings(),
             )
-        assert invalid.value.status_code == 422
+        assert invalid.value.status_code == 404
         with pytest.raises(HTTPException) as history:
             create_ai_chat_run(
                 session, user_id=owner.id,

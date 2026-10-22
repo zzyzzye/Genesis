@@ -44,7 +44,7 @@ describe('博客助手删除后的会话恢复', () => {
     expect(screen.getByRole('button', { name: '重命名' })).toBeDisabled()
     expect(screen.getByRole('button', { name: /^其他历史/ })).toBeInTheDocument()
     await waitFor(() => expect(storedConversationId()).toBeNull())
-    expect(deleteAiConversations).toHaveBeenCalledWith('test-placeholder', { scope: 'selected', ids: ['history-0'] })
+    expect(deleteAiConversations).toHaveBeenCalledWith('test-placeholder', { scope: 'selected', ids: ['history-0'] }, 'studio')
   })
 
   it('删除其他历史保留当前正文和恢复标识，全选排除当前同样保留', async () => {
@@ -59,6 +59,6 @@ describe('博客助手删除后的会话恢复', () => {
     expect(screen.getByText('当前对话中保存的正文')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '重命名' })).toBeEnabled()
     expect(storedConversationId()).toBe('history-0')
-    expect(deleteAiConversations).toHaveBeenCalledWith('test-placeholder', { scope: 'all', excluded_ids: ['history-0'] })
+    expect(deleteAiConversations).toHaveBeenCalledWith('test-placeholder', { scope: 'all', excluded_ids: ['history-0'] }, 'studio')
   })
 })

@@ -195,6 +195,28 @@ def test_model_capabilities_and_video_transport_are_enforced(
     assert converted["content"][0]["type"] == "image_url"
 
 
+def test_media_attachments_reuse_private_loader(
+    session: Session, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """影音使用同一鉴权附件入口，不复制解析或公开文件。"""
+    from genesis_api.agent.capabilities import agent_capabilities
+    from genesis_api.blog.agent import capability
+
+    user = owner(session)
+    item_id = file(session, user.id, "分镜.txt", "雨夜街道".encode())
+    payload = request(user.id, [item_id])
+    payload.surface = "media"
+    prepared = prepare_attachments(session, user.id, payload, Settings())
+    assert prepared.messages[0].attachments[0].id == item_id
+    monkeypatch.setattr(capability, "SessionLocal", lambda: session)
+    inputs, files = agent_capabilities.load_attachments("media", prepared)
+    assert inputs[0]["role"] == "user"
+    assert files[0][1].decode() == "雨夜街道"
+    prepared.actor_role = "member"
+    with pytest.raises(RuntimeError, match="权限"):
+        agent_capabilities.load_attachments("media", prepared)
+
+
 def test_total_size_role_scope_and_changed_file_are_rejected(session: Session) -> None:
     from genesis_api.blog.agent import attachments
     from genesis_api.blog.models import BlogAttachment
@@ -202,7 +224,7 @@ def test_total_size_role_scope_and_changed_file_are_rejected(session: Session) -
     user = owner(session)
     item_id = file(session, user.id, "文本.txt", b"test")
     payload = request(user.id, [item_id])
-    payload.surface = "media"
+    payload.surface = "toolbox"
     with pytest.raises(HTTPException):
         prepare_attachments(session, user.id, payload, Settings())
     payload.surface = "studio"

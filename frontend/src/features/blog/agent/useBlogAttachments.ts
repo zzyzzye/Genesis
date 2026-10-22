@@ -7,7 +7,7 @@ export const agentAttachmentAccept = '.txt,.md,.markdown,.csv,.json,.log,.yaml,.
 const limit = 20 * 1024 * 1024
 export type PendingAttachment = AiAttachment & { file: File; status: 'uploading' | 'ready' | 'failed'; progress: number; error?: string }
 
-export function useBlogAttachments(conversationKey: string) {
+export function useBlogAttachments(conversationKey: string, authKey = studioAuthTokenKey) {
   const [queues, setQueues] = useState<Record<string, PendingAttachment[]>>({})
   const queuesRef = useRef(queues)
   const controllers = useRef(new Map<string, AbortController>())
@@ -26,7 +26,7 @@ export function useBlogAttachments(conversationKey: string) {
 
   async function upload(key: string, item: PendingAttachment) {
     if (controllers.current.has(item.id)) return
-    const token = getStoredAuthToken(studioAuthTokenKey)
+    const token = getStoredAuthToken(authKey)
     if (!token) { update(key, items => items.map(value => value.id === item.id ? { ...value, status: 'failed', error: '登录已失效，请重新登录。' } : value)); return }
     const controller = new AbortController()
     controllers.current.set(item.id, controller)
