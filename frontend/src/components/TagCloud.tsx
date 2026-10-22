@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useId, useRef, useState, type CSSProperties 
 import type { EChartsType } from 'echarts/core'
 import type { CloudTag } from './tagCloudChart'
 import { useLiveReducedMotion } from '../lib/motion'
+import { tagColorIndex } from './tagCloudPalette'
 import './TagCloud.css'
 
 export function TagCloud({ items, label, onSelect, itemLabel, selectedId, highlightedId, compact = false, disabled = false, opensDialog = false, maximumCount, buttonRef }: {
@@ -88,14 +89,14 @@ export function TagCloud({ items, label, onSelect, itemLabel, selectedId, highli
     chart.current?.dispatchAction({ type: focused ? 'showTip' : 'hideTip', seriesIndex: 0, dataIndex: index })
   }
 
-  return <div ref={root} className={`tag-cloud${compact ? ' tag-cloud--compact' : ''}${ready ? ' tag-cloud--ready' : ''}`} style={{ '--tag-cloud-height': `${height}px` } as CSSProperties}>
+  return <div ref={root} className={`tag-cloud${compact ? ' tag-cloud--compact' : ''}${ready ? ' tag-cloud--ready' : ''}`} data-disabled={disabled || undefined} style={{ '--tag-cloud-height': `${height}px` } as CSSProperties}>
     <div ref={canvas} className="tag-cloud__chart" aria-hidden="true" />
     <ul className="tag-cloud__list" aria-label={label}>
     {items.map((item, index) => {
       const count = Math.max(0, item.count)
       const weight = Math.log1p(count) / Math.log1p(maximum)
       const countId = `${id}-count-${index}`
-      return <li key={item.id} style={{ '--tag-cloud-weight': weight } as CSSProperties}>
+      return <li key={item.id} style={{ '--tag-cloud-weight': weight, '--tag-cloud-word-color': `var(--tag-cloud-color-${tagColorIndex(item.name)})` } as CSSProperties}>
         <button
           ref={element => buttonRef?.(item.id, element)}
           type="button"

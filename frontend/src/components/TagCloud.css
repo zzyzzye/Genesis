@@ -5,13 +5,29 @@
   --tag-cloud-muted: #686868;
   --tag-cloud-hover: #ededed;
   --tag-cloud-paper: #fff;
+  --tag-cloud-color-1: #2563b8;
+  --tag-cloud-color-2: #087f8c;
+  --tag-cloud-color-3: #278246;
+  --tag-cloud-color-4: #ad5b16;
+  --tag-cloud-color-5: #7952b3;
+  --tag-cloud-color-6: #b83e65;
   position: relative;
   min-width: 0;
   height: var(--tag-cloud-height);
 }
 .tag-cloud__chart { position: absolute; inset: 0; overflow: hidden; opacity: 0; }
 .tag-cloud .tag-cloud__chart svg { width: 100%; height: 100%; max-width: none; }
-.tag-cloud--ready .tag-cloud__chart { opacity: 1; }
+.tag-cloud--ready .tag-cloud__chart { opacity: 1; animation: tag-cloud-reveal 600ms ease-out; }
+.tag-cloud__chart svg text {
+  --word-delay: 0ms;
+  animation: tag-word-float 4.8s ease-in-out var(--word-delay) infinite;
+}
+.tag-cloud__chart svg text:nth-of-type(3n + 2) { --word-delay: 110ms; animation-direction: reverse; }
+.tag-cloud__chart svg text:nth-of-type(3n) { --word-delay: 220ms; }
+/* 独立 translate 不覆盖 ECharts 为每个词计算的位置矩阵。 */
+@keyframes tag-cloud-reveal { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
+@keyframes tag-word-float { 0%, 100% { translate: 0 2px; } 50% { translate: 0 -2px; } }
+.tag-cloud:is(:hover, :focus-within, [data-disabled]) .tag-cloud__chart svg text { animation-play-state: paused; }
 .tag-cloud__list {
   position: absolute;
   inset: 0;
@@ -40,7 +56,7 @@
   outline: 0;
   box-shadow: none;
   background: transparent;
-  color: var(--tag-cloud-ink);
+  color: var(--tag-cloud-word-color, var(--tag-cloud-ink));
   font-family: inherit;
   font-size: calc(var(--tag-cloud-min-size) + (var(--tag-cloud-max-size) - var(--tag-cloud-min-size)) * var(--tag-cloud-weight));
   font-weight: calc(450 + 150 * var(--tag-cloud-weight));
@@ -57,4 +73,8 @@
 .tag-cloud--compact { --tag-cloud-min-size: 12px; --tag-cloud-max-size: 20px; }
 .tag-cloud--compact .tag-cloud__list { gap: 2px 4px; justify-content: flex-start; }
 .tag-cloud--compact .tag-cloud__word { min-height: 36px; padding-inline: 6px; }
-@media (prefers-reduced-motion: reduce) { .tag-cloud .tag-cloud__word { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .tag-cloud .tag-cloud__word { transition: none; }
+  .tag-cloud--ready .tag-cloud__chart { animation: none; }
+  .tag-cloud__chart svg text { animation: none; translate: none; }
+}
