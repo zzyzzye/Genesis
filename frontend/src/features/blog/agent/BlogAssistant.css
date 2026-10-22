@@ -52,9 +52,6 @@
 .studio-assistant__context svg { width: 13px; height: 13px; flex: none; }
 .studio-assistant__messages { display: grid; flex: none; gap: 20px; min-width: 0; }
 .studio-assistant__message { display: flex; align-items: flex-start; min-width: 0; gap: 8px; }
-.studio-assistant__message-mark { display: grid; place-items: center; flex: none; width: 18px; height: 22px; color: var(--assistant-muted); }
-.studio-assistant__message-mark svg { width: 14px; height: 14px; }
-.studio-assistant__panel.is-empty .studio-assistant__message-mark { display: none; }
 .studio-assistant__response { display: grid; flex: 1; min-width: 0; gap: 8px; }
 .studio-assistant__message > p { margin: 0; padding: 9px 12px; max-width: 90%; border-radius: 9px; background: var(--assistant-surface); white-space: pre-wrap; overflow-wrap: anywhere; }
 .studio-assistant__message--user { justify-content: flex-end; }

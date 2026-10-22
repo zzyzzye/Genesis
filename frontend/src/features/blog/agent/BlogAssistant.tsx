@@ -827,7 +827,6 @@ export function BlogAssistant({ page, editor, userId, onExecuted }: { page: Assi
                 if (message.role === 'user' && previousQuestion && questionAnswers(previousQuestion, message.content)) return null
                 return (
                 <motion.div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={(message.role === 'assistant' ? splitAgentQuestion(message.content).request?.id : null) ?? `${conversationId ?? 'new'}-${message.role}-${index}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={transition}>
-                  {message.role === 'assistant' && <span className="studio-assistant__message-mark"><StudioIcon name="assistant" /></span>}
                   {message.role === 'assistant' ? <MarkdownMessage {...message} targetPost={editor} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} onAnswer={(answer) => { void sendMessage(answer) }} questionDisabled={isBusy || conversationLoading} questionAnswer={messages.slice(index + 1).find((item) => item.role === 'user')?.content} /> : <div className="blog-agent-user-content">{message.content && <p>{message.content}</p>}{!!message.attachments?.length && <BlogMessageAttachments items={message.attachments} />}</div>}
                 </motion.div>
               )})}
