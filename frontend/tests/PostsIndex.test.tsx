@@ -26,6 +26,22 @@ function setup(items = posts, path = '/blog/studio/posts') {
 }
 
 describe('PostsIndex', () => {
+  it('表格选择与编辑互不触发，表头全选仍包含当前页文章', () => {
+    const { onOpenPost } = setup(posts.slice(0, 2))
+    const table = screen.getByRole('table', { name: '文章管理表格' })
+    expect(within(table).getByRole('columnheader', { name: '状态' })).toBeInTheDocument()
+    const first = within(table).getByRole('checkbox', { name: '选择文章：文章 0' })
+    fireEvent.click(first)
+    expect(first).toBeChecked()
+    expect(onOpenPost).not.toHaveBeenCalled()
+    fireEvent.click(within(table).getByRole('button', { name: /^文章 0/ }))
+    expect(onOpenPost).toHaveBeenCalledExactlyOnceWith(posts[0])
+    fireEvent.click(within(table).getByRole('checkbox', { name: '选择本页文章' }))
+    expect(within(table).getByRole('checkbox', { name: '选择文章：文章 1' })).toBeChecked()
+    expect(first).toBeChecked()
+    expect(onOpenPost).toHaveBeenCalledOnce()
+  })
+
   it('整库导出不传搜索和分页，单篇导出不触发编辑，失败保留列表并可重试', async () => {
     const { onOpenPost, router } = setup(posts, '/blog/studio/posts?q=特别&status=draft')
     vi.mocked(downloadBlogArticles).mockRejectedValueOnce(new TypeError('Failed to fetch'))

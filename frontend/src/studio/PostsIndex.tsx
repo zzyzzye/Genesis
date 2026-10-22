@@ -13,6 +13,31 @@ import { articleActions } from './postManagement'
 
 const pageSize = 40
 
+function postState(post: BlogPostAdmin, trashed: boolean) {
+  return trashed ? '回收站' : post.status === 'published' ? '已发布' : post.scheduled_at ? '定时发布' : '草稿'
+}
+
+function postCategories(post: BlogPostAdmin) {
+  return (post.categories ?? (post.category ? [post.category] : [])).map(category => category.name).join('、') || '未分类'
+}
+
+function PostDate({ post, trashed }: { post: BlogPostAdmin; trashed: boolean }) {
+  const timestamp = trashed ? post.deleted_at ?? post.updated_at : post.scheduled_at || post.updated_at
+  return <time dateTime={timestamp}>{!trashed && post.scheduled_at ? new Date(timestamp).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : timestamp.slice(0, 10)}</time>
+}
+
+function PostSummary({ post, trashed }: { post: BlogPostAdmin; trashed: boolean }) {
+  return <span className="studio-post-summary">
+    <strong title={post.title}>{post.title || '未命名文章'}</strong>
+    <small title={post.excerpt || '暂无摘要'}>{post.excerpt || '暂无摘要'}</small>
+    <span className="studio-post-compact-meta">
+      <span className="studio-post-compact-state">{postState(post, trashed)}</span>
+      <span title={postCategories(post)}>{postCategories(post)}</span>
+      <span className="studio-post-compact-date"><PostDate post={post} trashed={trashed} /></span>
+    </span>
+  </span>
+}
+
 export function PostsIndex({ posts, token, feedback, onRestored, onPendingChange, onCreatePost, onOpenPost, categories = [], tags = [], onRefresh }: {
   posts: BlogPostAdmin[]
   token: string
@@ -160,6 +185,7 @@ export function PostsIndex({ posts, token, feedback, onRestored, onPendingChange
 
   function changeFilter(key: 'q' | 'status', value: string) {
     setSelection({ scope: '', posts: [] })
+    setNotice('')
     const next = new URLSearchParams(params)
     if (value && value !== 'all') next.set(key, value)
     else next.delete(key)
@@ -192,39 +218,35 @@ export function PostsIndex({ posts, token, feedback, onRestored, onPendingChange
       </div>
       <div className="studio-post-index__filters" aria-label="文章筛选">
         {([['all', '全部'], ['draft', '草稿'], ['scheduled', '定时发布'], ['published', '已发布'], ['trash', '回收站']] as const).map(([value, label]) => <button key={value} type="button" className={status === value ? 'is-active' : ''} aria-pressed={status === value} onClick={() => changeFilter('status', value)}>{label}</button>)}
-        <span className="studio-post-count" role="status">共 {filtered.length} 篇 · 最近更新</span>
+        <span className="studio-post-list-meta"><span className="studio-post-count" role="status">共 {filtered.length} 篇 · 最近更新</span>
+        <button className="studio-post-refresh" type="button" aria-label={refreshing ? '刷新中…' : '刷新列表'} title="刷新列表" disabled={refreshing} onClick={() => { void refresh().then(() => setNotice('列表已刷新，原选择已清空。')).catch(() => setNotice('列表刷新失败，请检查网络后重试。')) }}><RotateCw className={refreshing ? 'studio-post-export-spinner' : undefined} aria-hidden="true" /></button></span>
       </div>
-      <div className="studio-post-bulkbar" aria-label="批量管理">
-        <label><input type="checkbox" aria-label="选择本页文章" checked={allVisible} ref={element => { if (element) element.indeterminate = !allVisible && visible.some(post => selectedIds.has(post.id)) }} disabled={!visible.length || Boolean(inTrash && (!loaded || loadError))} onChange={() => selectPosts(allVisible ? selected.filter(post => !visible.some(item => item.id === post.id)) : [...selected, ...visible.filter(post => !selectedIds.has(post.id))])} />本页</label>
+      <div className={selected.length ? 'studio-post-bulkbar' : 'sr-only'} aria-label="批量管理">
         <span role="status">已选 {selected.length} 篇</span>
         {selected.length > 0 && <><button type="button" onClick={() => selectPosts([])}>取消选择</button>{filtered.length > selected.length && <button type="button" disabled={filtered.length > 200} onClick={() => selectPosts(filtered)}>选择全部 {filtered.length} 篇匹配文章</button>}<label className="sr-only" htmlFor="post-batch-action">批量操作</label><select id="post-batch-action" value="" onChange={event => { if (event.target.value) setBatch({ action: event.target.value as ArticleBatchAction, posts: [...selected] }) }}><option value="" disabled>批量操作…</option>{(inTrash ? ['restore', 'permanent'] as const : ['publish', 'unpublish', 'categories', 'tags', 'schedule', 'cancel_schedule', 'trash'] as const).map(action => <option key={action} value={action}>{articleActions[action]}</option>)}</select></>}
         {filtered.length > 200 && <span>每批最多 200 篇</span>}
-        <button className="studio-post-refresh" type="button" aria-label={refreshing ? '刷新中…' : '刷新列表'} title="刷新列表" disabled={refreshing} onClick={() => { void refresh().then(() => setNotice('列表已刷新，原选择已清空。')).catch(() => setNotice('列表刷新失败，请检查网络后重试。')) }}><RotateCw className={refreshing ? 'studio-post-export-spinner' : undefined} aria-hidden="true" /></button>
       </div>
       {(notice || feedback) && <p className="studio-post-notice" role="status">{notice || feedback}</p>}
       {exportError && <p className="studio-post-notice" role="alert">{exportError} <button type="button" className="studio-post-export-retry" disabled={Boolean(exporting)} onClick={() => { setExportError(''); inputRef.current?.focus() }}>关闭提示</button></p>}
       {exporting && <p className="studio-post-notice" role="status">正在准备导出，请稍候… <button className="studio-post-export-retry" type="button" onClick={() => { exportRequest.current?.abort(); exportRequest.current = null; setExporting(null); setNotice('已取消下载，可重新导出。') }}>取消下载</button></p>}
       {inTrash && <p className="studio-post-notice">回收站保留文章内容，恢复后存为草稿。彻底删除后无法恢复。</p>}
-      <div className="studio-content-list">
-        {inTrash && loadError ? <div className="studio-post-empty" role="alert"><strong>回收站暂时未能加载</strong><p>{loadError}</p><button type="button" onClick={() => { setLoadError(null); setRetry(value => value + 1) }}>重新加载</button></div> : inTrash && !loaded ? <div className="studio-post-empty" role="status">正在读取回收站…</div> : visible.map((post) => inTrash ? (
-          <div key={post.id} className={`studio-post-row ${selectedIds.has(post.id) ? 'is-selected' : ''}`}><label className="studio-post-select"><input type="checkbox" aria-label={`选择文章：${post.title}`} checked={selectedIds.has(post.id)} onChange={event => selectPosts(event.target.checked ? [...selected, post] : selected.filter(item => item.id !== post.id))} /></label><article className="studio-trash-row" aria-label={post.title}>
-            <Trash2 aria-hidden="true" />
-            <div className="studio-content-list__body"><strong>{post.title}</strong><small>{post.excerpt || '暂无摘要'}</small><div className="studio-content-list__details"><span>移入时间</span><time dateTime={post.deleted_at ?? post.updated_at}>{(post.deleted_at ?? post.updated_at).slice(0, 10)}</time></div></div>
-            <div className="studio-trash-actions"><button type="button" disabled={Boolean(exporting)} aria-label={`导出 Markdown：${post.title || '无标题文章'}`} onClick={event => { void exportArticles(post, event.currentTarget) }}><Download size={14} aria-hidden="true" />导出</button><button type="button" disabled={busy} onClick={() => { completionFocus.current = null; setError(null); setConfirmation({ post, action: 'restore' }) }}><RotateCcw size={14} />恢复为草稿</button><button type="button" disabled={busy} onClick={() => { completionFocus.current = null; setError(null); setConfirmation({ post, action: 'permanent' }) }}><Trash2 size={14} />彻底删除</button></div>
-          </article></div>
-        ) : (
-          <div className={`studio-post-row ${selectedIds.has(post.id) ? 'is-selected' : ''}`} key={post.id}>
-          <label className="studio-post-select"><input type="checkbox" aria-label={`选择文章：${post.title}`} checked={selectedIds.has(post.id)} onChange={event => selectPosts(event.target.checked ? [...selected, post] : selected.filter(item => item.id !== post.id))} /></label>
-          <button className="studio-content-list__item" type="button" onClick={() => onOpenPost(post)}>
-            <span className="studio-content-list__body">
-              <strong title={post.title}>{post.title}</strong>
-              <small title={post.excerpt || '暂无摘要'}>{post.excerpt || '暂无摘要'}</small>
-              <span className="studio-content-list__details"><em>{post.status === 'published' ? '已发布' : post.scheduled_at ? '定时发布' : '草稿'}</em><span>{(post.categories ?? (post.category ? [post.category] : [])).map(category => category.name).join('、') || '未分类'}</span><time dateTime={post.scheduled_at || post.updated_at}>{post.scheduled_at ? new Date(post.scheduled_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : post.updated_at.slice(0, 10)}</time></span>
-            </span>
-          </button>
-          <button className="studio-post-export" type="button" disabled={Boolean(exporting)} aria-label={`导出 Markdown：${post.title || '无标题文章'}`} title="导出已保存的 Markdown" onClick={event => { void exportArticles(post, event.currentTarget) }}>{exporting === post.id ? <LoaderCircle className="studio-post-export-spinner" aria-hidden="true" /> : <Download aria-hidden="true" />}</button>
-          </div>
-        ))}
+      <div className="studio-post-table-wrap">
+        <table className={`studio-post-table${inTrash ? ' is-trash' : ''}`} aria-label={inTrash ? '回收站文章' : '文章管理表格'}>
+          <thead><tr>
+            <th className="studio-post-table__select" scope="col"><input type="checkbox" aria-label="选择本页文章" title="选择本页文章" checked={allVisible} ref={element => { if (element) element.indeterminate = !allVisible && visible.some(post => selectedIds.has(post.id)) }} disabled={!visible.length || Boolean(inTrash && (!loaded || loadError))} onChange={() => selectPosts(allVisible ? selected.filter(post => !visible.some(item => item.id === post.id)) : [...selected, ...visible.filter(post => !selectedIds.has(post.id))])} /></th>
+            <th scope="col">文章</th><th className="studio-post-table__state" scope="col">状态</th><th className="studio-post-table__category" scope="col">分类</th><th className="studio-post-table__date" scope="col">{inTrash ? '移入时间' : '更新 / 计划'}</th><th className="studio-post-table__actions" scope="col"><span className={inTrash ? '' : 'sr-only'}>操作</span></th>
+          </tr></thead>
+          <tbody>{(!inTrash || (loaded && !loadError)) && visible.map(post => <tr className={selectedIds.has(post.id) ? 'is-selected' : undefined} key={post.id}>
+            <td className="studio-post-table__select"><input type="checkbox" aria-label={`选择文章：${post.title}`} checked={selectedIds.has(post.id)} onChange={event => selectPosts(event.target.checked ? [...selected, post] : selected.filter(item => item.id !== post.id))} /></td>
+            <td className="studio-post-table__main">{inTrash ? <div className="studio-post-open"><PostSummary post={post} trashed /></div> : <button className="studio-post-open" type="button" onClick={() => onOpenPost(post)}><PostSummary post={post} trashed={false} /></button>}</td>
+            <td className="studio-post-table__state"><span className="studio-post-state">{postState(post, inTrash)}</span></td>
+            <td className="studio-post-table__category"><span title={postCategories(post)}>{postCategories(post)}</span></td>
+            <td className="studio-post-table__date"><PostDate post={post} trashed={inTrash} /></td>
+            <td className="studio-post-table__actions">{inTrash ? <div className="studio-trash-actions"><button type="button" disabled={Boolean(exporting)} aria-label={`导出 Markdown：${post.title || '无标题文章'}`} onClick={event => { void exportArticles(post, event.currentTarget) }}><Download size={14} aria-hidden="true" />导出</button><button type="button" disabled={busy} onClick={() => { completionFocus.current = null; setError(null); setConfirmation({ post, action: 'restore' }) }}><RotateCcw size={14} />恢复为草稿</button><button type="button" disabled={busy} onClick={() => { completionFocus.current = null; setError(null); setConfirmation({ post, action: 'permanent' }) }}><Trash2 size={14} />彻底删除</button></div> : <button className="studio-post-export" type="button" disabled={Boolean(exporting)} aria-label={`导出 Markdown：${post.title || '无标题文章'}`} title="导出已保存的 Markdown" onClick={event => { void exportArticles(post, event.currentTarget) }}>{exporting === post.id ? <LoaderCircle className="studio-post-export-spinner" aria-hidden="true" /> : <Download aria-hidden="true" />}</button>}</td>
+          </tr>)}</tbody>
+        </table>
+        {inTrash && loadError && <div className="studio-post-empty" role="alert"><strong>回收站暂时未能加载</strong><p>{loadError}</p><button type="button" onClick={() => { setLoadError(null); setRetry(value => value + 1) }}>重新加载</button></div>}
+        {inTrash && !loaded && !loadError && <div className="studio-post-empty" role="status">正在读取回收站…</div>}
         {visible.length === 0 && (!inTrash || (loaded && !loadError)) && <div className="studio-post-empty">{inTrash ? <Trash2 aria-hidden="true" /> : <StudioIcon name="articles" />}<strong>{inTrash && !query ? '回收站是空的' : !inTrash && posts.length === 0 ? '还没有文章' : '没有匹配的文章'}</strong><p>{inTrash && !query ? '移入回收站的文章会出现在这里。' : posts.length === 0 && !inTrash ? '创建第一篇草稿，开始记录你的想法。' : '试试其他关键词，或切换文章状态。'}</p><button type="button" onClick={!inTrash && posts.length === 0 ? onCreatePost : () => { const next = new URLSearchParams(params); next.delete('q'); if (!inTrash || !query) next.delete('status'); next.delete('page'); setParams(next, { replace: true }); inputRef.current?.focus() }}>{inTrash && !query ? '返回文章' : posts.length === 0 && !inTrash ? '创建文章' : '清除筛选'}</button></div>}
       </div>
       <p className="studio-post-export-hint">{inTrash ? '导出回收站内全部已保存文章，保留删除状态。' : '导出全部草稿和已发布文章，不受筛选与分页影响。'}含分类与标签，不含评论、附件及独立页面。</p>

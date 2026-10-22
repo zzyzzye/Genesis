@@ -15,7 +15,7 @@
 .post-import-item > span { min-width: 0; }
 .post-import-item strong, .post-import-item small { display: block; overflow-wrap: anywhere; }
 .post-import-item strong { font-size: 14px; font-weight: 550; }
-.post-import-item input, .studio-post-select input, .studio-post-bulkbar input { flex: none; width: 16px; height: 16px; accent-color: var(--studio-ink); margin: 4px 0 0; }
+.post-import-item input, .studio-post-bulkbar input { flex: none; width: 16px; height: 16px; accent-color: var(--studio-ink); margin: 4px 0 0; }
 .post-import-item.has-issue { cursor: default; }
 .post-import-item.has-issue strong { color: var(--studio-muted); }
 .post-batch-targets { padding-left: 20px; margin: 0 0 22px; max-height: 160px; overflow: auto; overflow-wrap: anywhere; color: var(--studio-muted); }
@@ -31,11 +31,8 @@
 .studio-post-bulkbar input { margin: 0; }
 .studio-post-bulkbar button, .studio-post-bulkbar select { min-height: 36px; padding: 6px 10px; border: 0; outline: 0; box-shadow: none; border-radius: var(--studio-control-radius); background: var(--studio-soft); color: var(--studio-ink); font: inherit; }
 .studio-post-bulkbar button:hover:not(:disabled), .studio-post-bulkbar button:focus-visible { background: var(--studio-hover); }
-.studio-post-select { flex: none; display: grid; place-items: center; width: 28px; min-height: 40px; cursor: pointer; }
-.studio-post-row.is-selected { background: var(--studio-soft); border-radius: var(--studio-control-radius); }
-.studio-post-row > .studio-trash-row { flex: 1; min-width: 0; }
 .studio-post-index__toolbar { flex-wrap: wrap; }
 .studio-post-index__actions { flex-wrap: wrap; }
 .studio-post-refresh { margin-left: auto; }
-@media (max-width: 520px) { .post-import-dialog { padding: 20px; } .post-import-file { flex-wrap: wrap; } .post-import-file small { display: none; } .studio-post-index__actions { justify-content: flex-start; } .studio-post-row > .studio-post-export { width: 30px; } .studio-post-select { width: 24px; } }
+@media (max-width: 520px) { .post-import-dialog { padding: 20px; } .post-import-file { flex-wrap: wrap; } .post-import-file small { display: none; } .studio-post-index__actions { justify-content: flex-start; } }
 @media (prefers-reduced-motion: reduce) { .post-management-loading svg { animation: none; } }
