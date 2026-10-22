@@ -184,11 +184,11 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
     {metrics && !streaming ? <>
       <span><Zap aria-hidden="true" />首字 <span className="studio-assistant__duration">{metrics.first_token_seconds === null ? '未输出' : formatDuration(metrics.first_token_seconds * 1000)}</span></span>
       <span><Timer aria-hidden="true" />输出 <span className="studio-assistant__duration">{metrics.output_seconds === null ? '—' : formatDuration(metrics.output_seconds * 1000)}</span></span>
-      <span><Clock3 aria-hidden="true" />总计 <span className="studio-assistant__duration">{formatDuration(metrics.total_seconds * 1000)}</span></span>
+      <span className="studio-assistant__timing-total"><Clock3 aria-hidden="true" />总计 <span className="studio-assistant__duration">{formatDuration(metrics.total_seconds * 1000)}</span></span>
     </> : timing && <>
       <span><Zap aria-hidden="true" />首字 <span className="studio-assistant__duration">{firstToken ? formatDuration(firstToken - timing.startedAt) : '未输出'}</span></span>
       <span><Timer aria-hidden="true" />输出 <span className="studio-assistant__duration">{firstToken ? formatDuration(end - firstToken) : '—'}</span></span>
-      <span><Clock3 aria-hidden="true" />总计 <span className="studio-assistant__duration">{formatDuration(end - timing.startedAt)}</span></span>
+      <span className="studio-assistant__timing-total"><Clock3 aria-hidden="true" />总计 <span className="studio-assistant__duration">{formatDuration(end - timing.startedAt)}</span></span>
     </>}
     {showMetrics && <span className="studio-assistant__speed" title="平均输出速度 = 输出 token 数 ÷ 界面显示的输出时长（两位小数）。汇总整条回复所有有正文输出的模型调用，用量来自供应商并扣除明确报告的推理 token，可能包含工具参数；输出时长包含中途工具调用与等待。任一调用缺少真实用量时标记为估算；单片段或缺少耗时时速度不可用。">
       <Gauge aria-hidden="true" />
