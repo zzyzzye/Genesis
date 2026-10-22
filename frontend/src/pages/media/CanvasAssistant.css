@@ -1,15 +1,18 @@
 /* 两个业务共用助手交互；此处仅拥有影音的暗色与悬浮几何。 */
 .media-assistant.studio-assistant {
-  --studio-line:#303030;
-  --studio-navigation:#191919;
-  --assistant-paper:#141414;
-  --assistant-surface:#202020;
-  --assistant-composer:#1c1c1c;
-  --assistant-hover:#2b2b2b;
-  --assistant-ink:#ededed;
-  --assistant-muted:#aaa;
+  --studio-line:#484848;
+  --studio-navigation:#343434;
+  --assistant-paper:#292929;
+  --assistant-surface:#363636;
+  --assistant-composer:#383838;
+  --assistant-hover:#464646;
+  --assistant-ink:#f0f0f0;
+  --assistant-muted:#bcbcbc;
   --assistant-accent:#b7cfbd;
-  --assistant-line:#303030;
+  --assistant-line:#484848;
+  --assistant-menu:#3b3b3b;
+  --assistant-history:#232323;
+  --assistant-error:#f2b4a8;
   --studio-paper:var(--assistant-paper);
   --studio-ink:var(--assistant-ink);
   --studio-soft:var(--assistant-surface);
@@ -17,9 +20,9 @@
   --studio-editor-hover:var(--assistant-hover);
   --studio-accent:var(--assistant-accent);
   --studio-ui:Inter,"PingFang SC","Microsoft YaHei",sans-serif;
-  --scroll-thumb:#444;
-  --scroll-hover:#666;
-  --scroll-active:#888;
+  --scroll-thumb:#666;
+  --scroll-hover:#888;
+  --scroll-active:#aaa;
   color-scheme:dark;
 }
 .media-assistant.studio-assistant.is-open {
@@ -34,7 +37,11 @@
   border:1px solid var(--assistant-line); border-radius:14px;
   box-shadow:0 16px 48px #0006;
 }
-.media-assistant.studio-assistant.is-open .studio-assistant__header { padding:12px 16px; background:var(--assistant-paper); border:0; }
+.media-assistant.studio-assistant.is-open .studio-assistant__header { padding:12px 16px; background:var(--studio-navigation); border:0; }
+.media-assistant .studio-assistant__history { background:var(--assistant-history); }
+.media-assistant .studio-assistant__model-menu { background:var(--assistant-menu); }
+.media-assistant .studio-assistant__conversation-heading { background:var(--assistant-paper); }
+.media-assistant .studio-assistant__request-error { color:var(--assistant-error); }
 .media-assistant .studio-assistant__identity { gap:7px; }
 .media-assistant .studio-assistant__identity div>span { font-size:10px; }
 .media-assistant .studio-assistant__avatar { color:var(--assistant-accent); }
@@ -44,7 +51,7 @@
 .media-assistant .studio-assistant__conversation-heading { color:var(--assistant-muted); }
 .media-assistant .studio-assistant__conversation-heading>strong { font-size:11px; }
 .media-assistant .studio-assistant__resize { left:-5px; }
-.media-assistant .studio-assistant__ring-track { stroke:#424242; }
+.media-assistant .studio-assistant__ring-track { stroke:#626262; }
 .media-assistant .blog-workflow-dialog::backdrop { background:#0009; }
 .media-assistant .blog-workflow-dialog button.blog-workflow-dialog__confirm { background:var(--assistant-accent); color:#19251c; }
 .media-assistant .blog-workflow-dialog button.blog-workflow-dialog__confirm:is(:hover,:focus-visible):not(:disabled) { background:#cbdccf; color:#19251c; }
