@@ -117,7 +117,7 @@
 .studio-assistant__context-chip strong { font-weight: 400; }
 .studio-assistant__model-empty { padding: 12px 8px; font-size: 12px; color: var(--assistant-muted); }
 .studio-assistant__request-error { margin: 8px 0 0; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
-.studio-assistant__speed { flex-basis: 100%; min-height: 1.6em; }
+.studio-assistant__speed { min-height: 1.6em; }
 .studio-assistant__request-error { color: #a3443b; }
 .studio-assistant__action-card { display: grid; gap: 9px; min-width: 0; margin-block: 12px; padding: 14px; border: 1px solid var(--studio-line, #e8e8e8); border-radius: 10px; background: var(--assistant-surface); font-size: 12px; }
 .studio-assistant__action-heading { display: flex; align-items: center; gap: 7px; padding-bottom: 10px; border-bottom: 1px solid var(--studio-line, #e8e8e8); color: var(--assistant-muted); font-weight: 500; }
@@ -147,6 +147,10 @@
 .studio-assistant__timing > span:not(.studio-assistant__speed) { white-space: nowrap; }
 .studio-assistant__duration { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
 .studio-assistant__wait-hint { flex-basis: 100%; white-space: normal !important; line-height: 1.7; }
+.studio-assistant__timing--summary { flex-wrap: nowrap; gap: 8px; min-width: 0; max-width: 100%; overflow-x: auto; outline: 0; }
+.studio-assistant__timing--summary > span { flex: none; white-space: nowrap; }
+.studio-assistant .studio-assistant__timing--summary svg { display: none; }
+.studio-assistant__timing--summary:focus-visible { color: var(--assistant-ink); }
 .studio-assistant__message-status { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--studio-line, #e8e8e8); border-radius: 8px; background: var(--assistant-surface); color: var(--assistant-muted); font-size: 12px; line-height: 1.7; }
 .studio-assistant__stream-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
 .studio-assistant__typing-cursor { display: inline-block; width: 2px; height: 1em; margin-left: 2px; background: currentColor; vertical-align: -2px; animation: studio-caret 1s steps(2, start) infinite; }

@@ -180,7 +180,7 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
     <span><Timer aria-hidden="true" />等待首字 <span className="studio-assistant__duration">{formatDuration(timing ? end - timing.startedAt : (metrics?.total_seconds ?? 0) * 1000)}</span></span>
     {timing && end - timing.startedAt >= 15000 && <span className="studio-assistant__wait-hint">模型尚未返回正文，可继续等待，或停止后切换模型。</span>}
   </div>
-  return <div className="studio-assistant__timing" aria-label="生成耗时" title="首字是开始执行到首次正文输出的等待时间；输出是首次到最后一次正文输出的时间，包含中途工具调用与模型等待；总计为首字与输出之和，不包含输出结束后的收尾处理。">
+  return <div className="studio-assistant__timing studio-assistant__timing--summary" role="group" tabIndex={0} aria-label="生成耗时" title="首字是开始执行到首次正文输出的等待时间；输出是首次到最后一次正文输出的时间，包含中途工具调用与模型等待；总计为首字与输出之和，不包含输出结束后的收尾处理。">
     {metrics && !streaming ? <>
       <span><Zap aria-hidden="true" />首字 <span className="studio-assistant__duration">{metrics.first_token_seconds === null ? '未输出' : formatDuration(metrics.first_token_seconds * 1000)}</span></span>
       <span><Timer aria-hidden="true" />输出 <span className="studio-assistant__duration">{metrics.output_seconds === null ? '—' : formatDuration(metrics.output_seconds * 1000)}</span></span>
