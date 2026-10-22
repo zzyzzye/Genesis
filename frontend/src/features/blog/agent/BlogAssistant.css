@@ -81,7 +81,7 @@
 .studio-assistant__mode-switch { position: relative; display: flex; flex: none; align-items: center; }
 .studio-assistant__mode-switch select { appearance: none; padding: 4px 22px 4px 7px; min-height: 28px; border: 0; outline: 0; box-shadow: none; border-radius: 5px; background: transparent; color: var(--assistant-muted); font: inherit; font-size: 11px; cursor: pointer; }
 .studio-assistant__mode-switch select:hover, .studio-assistant__mode-switch select:focus-visible { background: var(--assistant-hover); }
-.studio-assistant__mode-switch > svg { position: absolute; right: 5px; width: 12px; height: 12px; transform: rotate(90deg); color: var(--assistant-muted); pointer-events: none; }
+.studio-assistant__mode-switch > svg { display: none; }
 .studio-assistant .studio-assistant__tool-button { display: inline-flex; align-items: center; flex: 0 1 auto; gap: 6px; min-width: 0; height: 28px; margin-left: auto; padding: 4px 6px; border-radius: 5px; background: transparent; font-size: 11px; font-weight: 400; }
 .studio-assistant__tool-button:hover, .studio-assistant__tool-button:focus-visible, .studio-assistant__tool-button[aria-expanded=true] { background: var(--assistant-hover); }
 .studio-assistant__selected-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }

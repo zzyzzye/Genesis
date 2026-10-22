@@ -1,5 +1,5 @@
 .agent-reasoning { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:36px; padding:4px 6px 0; color:var(--reasoning-text); }
 .agent-reasoning__title { flex:none; font-size:11px; color:var(--reasoning-muted); }
-.agent-reasoning select { max-width:65%; padding:5px 0 5px 8px; border:0; outline:0; box-shadow:none; background:transparent; color:var(--reasoning-text); font:inherit; font-size:11px; cursor:pointer; color-scheme:inherit; }
+.agent-reasoning select { max-width:65%; padding:5px 0 5px 8px; border:0; outline:0; box-shadow:none; background:transparent; color:var(--reasoning-text); font:inherit; font-size:11px; text-align:end; cursor:pointer; color-scheme:inherit; }
 .agent-reasoning select:disabled { opacity:.4; cursor:not-allowed; }
 .agent-reasoning__unavailable { color:var(--reasoning-muted); font-size:10px; }

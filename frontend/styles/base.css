@@ -1,4 +1,5 @@
 :root {
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6' fill='none' stroke='%23777777' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --scroll-thumb: #dedede;
   --scroll-hover: #b8b8b8;
   --scroll-active: #969696;
@@ -60,6 +61,26 @@ select {
 
 button {
   cursor: pointer;
+}
+
+/* 原生菜单保留系统行为；关闭态的箭头与留白由全站统一拥有。 */
+#root select:not([multiple]) {
+  appearance: none;
+  outline: 0;
+  box-shadow: none;
+  padding-inline-end: 30px;
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 14px 14px;
+  text-overflow: ellipsis;
+}
+
+@media (forced-colors: active) {
+  #root select:not([multiple]) {
+    appearance: auto;
+    background-image: none;
+  }
 }
 
 /* 文本域尺寸由布局、自动增高或画布节点控制，不显示浏览器拖拽手柄。 */
