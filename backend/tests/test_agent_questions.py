@@ -24,7 +24,7 @@ def test_question_tool_validates_and_returns_persistable_block() -> None:
     payload = json.loads(result.split("```user-question\n")[1].split("```")[0])
     assert payload["id"]
     assert payload["questions"] == [{"question": "目标是什么？", "options": []}]
-    assert ask_user_question.return_direct
+    assert not ask_user_question.return_direct
     with pytest.raises(ValidationError):
         QuestionRequest.model_validate({"questions": []})
     with pytest.raises(ValidationError):
@@ -70,6 +70,54 @@ async def test_question_error_does_not_leak_raw_tool_arguments(
     text = "".join(event for event in events if isinstance(event, str))
     assert "请在聊天中补充需求" in text
     assert "raw-placeholder" not in text
+
+
+@pytest.mark.anyio
+async def test_native_question_repairs_invalid_options_before_waiting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """复现选项被多包一层数组；原生模型循环可修正后才等待用户。"""
+    class QuestionModel(FakeMessagesListChatModel):
+        def bind_tools(self, tools: Any, **kwargs: Any) -> Any:
+            return self
+
+    options = [
+        {"label": "科普", "description": "面向普通读者"},
+        {"label": "专业", "description": "面向研究人员"},
+    ]
+    model = QuestionModel(responses=[
+        AIMessage(content="", tool_calls=[{
+            "name": "ask_user_question", "id": "invalid", "args": {"questions": [{
+                "question": "文章面向谁？", "options": [options[0], [options[1]]],
+            }]},
+        }]),
+        AIMessage(content="", tool_calls=[{
+            "name": "ask_user_question", "id": "repaired", "args": {"questions": [{
+                "question": "文章面向谁？", "options": options,
+            }]},
+        }]),
+        AIMessage(content="不应在用户回答前继续"),
+    ])
+    runtime = EmbeddedAgentRuntime()
+    runtime._checkpointer = cast(Any, InMemorySaver())
+    monkeypatch.setattr(runtime, "_build_model", lambda *_: model)
+    request = AiChatRequest(
+        surface="studio", actor_id=uuid4(), actor_role="owner",
+        messages=[AiMessage(role="user", content="写一篇文章")],
+    )
+    settings = Settings(text_openai_model="test")
+    events = [event async for event in runtime.stream(request, settings, thread_id="repair")]
+    text = "".join(event for event in events if isinstance(event, str))
+    assert model.i == 2
+    assert text.count("```user-question") == 1
+    assert "文章面向谁？" in text
+    assert "暂时无法显示" not in text and "不应" not in text
+    graph = runtime._graph(settings, "openai", "test", "blog")
+    snapshot = await graph.aget_state({"configurable": {"thread_id": "repair"}})
+    outputs = [m for m in snapshot.values["messages"] if isinstance(m, ToolMessage)]
+    assert [m.status for m in outputs] == ["error", "success"]
+    assert "questions[0].options[1]" in outputs[0].content
+    assert "必须是对象" in outputs[0].content
 
 
 @pytest.mark.anyio

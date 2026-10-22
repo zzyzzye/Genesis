@@ -3,8 +3,13 @@
 import json
 from uuid import uuid4
 
+from langchain.agents.middleware import AgentState, before_model
+from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
+from langgraph.runtime import Runtime
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from genesis_api.agent.tool_inputs import ToolArray, tool_validation_error
 
 COLLABORATION_PROMPT = """
 协作规则：始终使用自然、简洁的简体中文。
@@ -17,6 +22,7 @@ COLLABORATION_PROMPT = """
 一次集中询问 1–3 个关键问题，每题提供 2–3 个互斥选项；无法合理列出选项时使用空列表，
 让用户自由回答。界面始终支持自定义回答，不要添加“其他”选项，不默认替用户选择或提交。
 提问只使用 ask_user_question 工具，不自行输出问题 JSON 或代码块；同一批次不要混用提问与业务工具。
+工具参数中的数组直接传数组，不要编码成字符串；每个选项直接传包含 label、description 的对象。
 该工具结束本轮回复，等待用户明确回答后再沿用同一会话继续，不把沉默或超时当作答案。
 澄清回答只补充需求，不替代业务写操作的独立确认；用户更改方向时以最新明确指令为准。
 """
@@ -39,7 +45,7 @@ class UserQuestion(BaseModel):
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     question: str = Field(min_length=1, max_length=500)
-    options: list[QuestionOption] = Field(default_factory=list, max_length=3)
+    options: ToolArray[QuestionOption] = Field(default_factory=list, max_length=3)
 
     @model_validator(mode="after")
     def validate_options(self) -> "UserQuestion":
@@ -56,10 +62,10 @@ class UserQuestion(BaseModel):
 class QuestionRequest(BaseModel):
     """集中呈现一次澄清所需的问题，避免连续打断用户。"""
 
-    questions: list[UserQuestion] = Field(min_length=1, max_length=3)
+    questions: ToolArray[UserQuestion] = Field(min_length=1, max_length=3)
 
 
-@tool(args_schema=QuestionRequest, return_direct=True)
+@tool(args_schema=QuestionRequest)
 def ask_user_question(questions: list[UserQuestion]) -> str:
     """缺少关键信息或任务过宽时，向用户展示选择卡片并结束本轮等待回答。
 
@@ -72,3 +78,23 @@ def ask_user_question(questions: list[UserQuestion]) -> str:
     request = QuestionRequest(questions=questions)
     payload = {"id": str(uuid4()), **request.model_dump()}
     return "\n```user-question\n" + json.dumps(payload, ensure_ascii=False) + "\n```\n"
+
+
+ask_user_question.handle_validation_error = tool_validation_error
+
+
+@before_model(can_jump_to=["end"])
+def finish_after_user_question(
+    state: AgentState, runtime: Runtime[None],
+) -> dict[str, object] | None:
+    """有效提问才用原生跳转等待用户；参数错误继续交给模型修正。
+
+    return_direct 会连校验失败一起结束，因此这里只替换提问的终止条件，
+    不接管框架的工具执行、重试循环或 checkpoint。
+    """
+    for message in reversed(state["messages"]):
+        if not isinstance(message, ToolMessage):
+            break
+        if message.name == "ask_user_question" and message.status != "error":
+            return {"jump_to": "end"}
+    return None

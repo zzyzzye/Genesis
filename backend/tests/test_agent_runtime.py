@@ -642,3 +642,39 @@ async def test_built_tools_delegate_without_http(monkeypatch: pytest.MonkeyPatch
         },
     })
     assert unexpected.status == "error" and "未声明的参数" in unexpected.content
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("name", ["create_draft", "create_scheduled_post", "create_and_publish"])
+async def test_creation_tools_accept_encoded_arrays_without_weakening_validation(
+    monkeypatch: pytest.MonkeyPatch, name: str,
+) -> None:
+    """复现 MiMo 将分类和标签传为字符串；兼容后仍按原契约生成一次提议。"""
+    received: list[dict[str, object]] = []
+
+    def preview(action: str, payload: dict[str, object], settings: Settings) -> str:
+        received.append(payload)
+        return "提议替身"
+
+    monkeypatch.setattr(agent_tools, "_preview", preview)
+    target = next(item for item in agent_tools.build_blog_tools(Settings()) if item.name == name)
+    arguments: dict[str, object] = {
+        "title": "验收", "excerpt": "摘要", "content_markdown": "正文", "slug": "sample",
+        "category_ids": '["category-id"]', "tags": '[{"name":"测试","slug":"test"}]',
+    }
+    if name == "create_scheduled_post":
+        arguments["scheduled_at"] = "2099-01-01T09:00:00+08:00"
+    assert await target.ainvoke(arguments) == "提议替身"
+    assert len(received) == 1
+    assert received[0]["category_ids"] == ["category-id"]
+    assert received[0]["tags"] == [{"name": "测试", "slug": "test"}]
+    assert received[0]["content_markdown"] == "正文"
+    for field, value in (("category_ids", "{}"), ("tags", '[{"name":"private-marker"}]')):
+        result = await target.ainvoke({
+            "type": "tool_call", "name": name, "id": "invalid", "args": {
+                **arguments, field: value,
+            },
+        })
+        assert result.status == "error"
+        assert field in result.content and "private-marker" not in result.content
+    assert len(received) == 1

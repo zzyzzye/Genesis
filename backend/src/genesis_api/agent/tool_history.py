@@ -15,6 +15,8 @@ from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.messages import ToolMessage
 from pydantic import BaseModel, Field
 
+from genesis_api.agent.tool_inputs import tool_input_error_summary
+
 
 class AgentToolCall(BaseModel):
     """单次真实工具调用的展示投影；回调 ID 区分并行调用及恢复后的新尝试。"""
@@ -113,6 +115,8 @@ class ToolCallHistory(AsyncCallbackHandler):
             "failed" if failed else "succeeded"
         )
         summary = "工具执行失败，助手可继续处理" if failed else "工具执行完成"
+        if failed:
+            summary = tool_input_error_summary(data) or summary
         proposal_id = None
         if not failed and isinstance(data, dict) and data.get("type") == "pending_action":
             with suppress(ValueError):

@@ -25,7 +25,11 @@ from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.files import AttachmentFilesMiddleware, agent_files_context
 from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.mimo import ChatMiMo
-from genesis_api.agent.questions import COLLABORATION_PROMPT, ask_user_question
+from genesis_api.agent.questions import (
+    COLLABORATION_PROMPT,
+    ask_user_question,
+    finish_after_user_question,
+)
 from genesis_api.agent.tool_history import ToolCallHistory
 from genesis_api.ai.schemas import AiChatRequest, AiConversationTitle
 from genesis_api.core.config import Settings
@@ -271,6 +275,7 @@ class EmbeddedAgentRuntime:
                 checkpointer=self._checkpointer,
                 middleware=[
                     *([AttachmentFilesMiddleware()] if module == "blog" else []),
+                    finish_after_user_question,
                     *capability.middleware,
                 ],
                 name=capability.name,
@@ -358,6 +363,7 @@ class EmbeddedAgentRuntime:
         if resuming:
             # 已有 checkpoint 时不重复读取原文件或提交消息，由框架恢复执行状态。
             graph_input = None
+        question_failed = False
         with (
             agent_invocation_context(
                 request.actor_id, request.actor_role, module, execution_mode=request.execution_mode
@@ -380,11 +386,9 @@ class EmbeddedAgentRuntime:
                                 continue
                             if getattr(message, "name", None) == "ask_user_question":
                                 if getattr(message, "status", None) == "error":
-                                    yield (
-                                        "澄清问题暂时无法显示，请在聊天中补充需求，"
-                                        "或请助手重新提问。"
-                                    )
+                                    question_failed = True
                                 else:
+                                    question_failed = False
                                     yield str(message.content)
                                 continue
                             try:
@@ -398,6 +402,8 @@ class EmbeddedAgentRuntime:
                     if metrics is not None:
                         metrics.observe(message, text)
                     yield text
+        if question_failed:
+            yield "澄清问题暂时无法显示，请在聊天中补充需求，或请助手重新提问。"
 
     async def generate_structured(
         self,

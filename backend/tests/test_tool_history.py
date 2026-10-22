@@ -9,9 +9,12 @@ from langchain_core.tools import tool
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
+from pydantic import ValidationError
 
+from genesis_api.agent.questions import QuestionRequest
 from genesis_api.agent.runtime import EmbeddedAgentRuntime
 from genesis_api.agent.tool_history import AgentToolCall, ToolCallHistory
+from genesis_api.agent.tool_inputs import tool_validation_error
 from genesis_api.ai.schemas import AiChatRequest, AiMessage
 from genesis_api.core.config import Settings
 
@@ -131,3 +134,24 @@ async def test_tool_errors_proposals_and_interruption_are_distinct() -> None:
     await history.on_tool_error(asyncio.CancelledError(), run_id=call_id)
     assert [call.status for call in changes][-1] == "interrupted"
     assert "private-" not in "".join(call.model_dump_json() for call in changes)
+
+
+@pytest.mark.anyio
+async def test_validation_history_displays_safe_field_reason() -> None:
+    """模型与历史收到同一份字段原因，错误输入值不进入持久化历史。"""
+    changes: list[AgentToolCall] = []
+
+    async def save(call: AgentToolCall) -> None:
+        changes.append(call)
+
+    with pytest.raises(ValidationError) as caught:
+        QuestionRequest.model_validate({"questions": "private-marker"})
+    history = ToolCallHistory(save)
+    call_id = uuid4()
+    await history.on_tool_start({"name": "ask_user_question"}, "private-marker", run_id=call_id)
+    await history.on_tool_end(ToolMessage(
+        content=tool_validation_error(caught.value), status="error", tool_call_id="invalid",
+    ), run_id=call_id)
+    assert changes[-1].status == "failed"
+    assert changes[-1].result_summary == "参数校验失败：questions：必须是数组"
+    assert "private-marker" not in "".join(call.model_dump_json() for call in changes)

@@ -22,6 +22,7 @@ from sqlalchemy.orm import selectinload
 
 from genesis_api.agent.context import automatic_actions_allowed, require_owner
 from genesis_api.agent.contracts import AgentActionProposal
+from genesis_api.agent.tool_inputs import ToolArray, tool_validation_error
 from genesis_api.blog.agent.actions import (
     check_post_references,
     check_post_version,
@@ -374,7 +375,7 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
     @tool
     async def create_draft(
         title: str, excerpt: str, content_markdown: str, slug: str,
-        category_ids: list[str] | None = None, tags: list[BlogTagWrite] | None = None,
+        category_ids: ToolArray[str] | None = None, tags: ToolArray[BlogTagWrite] | None = None,
         cover_image_url: str | None = None,
     ) -> str:
         """创建新草稿，可同时设置分类、标签和封面；定时发布请用 create_scheduled_post。
@@ -406,7 +407,7 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
     @tool
     async def create_scheduled_post(
         title: str, excerpt: str, content_markdown: str, slug: str, scheduled_at: str,
-        category_ids: list[str], tags: list[BlogTagWrite],
+        category_ids: ToolArray[str], tags: ToolArray[BlogTagWrite],
         cover_image_url: str | None = None,
     ) -> str:
         """一次创建文章并安排定时发布，用户要求未来发布新文章时必须使用。
@@ -433,7 +434,7 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
     @tool
     async def create_and_publish(
         title: str, excerpt: str, content_markdown: str, slug: str,
-        category_ids: list[str] | None = None, tags: list[BlogTagWrite] | None = None,
+        category_ids: ToolArray[str] | None = None, tags: ToolArray[BlogTagWrite] | None = None,
         cover_image_url: str | None = None,
     ) -> str:
         """一次创建并发布全新文章；用户要求直接发布时使用，不要拆成创建草稿和再次发布。
@@ -571,7 +572,5 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             item.args_schema = create_model(schema.__name__, __base__=schema,
                                             __config__=ConfigDict(extra="forbid"))
         item.handle_tool_error = True
-        item.handle_validation_error = (
-            "参数无效，请按工具定义提供完整且正确的字段，不要传入未声明的参数。"
-        )
+        item.handle_validation_error = tool_validation_error
     return tools
