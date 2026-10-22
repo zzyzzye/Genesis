@@ -40,6 +40,23 @@ describe('账户登录与注册', () => {
   })
   afterEach(() => { cleanup(); localStorage.clear(); vi.resetAllMocks() })
 
+  it('资料保留返回首页，仅作者可进入写作台，头像加载失败后显示首字', async () => {
+    storeAuthToken(session.access_token)
+    vi.mocked(getCurrentUser).mockResolvedValueOnce({ ...user, role: 'owner', avatar_url: '/missing-avatar.jpg' })
+    const view = setup()
+    await screen.findByRole('heading', { name: user.display_name })
+    expect(screen.getByRole('link', { name: '返回首页' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: '写作台' })).toHaveAttribute('href', '/blog/studio')
+    const avatar = view.container.querySelector('.account-avatar')!
+    fireEvent.error(avatar.querySelector('img')!)
+    expect(avatar.querySelector('img')).toBeNull()
+    expect(avatar).toHaveTextContent('测')
+    view.unmount()
+    setup()
+    await screen.findByRole('heading', { name: user.display_name })
+    expect(screen.queryByRole('link', { name: '写作台' })).not.toBeInTheDocument()
+  })
+
   it('资料使用关联错误与首错聚焦，保存防重且失败保留输入', async () => {
     storeAuthToken(session.access_token)
     setup()
@@ -52,6 +69,7 @@ describe('账户登录与注册', () => {
     fireEvent.submit(form)
     expect(name).toHaveFocus()
     expect(name).toHaveAttribute('aria-invalid', 'true')
+    expect(name).toHaveAccessibleName('昵称')
     expect(updateCurrentUser).not.toHaveBeenCalled()
     fireEvent.change(name, { target: { value: ' 修改昵称 ' } })
     fireEvent.change(avatar, { target: { value: '不是网址' } })

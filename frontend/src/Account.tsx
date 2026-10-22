@@ -1,7 +1,7 @@
 import './Account.css'
 
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
-import { ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { GenesisLogo } from './components/GenesisLogo'
 import { FpsStatusSlot } from './features/performance/FpsMonitor'
@@ -15,8 +15,21 @@ type AccountState =
   | { status: 'ready'; user: CurrentUser; feedback: string | null }
 type AccountField = 'handle' | 'displayName' | 'password'
 
-function AccountLayout({ children }: { children: ReactNode }) {
+function AccountLayout({ children, profile = false }: { children: ReactNode; profile?: boolean }) {
   const [coverFailed, setCoverFailed] = useState(false)
+  if (profile) return <main className="account-shell account-profile-shell">
+    <aside className="account-profile-visual" aria-hidden="true">
+      {!coverFailed && <img src="/images/account/still-life.jpg" alt="" width={1024} height={1536} onError={() => setCoverFailed(true)} />}
+    </aside>
+    <div className="account-profile-main">
+      <header className="account-profile-header">
+        <Link className="account-header-back" to="/"><ArrowLeft size={17} aria-hidden="true" />返回首页</Link>
+        <FpsStatusSlot />
+      </header>
+      <div className="account-profile-content">{children}</div>
+      <footer className="account-profile-footer">Genesis · 你的个人空间</footer>
+    </div>
+  </main>
   return <main className="account-shell account-auth">
     <div className="account-auth-main">
       <header className="account-auth-header">
@@ -124,6 +137,7 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
   const [displayName, setDisplayName] = useState(user.display_name)
   const [bio, setBio] = useState(user.bio)
   const [avatarUrl, setAvatarUrl] = useState(user.avatar_url ?? '')
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null)
   const [errors, setErrors] = useState<Partial<Record<'displayName' | 'bio' | 'avatarUrl', string>>>({})
   const nameInput = useRef<HTMLInputElement>(null)
   const bioInput = useRef<HTMLTextAreaElement>(null)
@@ -151,50 +165,46 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
   }
 
   return (
-    <main className="account-shell">
+    <AccountLayout profile>
       <section className="account-card account-card--profile" aria-labelledby="profile-title">
+        <div className="account-profile-intro">
+          <h1 id="profile-title">个人资料</h1>
+          <p>让大家认识你，也让这里更像你。</p>
+        </div>
         <div className="account-profile-heading">
           <div className="account-avatar" aria-hidden="true">
-            {user.avatar_url ? <img alt="" src={user.avatar_url} /> : user.display_name.slice(0, 1)}
+            {user.avatar_url && failedAvatar !== user.avatar_url ? <img alt="" src={user.avatar_url} onError={() => setFailedAvatar(user.avatar_url)} /> : user.display_name.slice(0, 1)}
           </div>
-          <div>
-            <p className="eyebrow">GENESIS / PROFILE</p>
-            <h1 id="profile-title">{user.display_name}</h1>
+          <div className="account-profile-identity">
+            <h2 title={user.display_name}>{user.display_name}</h2>
             <p>@{user.handle} · {user.role === 'owner' ? '站点作者' : '社区成员'}</p>
           </div>
+          {user.role === 'owner' && <Link className="account-studio-entry" to="/blog/studio">写作台<ArrowUpRight size={15} aria-hidden="true" /></Link>}
         </div>
-        {user.role === 'owner' && (
-          <Link className="account-studio-entry" to="/blog/studio">
-            <span>
-              <small>OWNER WORKSPACE</small>
-              <strong>进入写作台</strong>
-              <em>写作、整理与发布文章</em>
-            </span>
-            <span aria-hidden="true">→</span>
-          </Link>
-        )}
         <form className="account-form" aria-label="个人资料" noValidate aria-busy={busy} onSubmit={submit} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }}>
           <label htmlFor="profile-display-name">
-            <span>昵称</span>
-            <input ref={nameInput} id="profile-display-name" maxLength={100} readOnly={busy} aria-invalid={Boolean(errors.displayName)} aria-describedby={errors.displayName ? 'profile-name-error' : undefined} onChange={(event) => { setDisplayName(event.currentTarget.value); setErrors(current => ({ ...current, displayName: undefined })) }} required value={displayName} />
+            <span id="profile-name-label">昵称</span>
+            <input ref={nameInput} id="profile-display-name" aria-labelledby="profile-name-label" maxLength={100} readOnly={busy} aria-invalid={Boolean(errors.displayName)} aria-describedby={errors.displayName ? 'profile-name-error' : undefined} onChange={(event) => { setDisplayName(event.currentTarget.value); setErrors(current => ({ ...current, displayName: undefined })) }} required value={displayName} />
             <span className="account-field-help">{errors.displayName && <span id="profile-name-error" className="account-field-error" role="alert">{errors.displayName}</span>}</span>
           </label>
           <label htmlFor="profile-bio">
-            <span>个人简介</span>
-            <textarea ref={bioInput} className="resize-none" id="profile-bio" readOnly={busy} aria-invalid={Boolean(errors.bio)} aria-describedby={errors.bio ? 'profile-bio-error' : undefined} maxLength={1000} onChange={(event) => { setBio(event.currentTarget.value); setErrors(current => ({ ...current, bio: undefined })) }} placeholder="介绍一下你自己" rows={4} value={bio} />
+            <span id="profile-bio-label">个人简介</span>
+            <textarea ref={bioInput} className="resize-none" id="profile-bio" aria-labelledby="profile-bio-label" readOnly={busy} aria-invalid={Boolean(errors.bio)} aria-describedby={errors.bio ? 'profile-bio-error' : undefined} maxLength={1000} onChange={(event) => { setBio(event.currentTarget.value); setErrors(current => ({ ...current, bio: undefined })) }} placeholder="介绍一下你自己" rows={3} value={bio} />
             <span className="account-field-help">{errors.bio && <span id="profile-bio-error" className="account-field-error" role="alert">{errors.bio}</span>}</span>
           </label>
           <label htmlFor="profile-avatar-url">
-            <span>头像地址</span>
-            <input ref={avatarInput} id="profile-avatar-url" maxLength={500} readOnly={busy} aria-invalid={Boolean(errors.avatarUrl)} aria-describedby={errors.avatarUrl ? 'profile-avatar-error' : undefined} onChange={(event) => { setAvatarUrl(event.currentTarget.value); setErrors(current => ({ ...current, avatarUrl: undefined })) }} placeholder="https://example.com/avatar.png" type="url" value={avatarUrl} />
+            <span id="profile-avatar-label">头像地址</span>
+            <input ref={avatarInput} id="profile-avatar-url" aria-labelledby="profile-avatar-label" maxLength={500} readOnly={busy} aria-invalid={Boolean(errors.avatarUrl)} aria-describedby={errors.avatarUrl ? 'profile-avatar-error' : undefined} onChange={(event) => { setAvatarUrl(event.currentTarget.value); setErrors(current => ({ ...current, avatarUrl: undefined })) }} placeholder="https://example.com/avatar.png" type="url" value={avatarUrl} />
             <span className="account-field-help">{errors.avatarUrl && <span id="profile-avatar-error" className="account-field-error" role="alert">{errors.avatarUrl}</span>}</span>
           </label>
           {feedback && <p className="account-feedback" role="status">{feedback}</p>}
-          <button className="primary-button" type="submit" disabled={busy}>{busy ? '正在保存…' : '保存资料'} <span aria-hidden="true">→</span></button>
+          <div className="account-profile-actions">
+            <button className="primary-button" type="submit" disabled={busy}>{busy && <LoaderCircle className="account-submit-spinner" size={16} aria-hidden="true" />}{busy ? '正在保存…' : '保存资料'}</button>
+            <button className="account-logout" disabled={busy} onClick={onLogout} type="button">退出登录</button>
+          </div>
         </form>
-        <button className="account-logout" disabled={busy} onClick={onLogout} type="button">退出登录</button>
       </section>
-    </main>
+    </AccountLayout>
   )
 }
 

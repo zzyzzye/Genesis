@@ -93,6 +93,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | 账户登录 / 注册 Form | AccountLayout、AccountForm、Account、SessionRecovery | Account.tsx/CSS、lib/auth.ts、lib/api.ts、auth.py 的注册约束 | 普通按钮切换模式；noValidate 与关联字段错误、首错聚焦；密码默认隐藏、可切换显示；提交保留表单、同步锁防重、输入只读；失败保留内存输入；离开忽略迟到响应；注册已成功但自动登录失败时回到登录，避免重复创建；返回路径沿用原有规则 | 桌面/390/320px、登录/注册/失效/初始加载、校验、输入法、密码切换、提交中与重试、成功返回及成员/作者资料、离开时的迟到响应 |
 | Select/Listbox | 原生 select | premium-ui.json、AgentModelPicker、ReasoningEffortControl、BlogAssistant、ProjectCanvas、AssetLibrary | 简单枚举使用系统菜单管理弹出几何与键盘；思考模式/强度、执行方式、素材类型、画布参数维持原生行为；模型目录搜索沿用现有专用面板 | 浏览器展开、选择、Escape，组件测试 |
 | 表单下拉箭头 | base.css 的原生 select 关闭态 | DESIGN.md、既有 select | 单选框统一箭头尺寸、居中和右侧留白，保留系统菜单及键盘行为；助手执行方式不再叠加第二个箭头 | 闭合/展开、键盘与 Escape、浅色/暗色、长值和窄屏 |
+| 账户资料 | AccountProfile、AccountLayout 的 profile 变体 | Account.tsx/CSS、public/images/account/still-life.jpg | 左侧静物、右侧资料的扁平分栏；仅作者显示写作台；头像失败回落首字；空错误不占位；保存与退出同组；保留原校验、防重及失败输入 | 桌面与短屏、390/320px、空简介、长昵称、图片失败、聚焦、校验、提交中、保存成功与失败、成员/作者 |
 | Form | AccountForm、AccountProfile、AiChatPanel、ProjectDialog 与各业务表单 | Account.tsx、AiChatPanel.tsx、ProjectCanvas.tsx、MediaHome.tsx | 提交表单使用 noValidate、业务校验及重复提交锁；个人资料必填/长度/头像地址错误与字段关联并聚焦首错，保存失败保留输入；节点编辑无需表单提交 | 校验、焦点、提交锁、失败重试、整数时长、保存恢复 |
 | CRUD | useCanvas、作品素材 API | useCanvas.ts、api/routes/media.py | 节点修改可撤销；素材删除沿用既有确认流程 | 组件测试、后端权限与素材类型测试 |
 | 文章导出 | PostsIndex、downloadBlogArticles、共享 downloadBlob | blog/export.py、admin_blog.py 的所有者只读导出接口 | 单篇 Markdown 可读回收站；整库 ZIP 只含普通文章，回收站独立导出，均不受前端筛选分页影响；含原正文与 front matter，不含评论/附件/页面；请求取消、同步防重、失败保留列表，响应 no-store | 授权与 404、正文和多分类保真、删除范围、归档路径、临时文件关闭、重复点击/取消竞态、失败重试、空态、桌面与窄屏 |
@@ -306,6 +307,10 @@ PNG/JPEG/GIF/WebP 使用 LangChain 标准 image 内容块；MP4/WebM 使用 vide
 2026-10-20 重做账户登录和注册，复用已有 Compose 前端服务，在 Chrome 检查 1470×689、390×844、320×740：正常空表单、注册切换、字段校验与首错聚焦、密码显示/隐藏、真实无效登录与输入保留、失效提示及自动聚焦、键盘聚焦与窄屏滚动。登录桌面首屏无额外滚动，输入无边框、描边、阴影或聚焦变色。初始加载、提交中、成功登录、成员/作者资料、资料反馈及退出使用当前标签页的内存接口和存储替身验收；临时验收入口已移除，未创建真实测试账户。
 
 32 项账户及关联流程测试通过，最终账户 8 项复验通过；ESLint、TypeScript/生产构建通过。本次无后端改动。DESIGN lint 零错误、7 项既有警告；strict 静态发现由 21 项降至 20 项，剩余账户资料表单的原生校验问题和 textarea 静态检测属于既有项，后者的运行时 resize:none 已复核；不代表全站静态审计通过。构建保留既有大分块提示。
+
+2026-10-22 账户资料按左右分栏静物参考重排，复用 Compose 前端，在 Chrome 检查 1470×689、390×844、320×740。真实作者资料与配图正常显示，短屏正常内容无额外滚动；临时验收入口使用同一 AccountProfile 验证空简介、成员无写作台入口、超长昵称、头像失败首字回落、字段错误与首错聚焦、键盘按钮聚焦、保存中只读及禁用、成功反馈、失败保留输入。输入和按钮均无边框、描边或阴影，窄屏无横向溢出；已移除临时验收入口，没有修改真实账户资料。相关文件 ESLint 与 TypeScript/生产构建通过，保留既有大分块提示；DESIGN lint 零错误、7 项既有警告，strict audit 零发现。
+
+账户、会话恢复与 FPS 的 18 项测试通过；App 的 12 项测试单独复验通过，共 30 项。首次整站复验出现 4 项超时，独立复验全部通过，未调高测试超时或修改测试预期。
 
 2026-10-20 博客目录按用户指定参考站独立重做，复用 Compose 5173/8000 服务。Chrome 在 1470px、390px、320px 检查正常封面、长标题、标签选中、侧栏收起、手机菜单、搜索加载和空结果、输入聚焦、Escape 与焦点恢复、搜索提交和正文返回。暂停并恢复原有内容服务验证失败界面与恢复入口；服务已恢复，未修改文章或账户。修复桌面收起状态影响手机菜单文字的问题。截图确认无横向溢出、遮挡或焦点描边。
 
