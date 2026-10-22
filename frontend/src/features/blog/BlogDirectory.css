@@ -41,12 +41,9 @@ body:has(.blog-portal) { min-width: 0; }
 .blog-portal--collapsed .portal-sidebar { padding-inline: 10px; }
 .blog-portal--collapsed .portal-sidebar .portal-navigation > a { justify-content: center; padding-inline: 8px; }
 .portal-main { min-width: 0; margin-left: var(--portal-sidebar-width); padding: calc(var(--portal-header-height) + 22px) 32px 0; }
-.portal-topics { min-height: 44px; margin-bottom: 28px; }
-.portal-topics-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
-.portal-topics-heading > span { color: var(--portal-muted); font-size: 11px; }
-.portal-topics .portal-topics-reset { min-height: 40px; padding: 8px 14px; border-radius: 9px; background: transparent; font-size: 14px; font-weight: 600; }
-.portal-topics-reset:is(:hover, :focus-visible, [aria-pressed="true"]) { background: var(--portal-hover); }
-.portal-topics > .tag-cloud { margin-top: 12px; }
+.portal-topics { display: flex; gap: 8px; min-height: 44px; margin-bottom: 32px; overflow-x: auto; }
+.portal-topics button { min-height: 40px; flex: none; padding: 8px 14px; border-radius: 9px; background: transparent; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.portal-topics button:is(:hover, :focus-visible, [aria-pressed="true"]) { background: var(--portal-hover); }
 .portal-featured { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; min-height: 350px; padding: 20px; border-radius: 28px; background: var(--portal-soft); }
 .portal-featured-copy { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; padding: 12px 18px 14px; }
 .portal-author { display: inline-flex; min-width: 0; align-items: center; gap: 8px; color: var(--portal-muted); font-size: 12px; font-weight: 400; }
@@ -142,7 +139,7 @@ body:has(.blog-portal) { min-width: 0; }
   .blog-portal { --portal-header-height: 64px; --portal-sidebar-width: 0px; }
   .portal-header { grid-template-columns: minmax(0, 1fr) 44px minmax(44px, max-content); gap: 5px; padding-inline: 12px; }.portal-brand { --genesis-logo-size: 26px; --genesis-wordmark-size: 14px; --genesis-logo-gap: 7px; gap: 5px; }.portal-brand > a, .blog-portal--collapsed .portal-brand > a { display: block; font-size: 16px; }
   .portal-search-trigger { width: 40px; height: 40px; min-height: 40px; justify-content: center; padding: 0; background: transparent; }.portal-search-trigger > span, .portal-search-trigger > kbd { display: none; }
-  .portal-sidebar { display: none; }.portal-main { margin-left: 0; padding: 80px 20px 0; }.portal-topics { margin-bottom: 22px; }.portal-topics .portal-topics-reset { padding-inline: 12px; }
+  .portal-sidebar { display: none; }.portal-main { margin-left: 0; padding: 80px 20px 0; }.portal-topics { margin-bottom: 22px; gap: 4px; }.portal-topics button { padding-inline: 12px; font-size: 14px; }
   .portal-featured { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 16px; border-radius: 22px; }.portal-featured-cover { grid-row: auto; max-height: none; }.portal-featured-cover > img { height: 100%; min-height: 250px; }.portal-featured-copy { padding: 7px; }.portal-featured h2 { font-size: 23px; }
   .portal-featured-copy > p { font-size: 13px; }.portal-featured-copy > .portal-author { margin-bottom: 18px; }.portal-posts { margin-top: 32px; }.portal-post-grid { gap: 28px 20px; }
 }

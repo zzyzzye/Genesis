@@ -100,7 +100,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | Date / 定时发布 | 原生 datetime-local、PostBatchDialog、postManagement.ts | blog/publication.py、BlogPost.scheduled_at、应用 lifespan | 浏览器拥有日历弹层；显示当前浏览器时区，输入转换 UTC、拒绝过去或被日期规范化的无效时间；仅完整草稿可计划，单篇使用同一批量入口；计划持久化，每 5 秒检查，停机后补发，行锁避免重复；撤回/立即发布/回收站清除计划，草稿保存保留；有计划时列表定期刷新但保留所选版本快照 | 未来时间、校验关联与聚焦、取消、回收站、重启补发、只发布一次、日期键盘输入、桌面与窄屏 |
 | 博客分类/标签选择 | TaxonomyPicker | TaxonomyPicker.tsx、blog/schemas.py | 直接展示原生按钮组；分类单选、标签多选，不使用弹出式 combobox | 直接选择、创建并选入、输入法、数量上限与窄屏 |
 | 博客分类/标签管理 | TaxonomyWorkspace、TaxonomyEditor、TagCloud | TaxonomyWorkspace.tsx、admin_blog.py | 搜索/新增共用输入，标签词云和分类列表；原生 dialog 管理改名和删除 | 模态焦点、取消恢复、失败重试、使用中禁止删除 |
-| 标签词云 | TagCloud、ECharts + echarts-wordcloud | TagCloud.tsx/CSS、tagCloudChart.ts、公开标签 API、TaxonomyWorkspace 的文章使用计数 | ECharts 词云负责排布与点击；原生按钮保留键盘和读屏，聚焦同步图中强调和完整提示；加载失败显示原生列表；首页 URL 筛选，管理页进入既有 dialog，字号按全量比例计算 | 图表真实点击、数量相等/为零、长名称提示、搜索清空、焦点恢复、窄屏、空态、实例释放 |
+| 标签词云 | TagCloud、ECharts + echarts-wordcloud | TagCloud.tsx/CSS、tagCloudChart.ts、公开标签 API、TaxonomyWorkspace 的文章使用计数 | ECharts 词云负责排布与点击；原生按钮保留键盘和读屏，聚焦同步图中强调和完整提示；加载失败显示原生列表；博客左侧栏 URL 筛选，管理页进入既有 dialog，字号按全量比例计算 | 图表真实点击、数量相等/为零、长名称提示、搜索清空、焦点恢复、窄屏、空态、实例释放 |
 | 博客写作 Form / CRUD | blogEditor.ts、Studio 的 Dashboard | blog/schemas.py、admin_blog.py | 草稿允许缺少正文；公开发布校验完整性，发布与更新公开内容均先检查确认 | 草稿保存、首次发布、更新发布、失败重试、版本冲突 |
 | 博客独立页面 Form / CRUD | PagesWorkspace、usePagesWorkspace、共享 MarkdownEditor、BlogWorkflowDialog | blog/pages.py、api/routes/blog_pages.py | 独立草稿与公开目录；创建使用稳定 UUID，更新与删除必须核对版本；恢复与文章隔离 | 编辑预览保留、创建重试、发布/撤回/删除确认、公开边界、导航拦截、窄屏 |
 | 博客链接 Form / CRUD | LinksWorkspace、useModalDialog、BlogWorkflowDialog | blog/links.py、admin_blog.py、BlogLinks.tsx | 默认隐藏；明确勾选公开；更新与删除携带版本，复用 OwnerDependency | 增删改、筛选分页、失败重试、并发冲突、模态焦点、窄屏与公开边界 |
@@ -143,7 +143,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 管理页只有一个搜索/新建输入，查询存入 URL 的 `q` 参数，并提供清空入口；输入新名称按 Enter 或点击「新建」创建，已有名称则定位原项。成功后清空输入并高亮新项，焦点回到输入；列表每次显示 40 项，可显示更多。名称按钮打开原生 dialog，由浏览器管理模态焦点和背景不可交互状态，取消或 Escape 丢弃当前改名草稿并恢复名称按钮焦点。名称未变化不发请求。错误留在操作处，保留输入供重试；同步锁阻止重复请求，输入法候选确认的 Enter 不提交。改名不改变 ID/Slug 与文章关联。
 
 文章设置由 `TaxonomyPicker` 展示可选项，点击即可选用；分类单选且可选择「暂不分类」，标签多选且最多 10 个。已选项提供明确的移除按钮。查询仅为当前选择过程的临时状态，不进入 URL；新名称可就地创建，服务端成功后加入工作台选项并自动选入当前文章，创建本身不保存或发布文章。使用共享 `taxonomy.ts` 生成标识与转换错误提示。父组件通过函数式更新选择状态，避免异步创建覆盖其他字段。未搜索到的名称始终提供创建入口，失败保留查询；达到上限时仍可移除已选项，但不再允许添加。
-标签管理与公开首页复用 `TagCloud` 的 ECharts 词云，字号按各自真实文章计数缩放，悬停或键盘聚焦展示完整名称和数量，过长图中文字允许省略并缩小。管理页包含未使用的标签，搜索和显示更多按全量上限维持字号；首页仅使用公开标签计数，点击图中文字更新 `tag` 参数并回到第一页，「全部文章」只清除标签筛选。原生列表保留每个标签的完整名称与数量，图表就绪时供键盘与读屏使用，无图表时直接显示；Tab 聚焦同步图中强调与提示，Enter/Space 激活，首页用 `aria-pressed` 表示选中。管理按钮声明会打开编辑 dialog，并沿用焦点恢复与使用中禁止删除约束。分类管理仍为列表。
+标签管理与博客左侧栏复用 `TagCloud` 的 ECharts 词云，字号按各自真实文章计数缩放，悬停或键盘聚焦展示完整名称和数量，过长图中文字允许省略并缩小。管理页包含未使用的标签，搜索和显示更多按全量上限维持字号；首页仅使用公开标签计数，点击图中文字更新 `tag` 参数并回到第一页，「全部文章」只清除标签筛选。原生列表保留每个标签的完整名称与数量，图表就绪时供键盘与读屏使用，无图表时直接显示；Tab 聚焦同步图中强调与提示，Enter/Space 激活，首页用 `aria-pressed` 表示选中。管理按钮声明会打开编辑 dialog，并沿用焦点恢复与使用中禁止删除约束。分类管理仍为列表。
 
 
 删除分类/标签在管理 dialog 内确认并说明不可恢复，默认聚焦取消；仅允许删除未被任何文章使用的分类/标签，服务器同样检查引用并返回 409。接口继续要求站点所有者权限，分类/标签操作不删除文章。
