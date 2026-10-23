@@ -126,7 +126,7 @@
 }
 
 /* 节点标题、正文与编辑控件同字号，辅助说明保持次级层级。 */
-.media-editor { --media-node-font-size:16px; --media-canvas-font-size:13px; --media-reference-size:48px; }
+.media-editor { --media-node-font-size:14px; --media-canvas-font-size:13px; --media-reference-size:48px; }
 .media-editor .media-node-grip,.media-editor .media-video-composer textarea { font-size:var(--media-node-font-size); }
 .media-editor .media-node-editor :is(button,select,input),.media-node-editor .media-video-composer-footer,.media-node-editor .media-node-references>div,.media-node-editor .media-node-generation-settings { font-size:var(--media-node-font-size); }
 .media-editor .media-node-editor .media-video-composer-footer small,.media-editor .media-download { font-size:12px; }
