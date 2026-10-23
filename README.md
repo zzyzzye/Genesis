@@ -156,7 +156,7 @@ cp .env.example .env
 make docker-up
 ```
 
-文本生成通过 `GENESIS_TEXT_PROVIDER` 选择 `openai`、`grok` 或 `claude`，并分别填写对应的 API Key 和模型名。图像生成、视频生成配置将在后续阶段补充。
+文本生成通过 `GENESIS_TEXT_PROVIDER` 选择 `openai`、`grok` 或 `claude`，并分别填写对应的 API Key 和模型名。视频生成配置见下文，图片与音频生成仍为参数草稿。
 
 后端已预留 LangChain、LangGraph、Deep Agents 依赖，并提供站点所有者权限的动态模型发现接口：GET /api/v1/llm/providers/{provider}/models。模型名称会根据配置的 URL 和 API Key 从供应商接口获取，.env 中的模型名仅作为自定义网关不可发现时的 fallback。
 
@@ -174,3 +174,20 @@ cp frontend/.env.example frontend/.env
 工具箱业务系统统一使用 `toolbox`：前端源码位于 `frontend/src/pages/toolbox/`，后端业务模块位于 `backend/src/genesis_api/toolbox/`，页面路径为 `/toolbox`，健康检查为 `/api/v1/toolbox/health`，AI 请求的 `surface` 和 `context.module` 均使用 `toolbox`。旧前端 `/tools/*` 链接会跳转到对应的新路径，并保留查询参数与锚点。
 
 Agent 的 `tools.py`、工具列表 `tools` 与第三方框架工具 API 保留原名，表示可调用能力，不表示业务系统。
+
+## 视频生成（云影 API）
+
+生视频节点接入[云影 OpenAI Videos 兼容接口](https://ai-document.yyapi.cloud/zh/video-api)。在项目根目录的本地配置中自行填写 `GENESIS_VIDEO_API_KEY`；不要将 Key 写入源码或发到聊天。Compose 也兼容根配置中的 `VIDEO_API_KEY`，优先使用带 GENESIS 前缀的配置。`GENESIS_VIDEO_API_BASE_URL` 默认是 `https://zl.yyapi.cloud`，不需要附加 `/v1`。
+
+修改配置后，通过现有 Compose 服务应用配置和数据库迁移：
+
+```bash
+docker compose up -d --no-deps backend
+docker compose exec -T backend uv run alembic upgrade head
+```
+
+模型名来自实时 `/v1/models` 目录，与文档中的已验证参数范围取交集；不能自行填写未知模型名。选择模型后，比例、清晰度和时长按其能力调整；每次生成一个视频。文档未明确模型声音开关能力，因此省略 `generate_audio`，声音沿用模型默认。保存节点只保存草稿；点击「生成视频」才创建任务。
+
+服务端保存公开任务 ID，每 15 秒查询状态；页面刷新或服务重启继续查询已有任务。完成后将视频保存为当前作品的私有素材，点击「使用生成结果」应用到节点预览，不覆盖正在编辑的提示词。创建请求超时或结果未知时不自动重提；必须核实供应商任务后才能重新提交，避免重复扣费。视频保存失败可单独「重试保存视频」，不会重新生成；供应商下载链接约 24 小时有效。
+
+参考素材取生视频节点的直接连入素材，按连线顺序传递。当前本地环境保留 `GENESIS_VIDEO_PUBLIC_BASE_URL` 为空，文生视频可独立使用；参考模式会明确提示需要公网部署。待 `https://serenova.cn` 部署完成、可从公网访问 `/api/v1/media/video-references/` 后，再设置 `GENESIS_VIDEO_PUBLIC_BASE_URL=https://serenova.cn` 并通过 Compose 应用。素材按任务签发两小时读取链接，不改变账户素材的私有状态；提交前先检查公网 GET 和媒体类型。自带 Nginx 与后端访问日志不记录这些链接的授权参数，外层反向代理也应过滤该路径的查询串。

@@ -49,7 +49,9 @@
 .media-editor .media-canvas .react-flow__nodesselection-rect { border:0; background:#ffffff05; }
 .media-editor :is(.media-node,.media-video-card):is(.is-selected,:focus-within) .media-node-grip { color:#eee; }
 .media-editor .media-canvas-resize::after { width:5px; height:5px; border:0; background:#aaa; }
-.media-editor .media-video-screen .media-download { border:0; background:#292929; }
+.media-editor .media-video-screen .media-download { top:-34px; bottom:auto; right:24px; padding:4px; border:0; background:transparent; color:#aaa; }
+.media-editor .media-video-screen,.media-editor .media-video-screen .media-preview { overflow:visible; }
+.media-video-screen img { border-radius:10px; }
 .media-node-grip,.media-node--media .media-node-grip { color:#aaa; background:transparent; }
 .media-video-screen .media-node-preview { width:100%; height:100%; }
 .media-video-placeholder { max-width:85%; padding:24px; text-align:center; }
@@ -166,3 +168,17 @@
 .media-node--material .media-node-media-empty { gap:8px; padding:8px; border-radius:8px; background:#252525; }
 .media-node--material.is-audio-material .media-node-media-empty { flex-direction:row; }
 .media-node--material .media-node-media-empty>div { margin:0; }
+
+.media-video-generation { display:grid; gap:7px; margin-top:10px; font-size:12px; }
+.media-video-generation-actions { display:flex; align-items:center; gap:6px; min-width:0; }
+.media-editor .media-video-generation-actions select { flex:1; min-width:0; max-width:none; padding:5px 7px; }
+.media-editor .media-video-generation-actions button { display:flex; align-items:center; justify-content:center; gap:5px; padding:5px 8px; min-height:30px; flex:none; }
+.media-editor .media-video-generation-actions .media-video-submit { background:#dedede; color:#222; }
+.media-editor .media-video-generation-actions .media-video-submit:disabled { background:#303030; color:#888; cursor:default; }
+.media-video-generation p { margin:0; color:#aaa; line-height:1.6; overflow-wrap:anywhere; }
+.media-video-generation .media-video-task { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#ddd; }
+.media-video-generation .media-video-unknown { display:flex; align-items:flex-start; gap:6px; color:#bbb; line-height:1.5; }
+.media-video-generation .media-video-unknown input { width:14px; height:14px; flex:none; margin:2px 0; }
+.media-video-generation .is-spinning { animation:media-video-spin 1s linear infinite; }
+@keyframes media-video-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .media-video-generation .is-spinning { animation:none; } }

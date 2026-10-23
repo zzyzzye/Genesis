@@ -14,6 +14,9 @@ import { incomingReferences } from '../src/pages/media/canvasReferences'
 
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
 
+// 视频任务协议在独立测试覆盖；这些用例聚焦画布与素材操作。
+vi.mock('../src/pages/media/VideoGeneration', () => ({ VideoGeneration: () => null }))
+
 describe('作品画布', () => {
   beforeEach(() => {
     localStorage.setItem(accountAuthTokenKey, 'test-token')

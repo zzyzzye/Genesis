@@ -44,3 +44,26 @@ class ProjectAsset(Base):
 
     project_id: Mapped[UUID] = mapped_column(ForeignKey("media_projects.id"), primary_key=True)
     asset_id: Mapped[UUID] = mapped_column(ForeignKey("media_assets.id"), primary_key=True)
+
+
+class VideoGeneration(Base):
+    """持久化视频任务与提交快照，防止重试或刷新重复创建付费任务。"""
+
+    __tablename__ = "media_video_generations"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    owner_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("media_projects.id", ondelete="CASCADE"), index=True
+    )
+    node_id: Mapped[UUID] = mapped_column(Uuid)
+    snapshot: Mapped[dict[str, object]] = mapped_column(JSON)
+    reference_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    upstream_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(30), default="submitting")
+    progress: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(String(500), default="")
+    asset_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("media_assets.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

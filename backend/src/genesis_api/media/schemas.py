@@ -18,8 +18,8 @@ class GenerationSettings(BaseModel):
 
     model: str = Field(default="", max_length=200)
     mode: Literal["text", "reference", "first_last"] = "text"
-    ratio: Literal["16:9", "9:16", "1:1", "4:3", "3:4"] = "16:9"
-    resolution: Literal["480P", "720P", "1080P"] = "720P"
+    ratio: Literal["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "2:3", "3:2"] = "16:9"
+    resolution: Literal["480P", "720P", "1080P", "768P", "2160P", "2K"] = "720P"
     count: Literal[1, 2, 4] = 1
     sound: bool = True
 

@@ -9,9 +9,10 @@ from fastapi.responses import FileResponse
 from sqlalchemy import delete, func, select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
+from genesis_api.api.routes.media_video import router as video_router
 from genesis_api.core.uploads import copy_upload
 from genesis_api.media import service
-from genesis_api.media.models import MediaAsset, MediaProject, ProjectAsset
+from genesis_api.media.models import MediaAsset, MediaProject, ProjectAsset, VideoGeneration
 from genesis_api.media.schemas import (
     AssetCopies,
     AssetReference,
@@ -21,6 +22,7 @@ from genesis_api.media.schemas import (
 )
 
 router = APIRouter(prefix="/media", tags=["影音系统"])
+router.include_router(video_router)
 
 
 @router.post("/projects/{project_id}/copy-assets/{target_id}", status_code=204)
@@ -165,13 +167,24 @@ def delete_project(
         session: 当前事务会话，数据库提交先于文件删除。
 
     Raises:
-        HTTPException: 作品不存在或不属于用户，返回 404。
+        HTTPException: 作品不存在或不属于用户返回 404；有视频任务运行时返回 409。
         OSError: 数据库已提交后的文件清理失败，不会自动回滚作品删除。
     """
     project = service.project_for(session, user.id, project_id)
     ids = list(
         session.scalars(select(ProjectAsset.asset_id).where(ProjectAsset.project_id == project.id))
     )
+    active_video = session.scalar(
+        select(VideoGeneration.id)
+        .where(
+            VideoGeneration.project_id == project.id,
+            VideoGeneration.status.in_(("submitting", "queued", "processing", "downloading")),
+        )
+        .limit(1)
+    )
+    if active_video is not None:
+        raise HTTPException(409, "作品仍有视频任务运行，请任务结束后再删除")
+    session.execute(delete(VideoGeneration).where(VideoGeneration.project_id == project.id))
     session.execute(delete(ProjectAsset).where(ProjectAsset.project_id == project.id))
     session.delete(project)
     paths = service.collect_orphans(session, ids)

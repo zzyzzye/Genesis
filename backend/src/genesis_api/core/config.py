@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Genesis API"
+    video_api_key: SecretStr | None = None
+    video_api_base_url: str = "https://zl.yyapi.cloud"
+    video_public_base_url: str = ""
     environment: str = "development"
     debug: bool = False
     api_v1_prefix: str = "/api/v1"

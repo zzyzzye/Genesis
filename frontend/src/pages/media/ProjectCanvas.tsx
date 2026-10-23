@@ -32,12 +32,16 @@ import { incomingReferences } from './canvasReferences'
 import { AssetPreview } from './AssetPreview'
 import { AssetLibrary } from './AssetLibrary'
 import { CanvasReferenceEdge } from './CanvasReferenceEdge'
+import { VideoGeneration, type VideoModel } from './VideoGeneration'
 import { ProjectDialog } from './MediaHome'
 import type { MediaAssistantNode, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
 import { audioAssetNodeSize, generationNodeSize, groupSelection, isGenerationNode, nodeTypeLabel, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
 
 type CanvasNodeData = {
+  projectId: string
+  onSave: () => Promise<void>
+  onGenerated: (id: string, asset: Asset) => void
   source: Node
   asset?: Asset
   assetsLoading: boolean
@@ -160,6 +164,7 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
   const [cameraOpen, setCameraOpen] = useState(false)
   const [referencesOpen, setReferencesOpen] = useState(false)
   const [durationError, setDurationError] = useState('')
+  const [videoModel, setVideoModel] = useState<VideoModel | null>(null)
   const settings = node.generation ?? defaultGenerationSettings()
   const patchSettings = (patch: Partial<typeof settings>) => data.onPatch(id, { generation: { ...settings, ...patch } })
   return <section className="media-video-composer nodrag nowheel nopan" aria-label={isImage ? '生图草稿' : isAudio ? '生音频草稿' : '镜头草稿'} onKeyDown={(event) => {
@@ -202,8 +207,8 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
       {settingsOpen && <div className="media-node-generation-settings" aria-label="生成参数">
         {!isImage && <label>{isAudio ? '音频时长' : '镜头时长'}<span><input key={node.duration_seconds} type="number" aria-label={isAudio ? '音频时长' : '镜头时长'} aria-invalid={Boolean(durationError)} aria-describedby={durationError ? `duration-error-${id}` : undefined} min={1} max={600} step={1} defaultValue={node.duration_seconds ?? 5} onFocus={data.onInteractionStart} onBlur={(event) => {
           const seconds = Number(event.target.value)
-          if (!Number.isInteger(seconds) || seconds < 1 || seconds > 600) {
-            setDurationError('请输入 1–600 的整数秒，已保留原时长。')
+          if (!Number.isInteger(seconds) || seconds < 1 || seconds > 600 || isVideo && videoModel && !videoModel.durations.includes(seconds)) {
+            setDurationError(isVideo && videoModel ? `当前模型支持 ${videoModel.durations[0]}–${videoModel.durations.at(-1)} 的整数秒，已保留原时长。` : '请输入 1–600 的整数秒，已保留原时长。')
             event.target.value = String(node.duration_seconds ?? 5)
           } else {
             setDurationError('')
@@ -212,13 +217,14 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
           data.onInteractionEnd()
         }} /> 秒</span></label>}
         <label className="media-video-asset-picker"><span>预览素材</span><select aria-label={`${nodeTypeLabel(node.type)}预览素材`} value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
-        {!isAudio && <label>画面比例<select aria-label="画面比例" value={settings.ratio} onChange={(event) => patchSettings({ ratio: event.target.value as typeof settings.ratio })}>{['16:9', '9:16', '1:1', '4:3', '3:4'].map((ratio) => <option key={ratio}>{ratio}</option>)}</select></label>}
-        {!isAudio && <label>清晰度<select aria-label="生成清晰度" value={settings.resolution} onChange={(event) => patchSettings({ resolution: event.target.value as typeof settings.resolution })}>{['480P', '720P', '1080P'].map((quality) => <option key={quality}>{quality}</option>)}</select></label>}
-        <label>数量<select aria-label="生成数量" value={settings.count} onChange={(event) => patchSettings({ count: Number(event.target.value) as typeof settings.count })}>{[1, 2, 4].map((count) => <option key={count} value={count}>{count} 个</option>)}</select></label>
-        {isVideo && <label>生成声音<select aria-label="生成声音" value={settings.sound ? 'on' : 'off'} onChange={(event) => patchSettings({ sound: event.target.value === 'on' })}><option value="on">开启</option><option value="off">关闭</option></select></label>}
-        <p>提示词与参数随节点保存；生成服务接入后才能提交任务。</p>
+        {!isAudio && <label>画面比例<select aria-label="画面比例" value={settings.ratio} onChange={(event) => patchSettings({ ratio: event.target.value as typeof settings.ratio })}>{(isVideo && videoModel ? videoModel.ratios : ['16:9', '9:16', '1:1', '4:3', '3:4']).map((ratio) => <option key={ratio}>{ratio}</option>)}</select></label>}
+        {!isAudio && <label>清晰度<select aria-label="生成清晰度" value={settings.resolution} onChange={(event) => patchSettings({ resolution: event.target.value as typeof settings.resolution })}>{(isVideo && videoModel ? videoModel.resolutions.map((value) => value.toUpperCase()) : ['480P', '720P', '1080P']).map((quality) => <option key={quality}>{quality}</option>)}</select></label>}
+        <label>数量<select aria-label="生成数量" value={settings.count} onChange={(event) => patchSettings({ count: Number(event.target.value) as typeof settings.count })}>{(isVideo ? [1] : [1, 2, 4]).map((count) => <option key={count} value={count}>{count} 个</option>)}</select></label>
+        {isVideo && !videoModel && <label>生成声音<select aria-label="生成声音" value={settings.sound ? 'on' : 'off'} onChange={(event) => patchSettings({ sound: event.target.value === 'on' })}><option value="on">开启</option><option value="off">关闭</option></select></label>}
+        <p>{isVideo ? '参数按所选模型校验；每次提交生成一个视频，声音沿用模型默认设置。' : '提示词与参数随节点保存；生成服务接入后才能提交任务。'}</p>
       </div>}
       {durationError && <p className="media-node-field-error" id={`duration-error-${id}`} aria-live="polite">{durationError}</p>}
+      {isVideo && <VideoGeneration projectId={data.projectId} node={node} referenceCount={data.references.filter((item) => item.asset).length} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} onModelChange={setVideoModel} />}
     </section>
 }
 
@@ -520,6 +526,9 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     dragHandle: '.media-node-drag-handle, .media-node-drag-surface',
     ariaLabel: node.type === 'asset' ? assets[node.asset_id ?? '']?.name ?? '素材不可用' : node.name || nodeTypeLabel(node.type),
     data: {
+      projectId,
+      onSave: canvas.save,
+      onGenerated: (id, asset) => { setAssets((previous) => ({ ...previous, [asset.id]: asset })); patchNode(id, { asset_id: asset.id }) },
       source: node,
       asset: assets[node.asset_id ?? ''],
       assetsLoading,
@@ -542,7 +551,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       editorOpen: selected.length === 1 && selected[0] === node.id && !nodeMenu && !contextMenu,
       onCloseEditor: () => setSelected([]),
     },
-  })), [addConnected, assets, assetsLoading, beginInteraction, canvas.document, changeReference, contextMenu, convertToVideo, draggingNode, endInteraction, nodeMenu, openAssets, openNodeAssets, patchNode, previewAssets, selected, updateText, uploadNodeAsset, uploadPreview])
+  })), [addConnected, assets, assetsLoading, beginInteraction, canvas.document, canvas.save, changeReference, contextMenu, convertToVideo, draggingNode, endInteraction, nodeMenu, openAssets, openNodeAssets, patchNode, previewAssets, projectId, selected, updateText, uploadNodeAsset, uploadPreview])
 
   const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
     ...edge,
