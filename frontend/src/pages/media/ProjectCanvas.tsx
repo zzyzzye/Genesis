@@ -26,7 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { AnimatePresence, motion, useIsPresent } from 'motion/react'
 import { canvasEditorTransition, useLiveReducedMotion } from '../../lib/motion'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, GripVertical, Hand, ImagePlus, Map as MapIcon, MousePointer2, Music2, Play, Shapes, StickyNote, Type, Upload, X } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, FolderOpen, GripVertical, Hand, ImagePlus, Map as MapIcon, MousePointer2, Music2, Play, Shapes, StickyNote, Type, Upload, X } from 'lucide-react'
 import { api, defaultGenerationSettings, type Asset, type Document, type Edge, type Node, type Project, type VideoFrame, upload } from './api'
 import { incomingReferences } from './canvasReferences'
 import { AssetPreview } from './AssetPreview'
@@ -279,7 +279,7 @@ function MediaAssetNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
         if (width > 0 && height > 0 && node.width === 360 && node.height === 280) data.onPatch(id, { height: Math.max(80, Math.min(4000, node.width * height / width)) }, false)
       }} /></div>
       : <div className="media-node-drag-surface nowheel nopan media-node-media-empty"><Icon size={24} aria-hidden="true" /><div className="nodrag"><button type="button" onClick={() => fileInput.current?.click()}>导入{kindLabel}</button><button type="button" onClick={() => data.onOpenNodeAssets(id, kind)}>选择作品素材</button></div></div>}
-    {asset && <div className="media-node-media-actions nodrag nowheel nopan"><button type="button" onClick={() => fileInput.current?.click()}>导入替换</button><button type="button" onClick={() => data.onOpenNodeAssets(id, kind)}>选择作品素材</button><button type="button" onClick={() => data.onPatch(id, { asset_id: null })}>清空节点素材</button></div>}
+    {asset && <div className="media-node-media-actions nodrag nowheel nopan"><button type="button" aria-label="导入替换" title="导入替换" onClick={() => fileInput.current?.click()}><Upload size={15} aria-hidden="true" /></button><button type="button" aria-label="选择作品素材" title="选择作品素材" onClick={() => data.onOpenNodeAssets(id, kind)}><FolderOpen size={15} aria-hidden="true" /></button><button type="button" aria-label="清空节点素材" title="清空节点素材" onClick={() => data.onPatch(id, { asset_id: null })}><X size={15} aria-hidden="true" /></button></div>}
     <Handle type="source" position={Position.Right} aria-label="输出连接点" />
   </article>
 }

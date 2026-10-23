@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { ImagePlus, RotateCcw } from 'lucide-react'
+import { Download, ImagePlus, RotateCcw } from 'lucide-react'
 import { type Asset, fileBlob } from './api'
 
 const MediaPlayer = lazy(() => import('./MediaPlayer'))
@@ -24,6 +24,6 @@ export function AssetPreview({ asset, controls = false, thumbnail = false, onIma
     </div> : error ? <span>{error} <button className="nodrag nopan" onClick={retry}>重试</button></span> : !url ? <span>加载素材…</span> : asset.kind === 'image' ? <img src={url} alt={asset.name} draggable={false} onLoad={(event) => onImageDimensions?.(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} onError={() => setError('此图片无法预览')} /> : controls && !thumbnail && (asset.kind === 'video' || asset.kind === 'audio') ? <Suspense fallback={<span>加载播放器…</span>}>
       <MediaPlayer key={url} src={url} kind={asset.kind} name={asset.name} onError={() => setError('浏览器不支持预览，可下载原文件')} />
     </Suspense> : asset.kind === 'video' ? <video className="nodrag nopan" src={url} muted={thumbnail} playsInline preload="metadata" aria-label={thumbnail ? `视频参考：${asset.name}` : undefined} onError={() => setError('浏览器不支持预览，可下载原文件')} /> : <span className="media-audio-symbol" aria-label="音频素材">♫</span>}
-    {controls && url && <a className="media-download nodrag nopan" href={url} download={asset.name}>下载原文件</a>}
+    {controls && url && <a className="media-download nodrag nopan" href={url} download={asset.name} aria-label="下载原文件" title="下载原文件"><Download size={15} aria-hidden="true" /></a>}
   </div>
 }
