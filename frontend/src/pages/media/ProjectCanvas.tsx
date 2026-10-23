@@ -167,7 +167,18 @@ function VideoNodeComposer({ id, data }: { id: string; data: CanvasNodeData }) {
       </div>
       {referencesOpen && <div className="media-node-reference-panel"><label className="media-node-reference-picker"><span>添加参考</span><select aria-label="添加参考节点" value="" onChange={(event) => { if (event.target.value) data.onReferenceChange(id, event.target.value, true) }}><option value="">选择画布中的节点…</option>{data.referenceCandidates.map((source) => <option key={source.id} value={source.id}>{source.name || source.text.slice(0, 30) || '未命名节点'}</option>)}</select></label>{!data.references.length && <p>选择上游节点，或从它的连接点拖线到当前节点。</p>}</div>}
       {cameraOpen && <div className="media-node-camera-options" aria-label="选择运镜">{['固定镜头', '缓慢推近', '拉远镜头', '跟随拍摄', '镜头上摇', '镜头下摇', '环绕拍摄', '手持拍摄'].map((camera) => <button key={camera} type="button" onClick={() => { appendPromptToken(`运镜：${camera}。`); setCameraOpen(false) }}>{camera}</button>)}</div>}
-      {data.references.length > 0 && <div className="media-node-references" aria-label="连入参考">{data.references.map(({ node: source, asset }) => <div key={source.id}><span title={asset?.name || source.name || source.text}>{asset ? `${asset.kind === 'image' ? '图片' : asset.kind === 'audio' ? '音频' : '视频'} · ${asset.name}` : source.name || source.text.slice(0, 40) || '空节点'}</span>{source.text && <button type="button" onClick={() => appendPromptToken(source.text)}>引用文字</button>}{referencesOpen && <><small>{source.asset_id && !asset ? (data.assetsLoading ? '加载中' : '素材不可用') : !asset && !source.text ? '请先补充内容' : '已连接'}</small><button type="button" aria-label={`断开参考：${asset?.name || source.name || '节点'}`} onClick={() => data.onReferenceChange(id, source.id, false)}>断开</button></>}</div>)}</div>}
+      {data.references.length > 0 && <div className="media-node-references" aria-label="连入参考">{data.references.map(({ node: source, asset }, index) => {
+        const name = asset?.name || source.name || source.text.slice(0, 40) || '空节点'
+        return <div key={source.id} className="media-reference-item" role="group" aria-label={`参考 ${index + 1}：${name}`}>
+          <div className="media-reference-thumbnail" title={name}>
+            {asset && asset.kind !== 'audio' ? <AssetPreview key={asset.id} asset={asset} thumbnail /> : asset?.kind === 'audio' || source.type === 'audio' ? <Music2 size={26} aria-label="音频参考" /> : !source.asset_id && source.text ? <span className="media-reference-text">{source.text}</span> : source.type === 'video' ? <Film size={26} aria-hidden="true" /> : <ImagePlus size={26} aria-hidden="true" />}
+            <span className="media-reference-index" aria-hidden="true">{index + 1}</span>
+          </div>
+          <span className="media-reference-name" title={name}>{name}</span>
+          {source.text && <button type="button" onClick={() => appendPromptToken(source.text)}>引用文字</button>}
+          {referencesOpen && <><small>{source.asset_id && !asset ? (data.assetsLoading ? '加载中' : '素材不可用') : !asset && !source.text ? '请先补充内容' : '已连接'}</small><button type="button" aria-label={`断开参考：${asset?.name || source.name || '节点'}`} onClick={() => data.onReferenceChange(id, source.id, false)}>断开</button></>}
+        </div>
+      })}</div>}
       <input ref={fileInput} className="media-video-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska" aria-label="导入视频节点预览素材" onChange={(event) => { const file = event.target.files?.[0]; if (file) void data.onUploadPreview(id, file); event.target.value = '' }} />
       <textarea className="resize-none" aria-label="镜头描述" value={node.text} placeholder="描述画面、人物动作与声音，可引用连入节点的文字" maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
       <div className="media-video-composer-footer">
