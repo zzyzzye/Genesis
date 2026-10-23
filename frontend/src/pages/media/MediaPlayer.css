@@ -1,0 +1,57 @@
+/* 使用播放器公开令牌统一尺寸与配色，画布缩放仍由节点本身负责。 */
+.media-player-shell {
+  --media-accent-color:#e2e2e2;
+  --media-accent-text-color:#202020;
+  --media-border-color:transparent;
+  --media-border-radius:8px;
+  --media-font-family:inherit;
+  --media-scale-unit:calc(12px * 16 / 13);
+  --media-object-fit:contain;
+  position:relative;
+  width:100%;
+  min-width:0;
+  color-scheme:dark;
+  color:#e8e8e8;
+  font-size:12px;
+  container:asset-player / inline-size;
+}
+.media-player-shell.is-video { height:100%; min-height:0; }
+.media-player-shell .media-asset-player { width:100%; max-width:100%; border:0; outline:0; box-shadow:none; }
+.media-player-shell.is-video .media-asset-player { height:100%; }
+.media-player-shell.is-audio { padding:8px; }
+.media-player-shell .media-asset-player * { border:0; outline:0; box-shadow:none; }
+.media-player-shell.is-audio .media-asset-player > [data-interactive] { background:transparent; }
+.media-player-shell :is(button,[role=slider],[role=menu],:focus,:focus-visible) { border:0; outline:0; box-shadow:none; }
+/* 业务页面的通用按钮规则不覆盖播放器自带的布局与交互状态。 */
+.media-player-shell .media-asset-player button {
+  display:revert-layer;
+  align-items:revert-layer;
+  justify-content:revert-layer;
+  gap:revert-layer;
+  min-height:0;
+  padding:0;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  cursor:pointer;
+}
+.media-player-shell .media-asset-player svg { width:revert-layer; height:revert-layer; stroke-width:revert-layer; flex:revert-layer; }
+.media-player-shell .media-asset-player button:is(:hover,:focus-visible) { color:#fff; background:#ffffff14; }
+/* 项目菜单与播放器菜单恰好同名，后者恢复依赖样式层的布局。 */
+.media-player-shell .media-menu-content { all:revert-layer; border:0; outline:0; box-shadow:none; }
+.media-player-shell [role^=menuitem] { background:transparent; color:#ddd; }
+.media-player-shell [role^=menuitem]:is(:hover,:focus-visible,[data-highlighted]) { background:#ffffff14; color:#fff; }
+.media-player-shell :is(.media-menu-content,.media-menu-radio-group)::before { background:#ffffff14; }
+.media-player-shell .media-asset-player:fullscreen { --media-scale-unit:16px; border-radius:0; }
+
+/* 素材库小卡片和缩小后的自定义节点保留核心操作，避免控件相互覆盖。 */
+@container asset-player (width < 320px) {
+  .media-player-shell .media-asset-player .media-seek-button { display:none; }
+  .media-player-shell .media-asset-player .audio-time-slider { min-width:0; }
+}
+@container asset-player (width < 240px) {
+  .media-player-shell .media-asset-player :is(.media-cast-button,.media-pip-button) { display:none; }
+  .media-player-shell.is-audio .media-asset-player .media-playback-rate-button { display:none; }
+}

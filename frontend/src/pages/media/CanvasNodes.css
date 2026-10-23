@@ -45,9 +45,11 @@
 .media-canvas-view-tools output { min-width:38px; text-align:center; color:#bbb; font-size:12px; }
 .media-editor .media-node { border:0; background:#252525; }
 .media-editor .media-node.is-note { background:#2c2c2c; }
-.media-node.is-selected::before,.media-video-card.is-selected::before { display:none; }
-.media-node.is-selected::after,.media-video-card.is-selected::after { inset:0; border:1px solid #aaa; border-radius:8px; box-shadow:none; animation:none; }
-.media-video-card.is-selected::after { top:42px; border-radius:10px; }
+.media-node.is-selected::before,.media-video-card.is-selected::before,.media-node.is-selected::after,.media-video-card.is-selected::after { display:none; content:none; }
+.media-editor .media-canvas .react-flow__nodesselection-rect { border:0; background:#ffffff05; }
+.media-editor :is(.media-node,.media-video-card):is(.is-selected,:focus-within) .media-node-grip { color:#eee; }
+.media-editor .media-canvas-resize::after { width:5px; height:5px; border:0; background:#aaa; }
+.media-editor .media-video-screen .media-download { border:0; background:#292929; }
 .media-node-grip,.media-node--media .media-node-grip { color:#aaa; background:transparent; }
 .media-video-screen .media-node-preview { width:100%; height:100%; }
 .media-video-placeholder { max-width:85%; padding:24px; text-align:center; }
@@ -157,7 +159,6 @@
 .media-node--material .media-preview { height:100%; overflow:visible; border-radius:8px; background:transparent; }
 .media-node--material .media-preview :is(img,video) { border-radius:8px; }
 .media-node--material.is-audio-material .media-preview { justify-content:center; background:#252525; }
-.media-node--material audio { width:calc(100% - 24px); max-width:100%; }
 .media-node--material .media-download { position:absolute; top:-32px; right:26px; padding:4px; color:#aaa; }
 .media-node--material:not(.is-selected):not(:focus-within) .media-download { visibility:hidden; pointer-events:none; }
 .media-node--material>.media-node-media-actions { position:absolute; top:calc(100% + 8px); left:0; width:100%; padding:0; background:transparent; }
