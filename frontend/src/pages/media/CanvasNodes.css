@@ -73,7 +73,7 @@
 .media-node-editor .media-video-composer-top { gap:5px; }
 .media-node-editor .media-video-composer-footer { gap:8px; font-size:12px; }
 .media-node-editor .media-video-composer-footer small { font-size:11px; }
-.media-editor .media-node-editor .media-video-spec { padding:4px 8px; margin-left:auto; }
+.media-editor .media-node-editor .media-video-spec { padding:4px 8px; margin-left:0; }
 .media-node-editor .media-video-asset-picker { max-width:37%; }
 .media-node-editor .media-video-asset-picker>span { flex:none; white-space:nowrap; }
 .media-node-editor .media-node-references { gap:4px; max-height:105px; overflow:auto; }
@@ -131,12 +131,17 @@
 
 /* 参考以固定尺寸横向排列，预览加载及长文件名不推移编辑控件。 */
 .media-node-editor .media-node-references { display:flex; align-items:flex-start; gap:10px; max-height:none; overflow-x:auto; overflow-y:hidden; padding-bottom:4px; }
-.media-node-editor .media-node-references>.media-reference-item { display:flex; flex:0 0 76px; min-width:0; flex-direction:column; align-items:stretch; gap:4px; }
+.media-node-editor .media-node-references>.media-reference-item { display:flex; flex:0 0 64px; min-width:0; }
 .media-reference-thumbnail { position:relative; display:flex; align-items:center; justify-content:center; flex:none; width:64px; height:64px; overflow:hidden; border-radius:7px; background:#303030; color:#ccc; }
 .media-reference-thumbnail .media-preview.is-thumbnail { width:100%; height:100%; min-height:0; border-radius:0; background:transparent; }
 .media-reference-thumbnail .media-preview :is(img,video) { width:100%; height:100%; object-fit:cover; }
 .media-node-references .media-reference-index { position:absolute; top:3px; left:3px; display:grid; place-items:center; min-width:17px; height:17px; padding:0 3px; border-radius:5px; background:#252525d9; color:#eee; font-size:11px; line-height:1; flex:none; pointer-events:none; }
-.media-node-references .media-reference-name { display:block; flex:none; min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.4; }
 .media-node-references .media-reference-text { display:-webkit-box; flex:none; padding:7px; overflow:hidden; -webkit-line-clamp:3; -webkit-box-orient:vertical; white-space:normal; font-size:12px; line-height:1.3; }
 .media-reference-thumbnail .media-preview.is-thumbnail>span { display:flex; flex:none; flex-direction:column; align-items:center; justify-content:center; width:100%; height:100%; box-sizing:border-box; padding:20px 3px 3px; overflow:visible; white-space:normal; font-size:12px; line-height:1.3; text-align:center; color:#bbb; }
 .media-editor .media-node-editor .media-preview.is-thumbnail button { min-height:22px; padding:1px 5px; font-size:12px; }
+.media-reference-details { display:grid; gap:6px; padding-top:10px; }
+.media-reference-details>div { display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; }
+.media-reference-details span { flex:1 1 100px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+.media-reference-details small { color:#aaa; font-size:12px; }
+.media-editor .media-node-editor .media-reference-details button { min-height:26px; padding:2px 7px; }
+.media-node-editor .media-node-generation-settings .media-video-asset-picker { max-width:none; }
