@@ -181,26 +181,34 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
           </div>
           {user.role === 'owner' && <Link className="account-studio-entry" to="/blog/studio">写作台<ArrowUpRight size={15} aria-hidden="true" /></Link>}
         </div>
-        <form className="account-form" aria-label="个人资料" noValidate aria-busy={busy} onSubmit={submit} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }}>
-          <label htmlFor="profile-display-name">
-            <span id="profile-name-label">昵称</span>
-            <input ref={nameInput} id="profile-display-name" aria-labelledby="profile-name-label" maxLength={100} readOnly={busy} aria-invalid={Boolean(errors.displayName)} aria-describedby={errors.displayName ? 'profile-name-error' : undefined} onChange={(event) => { setDisplayName(event.currentTarget.value); setErrors(current => ({ ...current, displayName: undefined })) }} required value={displayName} />
-            <span className="account-field-help">{errors.displayName && <span id="profile-name-error" className="account-field-error" role="alert">{errors.displayName}</span>}</span>
-          </label>
-          <label htmlFor="profile-bio">
-            <span id="profile-bio-label">个人简介</span>
-            <textarea ref={bioInput} className="resize-none" id="profile-bio" aria-labelledby="profile-bio-label" readOnly={busy} aria-invalid={Boolean(errors.bio)} aria-describedby={errors.bio ? 'profile-bio-error' : undefined} maxLength={1000} onChange={(event) => { setBio(event.currentTarget.value); setErrors(current => ({ ...current, bio: undefined })) }} placeholder="介绍一下你自己" rows={3} value={bio} />
-            <span className="account-field-help">{errors.bio && <span id="profile-bio-error" className="account-field-error" role="alert">{errors.bio}</span>}</span>
-          </label>
-          <label htmlFor="profile-avatar-url">
-            <span id="profile-avatar-label">头像地址</span>
-            <input ref={avatarInput} id="profile-avatar-url" aria-labelledby="profile-avatar-label" maxLength={500} readOnly={busy} aria-invalid={Boolean(errors.avatarUrl)} aria-describedby={errors.avatarUrl ? 'profile-avatar-error' : undefined} onChange={(event) => { setAvatarUrl(event.currentTarget.value); setErrors(current => ({ ...current, avatarUrl: undefined })) }} placeholder="https://example.com/avatar.png" type="url" value={avatarUrl} />
-            <span className="account-field-help">{errors.avatarUrl && <span id="profile-avatar-error" className="account-field-error" role="alert">{errors.avatarUrl}</span>}</span>
-          </label>
-          {feedback && <p className="account-feedback" role="status">{feedback}</p>}
-          <div className="account-profile-actions">
-            <button className="primary-button" type="submit" disabled={busy}>{busy && <LoaderCircle className="account-submit-spinner" size={16} aria-hidden="true" />}{busy ? '正在保存…' : '保存资料'}</button>
-            <button className="account-logout" disabled={busy} onClick={onLogout} type="button">退出登录</button>
+        <form className="account-form account-profile-form" aria-label="个人资料" noValidate aria-busy={busy} onSubmit={submit} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }}>
+          <div className="account-field account-profile-field">
+            <label htmlFor="profile-display-name">昵称</label>
+            <div className="account-profile-control">
+              <input ref={nameInput} id="profile-display-name" autoComplete="nickname" maxLength={100} readOnly={busy} aria-invalid={Boolean(errors.displayName)} aria-describedby={errors.displayName ? 'profile-name-error' : undefined} onChange={(event) => { setDisplayName(event.currentTarget.value); setErrors(current => ({ ...current, displayName: undefined })) }} required value={displayName} />
+              <div className="account-field-help">{errors.displayName && <p id="profile-name-error" className="account-field-error" role="alert">{errors.displayName}</p>}</div>
+            </div>
+          </div>
+          <div className="account-field account-profile-field">
+            <label htmlFor="profile-bio">个人简介</label>
+            <div className="account-profile-control">
+              <textarea ref={bioInput} className="resize-none" id="profile-bio" readOnly={busy} aria-invalid={Boolean(errors.bio)} aria-describedby={errors.bio ? 'profile-bio-error' : undefined} maxLength={1000} onChange={(event) => { setBio(event.currentTarget.value); setErrors(current => ({ ...current, bio: undefined })) }} placeholder="介绍一下你自己" rows={4} value={bio} />
+              <div className="account-field-help">{errors.bio && <p id="profile-bio-error" className="account-field-error" role="alert">{errors.bio}</p>}</div>
+            </div>
+          </div>
+          <div className="account-field account-profile-field">
+            <label htmlFor="profile-avatar-url">头像地址</label>
+            <div className="account-profile-control">
+              <input ref={avatarInput} id="profile-avatar-url" autoCapitalize="none" spellCheck={false} maxLength={500} readOnly={busy} aria-invalid={Boolean(errors.avatarUrl)} aria-describedby={errors.avatarUrl ? 'profile-avatar-error' : undefined} onChange={(event) => { setAvatarUrl(event.currentTarget.value); setErrors(current => ({ ...current, avatarUrl: undefined })) }} placeholder="https://example.com/avatar.png" type="url" value={avatarUrl} />
+              <div className="account-field-help">{errors.avatarUrl && <p id="profile-avatar-error" className="account-field-error" role="alert">{errors.avatarUrl}</p>}</div>
+            </div>
+          </div>
+          <div className="account-profile-form-footer">
+            <div className="account-profile-actions">
+              <button className="primary-button" type="submit" disabled={busy}>{busy && <LoaderCircle className="account-submit-spinner" size={16} aria-hidden="true" />}{busy ? '正在保存…' : '保存资料'}</button>
+              <button className="account-logout" disabled={busy} onClick={onLogout} type="button">退出登录</button>
+            </div>
+            <div className="account-profile-feedback" role="status">{feedback && <p className="account-feedback">{feedback}</p>}</div>
           </div>
         </form>
       </section>
