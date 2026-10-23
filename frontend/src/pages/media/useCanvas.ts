@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type Document, defaultVideoFrame, emptyDocument, MediaError, type Snapshot } from './api'
+import { compactLegacyVideoNodes } from './canvasOperations'
 
 export function useCanvas(projectId: string, userId: string) {
   const [document, setDocument] = useState<Document>(emptyDocument)
@@ -37,9 +38,11 @@ export function useCanvas(projectId: string, userId: string) {
         }
       } catch { /* 损坏的本地草稿不会阻止打开服务器版本。 */ }
     } else localStorage.removeItem(key)
-    current.current = next; setDocument(next); history.current = []; future.current = []
+    const original = next
+    next = compactLegacyVideoNodes(original)
+    current.current = next; setDocument(next); history.current = next === original ? [] : [original]; future.current = []
     setDirty(JSON.stringify(next) !== saved.current); setReady(true)
-    setStatus(blocked.current ? '检测到冲突，已保留本地草稿' : JSON.stringify(next) === saved.current ? '已保存' : '已恢复本地草稿')
+    setStatus(blocked.current ? '检测到冲突，已保留本地草稿' : next !== original ? '已收紧旧版节点布局，可撤销' : JSON.stringify(next) === saved.current ? '已保存' : '已恢复本地草稿')
   }, [key, projectId])
   useEffect(() => { let active = true; void Promise.resolve().then(async () => { if (active) await load(true) }).catch((reason: Error) => { if (active) setStatus(reason.message) }); return () => { active = false } }, [load])
   const save = useCallback(async (): Promise<void> => {

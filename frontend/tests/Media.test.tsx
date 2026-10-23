@@ -35,7 +35,7 @@ describe('作品画布', () => {
   })
   it('连入文字可以引用；错误时长保留原值，整数编辑可保存并撤销', async () => {
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
-    const video = { ...note, id: crypto.randomUUID(), type: 'video' as const, text: '', duration_seconds: 8, width: 820, height: 670 }
+    const video = { ...note, id: crypto.randomUUID(), type: 'video' as const, text: '', duration_seconds: 8, width: 480, height: 312 }
     const document: Document = { ...emptyDocument(), nodes: [note, video], edges: [{ id: crypto.randomUUID(), source: note.id, target: video.id }] }
     vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
     render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
@@ -66,7 +66,7 @@ describe('作品画布', () => {
     expect(size).toHaveAttribute('tabindex', '0')
     fireEvent.keyDown(size, { key: 'ArrowRight' })
     fireEvent.keyDown(size, { key: 'ArrowDown', shiftKey: true })
-    expect(screen.getByRole('group', { name: /调整视频节点大小/ })).toHaveAccessibleName(/830 × 720/)
+    expect(screen.getByRole('group', { name: /调整视频节点大小/ })).toHaveAccessibleName(/490 × 362/)
     fireEvent.click(screen.getByRole('button', { name: '关闭节点编辑' }))
     expect(screen.queryByRole('textbox', { name: '镜头描述' })).not.toBeInTheDocument()
   })
@@ -94,6 +94,30 @@ describe('作品画布', () => {
     expect(result.current.document.edges).toEqual([])
     expect(result.current.document.frame).toEqual({ width: 1920, height: 1080 })
   })
+  it('收紧旧视频预设时保持中心、内容和视口，自定义尺寸不变且可撤销', async () => {
+    const video = { ...note, type: 'video' as const, width: 820, height: 670 }
+    const custom = { ...video, id: crypto.randomUUID(), width: 900 }
+    const document: Document = { ...emptyDocument(), nodes: [video, custom], viewport: { x: 20, y: -50, zoom: .92 } }
+    vi.spyOn(media, 'api').mockResolvedValue({ version: 1, document })
+    const { result } = renderHook(() => useCanvas('legacy-video', 'user'))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(result.current.document.nodes[0]).toEqual({ ...video, width: 480, height: 312, x: video.x + 170, y: video.y + 179 })
+    expect(result.current.document.nodes[1]).toEqual(custom)
+    expect(result.current.document.viewport).toEqual(document.viewport)
+    act(() => result.current.undo())
+    expect(result.current.document).toEqual(document)
+  })
+  it('恢复旧尺寸草稿时继续保留版本冲突保护', async () => {
+    const video = { ...note, type: 'video' as const, width: 820, height: 670 }
+    const document: Document = { ...emptyDocument(), nodes: [video] }
+    localStorage.setItem('genesis-media-draft:user:legacy-draft', JSON.stringify({ version: 1, document: { ...document, nodes: [{ ...video, text: '本地未保存镜头' }] } }))
+    vi.spyOn(media, 'api').mockResolvedValue({ version: 2, document })
+    const { result } = renderHook(() => useCanvas('legacy-draft', 'user'))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(result.current.document.nodes[0]).toMatchObject({ text: '本地未保存镜头', width: 480, height: 312 })
+    expect(result.current.conflict).toBe(true)
+    await expect(result.current.save()).rejects.toThrow('请先处理保存冲突')
+  })
   it('空旧形状可原位改成视频节点，保留节点标识与连接', async () => {
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
     const shape = { ...note, type: 'shape' as const, text: '' }
@@ -107,7 +131,7 @@ describe('作品画布', () => {
     expect(screen.getByRole('textbox', { name: '镜头描述' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '改为视频节点' })).not.toBeInTheDocument()
     const saved = JSON.parse(localStorage.getItem('genesis-media-draft:user:project')!) as { document: Document }
-    expect(saved.document.nodes.find((node) => node.id === shape.id)).toMatchObject({ type: 'video', x: shape.x, y: shape.y, width: 820, height: 670 })
+    expect(saved.document.nodes.find((node) => node.id === shape.id)).toMatchObject({ type: 'video', x: shape.x, y: shape.y, width: 480, height: 312 })
     expect(saved.document.edges).toEqual([edge])
   })
   it('保存布局与视口，并支持撤销重做', async () => {

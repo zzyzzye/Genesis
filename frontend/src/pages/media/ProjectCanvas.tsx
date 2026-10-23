@@ -34,7 +34,7 @@ import { AssetLibrary } from './AssetLibrary'
 import { ProjectDialog } from './MediaHome'
 import type { MediaAssistantNode, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
-import { groupSelection, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
+import { groupSelection, removeSelection, resizedNodeDimensions, ungroupSelection, videoNodeSize } from './canvasOperations'
 
 type CanvasNodeData = {
   source: Node
@@ -425,7 +425,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
 
   useEffect(() => () => onAgentNodeChange?.(null), [onAgentNodeChange])
 
-  const fittedViewport = useCallback((document: Document, editor?: { id: string; height: number }) => {
+  const fittedViewport = useCallback((document: Document, editor?: { id: string; height: number }, focus = false) => {
     const nodes = document.nodes
     const rect = canvasElement.current?.getBoundingClientRect()
     if (!rect?.width || !rect.height) return null
@@ -437,11 +437,13 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     const bottom = Math.max(...nodes.map((node) => node.y + node.height), editedNode && editor ? editedNode.y + editedNode.height + 14 + editor.height : -Infinity)
     const paddingX = Math.min(100, Math.max(32, rect.width * .1))
     const paddingY = Math.min(180, Math.max(100, rect.height * .16))
-    const zoom = Math.max(.02, Math.min(1, (rect.width - paddingX * 2) / (right - left), (rect.height - paddingY * 2) / (bottom - top)))
+    const paddingTop = focus ? 80 : paddingY
+    const paddingBottom = focus ? rect.width <= 1100 ? 148 : 88 : paddingY
+    const zoom = Math.max(.02, Math.min(1, (rect.width - paddingX * 2) / (right - left), (rect.height - paddingTop - paddingBottom) / (bottom - top)))
     return {
       zoom,
       x: (rect.width - (right - left) * zoom) / 2 - left * zoom,
-      y: (rect.height - (bottom - top) * zoom) / 2 - top * zoom,
+      y: (rect.height + paddingTop - paddingBottom - (bottom - top) * zoom) / 2 - top * zoom,
     }
   }, [])
 
@@ -461,7 +463,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     const current = canvas.current.current
     const original = current.nodes.find((node) => node.id === id && node.type === 'shape' && !node.text.trim())
     if (!original) return
-    const converted: Node = { ...original, type: 'video', name: `视频节点 ${current.nodes.filter((node) => node.type === 'video').length + 1}`, duration_seconds: 5, width: 820, height: 670 }
+    const converted: Node = { ...original, type: 'video', name: `视频节点 ${current.nodes.filter((node) => node.type === 'video').length + 1}`, duration_seconds: 5, ...videoNodeSize }
     const next = { ...current, nodes: current.nodes.map((node) => node.id === id ? converted : node) }
     canvas.apply({ ...next, viewport: fittedViewport({ ...next, nodes: [converted] }) ?? current.viewport })
     setSelected([id])
@@ -747,7 +749,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         continue
       }
       const requestedSource = operation.connect_from_id ? nodes.find((node) => node.id === operation.connect_from_id && node.type === 'video') : previousVideo
-      const node: Node = { id: crypto.randomUUID(), type: 'video', asset_id: null, name: operation.name, duration_seconds: operation.duration_seconds, text: operation.text, ...place(820, 670, requestedSource), width: 820, height: 670 }
+      const node: Node = { id: crypto.randomUUID(), type: 'video', asset_id: null, name: operation.name, duration_seconds: operation.duration_seconds, text: operation.text, ...place(videoNodeSize.width, videoNodeSize.height, requestedSource), ...videoNodeSize }
       nodes.push(node); affectedIds.push(node.id)
       if (requestedSource) edges.push({ id: crypto.randomUUID(), source: requestedSource.id, target: node.id })
       previousVideo = node
@@ -769,7 +771,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
 
   function addNode(type: 'video' | 'image' | 'audio' | 'note' | 'text' | 'shape') {
     const current = canvas.current.current
-    const size = type === 'video' ? { width: 480, height: 310 } : type === 'image' ? { width: 360, height: 280 } : type === 'audio' ? { width: 360, height: 230 } : type === 'note' ? { width: 280, height: 220 } : type === 'text' ? { width: 320, height: 150 } : { width: 240, height: 150 }
+    const size = type === 'video' ? videoNodeSize : type === 'image' ? { width: 360, height: 280 } : type === 'audio' ? { width: 360, height: 230 } : type === 'note' ? { width: 280, height: 220 } : type === 'text' ? { width: 320, height: 150 } : { width: 240, height: 150 }
     const label = type === 'video' ? '视频节点' : type === 'image' ? '图片节点' : type === 'audio' ? '音频节点' : ''
     const name = label ? `${label} ${current.nodes.filter((item) => item.type === type).length + 1}` : ''
     const position = paletteAnchor ? { x: paletteAnchor.flowX, y: paletteAnchor.flowY } : center(size.width, size.height)
@@ -830,10 +832,12 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     }, false)
   }
 
-  function fit() {
+  function fit(selectedOnly = false) {
     const current = canvas.current.current
     const editor = canvasElement.current?.querySelector<HTMLElement>('.media-node-editor:not([aria-hidden="true"])')
-    const viewport = fittedViewport(current, editor?.dataset.nodeId ? { id: editor.dataset.nodeId, height: editor.offsetHeight } : undefined)
+    const target = selectedOnly ? { ...current, nodes: current.nodes.filter((node) => selected.includes(node.id)) } : current
+    if (selectedOnly && !target.nodes.length) return
+    const viewport = fittedViewport(target, editor?.dataset.nodeId ? { id: editor.dataset.nodeId, height: editor.offsetHeight } : undefined, selectedOnly)
     if (viewport) canvas.apply({ ...current, viewport }, false)
   }
 
@@ -959,6 +963,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     </div>}
     {(selected.filter((id) => canvas.document.nodes.some((node) => node.id === id && node.type !== 'group')).length >= 2 || selected.some((id) => canvas.document.nodes.some((node) => node.id === id && node.type === 'group'))) && <div className="media-canvas-selection-actions"><span>已选 {selected.length} 个节点</span><button onClick={groupSelected} disabled={selected.filter((id) => canvas.document.nodes.some((node) => node.id === id && node.type !== 'group')).length < 2}>编组</button><button onClick={ungroupSelected} disabled={!selected.some((id) => canvas.document.nodes.some((node) => node.id === id && node.type === 'group'))}>取消编组</button></div>}
     <div className="media-canvas-toolbar" role="toolbar" aria-label="创作工具"><button ref={nodeMenuTrigger} className="media-add-node-button" aria-controls="media-node-palette" aria-expanded={nodeMenu} disabled={!canvas.ready} onClick={() => { setPaletteAnchor(null); setNodeMenu(!nodeMenu); setContextMenu(null); setMenu(false) }}>＋ 添加节点</button><button disabled={!canvas.ready} onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>素材库</button><button aria-label="选择" title="选择 V" aria-pressed={tool === 'select'} onClick={() => setTool('select')}><MousePointer2 size={17} /></button><button aria-label="平移" title="平移 H，按住空格临时平移" aria-pressed={tool === 'pan'} onClick={() => setTool('pan')}><Hand size={17} /></button><button aria-label="复制节点" title="复制节点 ⌘/Ctrl+C" disabled={!selected.length} onClick={copySelection}><Copy size={16} /></button><button aria-label="粘贴节点" title="粘贴节点 ⌘/Ctrl+V" disabled={clipboardProjectId !== projectId} onClick={pasteSelection}><ClipboardPaste size={16} /></button><button aria-label="撤销" onClick={canvas.undo}>↶</button><button aria-label="重做" onClick={canvas.redo}>↷</button><button disabled={!selected.length && !selectedEdges.length} onClick={removeSelected}>移除</button></div>
-    <div className="media-canvas-view-tools" role="toolbar" aria-label="画布视图"><button aria-label="切换小地图" aria-pressed={showMiniMap} title="小地图" onClick={() => setShowMiniMap(!showMiniMap)}><MapIcon size={16} /></button><button aria-label="缩小画布" onClick={() => zoom(1 / 1.2)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" onClick={() => zoom(1.2)}>＋</button><button onClick={fit}>适应全部</button></div>
+    <div className="media-canvas-view-tools" role="toolbar" aria-label="画布视图"><button aria-label="切换小地图" aria-pressed={showMiniMap} title="小地图" onClick={() => setShowMiniMap(!showMiniMap)}><MapIcon size={16} /></button><button aria-label="缩小画布" onClick={() => zoom(1 / 1.2)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" onClick={() => zoom(1.2)}>＋</button><button disabled={!selected.length} onClick={() => fit(true)}>聚焦所选</button><button onClick={() => fit()}>适应全部</button></div>
   </main>
 }

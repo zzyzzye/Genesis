@@ -1,5 +1,18 @@
 import type { Document, Node } from './api'
 
+export const videoNodeSize = { width: 480, height: 312 }
+
+export function compactLegacyVideoNodes(document: Document): Document {
+  let changed = false
+  const nodes = document.nodes.map((node) => {
+    if (node.type !== 'video' || node.width !== 820 || node.height !== 670) return node
+    changed = true
+    // 旧尺寸包含常驻表单的高度；仅收紧旧预设，保持中心及用户自定义尺寸。
+    return { ...node, ...videoNodeSize, x: node.x + (node.width - videoNodeSize.width) / 2, y: node.y + (node.height - videoNodeSize.height) / 2 }
+  })
+  return changed ? { ...document, nodes } : document
+}
+
 export function resizedNodeDimensions(width: number, height: number, deltaX: number, deltaY: number, zoom: number, minWidth: number, minHeight: number) {
   const scale = Math.max(.02, zoom)
   return {

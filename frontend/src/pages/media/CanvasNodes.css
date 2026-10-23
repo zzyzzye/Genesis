@@ -1,5 +1,5 @@
 .media-editor .media-video-composer { position:relative; flex:0 0 auto; min-height:0; margin:0; padding:8px 16px 16px; border-radius:0; background:transparent; }
-.media-editor .media-video-composer textarea { min-height:86px; flex:0 0 86px; font-size:14px; }
+.media-editor .media-video-composer textarea { min-height:72px; flex:0 0 72px; font-size:14px; }
 .media-video-composer-top { flex-wrap:wrap; }
 .media-video-composer-top>span { margin-right:auto; color:#aaa; }
 .media-node-reference-picker { margin-right:auto; }
@@ -59,7 +59,7 @@
 .media-node-preview .media-preview { background:#252525; }
 .media-node-drag-surface { cursor:grab; }
 .media-node-drag-surface:active { cursor:grabbing; }
-.media-node-editor { position:absolute; z-index:10; top:calc(100% + 14px); left:-16px; width:calc(100% + 32px); max-height:440px; overflow:auto; overscroll-behavior:contain; border-radius:14px; background:#252525; box-shadow:0 10px 30px #0004; cursor:default; }
+.media-node-editor { position:absolute; z-index:10; top:calc(100% + 14px); left:-16px; width:calc(100% + 32px); max-height:320px; overflow:auto; overscroll-behavior:contain; border-radius:14px; background:#252525; box-shadow:0 10px 30px #0004; cursor:default; }
 .media-editor .media-node-editor .media-node-editor-close { position:absolute; top:8px; right:8px; z-index:1; display:grid; place-items:center; min-height:28px; width:28px; padding:0; background:transparent; }
 .media-editor .media-node-editor .media-video-composer { padding-top:12px; }
 .media-node-editor .media-video-composer-top { padding-right:26px; }
@@ -113,7 +113,7 @@
   .media-editor .media-canvas-toolbar { width:max-content; bottom:12px; gap:0; flex-wrap:nowrap; }
   .media-editor .media-canvas-toolbar button { min-width:32px; padding:6px; }
   .media-editor .media-canvas-toolbar button[aria-label="复制节点"],.media-editor .media-canvas-toolbar button[aria-label="粘贴节点"] { display:none; }
-  .media-node-editor { max-height:400px; }
+  .media-node-editor { max-height:300px; }
   .media-node-generation-settings { grid-template-columns:1fr; }
   .media-editor .media-video-composer-footer { flex-wrap:wrap; }
   .media-editor .media-node-editor .media-video-spec { margin-left:0; }
