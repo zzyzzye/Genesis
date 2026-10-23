@@ -126,7 +126,7 @@
 }
 
 /* 节点标题、正文与编辑控件同字号，辅助说明保持次级层级。 */
-.media-editor { --media-node-font-size:14px; --media-canvas-font-size:13px; --media-reference-size:48px; }
+.media-editor { --media-node-font-size:12px; --media-canvas-font-size:13px; --media-reference-size:48px; }
 .media-editor .media-node-grip,.media-editor .media-video-composer textarea { font-size:var(--media-node-font-size); }
 .media-editor .media-node-editor :is(button,select,input),.media-node-editor .media-video-composer-footer,.media-node-editor .media-node-references>div,.media-node-editor .media-node-generation-settings { font-size:var(--media-node-font-size); }
 .media-editor .media-node-editor .media-video-composer-footer small,.media-editor .media-download { font-size:12px; }
@@ -142,7 +142,7 @@
 .media-editor .media-node-editor .media-preview.is-thumbnail .media-thumbnail-retry { display:grid; place-items:center; width:100%; height:100%; min-height:0; padding:0; border-radius:0; background:transparent; color:#bbb; }
 .media-reference-details { display:grid; gap:6px; padding-top:10px; }
 .media-reference-details>div { display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; }
-.media-reference-details span { flex:1 1 100px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+.media-reference-details span { flex:1 1 100px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--media-node-font-size); }
 .media-reference-details small { color:#aaa; font-size:12px; }
 .media-editor .media-node-editor .media-reference-details button { min-height:26px; padding:2px 7px; }
 .media-node-editor .media-node-generation-settings .media-video-asset-picker { max-width:none; }
