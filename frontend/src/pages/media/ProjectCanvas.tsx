@@ -22,7 +22,9 @@ import {
   type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { AnimatePresence, motion, useIsPresent } from 'motion/react'
+import { canvasEditorTransition, useLiveReducedMotion } from '../../lib/motion'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, GripVertical, Hand, ImagePlus, Map as MapIcon, MousePointer2, Music2, Play, Shapes, StickyNote, Type, Upload, X } from 'lucide-react'
 import { api, defaultGenerationSettings, type Asset, type Document, type Edge, type Node, type Project, type VideoFrame, upload } from './api'
@@ -54,6 +56,8 @@ type CanvasNodeData = {
   onConvertToVideo: (id: string) => void
   onInteractionStart: () => void
   onInteractionEnd: () => void
+  editorOpen: boolean
+  onCloseEditor: () => void
 }
 
 type CanvasFlowNode = FlowNode<CanvasNodeData, Node['type']>
@@ -67,26 +71,15 @@ function CanvasAssetPicker({ projectId, target, onClose, onSelect }: { projectId
   </dialog>
 }
 
-function CanvasVideoEditor({ node, viewport, onClose, dragging }: { node: CanvasFlowNode; viewport: Viewport; onClose: () => void; dragging: boolean }) {
-  const element = useRef<HTMLDivElement>(null)
-  const [size, setSize] = useState({ width: 560, height: 260 })
-  useLayoutEffect(() => {
-    if (!element.current) return
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setSize({ width: entry.contentRect.width, height: entry.contentRect.height })
-    })
-    observer.observe(element.current)
-    return () => observer.disconnect()
-  }, [])
-  const source = node.data.source
-  const left = Math.max(12, Math.min(window.innerWidth - size.width - 12, viewport.x + (source.x + source.width / 2) * viewport.zoom - size.width / 2))
-  const below = viewport.y + (source.y + source.height) * viewport.zoom + 14
-  const above = viewport.y + source.y * viewport.zoom - size.height - 14
-  const top = Math.max(76, Math.min(window.innerHeight - size.height - 104, below + size.height < window.innerHeight - 104 ? below : above))
-  return <div ref={element} className="media-node-editor" role="region" aria-hidden={dragging} aria-label={`${source.name || '视频节点'}编辑面板`} style={{ left, top, visibility: dragging ? 'hidden' : undefined, pointerEvents: dragging ? 'none' : undefined }}>
-    <header><span>{source.name || '视频节点'}</span><button type="button" aria-label="关闭节点编辑" onClick={onClose}><X size={15} /></button></header>
-    <VideoNodeComposer key={node.id} id={node.id} data={node.data} />
-  </div>
+function CanvasVideoEditor({ id, data, dragging }: { id: string; data: CanvasNodeData; dragging: boolean }) {
+  const reducedMotion = useLiveReducedMotion()
+  const isPresent = useIsPresent()
+  return <motion.div className="media-node-editor nodrag nowheel nopan" data-node-id={id} role="region" inert={!isPresent || dragging} aria-hidden={!isPresent || dragging} aria-label={`${data.source.name || '视频节点'}编辑面板`}
+    variants={canvasEditorTransition} initial={reducedMotion ? false : 'initial'} animate="enter" exit={reducedMotion ? { opacity: 0, transition: { duration: 0 } } : 'exit'}
+    style={{ visibility: dragging ? 'hidden' : undefined, pointerEvents: dragging ? 'none' : undefined }}>
+    <button className="media-node-editor-close" type="button" aria-label="关闭节点编辑" onClick={data.onCloseEditor}><X size={15} /></button>
+    <VideoNodeComposer id={id} data={data} />
+  </motion.div>
 }
 
 function CanvasResizeCorner({ id, data, minWidth, minHeight, label }: { id: string; data: CanvasNodeData; minWidth: number; minHeight: number; label: string }) {
@@ -130,7 +123,7 @@ function CanvasResizeCorner({ id, data, minWidth, minHeight, label }: { id: stri
   />
 }
 
-function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
+function VideoNodeView({ id, data, selected, dragging }: NodeProps<CanvasFlowNode>) {
   const node = data.source
   const preview = data.asset && data.asset.kind !== 'audio' ? data.asset : null
   return <article className={`media-video-card ${selected ? 'is-selected' : ''}`} aria-label={node.name || '视频节点'}>
@@ -145,6 +138,7 @@ function VideoNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
       </div>
       <button type="button" className="media-video-add-segment nodrag nopan is-next" aria-label="新增下一段视频" title="添加下游节点" onClick={() => data.onAddConnected(id, 'right')}>+</button>
     </div>
+    <AnimatePresence>{data.editorOpen && <CanvasVideoEditor key={id} id={id} data={data} dragging={dragging} />}</AnimatePresence>
   </article>
 }
 
@@ -431,24 +425,23 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
 
   useEffect(() => () => onAgentNodeChange?.(null), [onAgentNodeChange])
 
-  const fittedViewport = useCallback((document: Document, editorHeight = 0) => {
+  const fittedViewport = useCallback((document: Document, editor?: { id: string; height: number }) => {
     const nodes = document.nodes
     const rect = canvasElement.current?.getBoundingClientRect()
     if (!rect?.width || !rect.height) return null
     if (!nodes.length) return { x: 0, y: 0, zoom: 1 }
-    const left = Math.min(...nodes.map((node) => node.x))
+    const editedNode = editor ? nodes.find((node) => node.id === editor.id) : undefined
+    const left = Math.min(...nodes.map((node) => node.x), editedNode ? editedNode.x - 16 : Infinity)
     const top = Math.min(...nodes.map((node) => node.y))
-    const right = Math.max(...nodes.map((node) => node.x + node.width))
-    const bottom = Math.max(...nodes.map((node) => node.y + node.height))
+    const right = Math.max(...nodes.map((node) => node.x + node.width), editedNode ? editedNode.x + editedNode.width + 16 : -Infinity)
+    const bottom = Math.max(...nodes.map((node) => node.y + node.height), editedNode && editor ? editedNode.y + editedNode.height + 14 + editor.height : -Infinity)
     const paddingX = Math.min(100, Math.max(32, rect.width * .1))
     const paddingY = Math.min(180, Math.max(100, rect.height * .16))
-    const paddingTop = editorHeight ? 80 : paddingY
-    const paddingBottom = editorHeight ? editorHeight + (rect.width <= 1100 ? 178 : 118) : paddingY
-    const zoom = Math.max(.02, Math.min(1, (rect.width - paddingX * 2) / (right - left), (rect.height - paddingTop - paddingBottom) / (bottom - top)))
+    const zoom = Math.max(.02, Math.min(1, (rect.width - paddingX * 2) / (right - left), (rect.height - paddingY * 2) / (bottom - top)))
     return {
       zoom,
       x: (rect.width - (right - left) * zoom) / 2 - left * zoom,
-      y: (rect.height + paddingTop - paddingBottom - (bottom - top) * zoom) / 2 - top * zoom,
+      y: (rect.height - (bottom - top) * zoom) / 2 - top * zoom,
     }
   }, [])
 
@@ -512,8 +505,10 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       onConvertToVideo: convertToVideo,
       onInteractionStart: beginInteraction,
       onInteractionEnd: endInteraction,
+      editorOpen: selected.length === 1 && selected[0] === node.id && !nodeMenu && !contextMenu,
+      onCloseEditor: () => setSelected([]),
     },
-  })), [addConnected, assets, assetsLoading, beginInteraction, canvas.document, changeReference, convertToVideo, draggingNode, endInteraction, openAssets, openNodeAssets, patchNode, previewAssets, selected, updateText, uploadNodeAsset, uploadPreview])
+  })), [addConnected, assets, assetsLoading, beginInteraction, canvas.document, changeReference, contextMenu, convertToVideo, draggingNode, endInteraction, nodeMenu, openAssets, openNodeAssets, patchNode, previewAssets, selected, updateText, uploadNodeAsset, uploadPreview])
 
   const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
     ...edge,
@@ -837,8 +832,8 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
 
   function fit() {
     const current = canvas.current.current
-    const editorHeight = canvasElement.current?.parentElement?.querySelector('.media-node-editor')?.getBoundingClientRect().height ?? 0
-    const viewport = fittedViewport(current, editorHeight)
+    const editor = canvasElement.current?.querySelector<HTMLElement>('.media-node-editor:not([aria-hidden="true"])')
+    const viewport = fittedViewport(current, editor?.dataset.nodeId ? { id: editor.dataset.nodeId, height: editor.offsetHeight } : undefined)
     if (viewport) canvas.apply({ ...current, viewport }, false)
   }
 
@@ -864,7 +859,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   }
 
   const viewport = canvas.document.viewport
-  const editingNode = selected.length === 1 ? flowNodes.find((node) => node.id === selected[0] && node.type === 'video') : undefined
   return <main className="media-editor">
     <div className="media-project-menu"><div className="media-project-controls"><button className="media-project-back" aria-label="返回作品页" title="返回作品页" onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}`) })}><ArrowLeft size={17} /></button><button className="media-project-trigger" aria-expanded={menu} aria-label="作品菜单" onClick={() => { setMenu(!menu); setNodeMenu(false) }}><span className="media-project-name">{project?.name ?? '作品'}</span><ChevronDown size={15} /></button><FpsStatusSlot /></div>{menu && <div className="media-menu-content"><p role="status">{canvas.status}</p><label className="media-background-setting">画布背景<select aria-label="画布背景" value={canvas.document.background} onChange={(event) => canvas.apply({ ...canvas.current.current, background: event.target.value as Document['background'] })}><option value="dots">点阵</option><option value="lines">网格</option><option value="none">纯色</option></select></label><button onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}/assets`) })}>作品素材库</button><button disabled={!project} onClick={() => setRenameOpen(true)}>重命名作品</button><button onClick={() => void action(canvas.save)}>立即保存 / 重试</button></div>}</div>
     {(error || canvas.status.startsWith('保存失败') || canvas.conflict || !canvas.ready) && <div className="media-editor-notice" role="status">{error || canvas.status}{previewRetry ? <button onClick={() => void (previewRetry.kind ? uploadNodeAsset(previewRetry.id, previewRetry.kind, previewRetry.file) : uploadPreview(previewRetry.id, previewRetry.file))}>重试上传</button> : <button onClick={() => void action(canvas.ready ? canvas.save : () => canvas.load(true))}>重试</button>}{canvas.conflict && <><button onClick={() => setReloadOpen(true)}>重新加载</button><button onClick={() => void action(fork)}>保留为新作品</button></>}<button onClick={() => void navigate(`/media/projects/${projectId}`)}>作品页</button></div>}
@@ -944,7 +938,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       {uploadProgress !== null && <div className="media-canvas-upload" role="status">正在导入素材 · {uploadProgress}%</div>}
       {canvas.ready && canvas.document.nodes.length === 0 && !nodeMenu && <div className="media-canvas-empty"><small>视频创作空间</small><h1>从第一个镜头开始。</h1><p>创建视频节点，添加素材、描述画面，再连接下一段。</p><div className="media-canvas-empty-actions"><button className="media-accent" onClick={() => addNode('video')}>＋ 添加视频节点</button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>打开作品素材库</button></div></div>}
     </div>
-    {editingNode && !nodeMenu && !contextMenu && <CanvasVideoEditor node={editingNode} viewport={viewport} dragging={draggingNode} onClose={() => setSelected([])} />}
     {nodeMenu && <div ref={nodeMenuElement} id="media-node-palette" className={`media-node-palette ${paletteAnchor ? 'is-contextual' : ''}`} style={paletteAnchor ? { left: Math.max(12, Math.min(window.innerWidth - 284, paletteAnchor.x)), top: Math.max(76, Math.min(window.innerHeight - 360, paletteAnchor.y)) } : undefined} role="dialog" aria-label="添加节点">
       <div className="media-node-palette-heading"><strong>添加节点</strong><button type="button" aria-label="关闭节点菜单" onClick={() => setNodeMenu(false)}>×</button></div>
       <div className="media-node-palette-grid">

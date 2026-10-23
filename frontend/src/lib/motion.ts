@@ -40,6 +40,13 @@ export const motionCssVariables = {
   '--motion-layout-ease': `cubic-bezier(${layoutEase.join(',')})`,
 } as CSSProperties
 
+// 编辑区在节点下方轻移淡入，保持与节点相同的画布缩放，不缩放文字做入场。
+export const canvasEditorTransition: Variants = {
+  initial: { opacity: 0, y: 12 },
+  enter: { opacity: 1, y: 0, transition: { duration: motionTiming.panel, ease: motionTiming.ease } },
+  exit: { opacity: 0, y: 8, transition: { duration: motionTiming.quick, ease: motionTiming.ease } },
+}
+
 export const pageTransition: Variants = {
   initial: { opacity: 0 },
   enter: {

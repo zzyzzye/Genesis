@@ -44,6 +44,7 @@ describe('作品画布', () => {
     expect(screen.queryByRole('textbox', { name: '镜头描述' })).not.toBeInTheDocument()
     fireEvent.click(videoNode)
     expect(window.document.querySelector('.react-flow__viewport')?.getAttribute('style')).toBe(viewport)
+    expect(videoNode).toContainElement(await screen.findByRole('region', { name: '视频节点编辑面板' }))
     fireEvent.click(await screen.findByRole('button', { name: '引用文字' }))
     expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveValue('镜头一')
     fireEvent.click(screen.getByRole('button', { name: '画布参考 · 1' }))

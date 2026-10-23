@@ -24,7 +24,7 @@
 .media-editor ::-webkit-scrollbar-thumb { border-radius:8px; background:#555; }
 .media-editor ::-webkit-scrollbar-thumb:hover { background:#777; }
 
-/* 画布只承载内容；单选编辑层保持屏幕字号，不随节点缩放。 */
+/* 节点和下方编辑区共用画布坐标与缩放，标题、正文和控件同步变化。 */
 .media-editor { --media-ink:#e8e8e8; --media-muted:#aaa; --media-accent:#c5c5c5; --media-line:#414141; background:#191919; user-select:none; }
 .media-editor :is(input,textarea) { user-select:text; }
 .media-canvas .react-flow { background:#191919; }
@@ -59,10 +59,10 @@
 .media-node-preview .media-preview { background:#252525; }
 .media-node-drag-surface { cursor:grab; }
 .media-node-drag-surface:active { cursor:grabbing; }
-.media-node-editor { position:absolute; z-index:10; width:min(560px,calc(100vw - 24px)); max-height:min(440px,calc(100dvh - 190px)); overflow:auto; overscroll-behavior:contain; border-radius:14px; background:#252525; box-shadow:0 10px 30px #0004; }
-.media-node-editor>header { display:flex; align-items:center; gap:12px; padding:9px 12px 0 16px; color:#aaa; font-size:12px; }
-.media-node-editor>header>span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.media-editor .media-node-editor>header>button { display:grid; place-items:center; min-height:28px; width:28px; padding:0; background:transparent; }
+.media-node-editor { position:absolute; z-index:10; top:calc(100% + 14px); left:-16px; width:calc(100% + 32px); max-height:440px; overflow:auto; overscroll-behavior:contain; border-radius:14px; background:#252525; box-shadow:0 10px 30px #0004; cursor:default; }
+.media-editor .media-node-editor .media-node-editor-close { position:absolute; top:8px; right:8px; z-index:1; display:grid; place-items:center; min-height:28px; width:28px; padding:0; background:transparent; }
+.media-editor .media-node-editor .media-video-composer { padding-top:12px; }
+.media-node-editor .media-video-composer-top { padding-right:26px; }
 .media-editor .media-node-editor :is(button,select,input) { min-height:30px; color:#d5d5d5; background:#303030; font-size:12px; }
 .media-editor .media-node-editor button { display:inline-flex; align-items:center; justify-content:center; gap:5px; }
 .media-editor .media-node-editor button:hover,.media-editor .media-node-editor button:focus-visible,.media-editor .media-node-editor button[aria-expanded=true] { background:#3b3b3b; }
@@ -113,15 +113,15 @@
   .media-editor .media-canvas-toolbar { width:max-content; bottom:12px; gap:0; flex-wrap:nowrap; }
   .media-editor .media-canvas-toolbar button { min-width:32px; padding:6px; }
   .media-editor .media-canvas-toolbar button[aria-label="复制节点"],.media-editor .media-canvas-toolbar button[aria-label="粘贴节点"] { display:none; }
-  .media-node-editor { max-height:min(45dvh,400px); }
+  .media-node-editor { max-height:400px; }
   .media-node-generation-settings { grid-template-columns:1fr; }
   .media-editor .media-video-composer-footer { flex-wrap:wrap; }
   .media-editor .media-node-editor .media-video-spec { margin-left:0; }
   .media-node-palette:not(.is-contextual) { bottom:124px; }
 }
 
-/* 节点正文与标题统一，控件与辅助说明使用同一组字号层级。 */
+/* 节点标题、正文与编辑控件同字号，辅助说明保持次级层级。 */
 .media-editor { --media-node-font-size:14px; --media-canvas-font-size:13px; }
-.media-editor .media-node-grip,.media-editor .media-node-editor>header,.media-editor .media-video-composer textarea { font-size:14px; }
-.media-editor .media-node-editor :is(button,select,input),.media-node-editor .media-video-composer-footer,.media-node-editor .media-node-references>div { font-size:13px; }
+.media-editor .media-node-grip,.media-editor .media-video-composer textarea { font-size:var(--media-node-font-size); }
+.media-editor .media-node-editor :is(button,select,input),.media-node-editor .media-video-composer-footer,.media-node-editor .media-node-references>div,.media-node-editor .media-node-generation-settings { font-size:var(--media-node-font-size); }
 .media-editor .media-node-editor .media-video-composer-footer small,.media-editor .media-download { font-size:12px; }
