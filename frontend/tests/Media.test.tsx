@@ -15,7 +15,7 @@ import { incomingReferences } from '../src/pages/media/canvasReferences'
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
 
 // 视频任务协议在独立测试覆盖；这些用例聚焦画布与素材操作。
-vi.mock('../src/pages/media/VideoGeneration', () => ({ VideoGeneration: ({ controls }: { controls: import('react').ReactNode }) => controls }))
+vi.mock('../src/pages/media/VideoGeneration', () => ({ VideoGeneration: ({ controls }: { controls: import('react').ReactNode }) => controls, ImageGeneration: ({ controls }: { controls: import('react').ReactNode }) => controls }))
 
 describe('作品画布', () => {
   beforeEach(() => {
@@ -86,8 +86,9 @@ describe('作品画布', () => {
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     expect(screen.queryByRole('spinbutton', { name: '镜头时长' })).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: '生成声音' })).not.toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: '画面比例' })).toHaveValue('1:1')
-    fireEvent.change(screen.getByRole('combobox', { name: '画面比例' }), { target: { value: '3:4' } })
+    expect(screen.queryByRole('combobox', { name: '画面比例' })).not.toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: '图片输出尺寸' }), { target: { value: '1024x1536' } })
+    fireEvent.blur(screen.getByRole('textbox', { name: '图片输出尺寸' }))
     fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
     fireEvent.click(screen.getByRole('button', { name: '图片节点' }))
     expect(screen.getByRole('button', { name: '导入图片' })).toBeInTheDocument()
@@ -101,7 +102,33 @@ describe('作品画布', () => {
     await waitFor(() => {
       const saved = request.mock.calls.find(([path, method]) => path.endsWith('/canvas') && method === 'PUT')?.[2] as { document: Document }
       expect(saved.document.nodes.map((node) => node.type)).toEqual(['image_generation', 'image', 'video_asset'])
-      expect(saved.document.nodes[0]).toMatchObject({ text: '雨夜街道，电影感构图', width: 640, height: 402, generation: { mode: 'reference', ratio: '3:4' } })
+      expect(saved.document.nodes[0]).toMatchObject({ text: '雨夜街道，电影感构图', width: 640, height: 402, generation: { mode: 'reference', image_size:'1024x1536' } })
+    })
+  })
+  it('生图上传建立图片参考与连线，不覆盖生成预览或移动视口', async () => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const asset: media.Asset = {id:'image-upload',name:'人物.png',kind:'image',mime_type:'image/png',size:12,in_library:false}
+    const request=vi.spyOn(media,'api').mockImplementation(path=>Promise.resolve(path.endsWith('/canvas')?{version:0,document:emptyDocument()}:path.includes('/assets')?{items:[],total:0}:{id:'project',name:'测试作品',version:0}))
+    vi.spyOn(media,'upload').mockResolvedValue(asset)
+    vi.spyOn(media,'fileBlob').mockResolvedValue(new Blob(['image']))
+    vi.spyOn(URL,'createObjectURL').mockReturnValue('blob:image-reference')
+    vi.spyOn(URL,'revokeObjectURL').mockImplementation(()=>{})
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button',{name:'＋ 添加生图节点'}))
+    const viewport=window.document.querySelector('.react-flow__viewport')?.getAttribute('style')
+    fireEvent.change(screen.getByLabelText('导入生图节点参考素材'),{target:{files:[new File(['image'],'人物.png',{type:'image/png'})]}})
+    await screen.findByRole('group',{name:'参考 1：人物.png'})
+    expect(screen.getByRole('combobox',{name:'参考模式'})).toHaveValue('reference')
+    expect(window.document.querySelector('.react-flow__viewport')?.getAttribute('style')).toBe(viewport)
+    fireEvent.click(screen.getByRole('button',{name:'作品菜单'}))
+    fireEvent.click(screen.getByRole('button',{name:'立即保存 / 重试'}))
+    await waitFor(()=>{
+      const saved=request.mock.calls.find(([path,method])=>path.endsWith('/canvas')&&method==='PUT')?.[2] as {document:Document}
+      const generator=saved.document.nodes.find(node=>node.type==='image_generation')
+      const reference=saved.document.nodes.find(node=>node.type==='image')
+      expect(generator?.asset_id).toBeNull()
+      expect(reference?.asset_id).toBe(asset.id)
+      expect(saved.document.edges).toEqual([expect.objectContaining({source:reference?.id,target:generator?.id})])
     })
   })
   it('音频素材只承载文件，生音频独立保存提示词、参考与时长', async () => {

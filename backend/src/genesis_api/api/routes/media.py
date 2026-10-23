@@ -9,10 +9,18 @@ from fastapi.responses import FileResponse
 from sqlalchemy import delete, func, select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
+from genesis_api.api.routes.media_image import router as image_router
 from genesis_api.api.routes.media_video import router as video_router
 from genesis_api.core.uploads import copy_upload
 from genesis_api.media import service
-from genesis_api.media.models import MediaAsset, MediaProject, ProjectAsset, VideoGeneration
+from genesis_api.media.image import result_cache
+from genesis_api.media.models import (
+    ImageGeneration,
+    MediaAsset,
+    MediaProject,
+    ProjectAsset,
+    VideoGeneration,
+)
 from genesis_api.media.schemas import (
     AssetCopies,
     AssetReference,
@@ -23,6 +31,7 @@ from genesis_api.media.schemas import (
 
 router = APIRouter(prefix="/media", tags=["影音系统"])
 router.include_router(video_router)
+router.include_router(image_router)
 
 
 @router.post("/projects/{project_id}/copy-assets/{target_id}", status_code=204)
@@ -184,12 +193,22 @@ def delete_project(
     )
     if active_video is not None:
         raise HTTPException(409, "作品仍有视频任务运行，请任务结束后再删除")
+    image_tasks = session.scalars(
+        select(ImageGeneration).where(ImageGeneration.project_id == project.id)
+    ).all()
+    if any(task.status in ("submitting", "processing", "downloading") for task in image_tasks):
+        raise HTTPException(409, "作品仍有图片任务运行，请任务结束后再删除")
+    caches = [result_cache(task.id) for task in image_tasks]
+    session.execute(delete(ImageGeneration).where(ImageGeneration.project_id == project.id))
     session.execute(delete(VideoGeneration).where(VideoGeneration.project_id == project.id))
     session.execute(delete(ProjectAsset).where(ProjectAsset.project_id == project.id))
     session.delete(project)
     paths = service.collect_orphans(session, ids)
     # 先提交作品和引用删除，再清理文件；文件系统删除不属于数据库事务。
     session.commit()
+    for cache in caches:
+        cache.unlink(missing_ok=True)
+        cache.with_suffix(".partial").unlink(missing_ok=True)
     for path in paths:
         path.unlink(missing_ok=True)
 

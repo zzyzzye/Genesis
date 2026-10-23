@@ -175,7 +175,17 @@ cp frontend/.env.example frontend/.env
 
 Agent 的 `tools.py`、工具列表 `tools` 与第三方框架工具 API 保留原名，表示可调用能力，不表示业务系统。
 
-## 视频生成（云影 API）
+## 图片与视频生成（云影 API）
+
+### 图片生成
+
+生图节点接入[云影 OpenAI Images 兼容接口](https://ai-document.yyapi.cloud/zh/image-api)。在项目根目录的本地配置中自行填写 `GENESIS_IMAGE_API_KEY`，`GENESIS_IMAGE_API_BASE_URL` 默认 `https://zl.yyapi.cloud`。配置后运行 `docker compose up -d --no-deps backend`；容器会自动迁移图片任务表。不要将 Key 写入源码或发到聊天。
+
+模型完整读取当前图片 Key 的实时 `/v1/models`，不按文档白名单隐藏新模型。文生图提交 JSON；文档明确支持编辑的模型可使用图生图，服务端直接上传本地图片，无需部署公网地址。生图编辑区的「上传」「作品素材」建立图片参考节点与连线，并切换为图生图；画布中的图片节点也可手动连入。生成结果预览与参考图片相互独立。
+
+图片尺寸留空使用模型默认，也可填写如 `1024x1024`；尺寸和多图数量是否可用由所选模型决定，不沿用视频的 720P/比例参数。支持 1、2、4 张请求，兼容 URL 与 Base64 结果；全部结果保存为当前作品的私有素材。点击结果缩略图仅切换预览，不改写提示词。任务请求携带 `Idempotency-Key`，本地标识同时防止连续点击、断网重试重复调用；结果未知需先核实服务商记录。结果保存失败可重试保存已有响应，不重新生成。未完成任务阻止删除作品，重启仅恢复已缓存结果，不自动重放付费请求。
+
+### 视频配置与使用
 
 生视频节点接入[云影 OpenAI Videos 兼容接口](https://ai-document.yyapi.cloud/zh/video-api)。在项目根目录的本地配置中自行填写 `GENESIS_VIDEO_API_KEY`；不要将 Key 写入源码或发到聊天。Compose 也兼容根配置中的 `VIDEO_API_KEY`，优先使用带 GENESIS 前缀的配置。`GENESIS_VIDEO_API_BASE_URL` 默认是 `https://zl.yyapi.cloud`，不需要附加 `/v1`。
 

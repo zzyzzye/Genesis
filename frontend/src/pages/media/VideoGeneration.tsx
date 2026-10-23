@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowUp, LoaderCircle, RefreshCw } from 'lucide-react'
+import { ArrowUp, Check, LoaderCircle, RefreshCw } from 'lucide-react'
 import { api, defaultGenerationSettings, type Asset, type GenerationSettings, type Node } from './api'
+import { AssetPreview } from './AssetPreview'
 
-export type VideoModel = { id: string; parameters_known?: boolean; ratios: string[]; resolutions: string[]; durations: number[]; images: number; videos: number; audio: boolean }
+export type VideoModel = { id: string; parameters_known?: boolean; ratios: string[]; resolutions: string[]; durations: number[]; images: number; videos: number; audio: boolean; image_edit?: boolean }
 type ModelList = { configured: boolean; references_ready: boolean; models: VideoModel[] }
-type Task = { id: string; node_id: string; status: string; progress: number; error: string; asset_id: string | null }
+type Task = { id: string; node_id: string; status: string; progress: number; error: string; asset_id: string | null; asset_ids?: string[] }
 const running = (status: string) => ['submitting', 'queued', 'processing', 'downloading'].includes(status)
 const statusText: Record<string, string> = { submitting:'正在提交', queued:'排队中', processing:'生成中', downloading:'正在保存视频', download_failed:'视频保存失败', completed:'视频已生成', failed:'生成失败', unknown:'创建结果待核实', acknowledged:'已核实旧任务' }
+const imageStatusText: Record<string, string> = { submitting:'正在提交',processing:'生成中',downloading:'正在保存图片',download_failed:'图片保存失败',completed:'图片已生成',failed:'生成失败',unknown:'创建结果待核实',acknowledged:'已核实旧任务' }
 
-export function VideoGeneration({ projectId, node, onPatch, onSave, onResult, onModelChange, referenceCount = 0, controls }: {
+type GenerationProps = {
   projectId: string
   node: Node
   onPatch: (patch: Partial<Node>) => void
@@ -17,7 +19,18 @@ export function VideoGeneration({ projectId, node, onPatch, onSave, onResult, on
   onModelChange: (model: VideoModel | null) => void
   referenceCount?: number
   controls?: ReactNode
-}) {
+}
+export function VideoGeneration(props: GenerationProps) {
+  return <GenerationControls {...props} kind="video" />
+}
+export function ImageGeneration(props: GenerationProps) {
+  return <GenerationControls {...props} kind="image" />
+}
+function GenerationControls({ projectId, node, onPatch, onSave, onResult, onModelChange, referenceCount = 0, controls, kind }: GenerationProps & { kind: 'video' | 'image' }) {
+  const isImage = kind === 'image'
+  const noun = isImage ? '图片' : '视频'
+  const modelsPath = `/${kind}-models`
+  const tasksPath = `/projects/${projectId}/${kind}-generations`
   const [catalog, setCatalog] = useState<ModelList | null>(null)
   const [catalogError, setCatalogError] = useState('')
   const [task, setTask] = useState<Task | null>(null)
@@ -27,38 +40,52 @@ export function VideoGeneration({ projectId, node, onPatch, onSave, onResult, on
   const [attempt, setAttempt] = useState(0)
   const requestId = useRef<string | null>(null)
   const active = useRef(false)
+  const [results, setResults] = useState<Asset[]>([])
   const model = catalog?.models.find((item) => item.id === node.generation?.model)
+  const resultKey = isImage && task?.status === 'completed' ? (task.asset_ids ?? (task.asset_id ? [task.asset_id] : [])).join(',') : ''
+  useEffect(() => {
+    let current = true
+    if (!resultKey) return
+    void Promise.all(resultKey.split(',').map((id) => api<Asset>(`/assets/${id}`))).then((assets) => {
+      if (current) setResults(assets)
+    }).catch(() => { if (current) setError('生成图片读取失败，请刷新重试') })
+    return () => { current = false }
+  }, [resultKey, attempt])
   useEffect(() => { onModelChange(model ?? null) }, [model, onModelChange])
   useEffect(() => {
     let current = true
-    void api<ModelList>('/video-models').then((data) => {
-      if (!data || !Array.isArray(data.models)) throw new Error('视频模型目录格式无效，请重试')
+    void api<ModelList>(modelsPath).then((data) => {
+      if (!data || !Array.isArray(data.models)) throw new Error(`${noun}模型目录格式无效，请重试`)
       if (current) { setCatalog(data); setCatalogError('') }
     }).catch((reason: Error) => { if (current) setCatalogError(reason.message) })
     return () => { current = false }
-  }, [attempt])
+  }, [attempt, modelsPath, noun])
   useEffect(() => {
     let current = true
     let timer: ReturnType<typeof setTimeout>
     const refresh = async () => {
       try {
-        const tasks = await api<Task[]>(`/projects/${projectId}/video-generations?node_id=${node.id}`)
+        const tasks = await api<Task[]>(`${tasksPath}?node_id=${node.id}`)
         if (!current) return
         setTask(tasks[0] ?? null)
         setError('')
-        if (tasks[0] && running(tasks[0].status)) timer = setTimeout(() => { void refresh() }, 15000)
+        if (tasks[0] && running(tasks[0].status)) timer = setTimeout(() => { void refresh() }, isImage ? 2000 : 15000)
       } catch (reason) {
         if (current) { setError((reason as Error).message); timer = setTimeout(() => { void refresh() }, 15000) }
       }
     }
     void refresh()
     return () => { current = false; clearTimeout(timer) }
-  }, [projectId, node.id, attempt])
+  }, [tasksPath, node.id, attempt, isImage])
 
   const chooseModel = (id: string) => {
     const selected = catalog?.models.find((item) => item.id === id)
     if (!selected) return
     const settings = node.generation ?? defaultGenerationSettings()
+    if (isImage) {
+      onPatch({ generation: { ...settings, model:id, mode: selected.image_edit === false ? 'text' : settings.mode } })
+      return
+    }
     if (selected.parameters_known === false) {
       onPatch({ generation: { ...settings, model:id, count:1, mode:'text' } })
       return
@@ -78,38 +105,39 @@ export function VideoGeneration({ projectId, node, onPatch, onSave, onResult, on
       // 主动核实后的重新提交是新意图；普通断网重试继续复用原标识。
       if (acknowledged) requestId.current = null
       requestId.current ??= crypto.randomUUID()
-      const created = await api<Task>(`/projects/${projectId}/video-generations`, 'POST', { request_id:requestId.current, node_id:node.id, acknowledge_unknown:acknowledged })
+      const created = await api<Task>(tasksPath, 'POST', { request_id:requestId.current, node_id:node.id, acknowledge_unknown:acknowledged })
       setTask(created); requestId.current = null; setAcknowledged(false); setAttempt((value) => value + 1)
     } catch (reason) {
       setError(`${(reason as Error).message}。请先刷新任务状态；再次点击会使用同一请求标识。`)
     } finally { active.current = false; setBusy(false) }
-  }, [onSave, projectId, node.id, acknowledged])
+  }, [onSave, tasksPath, node.id, acknowledged])
   const blocked = busy || Boolean(task && running(task.status)) || task?.status === 'unknown' && !acknowledged
-  const referenceBlocked = (node.generation?.mode ?? 'text') !== 'text' && catalog && !catalog.references_ready
+  const referenceBlocked = (node.generation?.mode ?? 'text') !== 'text' && catalog && (!catalog.references_ready || isImage && model?.image_edit === false)
   return <div className="media-video-generation">
     <div className="media-video-generation-actions">
-      <select aria-label="视频生成模型" title={model ? model.parameters_known === false ? `${model.id} · 使用模型默认参数` : model.id : '选择视频模型'} value={model?.id ?? ''} disabled={busy || !catalog?.models.length} onChange={(event) => chooseModel(event.target.value)}>
-        <option value="">{catalog ? catalog.configured ? '选择视频模型' : '尚未配置视频服务' : '加载视频模型…'}</option>
+      <select aria-label={`${noun}生成模型`} title={model ? model.parameters_known === false ? `${model.id} · 使用模型默认参数` : model.id : `选择${noun}模型`} value={model?.id ?? ''} disabled={busy || !catalog?.models.length} onChange={(event) => chooseModel(event.target.value)}>
+        <option value="">{catalog ? catalog.configured ? `选择${noun}模型` : `尚未配置${noun}服务` : `加载${noun}模型…`}</option>
         {catalog?.models.map((item) => <option key={item.id}>{item.id}</option>)}
       </select>
       {controls}
-      <button type="button" aria-label="刷新视频模型与任务" title="刷新模型与任务" onClick={() => setAttempt((value) => value + 1)}><RefreshCw size={14} /></button>
-      <button type="button" className="media-video-submit" aria-label="生成视频" title="生成视频" disabled={Boolean(blocked || referenceBlocked || !model || !node.text.trim())} onClick={() => void submit()}>{busy || task && running(task.status) ? <LoaderCircle size={15} className="is-spinning" /> : <ArrowUp size={16} />}</button>
+      <button type="button" aria-label={`刷新${noun}模型与任务`} title="刷新模型与任务" onClick={() => setAttempt((value) => value + 1)}><RefreshCw size={14} /></button>
+      <button type="button" className="media-video-submit" aria-label={`生成${noun}`} title={`生成${noun}`} disabled={Boolean(blocked || referenceBlocked || !model || !node.text.trim())} onClick={() => void submit()}>{busy || task && running(task.status) ? <LoaderCircle size={15} className="is-spinning" /> : <ArrowUp size={16} />}</button>
     </div>
-    {model?.parameters_known === false && <p>使用模型默认画幅、清晰度和时长，暂仅支持文生视频。</p>}
-    {catalog && !catalog.configured && <p>视频服务尚未配置，请先在服务端配置视频 API Key。</p>}
-    {catalog?.configured && !catalog.models.length && <p>暂无已支持的可用视频模型，可刷新重试。</p>}
-    {referenceBlocked && <p>参考素材暂不可用：需先部署公网地址并启用素材访问。</p>}
-    {referenceCount > 0 && (node.generation?.mode ?? 'text') === 'text' && <p>切换到「素材参考」后才会发送连入的参考素材。</p>}
-    {task && <div className="media-video-task" role="status"><span>{statusText[task.status] ?? task.status}{running(task.status) ? ` ${task.progress}%` : ''}</span>{task.status === 'completed' && task.asset_id && node.asset_id !== task.asset_id && <button type="button" disabled={busy} onClick={() => {
+    {!isImage && model?.parameters_known === false && <p>使用模型默认画幅、清晰度和时长，暂仅支持文生视频。</p>}
+    {catalog && !catalog.configured && <p>{noun}服务尚未配置，请先在服务端配置{noun} API Key。</p>}
+    {catalog?.configured && !catalog.models.length && <p>暂无已支持的可用{noun}模型，可刷新重试。</p>}
+    {referenceBlocked && catalog?.configured && model && <p>{isImage ? '当前模型尚无图生图支持说明，请切换到文生图。' : '参考素材暂不可用：需先部署公网地址并启用素材访问。'}</p>}
+    {!isImage && referenceCount > 0 && (node.generation?.mode ?? 'text') === 'text' && <p>切换到「素材参考」后才会发送连入的参考素材。</p>}
+    {task && <div className="media-video-task" role="status"><span>{(isImage ? imageStatusText[task.status] : statusText[task.status]) ?? task.status}{!isImage && running(task.status) ? ` ${task.progress}%` : ''}</span>{!isImage && task.status === 'completed' && task.asset_id && node.asset_id !== task.asset_id && <button type="button" disabled={busy} onClick={() => {
       setBusy(true)
       void api<Asset>(`/assets/${task.asset_id}`).then(onResult).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false))
     }}>使用生成结果</button>}</div>}
+    {isImage && task?.status === 'completed' && <div className="media-generated-results" aria-label="生成图片结果">{results.filter((asset) => resultKey.split(',').includes(asset.id)).map((asset, index) => <div className="media-generated-result" key={asset.id}><AssetPreview asset={asset} thumbnail /><button type="button" className="media-generated-use" aria-label={`使用第 ${index + 1} 张生成图片`} title={`使用第 ${index + 1} 张生成图片`} aria-pressed={node.asset_id === asset.id} onClick={() => onResult(asset)}>{node.asset_id === asset.id && <Check size={12} aria-hidden="true" />}</button></div>)}</div>}
     {task?.error && <p role="status">{task.error}</p>}
     {task?.status === 'download_failed' && <button type="button" disabled={busy} onClick={() => {
       setBusy(true)
-      void api<Task>(`/projects/${projectId}/video-generations/${task.id}/retry-download`, 'POST').then((next) => { setTask(next); setAttempt((value) => value + 1) }).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false))
-    }}>重试保存视频</button>}
+      void api<Task>(`${tasksPath}/${task.id}/retry-download`, 'POST').then((next) => { setTask(next); setAttempt((value) => value + 1) }).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false))
+    }}>重试保存{noun}</button>}
     {task?.status === 'unknown' && <label className="media-video-unknown"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />已核实上次任务，确认重新提交可能产生新的费用</label>}
     {(catalogError || error) && <p role="alert">{catalogError || error}</p>}
   </div>

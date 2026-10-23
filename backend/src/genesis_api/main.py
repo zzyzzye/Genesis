@@ -14,6 +14,7 @@ from genesis_api.blog.agent.guide import refresh_article_guides
 from genesis_api.blog.publication import refresh_scheduled_posts
 from genesis_api.core.access_logging import protect_media_reference_logs
 from genesis_api.core.config import get_settings
+from genesis_api.media.image import recover_images
 from genesis_api.media.video import refresh_videos
 
 
@@ -36,13 +37,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         refresh_scheduled_posts(), name="blog-scheduled-publication"
     )
     video_task = asyncio.create_task(refresh_videos(), name="media-video-generations")
+    image_task = asyncio.create_task(recover_images(), name="media-image-generations")
     try:
         yield
     finally:
         guide_task.cancel()
         publication_task.cancel()
         video_task.cancel()
-        await asyncio.gather(guide_task, publication_task, video_task, return_exceptions=True)
+        image_task.cancel()
+        await asyncio.gather(
+            guide_task, publication_task, video_task, image_task, return_exceptions=True
+        )
         # 等待生成任务退出后才关闭 checkpoint，避免取消过程中仍访问已关闭连接。
         await ai_chat_run_manager.shutdown()
         await embedded_agent_runtime.shutdown()

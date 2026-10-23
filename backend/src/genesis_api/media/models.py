@@ -1,6 +1,6 @@
 """影音作品与素材元数据；文件存于媒体目录，作品通过关联表复用素材。"""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Uuid, func
@@ -67,3 +67,24 @@ class VideoGeneration(Base):
         ForeignKey("media_assets.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ImageGeneration(Base):
+    """同步图片请求的持久状态；响应缓存用于重试保存，不重放付费生成。"""
+
+    __tablename__ = "media_image_generations"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    owner_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    project_id: Mapped[UUID] = mapped_column(
+        ForeignKey("media_projects.id", ondelete="CASCADE"), index=True
+    )
+    node_id: Mapped[UUID] = mapped_column(Uuid)
+    snapshot: Mapped[dict[str, object]] = mapped_column(JSON)
+    reference_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(30), default="submitting")
+    error: Mapped[str] = mapped_column(String(500), default="")
+    asset_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), server_default=func.now()
+    )

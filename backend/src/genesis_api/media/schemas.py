@@ -22,6 +22,15 @@ class GenerationSettings(BaseModel):
     resolution: Literal["480P", "720P", "1080P", "768P", "2160P", "2K"] = "720P"
     count: Literal[1, 2, 4] = 1
     sound: bool = True
+    image_size: str = Field(default="", pattern=r"^(?:auto|[1-9]\d{1,4}x[1-9]\d{1,4})?$")
+
+
+class GenerationSubmit(BaseModel):
+    """一次生成意图的幂等标识与目标节点，不接受前端指定文件地址。"""
+
+    request_id: UUID
+    node_id: UUID
+    acknowledge_unknown: bool = False
 
 
 class CanvasNode(BaseModel):

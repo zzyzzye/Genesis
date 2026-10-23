@@ -32,7 +32,7 @@ import { incomingReferences } from './canvasReferences'
 import { AssetPreview } from './AssetPreview'
 import { AssetLibrary } from './AssetLibrary'
 import { CanvasReferenceEdge } from './CanvasReferenceEdge'
-import { VideoGeneration, type VideoModel } from './VideoGeneration'
+import { ImageGeneration, VideoGeneration, type VideoModel } from './VideoGeneration'
 import { ProjectDialog } from './MediaHome'
 import type { MediaAssistantNode, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
@@ -199,12 +199,22 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
   const [cameraOpen, setCameraOpen] = useState(false)
   const [referencesOpen, setReferencesOpen] = useState(false)
   const [durationError, setDurationError] = useState('')
+  const [sizeError, setSizeError] = useState('')
   const [videoModel, setVideoModel] = useState<VideoModel | null>(null)
+  const [imageModel, setImageModel] = useState<VideoModel | null>(null)
   const settings = node.generation ?? defaultGenerationSettings()
   const patchSettings = (patch: Partial<typeof settings>) => data.onPatch(id, { generation: { ...settings, ...patch } })
   const defaultsOnly = isVideo && videoModel?.parameters_known === false
-  const modeControl = <select aria-label="参考模式" value={settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}><option value="text">{isImage ? '文生图' : isAudio ? '文生音频' : '文生视频'}</option><option value="reference" disabled={defaultsOnly}>{isImage ? '图生图' : isAudio ? '音频参考' : '素材参考'}</option>{isVideo && <option value="first_last" disabled={defaultsOnly}>首尾帧</option>}</select>
-  const parameterControl = <GenerationParameters disabled={defaultsOnly} summary={defaultsOnly ? '模型默认参数' : [!isAudio && settings.ratio, !isAudio && settings.resolution, !isImage && `${node.duration_seconds ?? 5}s`, !isVideo && `${settings.count}个`].filter(Boolean).join(' · ')}>
+  const modeControl = <select aria-label="参考模式" value={settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}><option value="text">{isImage ? '文生图' : isAudio ? '文生音频' : '文生视频'}</option><option value="reference" disabled={defaultsOnly || isImage && imageModel?.image_edit === false}>{isImage ? '图生图' : isAudio ? '音频参考' : '素材参考'}</option>{isVideo && <option value="first_last" disabled={defaultsOnly}>首尾帧</option>}</select>
+  const parameterControl = <GenerationParameters disabled={defaultsOnly} summary={defaultsOnly ? '模型默认参数' : isImage ? `${settings.image_size && settings.image_size !== 'auto' ? settings.image_size : '模型默认尺寸'} · ${settings.count}张` : [!isAudio && settings.ratio, !isAudio && settings.resolution, !isImage && `${node.duration_seconds ?? 5}s`, !isVideo && `${settings.count}个`].filter(Boolean).join(' · ')}>
+    {isImage && <label>输出尺寸<input key={settings.image_size} type="text" aria-label="图片输出尺寸" aria-invalid={Boolean(sizeError)} aria-describedby={sizeError ? `image-size-error-${id}` : undefined} placeholder="模型默认" defaultValue={settings.image_size ?? ''} maxLength={11} onFocus={data.onInteractionStart} onBlur={(event) => {
+      const size = event.target.value.trim().toLowerCase()
+      if (!/^(?:auto|[1-9]\d{1,4}x[1-9]\d{1,4})?$/.test(size)) {
+        setSizeError('请使用宽x高格式，例如 1024x1024，留空使用模型默认尺寸。')
+        event.target.value = settings.image_size ?? ''
+      } else { setSizeError(''); patchSettings({ image_size:size }) }
+      data.onInteractionEnd()
+    }} /></label>}
     {!isImage && <label>{isAudio ? '音频时长' : '镜头时长'}<span><input key={node.duration_seconds} type="number" aria-label={isAudio ? '音频时长' : '镜头时长'} aria-invalid={Boolean(durationError)} aria-describedby={durationError ? `duration-error-${id}` : undefined} min={1} max={600} step={1} defaultValue={node.duration_seconds ?? 5} onFocus={data.onInteractionStart} onBlur={(event) => {
       const seconds = Number(event.target.value)
       if (!Number.isInteger(seconds) || seconds < 1 || seconds > 600 || isVideo && videoModel && !videoModel.durations.includes(seconds)) {
@@ -216,11 +226,12 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
       }
       data.onInteractionEnd()
     }} /> 秒</span></label>}
-    {!isAudio && <label>画面比例<select aria-label="画面比例" value={settings.ratio} onChange={(event) => patchSettings({ ratio: event.target.value as typeof settings.ratio })}>{(isVideo && videoModel ? videoModel.ratios : ['16:9', '9:16', '1:1', '4:3', '3:4']).map((ratio) => <option key={ratio}>{ratio}</option>)}</select></label>}
-    {!isAudio && <label>清晰度<select aria-label="生成清晰度" value={settings.resolution} onChange={(event) => patchSettings({ resolution: event.target.value as typeof settings.resolution })}>{(isVideo && videoModel ? videoModel.resolutions.map((value) => value.toUpperCase()) : ['480P', '720P', '1080P']).map((quality) => <option key={quality}>{quality}</option>)}</select></label>}
-    {!isVideo && <label>数量<select aria-label="生成数量" value={settings.count} onChange={(event) => patchSettings({ count: Number(event.target.value) as typeof settings.count })}>{[1, 2, 4].map((count) => <option key={count} value={count}>{count} 个</option>)}</select></label>}
+    {isVideo && <label>画面比例<select aria-label="画面比例" value={settings.ratio} onChange={(event) => patchSettings({ ratio: event.target.value as typeof settings.ratio })}>{(videoModel ? videoModel.ratios : ['16:9', '9:16', '1:1', '4:3', '3:4']).map((ratio) => <option key={ratio}>{ratio}</option>)}</select></label>}
+    {isVideo && <label>清晰度<select aria-label="生成清晰度" value={settings.resolution} onChange={(event) => patchSettings({ resolution: event.target.value as typeof settings.resolution })}>{(videoModel ? videoModel.resolutions.map((value) => value.toUpperCase()) : ['480P', '720P', '1080P']).map((quality) => <option key={quality}>{quality}</option>)}</select></label>}
+    {!isVideo && <label>数量<select aria-label="生成数量" value={settings.count} onChange={(event) => patchSettings({ count: Number(event.target.value) as typeof settings.count })}>{[1, 2, 4].map((count) => <option key={count} value={count}>{count} {isImage ? '张' : '个'}</option>)}</select></label>}
     <label className="media-video-asset-picker"><span>预览素材</span><select aria-label={`${nodeTypeLabel(node.type)}预览素材`} value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
     {durationError && <p className="media-node-field-error" id={`duration-error-${id}`} aria-live="polite">{durationError}</p>}
+    {sizeError && <p className="media-node-field-error" id={`image-size-error-${id}`} aria-live="polite">{sizeError}</p>}
   </GenerationParameters>
   return <section className="media-video-composer nodrag nowheel nopan" aria-label={isImage ? '生图草稿' : isAudio ? '生音频草稿' : '镜头草稿'} onKeyDown={(event) => {
     if (event.key !== 'Escape' || !(cameraOpen || referencesOpen)) return
@@ -253,9 +264,9 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
           <button type="button" aria-label={`断开参考：${asset?.name || source.name || '节点'}`} onClick={() => data.onReferenceChange(id, source.id, false)}>断开</button>
         </div>)}</div> : <p>选择上游节点，或从它的连接点拖线到当前节点。</p>}
       </div>}
-      <input ref={fileInput} className="media-video-file-input" type="file" accept={isImage ? 'image/jpeg,image/png,image/webp,image/gif,image/avif' : isAudio ? 'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/webm,audio/aac' : 'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska'} aria-label={`导入${nodeTypeLabel(node.type)}预览素材`} onChange={(event) => { const file = event.target.files?.[0]; if (file) void (isVideo ? data.onUploadPreview(id, file) : data.onUploadNodeAsset(id, isAudio ? 'audio' : 'image', file)); event.target.value = '' }} />
+      <input ref={fileInput} className="media-video-file-input" type="file" accept={isImage ? 'image/jpeg,image/png,image/webp,image/gif,image/avif' : isAudio ? 'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/webm,audio/aac' : 'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska'} aria-label={`导入${nodeTypeLabel(node.type)}${isImage ? '参考' : '预览'}素材`} onChange={(event) => { const file = event.target.files?.[0]; if (file) void (isVideo ? data.onUploadPreview(id, file) : data.onUploadNodeAsset(id, isAudio ? 'audio' : 'image', file)); event.target.value = '' }} />
       <textarea className="resize-none" aria-label={isImage ? '图片提示词' : isAudio ? '音频提示词' : '镜头描述'} value={node.text} placeholder={isImage ? '描述想要生成的图片内容，可引用画布素材' : isAudio ? '描述声音、音乐风格或环境氛围，可引用画布素材' : '描述画面、人物动作与声音，可引用连入节点的文字'} maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
-      {isVideo ? <VideoGeneration projectId={data.projectId} node={node} controls={<>{modeControl}{parameterControl}</>} referenceCount={data.references.filter((item) => item.asset).length} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} onModelChange={setVideoModel} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
+      {isVideo ? <VideoGeneration projectId={data.projectId} node={node} controls={<>{modeControl}{parameterControl}</>} referenceCount={data.references.filter((item) => item.asset).length} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} onModelChange={setVideoModel} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={<>{modeControl}{parameterControl}</>} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} onModelChange={setImageModel} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
     </section>
 }
 
@@ -457,6 +468,20 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     setAssetTarget({ id, kind, allowImageForVideo: canvas.document.nodes.some((node) => node.id === id && node.type === 'video') })
   }, [canvas.document.nodes])
 
+  const assignNodeAsset = useCallback((id: string, asset: Asset) => {
+    const current = canvas.current.current
+    const target = current.nodes.find((node) => node.id === id)
+    if (target?.type !== 'image_generation' || asset.kind !== 'image') { patchNode(id, { asset_id:asset.id }); return }
+    const alreadyConnected = current.edges.some((edge) => edge.target === id && current.nodes.some((source) => source.id === edge.source && source.asset_id === asset.id))
+    const sourceId = crypto.randomUUID()
+    const references = current.edges.filter((edge) => edge.target === id).length
+    // 上传和素材选择都建立可见参考连线，结果预览继续独立保留。
+    canvas.apply({ ...current,
+      nodes:[...current.nodes.map((node) => node.id === id ? {...node,generation:{...(node.generation ?? defaultGenerationSettings()),mode:'reference' as const}} : node), ...(alreadyConnected ? [] : [{id:sourceId,type:'image' as const,name:asset.name.slice(0,120),asset_id:asset.id,text:'',x:Math.max(-1000000,target.x-480),y:Math.min(1000000,target.y+references*312),width:360,height:280}])],
+      edges:alreadyConnected ? current.edges : [...current.edges,{id:crypto.randomUUID(),source:sourceId,target:id}],
+    })
+  }, [canvas, patchNode])
+
   const uploadNodeAsset = useCallback(async (id: string, kind: Asset['kind'], file: File) => {
     const label = kind === 'image' ? '图片' : kind === 'video' ? '视频' : '音频'
     if (uploadActive.current) return
@@ -469,7 +494,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       const asset = await upload(`/projects/${projectId}/assets`, file, setUploadProgress)
       if (asset.kind !== kind) { setError(`请选择${label}文件。`); return }
       setAssets((previous) => ({ ...previous, [asset.id]: asset }))
-      patchNode(id, { asset_id: asset.id })
+      assignNodeAsset(id, asset)
     } catch (reason) {
       setPreviewRetry({ id, kind, file })
       setError(`${label}素材导入失败：${(reason as Error).message}`)
@@ -477,7 +502,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       uploadActive.current = false
       setUploadProgress(null)
     }
-  }, [patchNode, projectId])
+  }, [assignNodeAsset, projectId])
 
   const previewAssets = useMemo(() => Object.values(assets), [assets])
 
@@ -943,7 +968,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       if (assetTarget.allowImageForVideo ? asset.kind === 'audio' : asset.kind !== assetTarget.kind) throw new Error('该素材不适用于当前节点，请重新选择。')
       await api(`/projects/${projectId}/assets/reference`, 'POST', { asset_id: asset.id })
       setAssets((previous) => ({ ...previous, [asset.id]: asset }))
-      patchNode(assetTarget.id, { asset_id: asset.id })
+      assignNodeAsset(assetTarget.id, asset)
       setAssetTarget(null)
     }} />}
     <dialog ref={reloadDialog} className="media-home-dialog" aria-labelledby="canvas-reload-title" aria-describedby="canvas-reload-description" onCancel={() => setReloadOpen(false)} onClose={() => setReloadOpen(false)}>
