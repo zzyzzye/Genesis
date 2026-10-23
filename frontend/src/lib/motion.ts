@@ -47,6 +47,12 @@ export const canvasEditorTransition: Variants = {
   exit: { opacity: 0, y: 8, transition: { duration: motionTiming.quick, ease: motionTiming.ease } },
 }
 
+// 沿引用路径匀速流动，每条曲线保留两个短光段。
+export const canvasReferenceFlow: Variants = {
+  initial: { pathLength: .08, pathSpacing: .42, pathOffset: 0 },
+  flow: { pathLength: .08, pathSpacing: .42, pathOffset: [0, 1], transition: { duration: 3.2, ease: 'linear', repeat: Infinity } },
+}
+
 export const pageTransition: Variants = {
   initial: { opacity: 0 },
   enter: {

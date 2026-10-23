@@ -28,6 +28,9 @@
 .media-editor { --media-ink:#e8e8e8; --media-muted:#aaa; --media-accent:#c5c5c5; --media-line:#414141; background:#191919; user-select:none; }
 .media-editor :is(input,textarea) { user-select:text; }
 .media-canvas .react-flow { background:#191919; }
+.media-editor { --media-reference-flow:#82c2f2; }
+.media-reference-flow { stroke:var(--media-reference-flow); stroke-width:2.5; stroke-linecap:round; filter:drop-shadow(0 0 3px #82c2f27a); vector-effect:non-scaling-stroke; }
+.react-flow__edge.selected .media-reference-flow { stroke:#b8e0ff; }
 .media-editor button { cursor:pointer; }
 .media-editor :is(button,input,textarea,select),.media-editor :is(button,input,textarea,select):is(:focus,:focus-visible,:active) { border:0; outline:0; box-shadow:none; }
 .media-editor button:hover:not(:disabled),.media-editor button:focus-visible { background:#343434; }

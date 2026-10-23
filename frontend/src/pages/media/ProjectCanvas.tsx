@@ -31,6 +31,7 @@ import { api, defaultGenerationSettings, type Asset, type Document, type Edge, t
 import { incomingReferences } from './canvasReferences'
 import { AssetPreview } from './AssetPreview'
 import { AssetLibrary } from './AssetLibrary'
+import { CanvasReferenceEdge } from './CanvasReferenceEdge'
 import { ProjectDialog } from './MediaHome'
 import type { MediaAssistantNode, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
@@ -250,6 +251,7 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
 }
 
 const nodeTypes = { asset: CanvasNodeView, note: CanvasNodeView, text: CanvasNodeView, shape: CanvasNodeView, group: CanvasNodeView, video: VideoNodeView, image: MediaAssetNodeView, audio: MediaAssetNodeView }
+const edgeTypes = { reference: CanvasReferenceEdge }
 function documentNode(flowNode: CanvasFlowNode): Node {
   return {
     ...flowNode.data.source,
@@ -514,9 +516,9 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
 
   const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
     ...edge,
-    type: 'default',
+    type: 'reference',
     selected: selectedEdges.includes(edge.id),
-    style: { stroke: selectedEdges.includes(edge.id) ? '#b7c8ce' : '#73828a', strokeWidth: selectedEdges.includes(edge.id) ? 2 : 1.5 },
+    style: { stroke: selectedEdges.includes(edge.id) ? '#c0c6ca' : '#858e94', strokeWidth: selectedEdges.includes(edge.id) ? 2 : 1.5 },
   })), [canvas.document.edges, selectedEdges])
 
   const fetchAssets = useCallback(async () => {
@@ -889,6 +891,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         edges={flowEdges}
         connectionLineType={ConnectionLineType.Bezier}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         viewport={viewport}
         minZoom={.02}
         maxZoom={4}
