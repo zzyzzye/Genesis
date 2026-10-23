@@ -48,7 +48,7 @@ async def available_models(settings: Settings) -> list[str]:
         settings: 服务端视频凭据与协议基础地址。
 
     Returns:
-        实时目录与已验证文档能力的模型 ID 交集。
+        服务商返回的完整模型 ID，保持顺序并去重。
 
     Raises:
         HTTPException: 未配置凭据返回 503，上游目录不可用返回 502。
@@ -69,7 +69,7 @@ async def available_models(settings: Settings) -> list[str]:
             dict.fromkeys(
                 item["id"]
                 for item in payload["data"]
-                if isinstance(item, dict) and item.get("id") in CATALOG
+                if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"]
             )
         )
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
@@ -128,12 +128,18 @@ def build_payload(
     if node is None:
         raise HTTPException(422, "请先保存生视频节点")
     spec = CATALOG.get(node.generation.model)
-    if spec is None:
+    if not node.generation.model:
         raise HTTPException(422, "请选择当前可用的视频模型")
     if not node.text.strip():
         raise HTTPException(422, "请填写镜头描述")
     if node.generation.count != 1:
         raise HTTPException(422, "视频接口每次创建一个任务，请将生成数量设为 1")
+    if spec is None:
+        # 目录不提供参数能力时只发送协议必填项，不猜测可选参数与参考能力。
+        if node.generation.mode != "text":
+            raise HTTPException(422, "该模型尚无参考参数说明，请使用文生视频")
+        task.reference_ids = []
+        return {"model": node.generation.model, "prompt": node.text.strip()}
     if (
         node.duration_seconds not in spec.durations
         or node.generation.ratio not in spec.ratios

@@ -19,7 +19,7 @@ router = APIRouter()
 
 @router.get("/video-models")
 async def video_models(user: CurrentUserDependency) -> dict[str, object]:
-    """返回实时可用视频模型及已验证能力，未配置时给出明确空态。"""
+    """返回完整实时视频目录及已知参数，未配置时给出明确空态。"""
     settings = get_settings()
     if not settings.video_api_key:
         return {"configured": False, "references_ready": False, "models": []}
@@ -27,7 +27,21 @@ async def video_models(user: CurrentUserDependency) -> dict[str, object]:
     return {
         "configured": True,
         "references_ready": settings.video_public_base_url.startswith("https://"),
-        "models": [CATALOG[item].data() for item in ids],
+        "models": [
+            {**CATALOG[item].data(), "parameters_known": True}
+            if item in CATALOG
+            else {
+                "id": item,
+                "parameters_known": False,
+                "ratios": [],
+                "durations": [],
+                "resolutions": [],
+                "images": 0,
+                "videos": 0,
+                "audio": False,
+            }
+            for item in ids
+        ],
     }
 
 

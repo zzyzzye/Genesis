@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowUp, LoaderCircle, RefreshCw } from 'lucide-react'
 import { api, defaultGenerationSettings, type Asset, type GenerationSettings, type Node } from './api'
 
-export type VideoModel = { id: string; ratios: string[]; resolutions: string[]; durations: number[]; images: number; videos: number; audio: boolean }
+export type VideoModel = { id: string; parameters_known?: boolean; ratios: string[]; resolutions: string[]; durations: number[]; images: number; videos: number; audio: boolean }
 type ModelList = { configured: boolean; references_ready: boolean; models: VideoModel[] }
 type Task = { id: string; node_id: string; status: string; progress: number; error: string; asset_id: string | null }
 const running = (status: string) => ['submitting', 'queued', 'processing', 'downloading'].includes(status)
 const statusText: Record<string, string> = { submitting:'正在提交', queued:'排队中', processing:'生成中', downloading:'正在保存视频', download_failed:'视频保存失败', completed:'视频已生成', failed:'生成失败', unknown:'创建结果待核实', acknowledged:'已核实旧任务' }
 
-export function VideoGeneration({ projectId, node, onPatch, onSave, onResult, onModelChange, referenceCount = 0 }: {
+export function VideoGeneration({ projectId, node, onPatch, onSave, onResult, onModelChange, referenceCount = 0, controls }: {
   projectId: string
   node: Node
   onPatch: (patch: Partial<Node>) => void
@@ -16,6 +16,7 @@ export function VideoGeneration({ projectId, node, onPatch, onSave, onResult, on
   onResult: (asset: Asset) => void
   onModelChange: (model: VideoModel | null) => void
   referenceCount?: number
+  controls?: ReactNode
 }) {
   const [catalog, setCatalog] = useState<ModelList | null>(null)
   const [catalogError, setCatalogError] = useState('')
@@ -58,6 +59,10 @@ export function VideoGeneration({ projectId, node, onPatch, onSave, onResult, on
     const selected = catalog?.models.find((item) => item.id === id)
     if (!selected) return
     const settings = node.generation ?? defaultGenerationSettings()
+    if (selected.parameters_known === false) {
+      onPatch({ generation: { ...settings, model:id, count:1, mode:'text' } })
+      return
+    }
     onPatch({ duration_seconds: selected.durations.includes(node.duration_seconds ?? 5) ? node.duration_seconds : selected.durations[0], generation: {
       ...settings, model:id, count:1,
       ratio: (selected.ratios.includes(settings.ratio) ? settings.ratio : selected.ratios[0]) as GenerationSettings['ratio'],
@@ -83,14 +88,15 @@ export function VideoGeneration({ projectId, node, onPatch, onSave, onResult, on
   const referenceBlocked = (node.generation?.mode ?? 'text') !== 'text' && catalog && !catalog.references_ready
   return <div className="media-video-generation">
     <div className="media-video-generation-actions">
-      <select aria-label="视频生成模型" value={model?.id ?? ''} disabled={busy || !catalog?.models.length} onChange={(event) => chooseModel(event.target.value)}>
+      <select aria-label="视频生成模型" title={model ? model.parameters_known === false ? `${model.id} · 使用模型默认参数` : model.id : '选择视频模型'} value={model?.id ?? ''} disabled={busy || !catalog?.models.length} onChange={(event) => chooseModel(event.target.value)}>
         <option value="">{catalog ? catalog.configured ? '选择视频模型' : '尚未配置视频服务' : '加载视频模型…'}</option>
         {catalog?.models.map((item) => <option key={item.id}>{item.id}</option>)}
       </select>
+      {controls}
       <button type="button" aria-label="刷新视频模型与任务" title="刷新模型与任务" onClick={() => setAttempt((value) => value + 1)}><RefreshCw size={14} /></button>
-      <button type="button" className="media-video-submit" disabled={Boolean(blocked || referenceBlocked || !model || !node.text.trim())} onClick={() => void submit()}>{busy || task && running(task.status) ? <LoaderCircle size={15} className="is-spinning" /> : <ArrowUp size={16} />}生成视频</button>
+      <button type="button" className="media-video-submit" aria-label="生成视频" title="生成视频" disabled={Boolean(blocked || referenceBlocked || !model || !node.text.trim())} onClick={() => void submit()}>{busy || task && running(task.status) ? <LoaderCircle size={15} className="is-spinning" /> : <ArrowUp size={16} />}</button>
     </div>
-    {model && <p className="media-video-model-hint">{model.durations.length === 1 ? `${model.durations[0]} 秒` : `${model.durations[0]}–${model.durations.at(-1)} 秒`} · 最多 {model.images} 张图片{model.videos ? ` · ${model.videos} 个参考视频` : ''}{model.audio ? ' · 支持音频参考' : ''}</p>}
+    {model?.parameters_known === false && <p>使用模型默认画幅、清晰度和时长，暂仅支持文生视频。</p>}
     {catalog && !catalog.configured && <p>视频服务尚未配置，请先在服务端配置视频 API Key。</p>}
     {catalog?.configured && !catalog.models.length && <p>暂无已支持的可用视频模型，可刷新重试。</p>}
     {referenceBlocked && <p>参考素材暂不可用：需先部署公网地址并启用素材访问。</p>}

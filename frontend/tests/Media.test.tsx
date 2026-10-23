@@ -15,7 +15,7 @@ import { incomingReferences } from '../src/pages/media/canvasReferences'
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
 
 // 视频任务协议在独立测试覆盖；这些用例聚焦画布与素材操作。
-vi.mock('../src/pages/media/VideoGeneration', () => ({ VideoGeneration: () => null }))
+vi.mock('../src/pages/media/VideoGeneration', () => ({ VideoGeneration: ({ controls }: { controls: import('react').ReactNode }) => controls }))
 
 describe('作品画布', () => {
   beforeEach(() => {
@@ -372,12 +372,18 @@ describe('作品画布', () => {
     fireEvent.change(screen.getByRole('spinbutton', { name: '镜头时长' }), { target: { value: '10' } })
     fireEvent.blur(screen.getByRole('spinbutton', { name: '镜头时长' }))
     fireEvent.change(screen.getByRole('combobox', { name: '画面比例' }), { target: { value: '9:16' } })
-    fireEvent.change(screen.getByRole('combobox', { name: '生成声音' }), { target: { value: 'off' } })
+    expect(screen.queryByRole('combobox', { name: '生成声音' })).not.toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('spinbutton', { name: '镜头时长' }), { key: 'Escape' })
+    expect(screen.getByRole('button', { name: '生成参数' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('textbox', { name: '镜头描述' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
+    fireEvent.keyDown(screen.getByRole('button', { name: '生成参数' }), { key: 'Escape' })
+    expect(screen.getByRole('button', { name: '生成参数' })).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
     fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
     await waitFor(() => {
       const saved = request.mock.calls.find(([path, method]) => path === '/projects/project/canvas' && method === 'PUT')
-      expect(saved?.[2]).toMatchObject({ document: { nodes: [{ type: 'video', name: '开场镜头', text: '雨夜街道，缓慢推进 运镜：缓慢推近。', duration_seconds: 10, generation: { ratio: '9:16', sound: false } }] } })
+      expect(saved?.[2]).toMatchObject({ document: { nodes: [{ type: 'video', name: '开场镜头', text: '雨夜街道，缓慢推进 运镜：缓慢推近。', duration_seconds: 10, generation: { ratio: '9:16' } }] } })
     })
     fireEvent.click(screen.getByRole('button', { name: '新增下一段视频' }))
     expect(screen.getAllByRole('textbox', { name: '生视频节点名称' })).toHaveLength(1)

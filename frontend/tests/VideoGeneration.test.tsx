@@ -10,6 +10,15 @@ const props = () => ({ projectId:'project',node,onPatch:vi.fn(),onSave:vi.fn().m
 afterEach(() => vi.restoreAllMocks())
 
 describe('视频节点生成', () => {
+  it('实时目录中的新模型使用默认参数，不写入猜测的参数范围', async () => {
+    const fresh = { id:'wan3.0-video-720p',parameters_known:false,ratios:[],resolutions:[],durations:[],images:0,videos:0,audio:false }
+    vi.spyOn(media,'api').mockImplementation((path) => Promise.resolve(path==='/video-models'?{configured:true,references_ready:false,models:[fresh]}:[]))
+    const state=props()
+    render(<VideoGeneration {...state} />)
+    await screen.findByRole('option',{name:fresh.id})
+    fireEvent.change(screen.getByRole('combobox',{name:'视频生成模型'}),{target:{value:fresh.id}})
+    expect(state.onPatch).toHaveBeenCalledWith({generation:{...node.generation,model:fresh.id,count:1,mode:'text'}})
+  })
   it('未配置和目录失败都明确提示，可原处刷新', async () => {
     const api = vi.spyOn(media,'api').mockImplementation((path) => path === '/video-models' ? Promise.resolve({configured:false,references_ready:false,models:[]}) : Promise.resolve([]))
     render(<VideoGeneration {...props()} />)

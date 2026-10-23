@@ -197,12 +197,28 @@ async def test_live_catalog_and_missing_configuration(fixture: VideoFixture) -> 
         "grok-imagine-video",
         "seedance-2.0-720p",
         "minimax-h3-首尾帧",
+        "unverified-model",
     ]
+    assert response["models"][-1]["parameters_known"] is False
+    assert response["models"][-1]["durations"] == []
     await state.client.get("video-models")
     assert len(state.requests) == 1
     state.settings.video_api_key = None
     assert (await state.client.get("video-models")).json()["configured"] is False
     assert (await submit(state)).status_code == 503
+
+
+@pytest.mark.anyio
+async def test_new_model_uses_provider_defaults(fixture: VideoFixture) -> None:
+    """新目录模型可提交文生视频，但不猜测可选参数和参考能力。"""
+    state = fixture
+    await save_node(state, generation={"model": "unverified-model", "mode": "text"})
+    assert (await submit(state)).status_code == 202
+    payload = next(request for request in state.requests if request.method == "POST")
+    assert json.loads(payload.content) == {
+        "model": "unverified-model",
+        "prompt": "雨夜街道，路灯倒映在积水中。",
+    }
 
 
 @pytest.mark.anyio
@@ -238,7 +254,8 @@ async def test_submit_is_idempotent_and_recovers_after_reload(fixture: VideoFixt
     [
         {"text": ""},
         {"duration_seconds": 60},
-        {"generation": {"model": "unverified-model"}},
+        {"generation": {"model": "not-in-live-catalog"}},
+        {"generation": {"model": "unverified-model", "mode": "reference"}},
         {"generation": {"model": "grok-imagine-video", "resolution": "2K"}},
         {"generation": {"model": "grok-imagine-video", "ratio": "1:1"}},
         {"generation": {"model": "grok-imagine-video", "count": 2}},
