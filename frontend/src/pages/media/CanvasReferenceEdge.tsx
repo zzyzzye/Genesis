@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from 'motion/react'
 import { canvasReferenceFlow, useLiveReducedMotion } from '../../lib/motion'
 
 export function CanvasReferenceEdge(props: EdgeProps) {
-  const [path] = getBezierPath(props)
+  // 端点落在圆点中心，不落在扩大后的透明命中区外沿。
+  const [path] = getBezierPath({ ...props, sourceX: props.sourceX - 16, targetX: props.targetX + 16 })
   const reducedMotion = useLiveReducedMotion()
   return <>
     <BaseEdge id={props.id} path={path} style={props.style} markerStart={props.markerStart} markerEnd={props.markerEnd} interactionWidth={props.interactionWidth} />

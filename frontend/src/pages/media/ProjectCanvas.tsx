@@ -351,6 +351,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const [selected, setSelected] = useState<string[]>([])
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
   const [draggingNode, setDraggingNode] = useState(false)
+  const [connecting, setConnecting] = useState(false)
   const [clipboardProjectId, setClipboardProjectId] = useState<string | null>(null)
   const [menu, setMenu] = useState(false)
   const [nodeMenu, setNodeMenu] = useState(false)
@@ -573,9 +574,10 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     // 节点外框严格使用文档尺寸，重建受控节点时也保留框架所需的尺寸信息。
     measured: { width: node.width, height: node.height },
     dragging: draggingNode && selected.includes(node.id),
+    // 受控节点预设的命中坐标须与 CSS 圆点一致，避免连线仍吸附旧的 8px 位置。
     handles: node.type !== 'group' ? [
-      { type: 'target', position: Position.Left, x: 0, y: node.height / 2 - 4, width: 8, height: 8 },
-      { type: 'source', position: Position.Right, x: node.width - 8, y: node.height / 2 - 4, width: 8, height: 8 },
+      { type: 'target', position: Position.Left, x: -28, y: node.height / 2 + (isGenerationNode(node) ? 21 : 0) - 16, width: 32, height: 32 },
+      { type: 'source', position: Position.Right, x: node.width - 4, y: node.height / 2 + (isGenerationNode(node) ? 21 : 0) - 16, width: 32, height: 32 },
     ] : undefined,
     selected: selected.includes(node.id),
     zIndex: node.type === 'group' ? -1 : selected.includes(node.id) ? 2 : 1,
@@ -779,6 +781,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const onConnect = useCallback(({ source, target }: Connection) => {
     if (!source || !target || source === target) return
     const current = canvas.current.current
+    if (!current.nodes.some((node) => node.id === source) || !current.nodes.some((node) => node.id === target)) return
     if (current.nodes.some((node) => (node.id === source || node.id === target) && node.type === 'group')) return
     if (current.edges.some((edge) => edge.source === source && edge.target === target)) return
     canvas.apply({ ...current, edges: [...current.edges, { id: crypto.randomUUID(), source, target }] })
@@ -974,7 +977,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     <dialog ref={reloadDialog} className="media-home-dialog" aria-labelledby="canvas-reload-title" aria-describedby="canvas-reload-description" onCancel={() => setReloadOpen(false)} onClose={() => setReloadOpen(false)}>
       <h2 id="canvas-reload-title">加载服务器版本？</h2><p id="canvas-reload-description">当前本地修改会被替换。需要保留时，请取消并选择“保留为新作品”。</p><footer><button autoFocus type="button" onClick={() => setReloadOpen(false)}>取消</button><button type="button" onClick={() => { setReloadOpen(false); void action(() => canvas.load()) }}>放弃本地修改并加载</button></footer>
     </dialog>
-    <div ref={canvasElement} className={`media-canvas ${draggingFile ? 'is-file-over' : ''}`} aria-label="作品无限画布" onDoubleClick={(event) => {
+    <div ref={canvasElement} className={`media-canvas ${draggingFile ? 'is-file-over' : ''} ${connecting ? 'is-connecting' : ''}`} aria-label="作品无限画布" onDoubleClick={(event) => {
       if (!(event.target as HTMLElement).classList.contains('react-flow__pane')) return
       event.preventDefault()
       const point = flow?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
@@ -991,6 +994,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         minZoom={.02}
         maxZoom={4}
         nodesConnectable
+        connectionRadius={28}
         selectionOnDrag={tool === 'select'}
         selectionMode={SelectionMode.Partial}
         panOnDrag={tool === 'pan' ? [0, 1] : [1]}
@@ -1005,13 +1009,34 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectStart={() => setConnecting(true)}
         onConnectEnd={(event, state) => {
-          if (state.isValid || state.toNode || !state.fromNode || !('clientX' in event)) return
+          setConnecting(false)
+          if (state.isValid || !state.fromNode) return
+          if (state.toHandle) return
+          const pointer = 'changedTouches' in event ? event.changedTouches[0] : event
+          if (!pointer) return
+          const { clientX, clientY } = pointer
+          // 复用原生拖线，松手时将节点内容作为落点；编辑面板不接收连线。
+          const element = document.elementFromPoint(clientX, clientY)
+          const dropNode = element?.closest<HTMLElement>('.react-flow__node')
+          if (dropNode && canvasElement.current?.contains(dropNode)) {
+            if (element?.closest('.media-node-editor, .media-node-media-actions')) return
+            const dropId = dropNode.dataset.id
+            if (dropId) onConnect({
+              source: state.fromHandle?.type === 'target' ? dropId : state.fromNode.id,
+              target: state.fromHandle?.type === 'target' ? state.fromNode.id : dropId,
+              sourceHandle: null,
+              targetHandle: null,
+            })
+            return
+          }
+          if (state.toNode) return
           const origin = state.from
-          if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) < 8) return
-          const point = flow?.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+          if (origin && Math.hypot(clientX - origin.x, clientY - origin.y) < 8) return
+          const point = flow?.screenToFlowPosition({ x: clientX, y: clientY })
           if (!point) return
-          setPaletteAnchor({ x: event.clientX, y: event.clientY, flowX: point.x, flowY: point.y, connection: { id: state.fromNode.id, side: state.fromHandle?.type === 'target' ? 'left' : 'right' } })
+          setPaletteAnchor({ x: clientX, y: clientY, flowX: point.x, flowY: point.y, connection: { id: state.fromNode.id, side: state.fromHandle?.type === 'target' ? 'left' : 'right' } })
           setNodeMenu(true); setMenu(false); setContextMenu(null)
         }}
         onPaneClick={() => {
