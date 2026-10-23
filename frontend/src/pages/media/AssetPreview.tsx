@@ -15,7 +15,7 @@ export function AssetPreview({ asset, controls = false }: { asset: Asset; contro
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl) }
   }, [asset, attempt])
   return <div className="media-preview" onPointerDown={(event) => { if ((event.target as HTMLElement).closest('video,audio,a,button')) event.stopPropagation() }}>
-    {error ? <span>{error} <button onClick={() => { setError(''); setAttempt(attempt + 1) }}>重试</button></span> : !url ? <span>加载素材…</span> : asset.kind === 'image' ? <img src={url} alt={asset.name} draggable={false} onError={() => setError('此图片无法预览')} /> : asset.kind === 'video' ? <video src={url} controls={controls} preload="metadata" onError={() => setError('浏览器不支持预览，可下载原文件')} /> : controls ? <audio src={url} controls onError={() => setError('浏览器不支持预览，可下载原文件')} /> : <span className="media-audio-symbol" aria-label="音频素材">♫</span>}
-    {controls && url && <a className="media-download" href={url} download={asset.name}>下载原文件</a>}
+    {error ? <span>{error} <button className="nodrag nopan" onClick={() => { setError(''); setAttempt(attempt + 1) }}>重试</button></span> : !url ? <span>加载素材…</span> : asset.kind === 'image' ? <img src={url} alt={asset.name} draggable={false} onError={() => setError('此图片无法预览')} /> : asset.kind === 'video' ? <video className="nodrag nopan" src={url} controls={controls} preload="metadata" onError={() => setError('浏览器不支持预览，可下载原文件')} /> : controls ? <audio className="nodrag nopan" src={url} controls onError={() => setError('浏览器不支持预览，可下载原文件')} /> : <span className="media-audio-symbol" aria-label="音频素材">♫</span>}
+    {controls && url && <a className="media-download nodrag nopan" href={url} download={asset.name}>下载原文件</a>}
   </div>
 }

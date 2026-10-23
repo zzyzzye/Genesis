@@ -54,9 +54,11 @@
 .media-video-add-segment.is-previous { left:-36px; }
 .media-video-add-segment.is-next { right:-36px; }
 .media-video-card:is(:hover,:focus-within,.is-selected) .media-video-add-segment { opacity:1; }
-.media-node--media:not(.is-selected) .media-node-media-actions { display:none; }
+.media-node--media:not(.is-selected) .media-node-media-actions { visibility:hidden; pointer-events:none; }
 .media-node-media-actions { background:#252525; }
 .media-node-preview .media-preview { background:#252525; }
+.media-node-drag-surface { cursor:grab; }
+.media-node-drag-surface:active { cursor:grabbing; }
 .media-node-editor { position:absolute; z-index:10; width:min(560px,calc(100vw - 24px)); max-height:min(440px,calc(100dvh - 190px)); overflow:auto; overscroll-behavior:contain; border-radius:14px; background:#252525; box-shadow:0 10px 30px #0004; }
 .media-node-editor>header { display:flex; align-items:center; gap:12px; padding:9px 12px 0 16px; color:#aaa; font-size:12px; }
 .media-node-editor>header>span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -70,6 +72,7 @@
 .media-node-editor .media-video-composer-footer small { font-size:11px; }
 .media-editor .media-node-editor .media-video-spec { padding:4px 8px; margin-left:auto; }
 .media-node-editor .media-video-asset-picker { max-width:37%; }
+.media-node-editor .media-video-asset-picker>span { flex:none; white-space:nowrap; }
 .media-node-editor .media-node-references { gap:4px; max-height:105px; overflow:auto; }
 .media-node-editor .media-node-references>div { gap:6px; font-size:12px; }
 .media-node-editor .media-node-references button { flex:none; min-height:25px; padding:2px 7px; }
@@ -116,3 +119,9 @@
   .media-editor .media-node-editor .media-video-spec { margin-left:0; }
   .media-node-palette:not(.is-contextual) { bottom:124px; }
 }
+
+/* 节点正文与标题统一，控件与辅助说明使用同一组字号层级。 */
+.media-editor { --media-node-font-size:14px; --media-canvas-font-size:13px; }
+.media-editor .media-node-grip,.media-editor .media-node-editor>header,.media-editor .media-video-composer textarea { font-size:14px; }
+.media-editor .media-node-editor :is(button,select,input),.media-node-editor .media-video-composer-footer,.media-node-editor .media-node-references>div { font-size:13px; }
+.media-editor .media-node-editor .media-video-composer-footer small,.media-editor .media-download { font-size:12px; }
