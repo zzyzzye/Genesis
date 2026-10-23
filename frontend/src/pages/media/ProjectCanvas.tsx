@@ -818,10 +818,10 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     canvas.apply({ ...current, viewport }, false)
   }
 
-  function zoom(factor: number) {
+  function zoom(delta: number) {
     const current = canvas.current.current
     const viewport = current.viewport
-    const nextZoom = Math.max(.02, Math.min(4, viewport.zoom * factor))
+    const nextZoom = Math.max(.02, Math.min(4, Math.round((viewport.zoom + delta) * 100) / 100))
     const centerX = window.innerWidth / 2
     const centerY = window.innerHeight / 2
     canvas.apply({
@@ -966,6 +966,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     </div>}
     {(selected.filter((id) => canvas.document.nodes.some((node) => node.id === id && node.type !== 'group')).length >= 2 || selected.some((id) => canvas.document.nodes.some((node) => node.id === id && node.type === 'group'))) && <div className="media-canvas-selection-actions"><span>已选 {selected.length} 个节点</span><button onClick={groupSelected} disabled={selected.filter((id) => canvas.document.nodes.some((node) => node.id === id && node.type !== 'group')).length < 2}>编组</button><button onClick={ungroupSelected} disabled={!selected.some((id) => canvas.document.nodes.some((node) => node.id === id && node.type === 'group'))}>取消编组</button></div>}
     <div className="media-canvas-toolbar" role="toolbar" aria-label="创作工具"><button ref={nodeMenuTrigger} className="media-add-node-button" aria-controls="media-node-palette" aria-expanded={nodeMenu} disabled={!canvas.ready} onClick={() => { setPaletteAnchor(null); setNodeMenu(!nodeMenu); setContextMenu(null); setMenu(false) }}>＋ 添加节点</button><button disabled={!canvas.ready} onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>素材库</button><button aria-label="选择" title="选择 V" aria-pressed={tool === 'select'} onClick={() => setTool('select')}><MousePointer2 size={17} /></button><button aria-label="平移" title="平移 H，按住空格临时平移" aria-pressed={tool === 'pan'} onClick={() => setTool('pan')}><Hand size={17} /></button><button aria-label="复制节点" title="复制节点 ⌘/Ctrl+C" disabled={!selected.length} onClick={copySelection}><Copy size={16} /></button><button aria-label="粘贴节点" title="粘贴节点 ⌘/Ctrl+V" disabled={clipboardProjectId !== projectId} onClick={pasteSelection}><ClipboardPaste size={16} /></button><button aria-label="撤销" onClick={canvas.undo}>↶</button><button aria-label="重做" onClick={canvas.redo}>↷</button><button disabled={!selected.length && !selectedEdges.length} onClick={removeSelected}>移除</button></div>
-    <div className="media-canvas-view-tools" role="toolbar" aria-label="画布视图"><button aria-label="切换小地图" aria-pressed={showMiniMap} title="小地图" onClick={() => setShowMiniMap(!showMiniMap)}><MapIcon size={16} /></button><button aria-label="缩小画布" onClick={() => zoom(1 / 1.2)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" onClick={() => zoom(1.2)}>＋</button><button disabled={!selected.length} onClick={() => fit(true)}>聚焦所选</button><button onClick={() => fit()}>适应全部</button></div>
+    <div className="media-canvas-view-tools" role="toolbar" aria-label="画布视图"><button aria-label="切换小地图" aria-pressed={showMiniMap} title="小地图" onClick={() => setShowMiniMap(!showMiniMap)}><MapIcon size={16} /></button><button aria-label="缩小画布" title="缩小 10%" onClick={() => zoom(-.1)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" title="放大 10%" onClick={() => zoom(.1)}>＋</button><button disabled={!selected.length} onClick={() => fit(true)}>聚焦所选</button><button onClick={() => fit()}>适应全部</button></div>
   </main>
 }

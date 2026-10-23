@@ -94,10 +94,22 @@ describe('作品画布', () => {
     expect(result.current.document.edges).toEqual([])
     expect(result.current.document.frame).toEqual({ width: 1920, height: 1080 })
   })
+  it.each([false, true])('打开画布默认 100%%，保留视口中心及草稿内容（本地草稿：%s）', async (restoreDraft) => {
+    const document: Document = { ...emptyDocument(), nodes: [note], viewport: { x: 30, y: 40, zoom: .5 } }
+    if (restoreDraft) localStorage.setItem('genesis-media-draft:user:zoom-default', JSON.stringify({ version: 1, document }))
+    vi.spyOn(media, 'api').mockResolvedValue({ version: 1, document: restoreDraft ? emptyDocument() : document })
+    const { result } = renderHook(() => useCanvas('zoom-default', 'user'))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    expect(result.current.document.nodes).toEqual([note])
+    const viewport = result.current.document.viewport
+    expect(viewport.zoom).toBe(1)
+    expect((window.innerWidth / 2 - viewport.x) / viewport.zoom).toBe((window.innerWidth / 2 - 30) / .5)
+    expect((window.innerHeight / 2 - viewport.y) / viewport.zoom).toBe((window.innerHeight / 2 - 40) / .5)
+  })
   it('收紧旧视频预设时保持中心、内容和视口，自定义尺寸不变且可撤销', async () => {
     const video = { ...note, type: 'video' as const, width: 820, height: 670 }
     const custom = { ...video, id: crypto.randomUUID(), width: 900 }
-    const document: Document = { ...emptyDocument(), nodes: [video, custom], viewport: { x: 20, y: -50, zoom: .92 } }
+    const document: Document = { ...emptyDocument(), nodes: [video, custom], viewport: { x: 20, y: -50, zoom: 1 } }
     vi.spyOn(media, 'api').mockResolvedValue({ version: 1, document })
     const { result } = renderHook(() => useCanvas('legacy-video', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
@@ -240,7 +252,12 @@ describe('作品画布', () => {
     fireEvent.click(screen.getByRole('button', { name: '切换小地图' }))
     expect(screen.getByRole('button', { name: '切换小地图' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(screen.getByRole('button', { name: '放大画布' }))
+    expect(screen.getByRole('status', { name: '当前缩放比例' })).toHaveTextContent('110%')
+    fireEvent.click(screen.getByRole('button', { name: '放大画布' }))
     expect(screen.getByRole('status', { name: '当前缩放比例' })).toHaveTextContent('120%')
+    fireEvent.click(screen.getByRole('button', { name: '缩小画布' }))
+    fireEvent.click(screen.getByRole('button', { name: '缩小画布' }))
+    expect(screen.getByRole('status', { name: '当前缩放比例' })).toHaveTextContent('100%')
     expect(screen.queryByRole('button', { name: '视频画幅设置' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '素材库' }))
     expect(await screen.findByText('独立的作品素材库页面')).toBeInTheDocument()

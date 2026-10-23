@@ -40,9 +40,15 @@ export function useCanvas(projectId: string, userId: string) {
     } else localStorage.removeItem(key)
     const original = next
     next = compactLegacyVideoNodes(original)
-    current.current = next; setDocument(next); history.current = next === original ? [] : [original]; future.current = []
+    const compacted = next !== original
+    if (next.viewport.zoom !== 1) {
+      // 每次打开从 100% 开始，并保留原视口中心对应的画布位置。
+      const { x, y, zoom } = next.viewport
+      next = { ...next, viewport: { x: window.innerWidth / 2 - (window.innerWidth / 2 - x) / zoom, y: window.innerHeight / 2 - (window.innerHeight / 2 - y) / zoom, zoom: 1 } }
+    }
+    current.current = next; setDocument(next); history.current = compacted ? [{ ...original, viewport: next.viewport }] : []; future.current = []
     setDirty(JSON.stringify(next) !== saved.current); setReady(true)
-    setStatus(blocked.current ? '检测到冲突，已保留本地草稿' : next !== original ? '已收紧旧版节点布局，可撤销' : JSON.stringify(next) === saved.current ? '已保存' : '已恢复本地草稿')
+    setStatus(blocked.current ? '检测到冲突，已保留本地草稿' : compacted ? '已收紧旧版节点布局，可撤销' : JSON.stringify(next) === saved.current ? '已保存' : original !== serverDocument ? '已恢复本地草稿' : '已打开')
   }, [key, projectId])
   useEffect(() => { let active = true; void Promise.resolve().then(async () => { if (active) await load(true) }).catch((reason: Error) => { if (active) setStatus(reason.message) }); return () => { active = false } }, [load])
   const save = useCallback(async (): Promise<void> => {
