@@ -249,15 +249,18 @@ def save_canvas(
         if node.type == "asset" and node.asset_id not in ids:
             raise HTTPException(422, "画布包含未关联到作品的素材")
         if (
-            node.type in ("video", "image_generation", "video_asset", "image", "audio")
+            node.type
+            in ("video", "image_generation", "audio_generation", "video_asset", "image", "audio")
             and node.asset_id is not None
         ):
             if node.asset_id not in ids:
                 raise HTTPException(422, "节点包含未关联到作品的素材")
             asset = session.get(MediaAsset, node.asset_id)
-            expected_kind = {"image_generation": "image", "video_asset": "video"}.get(
-                node.type, node.type
-            )
+            expected_kind = {
+                "image_generation": "image",
+                "audio_generation": "audio",
+                "video_asset": "video",
+            }.get(node.type, node.type)
             if asset is None or (
                 asset.kind == "audio" if node.type == "video" else asset.kind != expected_kind
             ):

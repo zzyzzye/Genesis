@@ -49,6 +49,7 @@ class CanvasNode(BaseModel):
         "group",
         "video",
         "image_generation",
+        "audio_generation",
         "video_asset",
         "image",
         "audio",

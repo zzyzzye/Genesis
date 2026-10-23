@@ -3,12 +3,17 @@ import type { Document, Node } from './api'
 export const generationNodeSize = { width: 640, height: 402 }
 
 // 旧 video 类型继续表示生视频节点，避免把已有提示词节点误转为素材。
-export const isGenerationNode = (node: Pick<Node, 'type'>) => node.type === 'video' || node.type === 'image_generation'
-export const nodeTypeLabel = (type: Node['type']) => ({ video: '生视频节点', image_generation: '生图节点', video_asset: '视频节点', image: '图片节点', audio: '音频节点', asset: '素材节点', note: '便签', text: '文本', shape: '形状', group: '分组' })[type]
+export const isGenerationNode = (node: Pick<Node, 'type'>) => node.type === 'video' || node.type === 'image_generation' || node.type === 'audio_generation'
+export const nodeTypeLabel = (type: Node['type']) => ({ video: '生视频节点', image_generation: '生图节点', audio_generation: '生音频节点', video_asset: '视频节点', image: '图片节点', audio: '音频节点', asset: '素材节点', note: '便签', text: '文本', shape: '形状', group: '分组' })[type]
+export const audioAssetNodeSize = { width: 360, height: 88 }
 
-export function normalizeGenerationNodes(document: Document): Document {
+export function normalizeCanvasNodePresets(document: Document): Document {
   let changed = false
   const nodes = document.nodes.map((node) => {
+    if (node.type === 'audio' && node.width === 360 && node.height === 230) {
+      changed = true
+      return { ...node, ...audioAssetNodeSize, y: node.y + (node.height - audioAssetNodeSize.height) / 2 }
+    }
     if (!isGenerationNode(node)) return node
     const preset = node.width === 820 && node.height === 670 || node.width === 480 && node.height === 312
     const name = node.type === 'video' ? node.name?.replace(/^视频节点(\s+\d+)?$/, '生视频节点$1') : node.name

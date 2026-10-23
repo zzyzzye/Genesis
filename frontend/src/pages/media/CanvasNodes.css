@@ -148,3 +148,20 @@
 .media-reference-details small { color:#aaa; font-size:12px; }
 .media-editor .media-node-editor .media-reference-details button { min-height:26px; padding:2px 7px; }
 .media-node-editor .media-node-generation-settings .media-video-asset-picker { max-width:none; }
+
+/* 素材本身就是节点内容，名称和管理操作放在内容外侧。 */
+.media-editor .media-node--material { background:transparent; }
+.media-editor .media-node--material>.media-node-grip { position:absolute; bottom:calc(100% + 6px); left:0; width:100%; min-height:28px; height:28px; padding:0 4px; }
+.media-node--material .media-node-grip input { max-width:calc(100% - 140px); }
+.media-node--material>.media-node-preview { height:100%; flex:1; }
+.media-node--material .media-preview { height:100%; overflow:visible; border-radius:8px; background:transparent; }
+.media-node--material .media-preview :is(img,video) { border-radius:8px; }
+.media-node--material.is-audio-material .media-preview { justify-content:center; background:#252525; }
+.media-node--material audio { width:calc(100% - 24px); max-width:100%; }
+.media-node--material .media-download { position:absolute; top:-32px; right:26px; padding:4px; color:#aaa; }
+.media-node--material:not(.is-selected):not(:focus-within) .media-download { visibility:hidden; pointer-events:none; }
+.media-node--material>.media-node-media-actions { position:absolute; top:calc(100% + 8px); left:0; width:100%; padding:0; background:transparent; }
+.media-editor .media-node--material:is(.is-selected,:focus-within) .media-node-media-actions { visibility:visible; pointer-events:auto; }
+.media-node--material .media-node-media-empty { gap:8px; padding:8px; border-radius:8px; background:#252525; }
+.media-node--material.is-audio-material .media-node-media-empty { flex-direction:row; }
+.media-node--material .media-node-media-empty>div { margin:0; }

@@ -21,7 +21,7 @@ const promptsByPage: Record<MediaAssistantPage, string[]> = {
   assets: ['给素材库一套命名与分组规则', '根据现有素材列拍摄补充清单'],
 }
 const pageLabels: Record<MediaAssistantPage, string> = { projects: '作品列表', project: '作品概览', canvas: '创作画布', assets: '素材库' }
-const nodeTypeLabels: Record<string, string> = { video: '生视频节点', image_generation: '生图节点', video_asset: '视频节点', image: '图片节点', audio: '音频节点', note: '便签', text: '文本', shape: '形状', asset: '素材', group: '分组' }
+const nodeTypeLabels: Record<string, string> = { video: '生视频节点', image_generation: '生图节点', audio_generation: '生音频节点', video_asset: '视频节点', image: '图片节点', audio: '音频节点', note: '便签', text: '文本', shape: '形状', asset: '素材', group: '分组' }
 
 function nodeLabel(node: MediaAssistantNode) { return node.name.trim() || node.text.trim().slice(0, 24) || nodeTypeLabels[node.type] || '节点' }
 function canvasPlanFromMessage(content: string): MediaCanvasPlan | null {

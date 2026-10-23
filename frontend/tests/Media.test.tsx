@@ -101,6 +101,38 @@ describe('作品画布', () => {
       expect(saved.document.nodes[0]).toMatchObject({ text: '雨夜街道，电影感构图', width: 640, height: 402, generation: { mode: 'reference', ratio: '3:4' } })
     })
   })
+  it('音频素材只承载文件，生音频独立保存提示词、参考与时长', async () => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const request = vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    await waitFor(() => expect(screen.getByRole('button', { name: '＋ 添加节点' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
+    fireEvent.click(screen.getByRole('button', { name: '音频' }))
+    expect(screen.getByRole('button', { name: '导入音频' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: '音频提示词' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
+    fireEvent.click(screen.getByRole('button', { name: '生音频节点' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '音频提示词' }), { target: { value: '细雨、远处车流与低沉钢琴' } })
+    expect(screen.queryByRole('button', { name: '运镜' })).not.toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveTextContent('文生音频')
+    fireEvent.click(screen.getByRole('button', { name: '画布参考' }))
+    const draft = JSON.parse(localStorage.getItem('genesis-media-draft:user:project')!) as { document: Document }
+    fireEvent.change(screen.getByRole('combobox', { name: '添加参考节点' }), { target: { value: draft.document.nodes[0]!.id } })
+    fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
+    expect(screen.queryByRole('combobox', { name: '画面比例' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: '生成清晰度' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: '生成声音' })).not.toBeInTheDocument()
+    const duration = screen.getByRole('spinbutton', { name: '音频时长' })
+    fireEvent.focus(duration); fireEvent.change(duration, { target: { value: '30' } }); fireEvent.blur(duration)
+    fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
+    await waitFor(() => {
+      const saved = request.mock.calls.find(([path, method]) => path.endsWith('/canvas') && method === 'PUT')?.[2] as { document: Document }
+      expect(saved.document.nodes[0]).toMatchObject({ type: 'audio', width: 360, height: 88 })
+      expect(saved.document.nodes[1]).toMatchObject({ type: 'audio_generation', text: '细雨、远处车流与低沉钢琴', duration_seconds: 30, width: 640, height: 402 })
+      expect(saved.document.edges).toHaveLength(1)
+    })
+  })
   it('编组、取消编组和删除成员会维护画布关系', () => {
     const second = { ...note, id: crypto.randomUUID(), x: 320 }
     const third = { ...note, id: crypto.randomUUID(), x: 640 }

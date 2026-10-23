@@ -407,7 +407,7 @@ async def test_media_nodes_only_accept_matching_project_assets(media_client: Asy
         "height": 280,
     }
     # 素材不能因节点类型不同而绕过作品关联检查。
-    for kind in ("image", "audio", "image_generation", "video_asset"):
+    for kind in ("image", "audio", "image_generation", "audio_generation", "video_asset"):
         response = await c.put(
             f"projects/{other}/canvas",
             json={"version": 0, "document": {"nodes": [{**node, "type": kind}]}},
@@ -435,18 +435,21 @@ async def test_generation_and_video_asset_nodes_roundtrip(media_client: AsyncCli
     for kind, filename, mime in (
         ("image", "frame.png", "image/png"),
         ("video", "clip.mp4", "video/mp4"),
+        ("audio", "sound.wav", "audio/wav"),
     ):
         response = await c.post(
             f"projects/{project}/assets", files={"file": (filename, b"test-media", mime)}
         )
         assets[kind] = response.json()["id"]
+    prompts = {"image_generation": "雨夜街道，电影感构图", "audio_generation": "细雨与钢琴"}
     nodes = [
         {
             "id": str(uuid4()),
             "type": kind,
             "asset_id": assets[asset_kind],
             "name": name,
-            "text": "雨夜街道，电影感构图" if kind == "image_generation" else "",
+            "text": prompts.get(kind, ""),
+            "duration_seconds": 30 if kind == "audio_generation" else 5,
             "generation": {"mode": "reference", "ratio": "3:4", "count": 2},
             "x": index * 800,
             "y": 0,
@@ -459,6 +462,8 @@ async def test_generation_and_video_asset_nodes_roundtrip(media_client: AsyncCli
                 ("image", "image", "图片节点"),
                 ("video", "video", "生视频节点"),
                 ("video_asset", "video", "视频节点"),
+                ("audio_generation", "audio", "生音频节点"),
+                ("audio", "audio", "音频节点"),
             )
         )
     ]
@@ -469,7 +474,13 @@ async def test_generation_and_video_asset_nodes_roundtrip(media_client: AsyncCli
     assert [node["type"] for node in reopened] == [node["type"] for node in nodes]
     assert reopened[0]["text"] == "雨夜街道，电影感构图"
     assert reopened[0]["generation"]["ratio"] == "3:4"
-    for kind, wrong_asset in (("image_generation", "video"), ("video_asset", "image")):
+    assert reopened[4]["text"] == "细雨与钢琴"
+    assert reopened[4]["duration_seconds"] == 30
+    for kind, wrong_asset in (
+        ("image_generation", "video"),
+        ("video_asset", "image"),
+        ("audio_generation", "image"),
+    ):
         response = await c.put(
             endpoint,
             json={
