@@ -1,21 +1,26 @@
 /* 写作区沿用工作台令牌，以文字状态和留白区分层级。 */
 .studio-app-shell { --studio-editor-muted: var(--studio-muted); --studio-editor-hover: var(--studio-hover); }
-.markdown-editor { background: var(--studio-paper); }
+.markdown-editor { --writing-publish: #2d6653; --writing-publish-hover: #245341; --writing-publish-active: #1d4536; background: var(--studio-paper); }
 .markdown-editor__header { border: 0; }
 .markdown-editor__title-row { flex-wrap: wrap; row-gap: 6px; }
 .markdown-editor__title { font-family: var(--studio-ui); font-size: clamp(24px, 2.5vw, 32px); font-weight: 600; line-height: 1.45; }
 .markdown-editor__title:disabled { opacity: 1; }
 .markdown-editor__save-state { color: var(--studio-editor-muted); font-size: 12px; font-weight: 400; letter-spacing: 0; }
-.markdown-editor__actions button { min-width: 64px; min-height: 40px; border-radius: var(--studio-control-radius); border: 0; outline: 0; box-shadow: none; cursor: pointer; }
-.markdown-editor__actions .secondary-button { background: var(--studio-soft); }
-.markdown-editor__actions .secondary-button:hover:not(:disabled),
-.markdown-editor__actions .secondary-button:focus-visible { background: var(--studio-editor-hover); color: var(--studio-ink); }
-.markdown-editor__actions .primary-button { background: var(--studio-ink); color: var(--studio-paper); }
-.markdown-editor__actions .primary-button:hover:not(:disabled),
-.markdown-editor__actions .primary-button:focus-visible { background: var(--studio-ink); opacity: .8; transform: none; }
-.markdown-editor__actions .primary-button:focus-visible,
-.markdown-editor__actions .secondary-button:focus-visible { border: 0; outline: 0; box-shadow: none; }
-.markdown-editor__actions button:disabled { cursor: default; opacity: .5; }
+/* 此处统一操作区规格，避免旧编辑器与工作台按钮规则按加载顺序互相覆盖。 */
+.markdown-editor .markdown-editor__actions { gap: 6px; }
+.markdown-editor .markdown-editor__actions button { display: inline-flex; width: auto; min-width: 60px; min-height: 36px; align-items: center; justify-content: center; gap: 6px; margin: 0; padding: 8px 12px; border: 0; border-radius: var(--studio-control-radius); outline: 0; box-shadow: none; font: 500 12px/20px var(--studio-ui); letter-spacing: 0; cursor: pointer; transform: none; }
+.markdown-editor .markdown-editor__actions svg { width: 15px; height: 15px; }
+.markdown-editor .markdown-editor__actions .markdown-editor__utility { background: transparent; color: var(--studio-muted); }
+.markdown-editor .markdown-editor__actions .markdown-editor__save { min-width: 84px; margin-left: 6px; background: var(--studio-soft); color: var(--studio-text); }
+.markdown-editor .markdown-editor__actions .secondary-button:hover:not(:disabled),
+.markdown-editor .markdown-editor__actions .secondary-button:focus-visible { background: var(--studio-editor-hover); color: var(--studio-ink); }
+.markdown-editor .markdown-editor__actions .secondary-button:active:not(:disabled) { background: var(--studio-hover); }
+.markdown-editor .markdown-editor__actions .markdown-editor__publish { min-width: 88px; padding-inline: 14px; background: var(--writing-publish); color: var(--studio-paper); }
+.markdown-editor .markdown-editor__actions .markdown-editor__publish:hover:not(:disabled),
+.markdown-editor .markdown-editor__actions .markdown-editor__publish:focus-visible { background: var(--writing-publish-hover); color: var(--studio-paper); opacity: 1; }
+.markdown-editor .markdown-editor__actions .markdown-editor__publish:active:not(:disabled) { background: var(--writing-publish-active); }
+.markdown-editor .markdown-editor__actions button:focus-visible { border: 0; outline: 0; box-shadow: none; }
+.markdown-editor .markdown-editor__actions button:disabled { cursor: default; opacity: .5; }
 .markdown-editor__feedback { border: 0; background: var(--studio-soft); color: var(--studio-ink); }
 .markdown-editor__recovery { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 12px 24px; background: var(--studio-soft); font-size: 13px; }
 .markdown-editor__recovery > span { flex: 1 1 220px; }
@@ -27,8 +32,21 @@
 .blog-version-comparison details { margin-top: 16px; }
 .blog-version-comparison summary { cursor: pointer; font-weight: 600; }
 .blog-version-comparison pre { max-height: 160px; overflow: auto; padding: 12px; border: 0; border-radius: var(--studio-control-radius); background: var(--studio-soft); white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+@media (min-width: 681px) and (max-width: 900px), (min-width: 1101px) and (max-width: 1200px) {
+  .markdown-editor .markdown-editor__header { grid-template-columns: minmax(0, 1fr); }
+  .markdown-editor .markdown-editor__actions { grid-column: 1; grid-row: 4; }
+}
 @media (max-width: 680px) {
   .markdown-editor__header { padding: 16px; }
   .markdown-editor__recovery, .markdown-editor__writing-meta { padding: 10px 16px; }
   .markdown-editor__writing-meta > span:last-child { display: none; }
+}
+@media (max-width: 480px) {
+  .markdown-editor .markdown-editor__actions { display: grid; width: 100%; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .markdown-editor .markdown-editor__actions .fps-status-slot { grid-column: 1 / -1; justify-self: end; }
+  .markdown-editor .markdown-editor__actions .fps-status-slot:empty { display: none; }
+  .markdown-editor .markdown-editor__actions button { min-width: 0; padding-inline: 8px; }
+  .markdown-editor .markdown-editor__actions .markdown-editor__save { min-width: 0; margin-left: 0; }
+  .markdown-editor .markdown-editor__actions .markdown-editor__publish { grid-column: 4; min-width: 0; padding-inline: 8px; }
+  .markdown-editor .markdown-editor__publish svg { display: none; }
 }

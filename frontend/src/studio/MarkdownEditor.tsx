@@ -449,10 +449,10 @@ export function MarkdownEditor({
         </div>
         <div className="markdown-editor__actions">
           <FpsStatusSlot />
-          <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" onClick={onPreview}><StudioIcon name="eye" /> 预览</button>
-          <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" aria-label={`打开${label}设置`} onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" /> 设置</button>
-          {editor.status === 'draft' && <button className="secondary-button" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('draft')}>保存草稿</button>}
-          <button className="primary-button" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('published')}>{editor.status === 'published' ? '更新发布' : '发布'}</button>
+          <button className="secondary-button markdown-editor__utility" disabled={isSaving || recovery !== null} type="button" onClick={onPreview}><StudioIcon name="eye" />预览</button>
+          <button className="secondary-button markdown-editor__utility" disabled={isSaving || recovery !== null} type="button" aria-label={`打开${label}设置`} onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" />设置</button>
+          {editor.status === 'draft' && <button className="secondary-button markdown-editor__save" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('draft')}>保存草稿</button>}
+          <button className="primary-button markdown-editor__publish" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('published')}>{editor.status === 'published' ? '更新发布' : '发布'}<StudioIcon name="arrow-up-right" /></button>
         </div>
       </header>
       {feedback && <p className="markdown-editor__feedback" role="status">{feedback}</p>}
