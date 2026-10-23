@@ -9,6 +9,7 @@ import { basicSetup } from 'codemirror'
 import {
   BlockTypeSelect,
   BoldItalicUnderlineToggles,
+  ButtonWithTooltip,
   codeBlockPlugin,
   codeMirrorPlugin,
   CodeToggle,
@@ -31,7 +32,6 @@ import {
   markdownShortcutPlugin,
   MDXEditor,
   quotePlugin,
-  Separator,
   StrikeThroughSupSubToggles,
   tablePlugin,
   thematicBreakPlugin,
@@ -56,6 +56,7 @@ import { articleStats, type BlogDraft, type EditorState } from './blogEditor'
 import { attachmentMarkdown, type Attachment } from '../lib/attachments'
 import { EditorAttachmentPicker, type EditorAttachmentAccess } from './EditorAttachmentPicker'
 import { requiresMarkdownSource } from './markdownCompatibility'
+import { editorIcon } from './editorIcons'
 
 const genesisCodeBlockTheme = EditorView.theme({
   '&': {
@@ -142,22 +143,24 @@ function MarkdownSourceEditor({ content, readOnly, onChange }: { content: string
 const GenesisToolbar = ({ onAttachment, disabled, sourceOnly = false }: { onAttachment?: () => void; disabled: boolean; sourceOnly?: boolean }) => {
   if (sourceOnly) return <div className="editor-tools-primary"><span>Markdown 源码</span>{onAttachment && <button type="button" className="editor-attachment-trigger" disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={onAttachment}><StudioIcon name="attachment" />插入附件</button>}</div>
   return (
-  <DiffSourceToggleWrapper SourceToolbar={<>{onAttachment && <button type="button" className="editor-attachment-trigger" disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={onAttachment}><StudioIcon name="attachment" />插入附件</button>}</>}>
+  <DiffSourceToggleWrapper SourceToolbar={<>{onAttachment && <ButtonWithTooltip title="插入附件" aria-label="插入附件" className="editor-attachment-trigger" disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={onAttachment}><StudioIcon name="attachment" /></ButtonWithTooltip>}</>}>
     <div className="editor-tools-primary">
-      <UndoRedo />
-      <BlockTypeSelect />
-      <BoldItalicUnderlineToggles />
-      <ListsToggle />
-      <CreateLink />
+      <div className="editor-tools-group" role="group" aria-label="撤销与重做"><UndoRedo /></div>
+      <div className="editor-tools-group editor-tools-paragraph"><BlockTypeSelect /></div>
+      <div className="editor-tools-group" role="group" aria-label="基础格式"><BoldItalicUnderlineToggles /></div>
+      <div className="editor-tools-group" role="group" aria-label="列表与链接"><ListsToggle /><CreateLink /></div>
     </div>
     <div className="editor-tools-secondary">
-      <span className="editor-tools-label">格式</span>
-      <CodeToggle /><HighlightToggle /><StrikeThroughSupSubToggles />
-      <Separator />
-      <span className="editor-tools-label">插入</span>
-      <InsertImage />
-      {onAttachment && <button type="button" className="editor-attachment-trigger" disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={onAttachment}><StudioIcon name="attachment" />插入附件</button>}
-      <InsertTable /><InsertThematicBreak /><InsertCodeBlock /><InsertAdmonition /><InsertFrontmatter />
+      <div className="editor-tools-group" role="group" aria-label="扩展格式">
+        <span className="editor-tools-label">格式</span>
+        <CodeToggle /><HighlightToggle /><StrikeThroughSupSubToggles />
+      </div>
+      <div className="editor-tools-group editor-tools-insert" role="group" aria-label="插入内容">
+        <span className="editor-tools-label">插入</span>
+        <InsertImage />
+        {onAttachment && <ButtonWithTooltip title="插入附件" aria-label="插入附件" className="editor-attachment-trigger" disabled={disabled} onMouseDown={event => event.preventDefault()} onClick={onAttachment}><StudioIcon name="attachment" /></ButtonWithTooltip>}
+        <InsertTable /><InsertThematicBreak /><InsertCodeBlock /><InsertAdmonition /><InsertFrontmatter />
+      </div>
     </div>
   </DiffSourceToggleWrapper>
   )
@@ -482,6 +485,7 @@ export function MarkdownEditor({
             }}
             onError={() => { if (!sourceOnly) queueMicrotask(() => setSourceFallback({ id: editor.id, enabled: true })) }}
             translation={mdxEditorChineseTranslation}
+            iconComponentFor={editorIcon}
             plugins={[
               headingsPlugin(),
               listsPlugin(),
