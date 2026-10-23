@@ -1,5 +1,5 @@
 .media-editor .media-video-composer { position:relative; flex:0 0 auto; min-height:0; margin:0; padding:8px 16px 16px; border-radius:0; background:transparent; }
-.media-editor .media-video-composer textarea { min-height:72px; flex:0 0 72px; font-size:14px; }
+.media-editor .media-video-composer textarea { min-height:64px; flex:0 0 64px; padding:10px 2px 8px; font-size:14px; }
 .media-video-composer-top { flex-wrap:wrap; }
 .media-video-composer-top>span { margin-right:auto; color:#aaa; }
 .media-node-reference-picker { margin-right:auto; }
@@ -70,7 +70,9 @@
 .media-editor .media-node-editor button { display:inline-flex; align-items:center; justify-content:center; gap:5px; }
 .media-editor .media-node-editor button:hover,.media-editor .media-node-editor button:focus-visible,.media-editor .media-node-editor button[aria-expanded=true] { background:#3b3b3b; }
 .media-editor .media-node-editor textarea:focus { background:transparent; }
-.media-node-editor .media-video-composer-top { gap:5px; }
+.media-node-editor .media-video-composer-top { gap:4px; }
+.media-editor .media-node-editor .media-video-composer-top>button { min-height:26px; padding:3px 8px; }
+.media-editor .media-node-editor .media-video-composer-footer>:is(button,select) { min-height:28px; }
 .media-node-editor .media-video-composer-footer { gap:8px; font-size:12px; }
 .media-node-editor .media-video-composer-footer small { font-size:11px; }
 .media-editor .media-node-editor .media-video-spec { padding:4px 8px; margin-left:0; }
@@ -130,7 +132,7 @@
 .media-editor .media-node-editor .media-video-composer-footer small,.media-editor .media-download { font-size:12px; }
 
 /* 参考以固定尺寸横向排列，预览加载及长文件名不推移编辑控件。 */
-.media-node-editor .media-node-references { display:flex; align-items:flex-start; gap:8px; max-height:none; overflow-x:auto; overflow-y:hidden; padding-bottom:4px; }
+.media-node-editor .media-node-references { display:flex; align-items:flex-start; gap:4px; max-height:none; overflow-x:auto; overflow-y:hidden; margin-top:6px; padding-bottom:0; }
 .media-node-editor .media-node-references>.media-reference-item { display:flex; flex:0 0 var(--media-reference-size); min-width:0; }
 .media-reference-thumbnail { position:relative; display:flex; align-items:center; justify-content:center; flex:none; width:var(--media-reference-size); height:var(--media-reference-size); overflow:hidden; border-radius:8px; background:#303030; color:#bdbdbd; }
 .media-reference-thumbnail .media-preview.is-thumbnail { width:100%; height:100%; min-height:0; border-radius:0; background:transparent; }
