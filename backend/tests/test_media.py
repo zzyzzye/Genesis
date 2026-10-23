@@ -407,7 +407,7 @@ async def test_media_nodes_only_accept_matching_project_assets(media_client: Asy
         "height": 280,
     }
     # 素材不能因节点类型不同而绕过作品关联检查。
-    for kind in ("image", "audio"):
+    for kind in ("image", "audio", "image_generation", "video_asset"):
         response = await c.put(
             f"projects/{other}/canvas",
             json={"version": 0, "document": {"nodes": [{**node, "type": kind}]}},
@@ -425,3 +425,58 @@ async def test_media_nodes_only_accept_matching_project_assets(media_client: Asy
     assert (await c.get(f"projects/{project}/canvas")).json()["document"]["nodes"][0][
         "asset_id"
     ] == asset
+
+
+@pytest.mark.anyio
+async def test_generation_and_video_asset_nodes_roundtrip(media_client: AsyncClient) -> None:
+    c = media_client
+    project = (await c.post("projects", json={"name": "生成与素材节点"})).json()["id"]
+    assets = {}
+    for kind, filename, mime in (
+        ("image", "frame.png", "image/png"),
+        ("video", "clip.mp4", "video/mp4"),
+    ):
+        response = await c.post(
+            f"projects/{project}/assets", files={"file": (filename, b"test-media", mime)}
+        )
+        assets[kind] = response.json()["id"]
+    nodes = [
+        {
+            "id": str(uuid4()),
+            "type": kind,
+            "asset_id": assets[asset_kind],
+            "name": name,
+            "text": "雨夜街道，电影感构图" if kind == "image_generation" else "",
+            "generation": {"mode": "reference", "ratio": "3:4", "count": 2},
+            "x": index * 800,
+            "y": 0,
+            "width": 640,
+            "height": 402,
+        }
+        for index, (kind, asset_kind, name) in enumerate(
+            (
+                ("image_generation", "image", "生图节点"),
+                ("image", "image", "图片节点"),
+                ("video", "video", "生视频节点"),
+                ("video_asset", "video", "视频节点"),
+            )
+        )
+    ]
+    endpoint = f"projects/{project}/canvas"
+    saved = await c.put(endpoint, json={"version": 0, "document": {"nodes": nodes}})
+    assert saved.status_code == 200
+    reopened = (await c.get(endpoint)).json()["document"]["nodes"]
+    assert [node["type"] for node in reopened] == [node["type"] for node in nodes]
+    assert reopened[0]["text"] == "雨夜街道，电影感构图"
+    assert reopened[0]["generation"]["ratio"] == "3:4"
+    for kind, wrong_asset in (("image_generation", "video"), ("video_asset", "image")):
+        response = await c.put(
+            endpoint,
+            json={
+                "version": 1,
+                "document": {
+                    "nodes": [{**nodes[0], "type": kind, "asset_id": assets[wrong_asset]}]
+                },
+            },
+        )
+        assert response.status_code == 422

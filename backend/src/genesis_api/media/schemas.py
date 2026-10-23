@@ -41,7 +41,18 @@ class CanvasNode(BaseModel):
     """
 
     id: UUID
-    type: Literal["asset", "note", "text", "shape", "group", "video", "image", "audio"]
+    type: Literal[
+        "asset",
+        "note",
+        "text",
+        "shape",
+        "group",
+        "video",
+        "image_generation",
+        "video_asset",
+        "image",
+        "audio",
+    ]
     asset_id: UUID | None = None
     member_ids: list[UUID] = Field(default_factory=list, max_length=1000)
     name: str = Field(default="", max_length=120)

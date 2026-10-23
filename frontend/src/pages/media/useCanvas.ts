@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type Document, defaultVideoFrame, emptyDocument, MediaError, type Snapshot } from './api'
-import { compactLegacyVideoNodes } from './canvasOperations'
+import { normalizeGenerationNodes } from './canvasOperations'
 
 export function useCanvas(projectId: string, userId: string) {
   const [document, setDocument] = useState<Document>(emptyDocument)
@@ -39,7 +39,7 @@ export function useCanvas(projectId: string, userId: string) {
       } catch { /* 损坏的本地草稿不会阻止打开服务器版本。 */ }
     } else localStorage.removeItem(key)
     const original = next
-    next = compactLegacyVideoNodes(original)
+    next = normalizeGenerationNodes(original)
     const compacted = next !== original
     if (next.viewport.zoom !== 1) {
       // 每次打开从 100% 开始，并保留原视口中心对应的画布位置。
@@ -48,7 +48,7 @@ export function useCanvas(projectId: string, userId: string) {
     }
     current.current = next; setDocument(next); history.current = compacted ? [{ ...original, viewport: next.viewport }] : []; future.current = []
     setDirty(JSON.stringify(next) !== saved.current); setReady(true)
-    setStatus(blocked.current ? '检测到冲突，已保留本地草稿' : compacted ? '已收紧旧版节点布局，可撤销' : JSON.stringify(next) === saved.current ? '已保存' : original !== serverDocument ? '已恢复本地草稿' : '已打开')
+    setStatus(blocked.current ? '检测到冲突，已保留本地草稿' : compacted ? '已更新生成节点布局，可撤销' : JSON.stringify(next) === saved.current ? '已保存' : original !== serverDocument ? '已恢复本地草稿' : '已打开')
   }, [key, projectId])
   useEffect(() => { let active = true; void Promise.resolve().then(async () => { if (active) await load(true) }).catch((reason: Error) => { if (active) setStatus(reason.message) }); return () => { active = false } }, [load])
   const save = useCallback(async (): Promise<void> => {

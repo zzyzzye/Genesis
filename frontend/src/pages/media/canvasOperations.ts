@@ -1,14 +1,21 @@
 import type { Document, Node } from './api'
 
-export const videoNodeSize = { width: 480, height: 312 }
+export const generationNodeSize = { width: 640, height: 402 }
 
-export function compactLegacyVideoNodes(document: Document): Document {
+// 旧 video 类型继续表示生视频节点，避免把已有提示词节点误转为素材。
+export const isGenerationNode = (node: Pick<Node, 'type'>) => node.type === 'video' || node.type === 'image_generation'
+export const nodeTypeLabel = (type: Node['type']) => ({ video: '生视频节点', image_generation: '生图节点', video_asset: '视频节点', image: '图片节点', audio: '音频节点', asset: '素材节点', note: '便签', text: '文本', shape: '形状', group: '分组' })[type]
+
+export function normalizeGenerationNodes(document: Document): Document {
   let changed = false
   const nodes = document.nodes.map((node) => {
-    if (node.type !== 'video' || node.width !== 820 || node.height !== 670) return node
+    if (!isGenerationNode(node)) return node
+    const preset = node.width === 820 && node.height === 670 || node.width === 480 && node.height === 312
+    const name = node.type === 'video' ? node.name?.replace(/^视频节点(\s+\d+)?$/, '生视频节点$1') : node.name
+    if (!preset && name === node.name) return node
     changed = true
-    // 旧尺寸包含常驻表单的高度；仅收紧旧预设，保持中心及用户自定义尺寸。
-    return { ...node, ...videoNodeSize, x: node.x + (node.width - videoNodeSize.width) / 2, y: node.y + (node.height - videoNodeSize.height) / 2 }
+    // 只迁移旧默认规格，保持中心、连接和用户手动调整的尺寸。
+    return preset ? { ...node, name, ...generationNodeSize, x: node.x + (node.width - generationNodeSize.width) / 2, y: node.y + (node.height - generationNodeSize.height) / 2 } : { ...node, name }
   })
   return changed ? { ...document, nodes } : document
 }
