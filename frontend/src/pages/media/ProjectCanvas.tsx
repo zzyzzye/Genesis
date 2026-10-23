@@ -170,7 +170,7 @@ function VideoNodeComposer({ id, data }: { id: string; data: CanvasNodeData }) {
         const name = asset?.name || source.name || source.text.slice(0, 40) || '空节点'
         return <div key={source.id} className="media-reference-item" role="group" aria-label={`参考 ${index + 1}：${name}`}>
           <div className="media-reference-thumbnail" title={name}>
-            {asset && asset.kind !== 'audio' ? <AssetPreview key={asset.id} asset={asset} thumbnail /> : asset?.kind === 'audio' || source.type === 'audio' ? <Music2 size={26} aria-label="音频参考" /> : !source.asset_id && source.text ? <span className="media-reference-text">{source.text}</span> : source.type === 'video' ? <Film size={26} aria-hidden="true" /> : <ImagePlus size={26} aria-hidden="true" />}
+            {asset && asset.kind !== 'audio' ? <AssetPreview key={asset.id} asset={asset} thumbnail /> : asset?.kind === 'audio' || source.type === 'audio' ? <Music2 size={20} strokeWidth={1.6} aria-label="音频参考" /> : !source.asset_id && source.text ? <Type size={20} strokeWidth={1.6} aria-label="文字参考" /> : source.type === 'video' ? <Film size={20} strokeWidth={1.6} aria-hidden="true" /> : <ImagePlus size={20} strokeWidth={1.6} aria-hidden="true" />}
             <span className="media-reference-index" aria-hidden="true">{index + 1}</span>
           </div>
         </div>
