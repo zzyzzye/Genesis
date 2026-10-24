@@ -140,8 +140,7 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
     }
     if node.generation.image_size:
         payload["size"] = node.generation.image_size
-    if node.generation.image_quality:
-        payload["quality"] = node.generation.image_quality
+    # 尚未确认逐模型画质档位，旧草稿字段仅保留兼容，不提交到上游。
     if node.generation.image_background:
         payload["background"] = node.generation.image_background
     sent = False

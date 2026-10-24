@@ -19,9 +19,10 @@ describe('图片参数', () => {
       return <><ImageParameters settings={settings} onChange={patch=>setSettings(previous=>({...previous,...patch}))} /><output>{imageSettingsSummary(settings)}</output></>
     }
     render(<Harness />)
-    expect(screen.getByRole('status')).toHaveTextContent('高画质 · 1536x1024 · 1张')
-    fireEvent.click(screen.getByRole('button', { name:'使用模型默认画质' }))
+    expect(screen.queryByRole('group', { name:'画质' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name:'使用模型默认画质' })).not.toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('1536x1024 · 1张')
+    expect(screen.getByRole('status')).not.toHaveTextContent('画质')
     fireEvent.click(screen.getByRole('button', { name:'图片比例 9:16' }))
     expect(screen.getByRole('button', { name:'1K' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('status')).toHaveTextContent('9:16 · 1K · 1张')

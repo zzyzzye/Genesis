@@ -201,7 +201,7 @@ async def test_multi_image_and_explicit_size(fixture: ImageFixture) -> None:
     assert len(set(task["asset_ids"])) == 4
     payload = json.loads(next(req for req in state.requests if req.method == "POST").content)
     assert payload["size"] == "1536x1024" and payload["n"] == 4
-    assert payload["quality"] == "standard" and payload["background"] == "transparent"
+    assert "quality" not in payload and payload["background"] == "transparent"
     assert "resolution" not in payload and "aspect_ratio" not in payload
 
 
@@ -248,7 +248,7 @@ async def test_image_edit_uses_local_multipart_without_public_base(fixture: Imag
     assert post.url.path == "/v1/images/edits"
     assert post.headers["content-type"].startswith("multipart/form-data;")
     assert b'name="image"' in post.content and PNG in post.content
-    assert b'name="quality"\r\n\r\nhigh' in post.content
+    assert b'name="quality"' not in post.content
     assert b'name="background"\r\n\r\nopaque' in post.content
     assert b"image_urls" not in post.content
     assert (await latest(state))["status"] == "completed"
