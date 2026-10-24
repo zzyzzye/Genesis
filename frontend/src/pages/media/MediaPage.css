@@ -125,8 +125,8 @@
 @media(max-width:700px) { .media-project-trigger { max-width:180px; }.media-node-palette { bottom:112px; } }
 .media-canvas .react-flow__handle { display:grid; place-items:center; z-index:6; width:32px; height:32px; border:0; background:transparent; opacity:.65; cursor:crosshair; }
 .media-canvas .react-flow__handle::after { content:""; width:10px; height:10px; border-radius:50%; background:#aaa; pointer-events:none; }
-.media-canvas .react-flow__handle-left { left:-12px; }
-.media-canvas .react-flow__handle-right { right:-12px; }
+.media-canvas .react-flow__handle-left { left:0; }
+.media-canvas .react-flow__handle-right { right:0; }
 .media-canvas .react-flow__node:hover .react-flow__handle,.media-canvas .react-flow__node.selected .react-flow__handle,.media-canvas .react-flow__node:focus-within .react-flow__handle,.media-canvas.is-connecting .react-flow__handle { opacity:1; }
 .media-canvas .react-flow__handle:hover::after,.media-canvas .react-flow__handle.connectingto::after { background:#eee; }
 .media-canvas.is-connecting .react-flow__node:not(.react-flow__node-group):hover>.media-node>.media-node-grip,.media-canvas.is-connecting .react-flow__node:hover>.media-video-card>.media-node-grip { color:#eee; }

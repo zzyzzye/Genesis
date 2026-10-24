@@ -576,8 +576,8 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     dragging: draggingNode && selected.includes(node.id),
     // 受控节点预设的命中坐标须与 CSS 圆点一致，避免连线仍吸附旧的 8px 位置。
     handles: node.type !== 'group' ? [
-      { type: 'target', position: Position.Left, x: -28, y: node.height / 2 + (isGenerationNode(node) ? 21 : 0) - 16, width: 32, height: 32 },
-      { type: 'source', position: Position.Right, x: node.width - 4, y: node.height / 2 + (isGenerationNode(node) ? 21 : 0) - 16, width: 32, height: 32 },
+      { type: 'target', position: Position.Left, x: -16, y: node.height / 2 + (isGenerationNode(node) ? 21 : 0) - 16, width: 32, height: 32 },
+      { type: 'source', position: Position.Right, x: node.width - 16, y: node.height / 2 + (isGenerationNode(node) ? 21 : 0) - 16, width: 32, height: 32 },
     ] : undefined,
     selected: selected.includes(node.id),
     zIndex: node.type === 'group' ? -1 : selected.includes(node.id) ? 2 : 1,

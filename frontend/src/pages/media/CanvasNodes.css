@@ -46,6 +46,22 @@
 .media-editor .media-node { border:0; background:#252525; }
 .media-editor .media-node.is-note { background:#2c2c2c; }
 .media-node.is-selected::before,.media-video-card.is-selected::before,.media-node.is-selected::after,.media-video-card.is-selected::after { display:none; content:none; }
+.media-editor { --media-selection-marker:#c5c5c5; }
+.media-editor :is(.media-node,.media-video-card).is-selected::after {
+  display:block; content:""; position:absolute; z-index:4; inset:-4px; border:0; border-radius:0; box-shadow:none; animation:none; opacity:1; transform:none; pointer-events:none;
+  background:
+    linear-gradient(var(--media-selection-marker),var(--media-selection-marker)) left top / 12px 2px no-repeat,
+    linear-gradient(var(--media-selection-marker),var(--media-selection-marker)) left top / 2px 12px no-repeat,
+    linear-gradient(var(--media-selection-marker),var(--media-selection-marker)) right top / 12px 2px no-repeat,
+    linear-gradient(var(--media-selection-marker),var(--media-selection-marker)) right top / 2px 12px no-repeat,
+    linear-gradient(var(--media-selection-marker),var(--media-selection-marker)) left bottom / 12px 2px no-repeat,
+    linear-gradient(var(--media-selection-marker),var(--media-selection-marker)) left bottom / 2px 12px no-repeat,
+    linear-gradient(var(--media-selection-marker),var(--media-selection-marker)) right bottom / 12px 2px no-repeat,
+    linear-gradient(var(--media-selection-marker),var(--media-selection-marker)) right bottom / 2px 12px no-repeat;
+}
+.media-editor .media-video-card.is-selected::after { top:38px; }
+.media-editor :is(.media-node,.media-video-card).is-selected .media-node-grip input { color:#fff; }
+.media-canvas .react-flow__node.selected .react-flow__handle::after { background:#eee; }
 .media-editor .media-canvas .react-flow__nodesselection-rect { border:0; background:#ffffff05; }
 .media-editor :is(.media-node,.media-video-card):is(.is-selected,:focus-within) .media-node-grip { color:#eee; }
 .media-editor .media-canvas-resize::after { width:5px; height:5px; border:0; background:#aaa; }
