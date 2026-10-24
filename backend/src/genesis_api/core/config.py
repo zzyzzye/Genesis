@@ -40,7 +40,8 @@ class Settings(BaseSettings):
     database_user: str = "genesis"
     database_password: SecretStr = SecretStr("genesis")
     jwt_secret: SecretStr = SecretStr("development-only-jwt-secret-do-not-use-in-production")
-    jwt_access_token_expire_minutes: int = 120
+    jwt_access_token_expire_minutes: int = 1440
+    jwt_refresh_token_expire_minutes: int = 1440
     development_owner_password: SecretStr = SecretStr("genesis-local-only")
 
     text_provider: Literal["openai", "grok", "gemini", "claude", "mimo"] = "openai"

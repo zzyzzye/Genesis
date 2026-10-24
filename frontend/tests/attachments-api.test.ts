@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { waitFor } from '@testing-library/react'
 import { uploadAttachment } from '../src/lib/attachments'
 
 class TestXHR {
@@ -23,6 +24,7 @@ describe('附件上传传输', () => {
     const progress = vi.fn()
     const uploaded = new File(['bytes'], 'binary.any')
     const promise = uploadAttachment('test-placeholder', 'upload-1', uploaded, 'folder-1', '目录/binary.any', progress, controller.signal)
+    await waitFor(() => expect(TestXHR.current?.send).toHaveBeenCalled())
     const xhr = TestXHR.current
     expect(xhr.open).toHaveBeenCalledWith('POST', '/api/v1/admin/blog/attachments/files')
     const form = xhr.send.mock.calls[0]?.[0] as FormData
@@ -45,16 +47,22 @@ describe('附件上传传输', () => {
   it('服务器拒绝、网络中断和停止分别返回持续可识别的错误', async () => {
     vi.stubGlobal('XMLHttpRequest', TestXHR)
     const upload = (controller = new AbortController()) => uploadAttachment('test-placeholder', 'upload-1', new File([], 'empty.bin'), null, 'empty.bin', vi.fn(), controller.signal)
+    const started = async (previous: TestXHR) => waitFor(() => expect(TestXHR.current).not.toBe(previous))
+    let previous = TestXHR.current
     const rejected = upload()
+    await started(previous)
     TestXHR.current.status = 409; TestXHR.current.responseText = '{"detail":"同名文件已存在"}'; TestXHR.current.onload?.()
     await expect(rejected).rejects.toMatchObject({ status: 409, message: expect.stringContaining('同名文件已存在') as unknown })
-    const offline = upload(); TestXHR.current.onerror?.()
+    previous = TestXHR.current
+    const offline = upload(); await started(previous); TestXHR.current.onerror?.()
     await expect(offline).rejects.toThrow('网络中断')
     const controller = new AbortController()
-    const stopped = upload(controller); controller.abort()
+    previous = TestXHR.current
+    const stopped = upload(controller); await started(previous); controller.abort()
     await expect(stopped).rejects.toMatchObject({ name: 'AbortError' })
     expect(TestXHR.current.abort).toHaveBeenCalledTimes(1)
-    const invalid = upload(); TestXHR.current.responseText = 'invalid'; TestXHR.current.onload?.()
+    previous = TestXHR.current
+    const invalid = upload(); await started(previous); TestXHR.current.responseText = 'invalid'; TestXHR.current.onload?.()
     await expect(invalid).rejects.toThrow('回执无法解析')
     controller.abort()
     await expect(upload(controller)).rejects.toMatchObject({ name: 'AbortError' })

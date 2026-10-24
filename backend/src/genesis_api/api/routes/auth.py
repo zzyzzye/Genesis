@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
 from genesis_api.identity.models import User, UserCredential, UserRole
 from genesis_api.identity.passwords import hash_password, verify_password
-from genesis_api.identity.tokens import create_access_token
+from genesis_api.identity.sessions import refresh_session, revoke_session, start_session
 
 router = APIRouter(prefix="/auth", tags=["身份认证"])
 HANDLE_PATTERN = r"^[a-z0-9][a-z0-9_-]{2,49}$"
@@ -129,12 +129,14 @@ def register_account(data: RegistrationRequest, session: SessionDependency) -> C
 def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: SessionDependency,
+    response: Response,
 ) -> AccessToken:
     """验证账号密码并签发令牌，成功时更新最后登录时间。
 
     Args:
         form_data: OAuth2 表单中的账号与密码，不得输出或记录。
         session: 当前请求会话，提交登录时间更新。
+        response: 设置独立的 HttpOnly 刷新 Cookie。
 
     Returns:
         Bearer 访问令牌，不返回密码哈希。
@@ -152,15 +154,16 @@ def login(
 
     user.credential.last_login_at = datetime.now(UTC)
     session.commit()
-    return AccessToken(access_token=create_access_token(user))
+    return AccessToken(access_token=start_session(user, session, response))
 
 
 @router.post("/dev-login", response_model=AccessToken)
-def development_login(session: SessionDependency) -> AccessToken:
+def development_login(session: SessionDependency, response: Response) -> AccessToken:
     """仅在开发环境签发示例所有者令牌，不要求输入账号密码。
 
     Args:
         session: 当前请求会话，用于读取开发示例所有者。
+        response: 设置独立的 HttpOnly 刷新 Cookie。
 
     Returns:
         示例所有者的 Bearer 访问令牌。
@@ -181,7 +184,19 @@ def development_login(session: SessionDependency) -> AccessToken:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="开发 Owner 尚未初始化",
         )
-    return AccessToken(access_token=create_access_token(user))
+    return AccessToken(access_token=start_session(user, session, response))
+
+
+@router.post("/refresh", response_model=AccessToken)
+def refresh_login(request: Request, response: Response, session: SessionDependency) -> AccessToken:
+    """轮换 Cookie 并签发新访问令牌，不接受用户 ID 或角色输入。"""
+    return AccessToken(access_token=refresh_session(request, response, session))
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(request: Request, response: Response, session: SessionDependency) -> None:
+    """幂等撤销当前登录会话，不影响其他浏览器或账号。"""
+    revoke_session(request, response, session)
 
 
 @router.get("/me", response_model=CurrentUser)

@@ -9,11 +9,12 @@ from genesis_api.core.config import get_settings
 from genesis_api.identity.models import User
 
 
-def create_access_token(user: User) -> str:
+def create_access_token(user: User, session_id: UUID | None = None) -> str:
     """为已认证用户签发有时限的 HS256 访问令牌。
 
     Args:
         user: 已完成认证的用户实体，此处不检查账号密码。
+        session_id: 新登录的可撤销会话标识；省略时兼容旧访问令牌。
 
     Returns:
         包含用户 UUID、角色及有效期的 JWT，只供认证响应使用，不得记录。
@@ -23,14 +24,36 @@ def create_access_token(user: User) -> str:
     payload = {
         "sub": str(user.id),
         "role": user.role.value,
+        "type": "access",
         "iat": now,
         "exp": now + timedelta(minutes=settings.jwt_access_token_expire_minutes),
     }
+    if session_id is not None:
+        payload["sid"] = str(session_id)
     return encode(
         payload,
         settings.jwt_secret.get_secret_value(),
         algorithm="HS256",
     )
+
+
+def access_claims(token: str, *, verify_exp: bool = True) -> dict[str, object] | None:
+    """校验访问令牌；仅刷新与退出端点允许忽略访问令牌过期时间。"""
+    try:
+        payload = decode(
+            token,
+            get_settings().jwt_secret.get_secret_value(),
+            algorithms=["HS256"],
+            options={"verify_exp": verify_exp},
+        )
+        if payload.get("type") not in (None, "access"):
+            return None
+        UUID(payload["sub"])
+        if "sid" in payload:
+            UUID(payload["sid"])
+        return dict(payload)
+    except (InvalidTokenError, KeyError, ValueError, TypeError):
+        return None
 
 
 def get_user_id_from_token(token: str) -> UUID | None:
@@ -43,14 +66,5 @@ def get_user_id_from_token(token: str) -> UUID | None:
         有效令牌中的用户 UUID；令牌无效、过期或 sub 格式错误时返回 None。
         用户是否仍存在及当前角色由 API 依赖进一步检查。
     """
-    settings = get_settings()
-    try:
-        payload = decode(
-            token,
-            settings.jwt_secret.get_secret_value(),
-            algorithms=["HS256"],
-        )
-        subject = payload.get("sub")
-        return UUID(subject) if isinstance(subject, str) else None
-    except (InvalidTokenError, ValueError):
-        return None
+    payload = access_claims(token)
+    return UUID(str(payload["sub"])) if payload else None

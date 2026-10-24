@@ -1,16 +1,17 @@
 import './Account.css'
 
-import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { GenesisLogo } from './components/GenesisLogo'
 import { FpsStatusSlot } from './features/performance/FpsMonitor'
-import { clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey } from './lib/auth'
+import { authTokenChangedEvent, clearStoredAuthToken, getStoredAuthToken, latestAuthToken, logoutAuthSession, storeAuthToken, studioAuthTokenKey } from './lib/auth'
 import { getCurrentUser, login, registerAccount, updateCurrentUser, type CurrentUser } from './lib/api'
 
 type AccountMode = 'login' | 'register'
 type AccountState =
   | { status: 'loading' }
+  | { status: 'unavailable' }
   | { status: 'guest'; error: string | null; mode: AccountMode }
   | { status: 'ready'; user: CurrentUser; feedback: string | null }
 type AccountField = 'handle' | 'displayName' | 'password'
@@ -60,6 +61,8 @@ function AccountForm({ mode, error, busy, onModeChange, onLogin, onRegister, foc
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
   const [visible, setVisible] = useState(false)
+  // 会话恢复会暂存原页面，表单标识必须与新登录页隔离。
+  const id = useId()
   const [errors, setErrors] = useState<Partial<Record<AccountField, string>>>({})
   const handleInput = useRef<HTMLInputElement>(null)
   const displayNameInput = useRef<HTMLInputElement>(null)
@@ -98,28 +101,28 @@ function AccountForm({ mode, error, busy, onModeChange, onLogin, onRegister, foc
   }
 
   return <AccountLayout>
-    <section className="account-auth-form" aria-labelledby="account-title">
-      <div className="account-form-heading"><span className="account-form-kicker">你的 Genesis 账户</span><h1 id="account-title">{isLogin ? '登录你的账户' : '创建你的账户'}</h1><p>{isLogin ? '参与讨论，继续你的创作。' : '留下名字，加入每一次有意思的讨论。'}</p></div>
+    <section className="account-auth-form" aria-labelledby={`${id}-title`}>
+      <div className="account-form-heading"><span className="account-form-kicker">你的 Genesis 账户</span><h1 id={`${id}-title`}>{isLogin ? '登录你的账户' : '创建你的账户'}</h1><p>{isLogin ? '参与讨论，继续你的创作。' : '留下名字，加入每一次有意思的讨论。'}</p></div>
       <form className="account-form" aria-label={isLogin ? '账户登录' : '账户注册'} aria-busy={busy} noValidate onSubmit={submit} onCompositionStart={() => { composing.current = true }} onCompositionEnd={() => { composing.current = false }}>
         <div className="account-field">
-          <label htmlFor="account-handle">账号</label>
-          <input ref={handleInput} autoComplete="username" autoCapitalize="none" spellCheck={false} id="account-handle" name="username" autoFocus={focusLogin} readOnly={busy} maxLength={isLogin ? undefined : 50} required value={handle} placeholder={isLogin ? '输入你的账号' : '为自己取一个账号'} aria-invalid={Boolean(errors.handle)} aria-describedby={errors.handle ? 'account-handle-error' : !isLogin ? 'account-handle-hint' : undefined} onChange={event => { setHandle(event.currentTarget.value); clearFieldError('handle') }} />
-          <div className="account-field-help">{errors.handle ? <p id="account-handle-error" className="account-field-error">{errors.handle}</p> : !isLogin && <p id="account-handle-hint">3–50 位英文、数字、_ 或 -，以英文或数字开头</p>}</div>
+          <label htmlFor={`${id}-handle`}>账号</label>
+          <input ref={handleInput} autoComplete="username" autoCapitalize="none" spellCheck={false} id={`${id}-handle`} name="username" autoFocus={focusLogin} readOnly={busy} maxLength={isLogin ? undefined : 50} required value={handle} placeholder={isLogin ? '输入你的账号' : '为自己取一个账号'} aria-invalid={Boolean(errors.handle)} aria-describedby={errors.handle ? `${id}-handle-error` : !isLogin ? `${id}-handle-hint` : undefined} onChange={event => { setHandle(event.currentTarget.value); clearFieldError('handle') }} />
+          <div className="account-field-help">{errors.handle ? <p id={`${id}-handle-error`} className="account-field-error">{errors.handle}</p> : !isLogin && <p id={`${id}-handle-hint`}>3–50 位英文、数字、_ 或 -，以英文或数字开头</p>}</div>
         </div>
         {!isLogin && <div className="account-field">
-          <label htmlFor="account-display-name">昵称</label>
-          <input ref={displayNameInput} autoComplete="nickname" id="account-display-name" name="nickname" readOnly={busy} required maxLength={100} value={displayName} placeholder="大家怎么称呼你" aria-invalid={Boolean(errors.displayName)} aria-describedby={errors.displayName ? 'account-display-name-error' : undefined} onChange={event => { setDisplayName(event.currentTarget.value); clearFieldError('displayName') }} />
-          <div className="account-field-help">{errors.displayName && <p id="account-display-name-error" className="account-field-error">{errors.displayName}</p>}</div>
+          <label htmlFor={`${id}-display-name`}>昵称</label>
+          <input ref={displayNameInput} autoComplete="nickname" id={`${id}-display-name`} name="nickname" readOnly={busy} required maxLength={100} value={displayName} placeholder="大家怎么称呼你" aria-invalid={Boolean(errors.displayName)} aria-describedby={errors.displayName ? `${id}-display-name-error` : undefined} onChange={event => { setDisplayName(event.currentTarget.value); clearFieldError('displayName') }} />
+          <div className="account-field-help">{errors.displayName && <p id={`${id}-display-name-error`} className="account-field-error">{errors.displayName}</p>}</div>
         </div>}
         <div className="account-field">
-          <label htmlFor="account-password">密码</label>
+          <label htmlFor={`${id}-password`}>密码</label>
           <div className="account-password">
-            <input ref={passwordInput} autoComplete={isLogin ? 'current-password' : 'new-password'} id="account-password" name="password" readOnly={busy} required maxLength={isLogin ? undefined : 128} type={visible ? 'text' : 'password'} value={password} placeholder={isLogin ? '输入你的密码' : '设置 8–128 位密码'} aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? 'account-password-error' : !isLogin ? 'account-password-hint' : undefined} onChange={event => { setPassword(event.currentTarget.value); clearFieldError('password') }} />
+            <input ref={passwordInput} autoComplete={isLogin ? 'current-password' : 'new-password'} id={`${id}-password`} name="password" readOnly={busy} required maxLength={isLogin ? undefined : 128} type={visible ? 'text' : 'password'} value={password} placeholder={isLogin ? '输入你的密码' : '设置 8–128 位密码'} aria-invalid={Boolean(errors.password)} aria-describedby={errors.password ? `${id}-password-error` : !isLogin ? `${id}-password-hint` : undefined} onChange={event => { setPassword(event.currentTarget.value); clearFieldError('password') }} />
             <button className="account-password-toggle" type="button" aria-label={visible ? '隐藏密码' : '显示密码'} aria-pressed={visible} disabled={busy} onClick={() => setVisible(value => !value)}>{visible ? <EyeOff size={18} /> : <Eye size={18} />}</button>
           </div>
-          <div className="account-field-help">{errors.password ? <p id="account-password-error" className="account-field-error">{errors.password}</p> : !isLogin && <p id="account-password-hint">至少 8 位，支持粘贴和密码管理器</p>}</div>
+          <div className="account-field-help">{errors.password ? <p id={`${id}-password-error`} className="account-field-error">{errors.password}</p> : !isLogin && <p id={`${id}-password-hint`}>至少 8 位，支持粘贴和密码管理器</p>}</div>
         </div>
-        <div className="account-form-message" aria-live="polite">{error && <p id="account-submit-error" role="alert">{error}</p>}</div>
+        <div className="account-form-message" aria-live="polite">{error && <p id={`${id}-submit-error`} role="alert">{error}</p>}</div>
         <button className="account-submit" type="submit" disabled={busy}>{busy ? <><LoaderCircle className="account-submit-spinner" size={18} aria-hidden="true" /><span>{isLogin ? '正在登录…' : '正在创建账户…'}</span></> : <><span>{isLogin ? '进入 Genesis' : '创建并进入'}</span><ArrowRight size={18} aria-hidden="true" /></>}</button>
       </form>
       <p className="account-mode-switch">{isLogin ? '还没有账户？' : '已经有账户？'}<button type="button" disabled={busy} onClick={changeMode}>{isLogin ? '注册账户' : '返回登录'}</button></p>
@@ -225,6 +228,7 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
     ? { status: 'guest', mode: 'login', error: null }
     : { status: 'loading' })
   const [submitting, setSubmitting] = useState(false)
+  const [reload, setReload] = useState(0)
   const pending = useRef(false)
   const attempt = useRef(0)
   const title = state.status === 'ready' ? '个人账户 · Genesis' : state.status === 'guest' && state.mode === 'register' ? '注册 · Genesis' : '登录 · Genesis'
@@ -232,8 +236,15 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
   useEffect(() => () => { attempt.current += 1 }, [])
 
   useEffect(() => {
-    const sync = () => setToken(getStoredAuthToken())
+    const sync = () => {
+      const current = getStoredAuthToken()
+      setToken(current)
+      if (!current) setState({ status:'guest', mode:'login', error:null })
+    }
     sync()
+    window.addEventListener(authTokenChangedEvent, sync)
+    window.addEventListener('storage', sync)
+    return () => { window.removeEventListener(authTokenChangedEvent, sync); window.removeEventListener('storage', sync) }
   }, [])
 
   useEffect(() => {
@@ -243,21 +254,28 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
       .then((user) => {
         if (!active) return
         pending.current = false; setSubmitting(false)
-        if (user.role === 'owner') storeAuthToken(token, studioAuthTokenKey)
+        if (user.role === 'owner') storeAuthToken(latestAuthToken(token), studioAuthTokenKey)
         else clearStoredAuthToken(studioAuthTokenKey)
         setState({ status: 'ready', user, feedback: null })
         if (onAuthenticated) { onAuthenticated(user); return }
         if (returnTo && (/^\/media(?:\/|$)/.test(returnTo) || /^\/blog\/studio(?:\/|$)/.test(returnTo) || /^\/articles\/[a-z0-9-]+(?:#comments)?$/.test(returnTo))) void navigate(returnTo, { replace: true })
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!active) return
         pending.current = false; setSubmitting(false)
+        const status = error instanceof Error && 'status' in error ? error.status : undefined
+        if (status !== 401) {
+          setState(current => current.status === 'ready'
+            ? { ...current, feedback:'账户暂时无法读取，请稍后重试。' }
+            : { status:'unavailable' })
+          return
+        }
         clearStoredAuthToken()
         setToken(null)
         setState({ status: 'guest', mode: 'login', error: '登录状态已过期，请重新登录。' })
       })
     return () => { active = false }
-  }, [token, returnTo, navigate, onAuthenticated])
+  }, [token, reload, returnTo, navigate, onAuthenticated])
 
   async function authenticate(mode: AccountMode, handle: string, password: string, displayName = '') {
     if (pending.current) return
@@ -299,7 +317,14 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
   }
 
   if (state.status === 'loading') return <AccountLayout><div className="account-auth-loading" role="status"><LoaderCircle className="account-submit-spinner" size={24} aria-hidden="true" /><span>正在加载账户…</span></div></AccountLayout>
+  if (state.status === 'unavailable') return <AccountLayout><section className="account-card">
+    <p className="account-feedback" role="alert">账户暂时无法读取，请稍后重试。</p>
+    <button className="account-submit" type="button" onClick={() => { setState({ status:'loading' }); setReload(current => current + 1) }}>重试</button>
+  </section></AccountLayout>
   if (state.status === 'ready') return <AccountProfile feedback={state.feedback} busy={submitting} user={state.user} onSave={saveProfile} onLogout={() => {
+    const authorToken = getStoredAuthToken(studioAuthTokenKey)
+    void logoutAuthSession(token)
+    if (authorToken && authorToken !== token) void logoutAuthSession(authorToken)
     clearStoredAuthToken(); clearStoredAuthToken(studioAuthTokenKey)
     setToken(null); setState({ status: 'guest', mode: 'login', error: null })
   }} />

@@ -1,4 +1,4 @@
-import { handleStudioUnauthorized, rememberSessionUser } from './auth'
+import { authFetch, handleStudioUnauthorized, latestAuthToken, rememberSessionUser } from './auth'
 import { collectCommentDeviceHints } from './commentDeviceHints'
 import { downloadBlob } from './download'
 
@@ -173,7 +173,7 @@ export class ApiError extends Error {
 }
 
 async function requestResponse(path: string, init?: RequestInit): Promise<Response> {
-  const response = await fetch(`${apiBaseUrl}${path}`, init)
+  const response = await authFetch(`${apiBaseUrl}${path}`, init)
   handleStudioUnauthorized(response.status, init?.headers)
   if (!response.ok) {
     const error: unknown = await response.json().catch((): null => null)
@@ -250,13 +250,14 @@ function authHeaders(token: string): HeadersInit {
 }
 
 export function developmentLogin(): Promise<AccessToken> {
-  return request<AccessToken>('/auth/dev-login', { method: 'POST' })
+  return request<AccessToken>('/auth/dev-login', { method: 'POST', credentials:'include' })
 }
 
 export function login(handle: string, password: string): Promise<AccessToken> {
   const body = new URLSearchParams({ username: handle, password })
   return request<AccessToken>('/auth/login', {
     method: 'POST',
+    credentials:'include',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
   })
@@ -272,7 +273,7 @@ export function registerAccount(data: RegistrationData): Promise<CurrentUser> {
 
 export async function getCurrentUser(token: string): Promise<CurrentUser> {
   const user = await request<CurrentUser>('/auth/me', { headers: authHeaders(token) })
-  rememberSessionUser(token, user.id)
+  rememberSessionUser(latestAuthToken(token), user.id)
   return user
 }
 
@@ -420,7 +421,7 @@ export function updateAdminBlogPost(
 
 export async function deleteAdminBlogPost(token: string, id: string, expectedUpdatedAt?: string | null): Promise<void> {
   const query = expectedUpdatedAt ? `?${new URLSearchParams({ expected_updated_at: expectedUpdatedAt })}` : ''
-  const response = await fetch(`${apiBaseUrl}/admin/blog/posts/${encodeURIComponent(id)}${query}`, {
+  const response = await authFetch(`${apiBaseUrl}/admin/blog/posts/${encodeURIComponent(id)}${query}`, {
     method: 'DELETE',
     headers: authHeaders(token),
   })
@@ -661,7 +662,7 @@ export async function streamAiChatRun(
   },
   signal?: AbortSignal,
 ): Promise<'completed' | 'disconnected'> {
-  const response = await fetch(`${apiBaseUrl}/ai/chat/runs/${encodeURIComponent(runId)}/stream`, {
+  const response = await authFetch(`${apiBaseUrl}/ai/chat/runs/${encodeURIComponent(runId)}/stream`, {
     headers: authHeaders(token),
     signal,
   })

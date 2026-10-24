@@ -30,6 +30,9 @@ describe('文章导出下载', () => {
     controller.abort()
     await expect(downloadBlogArticles('test-placeholder', { trashed: false }, controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
     expect(downloadBlob).not.toHaveBeenCalled()
+    // 已取消请求在传输前结束，不应消耗下一次请求的模拟响应。
+    expect(fetcher).toHaveBeenCalledTimes(1)
+    fetcher.mockReset()
     fetcher.mockResolvedValueOnce(new Response('content', { headers: { 'Content-Disposition': 'attachment; filename="../../escape.html"' } }))
     await downloadBlogArticles('test-placeholder', { postId: 'safe' }, new AbortController().signal)
     expect(vi.mocked(downloadBlob).mock.calls[0]?.[1]).toBe('article.md')

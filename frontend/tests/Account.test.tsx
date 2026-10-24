@@ -40,6 +40,23 @@ describe('账户登录与注册', () => {
   })
   afterEach(() => { cleanup(); localStorage.clear(); vi.resetAllMocks() })
 
+  it('暂时无法读取时保留凭据并允许重试，续期后不丢失正在编辑的资料', async () => {
+    storeAuthToken(session.access_token)
+    vi.mocked(getCurrentUser).mockRejectedValueOnce(new TypeError('测试网络失败'))
+    setup()
+    expect(await screen.findByRole('alert')).toHaveTextContent('账户暂时无法读取')
+    expect(getStoredAuthToken()).toBe(session.access_token)
+    fireEvent.click(screen.getByRole('button', { name:'重试' }))
+    await screen.findByRole('heading', { name:user.display_name })
+    const name = screen.getByRole('textbox', { name:'昵称' })
+    fireEvent.change(name, { target:{ value:'尚未保存的昵称' } })
+    vi.mocked(getCurrentUser).mockRejectedValueOnce(new Error('测试续期服务不可用'))
+    act(() => storeAuthToken('account-ui-renewed-session'))
+    expect(await screen.findByText('账户暂时无法读取，请稍后重试。')).toBeInTheDocument()
+    expect(name).toHaveValue('尚未保存的昵称')
+    expect(getStoredAuthToken()).toBe('account-ui-renewed-session')
+  })
+
   it('资料保留返回首页，仅作者可进入写作台，头像加载失败后显示首字', async () => {
     storeAuthToken(session.access_token)
     vi.mocked(getCurrentUser).mockResolvedValueOnce({ ...user, role: 'owner', avatar_url: '/missing-avatar.jpg' })

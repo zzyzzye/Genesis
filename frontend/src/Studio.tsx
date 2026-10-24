@@ -6,7 +6,7 @@ import './studio/styles/shell.css'
 import './studio/styles/login.css'
 
 
-import { authTokenChangedEvent, clearStoredAuthToken, getStoredAuthToken, storeAuthToken, studioAuthTokenKey, studioSessionExpiredEvent } from './lib/auth'
+import { authTokenChangedEvent, clearStoredAuthToken, getStoredAuthToken, logoutAuthSession, storeAuthToken, studioAuthTokenKey, studioSessionExpiredEvent } from './lib/auth'
 import { MarkdownEditor, ArticleReader } from './studio/MarkdownEditor'
 import { StudioIcon } from './studio/StudioIcon'
 import { StudioNavigation } from './studio/StudioNavigation'
@@ -758,6 +758,7 @@ export function Studio() {
 
   function handleLogout() {
     sessionExpired.current = true
+    void logoutAuthSession(token)
     clearStoredAuthToken(studioAuthTokenKey)
     setToken(null)
     setState({ status: 'login', error: null })

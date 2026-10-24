@@ -1,4 +1,4 @@
-import { getStoredAuthToken, handleStudioUnauthorized } from '../../lib/auth'
+import { authFetch, authUpload, getStoredAuthToken, handleStudioUnauthorized } from '../../lib/auth'
 
 export type Asset = { id: string; name: string; kind: 'image' | 'video' | 'audio'; mime_type: string; size: number; in_library: boolean }
 export type Project = { id: string; name: string; version: number; updated_at: string }
@@ -17,7 +17,7 @@ export class MediaError extends Error {
 }
 export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const headers = { Authorization: `Bearer ${getStoredAuthToken() ?? ''}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }
-  const response = await fetch(`${base}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined })
+  const response = await authFetch(`${base}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined })
   handleStudioUnauthorized(response.status, headers)
   if (!response.ok) {
     const data = await response.json().catch(() => null) as { detail?: unknown } | null
@@ -27,26 +27,16 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
 }
 export async function fileBlob(asset: Asset): Promise<Blob> {
   const headers = { Authorization: `Bearer ${getStoredAuthToken() ?? ''}` }
-  const response = await fetch(`${base}/assets/${asset.id}/file`, { headers })
+  const response = await authFetch(`${base}/assets/${asset.id}/file`, { headers })
   handleStudioUnauthorized(response.status, headers)
   if (!response.ok) throw new Error('素材读取失败，请重试')
   return response.blob()
 }
-export function upload(path: string, file: File, progress: (value: number) => void): Promise<Asset> {
-  return new Promise((resolve, reject) => {
-    const request = new XMLHttpRequest()
-    request.open('POST', `${base}${path}`)
-    const authorization = `Bearer ${getStoredAuthToken() ?? ''}`
-    request.setRequestHeader('Authorization', authorization)
-    request.upload.onprogress = (event) => { if (event.lengthComputable) progress(Math.round(event.loaded / event.total * 100)) }
-    request.onerror = () => reject(new Error('网络中断，请重试上传'))
-    request.onload = () => {
-      handleStudioUnauthorized(request.status, { Authorization: authorization })
-      let data: Asset & { detail?: string }
-      try { data = JSON.parse(request.responseText) as Asset & { detail?: string } } catch { reject(new Error('上传失败，请重试')); return }
-      if (request.status >= 200 && request.status < 300) resolve(data)
-      else reject(new Error(typeof data.detail === 'string' ? data.detail : '上传失败'))
-    }
-    const form = new FormData(); form.append('file', file); request.send(form)
-  })
+export async function upload(path: string, file: File, progress: (value: number) => void): Promise<Asset> {
+  const form = new FormData(); form.append('file', file)
+  const request = await authUpload(`${base}${path}`, getStoredAuthToken() ?? '', form, progress)
+  let data: Asset & { detail?: string }
+  try { data = JSON.parse(request.responseText) as Asset & { detail?: string } } catch { throw new Error('上传失败，请重试') }
+  if (request.status >= 200 && request.status < 300) return data
+  throw new Error(typeof data.detail === 'string' ? data.detail : '上传失败')
 }

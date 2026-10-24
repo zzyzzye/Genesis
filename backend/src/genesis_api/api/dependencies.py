@@ -1,14 +1,16 @@
 """API 共用依赖：数据库会话、登录身份与站点所有者权限。"""
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from genesis_api.database.session import get_session
-from genesis_api.identity.models import User, UserRole
-from genesis_api.identity.tokens import get_user_id_from_token
+from genesis_api.identity.models import AuthSession, User, UserRole
+from genesis_api.identity.sessions import active
+from genesis_api.identity.tokens import access_claims
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 SessionDependency = Annotated[Session, Depends(get_session)]
@@ -37,10 +39,14 @@ def get_current_user(token: TokenDependency, session: SessionDependency) -> User
     Raises:
         HTTPException: 令牌无效、已过期或用户不存在，返回 401。
     """
-    user_id = get_user_id_from_token(token)
-    if user_id is None:
+    claims = access_claims(token)
+    if claims is None:
         raise credentials_exception()
-
+    user_id = UUID(str(claims["sub"]))
+    if claims.get("sid"):
+        login = session.get(AuthSession, UUID(str(claims["sid"])))
+        if login is None or login.user_id != user_id or not active(login):
+            raise credentials_exception()
     user = session.get(User, user_id)
     if user is None:
         raise credentials_exception()
