@@ -87,8 +87,12 @@ describe('作品画布', () => {
     expect(screen.queryByRole('spinbutton', { name: '镜头时长' })).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: '生成声音' })).not.toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: '画面比例' })).not.toBeInTheDocument()
-    fireEvent.change(screen.getByRole('textbox', { name: '图片输出尺寸' }), { target: { value: '1024x1536' } })
-    fireEvent.blur(screen.getByRole('textbox', { name: '图片输出尺寸' }))
+    fireEvent.click(screen.getByRole('button', { name: '标准画质' }))
+    fireEvent.click(screen.getByRole('button', { name: '2K' }))
+    fireEvent.click(screen.getByRole('button', { name: '图片比例 16:9' }))
+    fireEvent.click(screen.getByRole('button', { name: '透明背景' }))
+    fireEvent.click(screen.getByRole('button', { name: '生成 2 张图片' }))
+    expect(screen.getByRole('button', { name:'生成参数' })).toHaveTextContent('16:9 · 标准画质 · 2K · 2张')
     fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
     fireEvent.click(screen.getByRole('button', { name: '图片节点' }))
     expect(screen.getByRole('button', { name: '导入图片' })).toBeInTheDocument()
@@ -102,7 +106,7 @@ describe('作品画布', () => {
     await waitFor(() => {
       const saved = request.mock.calls.find(([path, method]) => path.endsWith('/canvas') && method === 'PUT')?.[2] as { document: Document }
       expect(saved.document.nodes.map((node) => node.type)).toEqual(['image_generation', 'image', 'video_asset'])
-      expect(saved.document.nodes[0]).toMatchObject({ text: '雨夜街道，电影感构图', width: 640, height: 402, generation: { mode: 'reference', image_size:'1024x1536' } })
+      expect(saved.document.nodes[0]).toMatchObject({ text: '雨夜街道，电影感构图', width: 640, height: 402, generation: { mode: 'reference', image_size:'2048x1152', image_quality:'standard', image_resolution:'2K', image_ratio:'16:9', image_background:'transparent', count:2 } })
     })
   })
   it('生图上传建立图片参考与连线，不覆盖生成预览或移动视口', async () => {

@@ -33,6 +33,8 @@ import { AssetPreview } from './AssetPreview'
 import { AssetLibrary } from './AssetLibrary'
 import { CanvasReferenceEdge } from './CanvasReferenceEdge'
 import { ImageGeneration, VideoGeneration, type VideoModel } from './VideoGeneration'
+import { ImageParameters } from './ImageParameters'
+import { imageSettingsSummary } from './imageSettings'
 import { ProjectDialog } from './MediaHome'
 import type { MediaAssistantNode, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
@@ -152,7 +154,7 @@ function GenerationNodeView({ id, data, selected, dragging }: NodeProps<CanvasFl
   </article>
 }
 
-function GenerationParameters({ summary, disabled, children }: { summary: ReactNode; disabled?: boolean; children: ReactNode }) {
+function GenerationParameters({ summary, disabled, image = false, children }: { summary: ReactNode; disabled?: boolean; image?: boolean; children: ReactNode }) {
   const panel = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
@@ -166,7 +168,7 @@ function GenerationParameters({ summary, disabled, children }: { summary: ReactN
     <button ref={trigger} className="media-video-spec" type="button" aria-label="生成参数" aria-expanded={open} disabled={disabled} onClick={(event) => {
       const rect = event.currentTarget.getBoundingClientRect()
       if (panel.current) {
-        const width = Math.min(300, window.innerWidth - 24)
+        const width = Math.min(image ? 340 : 300, window.innerWidth - 24)
         panel.current.style.width = `${width}px`
         panel.current.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))}px`
         panel.current.style.maxHeight = `${window.innerHeight - 24}px`
@@ -180,7 +182,7 @@ function GenerationParameters({ summary, disabled, children }: { summary: ReactN
       event.preventDefault(); event.stopPropagation()
       panel.current?.hidePopover?.(); setOpen(false)
     }}>{summary}<ChevronDown size={13} /></button>
-    <div ref={panel} popover={nativePopover ? 'auto' : undefined} hidden={!nativePopover && !open} data-open={open} className="media-generation-popover media-node-generation-settings nodrag nowheel nopan" aria-label="生成参数" onToggle={(event) => setOpen(event.currentTarget.matches(':popover-open'))} onKeyDown={(event) => {
+    <div ref={panel} popover={nativePopover ? 'auto' : undefined} hidden={!nativePopover && !open} data-open={open} className={`media-generation-popover media-node-generation-settings nodrag nowheel nopan ${image ? 'media-image-parameters' : ''}`} aria-label="生成参数" onToggle={(event) => setOpen(event.currentTarget.matches(':popover-open'))} onKeyDown={(event) => {
       if (event.key !== 'Escape') return
       event.preventDefault(); event.stopPropagation()
       panel.current?.hidePopover?.(); setOpen(false); trigger.current?.focus()
@@ -199,23 +201,14 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
   const [cameraOpen, setCameraOpen] = useState(false)
   const [referencesOpen, setReferencesOpen] = useState(false)
   const [durationError, setDurationError] = useState('')
-  const [sizeError, setSizeError] = useState('')
   const [videoModel, setVideoModel] = useState<VideoModel | null>(null)
   const [imageModel, setImageModel] = useState<VideoModel | null>(null)
   const settings = node.generation ?? defaultGenerationSettings()
   const patchSettings = (patch: Partial<typeof settings>) => data.onPatch(id, { generation: { ...settings, ...patch } })
   const defaultsOnly = isVideo && videoModel?.parameters_known === false
   const modeControl = <select aria-label="参考模式" value={settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}><option value="text">{isImage ? '文生图' : isAudio ? '文生音频' : '文生视频'}</option><option value="reference" disabled={defaultsOnly || isImage && imageModel?.image_edit === false}>{isImage ? '图生图' : isAudio ? '音频参考' : '素材参考'}</option>{isVideo && <option value="first_last" disabled={defaultsOnly}>首尾帧</option>}</select>
-  const parameterControl = <GenerationParameters disabled={defaultsOnly} summary={defaultsOnly ? '模型默认参数' : isImage ? `${settings.image_size && settings.image_size !== 'auto' ? settings.image_size : '模型默认尺寸'} · ${settings.count}张` : [!isAudio && settings.ratio, !isAudio && settings.resolution, !isImage && `${node.duration_seconds ?? 5}s`, !isVideo && `${settings.count}个`].filter(Boolean).join(' · ')}>
-    {isImage && <label>输出尺寸<input key={settings.image_size} type="text" aria-label="图片输出尺寸" aria-invalid={Boolean(sizeError)} aria-describedby={sizeError ? `image-size-error-${id}` : undefined} placeholder="模型默认" defaultValue={settings.image_size ?? ''} maxLength={11} onFocus={data.onInteractionStart} onBlur={(event) => {
-      const size = event.target.value.trim().toLowerCase()
-      if (!/^(?:auto|[1-9]\d{1,4}x[1-9]\d{1,4})?$/.test(size)) {
-        setSizeError('请使用宽x高格式，例如 1024x1024，留空使用模型默认尺寸。')
-        event.target.value = settings.image_size ?? ''
-      } else { setSizeError(''); patchSettings({ image_size:size }) }
-      data.onInteractionEnd()
-    }} /></label>}
-    {!isImage && <label>{isAudio ? '音频时长' : '镜头时长'}<span><input key={node.duration_seconds} type="number" aria-label={isAudio ? '音频时长' : '镜头时长'} aria-invalid={Boolean(durationError)} aria-describedby={durationError ? `duration-error-${id}` : undefined} min={1} max={600} step={1} defaultValue={node.duration_seconds ?? 5} onFocus={data.onInteractionStart} onBlur={(event) => {
+  const parameterControl = isImage ? <GenerationParameters image summary={imageSettingsSummary(settings)}><ImageParameters settings={settings} onChange={patchSettings} /></GenerationParameters> : <GenerationParameters disabled={defaultsOnly} summary={defaultsOnly ? '模型默认参数' : [!isAudio && settings.ratio, !isAudio && settings.resolution, `${node.duration_seconds ?? 5}s`, !isVideo && `${settings.count}个`].filter(Boolean).join(' · ')}>
+    <label>{isAudio ? '音频时长' : '镜头时长'}<span><input key={node.duration_seconds} type="number" aria-label={isAudio ? '音频时长' : '镜头时长'} aria-invalid={Boolean(durationError)} aria-describedby={durationError ? `duration-error-${id}` : undefined} min={1} max={600} step={1} defaultValue={node.duration_seconds ?? 5} onFocus={data.onInteractionStart} onBlur={(event) => {
       const seconds = Number(event.target.value)
       if (!Number.isInteger(seconds) || seconds < 1 || seconds > 600 || isVideo && videoModel && !videoModel.durations.includes(seconds)) {
         setDurationError(isVideo && videoModel ? `当前模型支持 ${videoModel.durations[0]}–${videoModel.durations.at(-1)} 的整数秒，已保留原时长。` : '请输入 1–600 的整数秒，已保留原时长。')
@@ -225,13 +218,12 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
         if (seconds !== node.duration_seconds) data.onPatch(id, { duration_seconds: seconds }, false)
       }
       data.onInteractionEnd()
-    }} /> 秒</span></label>}
+    }} /> 秒</span></label>
     {isVideo && <label>画面比例<select aria-label="画面比例" value={settings.ratio} onChange={(event) => patchSettings({ ratio: event.target.value as typeof settings.ratio })}>{(videoModel ? videoModel.ratios : ['16:9', '9:16', '1:1', '4:3', '3:4']).map((ratio) => <option key={ratio}>{ratio}</option>)}</select></label>}
     {isVideo && <label>清晰度<select aria-label="生成清晰度" value={settings.resolution} onChange={(event) => patchSettings({ resolution: event.target.value as typeof settings.resolution })}>{(videoModel ? videoModel.resolutions.map((value) => value.toUpperCase()) : ['480P', '720P', '1080P']).map((quality) => <option key={quality}>{quality}</option>)}</select></label>}
     {!isVideo && <label>数量<select aria-label="生成数量" value={settings.count} onChange={(event) => patchSettings({ count: Number(event.target.value) as typeof settings.count })}>{[1, 2, 4].map((count) => <option key={count} value={count}>{count} {isImage ? '张' : '个'}</option>)}</select></label>}
     <label className="media-video-asset-picker"><span>预览素材</span><select aria-label={`${nodeTypeLabel(node.type)}预览素材`} value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
     {durationError && <p className="media-node-field-error" id={`duration-error-${id}`} aria-live="polite">{durationError}</p>}
-    {sizeError && <p className="media-node-field-error" id={`image-size-error-${id}`} aria-live="polite">{sizeError}</p>}
   </GenerationParameters>
   return <section className="media-video-composer nodrag nowheel nopan" aria-label={isImage ? '生图草稿' : isAudio ? '生音频草稿' : '镜头草稿'} onKeyDown={(event) => {
     if (event.key !== 'Escape' || !(cameraOpen || referencesOpen)) return

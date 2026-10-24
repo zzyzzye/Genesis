@@ -186,7 +186,14 @@ async def test_multi_image_and_explicit_size(fixture: ImageFixture) -> None:
     state = fixture
     state.result = {"data": [{"b64_json": base64.b64encode(PNG).decode()}] * 4}
     await save_node(
-        state, generation={"model": "new-image-model", "image_size": "1536x1024", "count": 4}
+        state,
+        generation={
+            "model": "new-image-model",
+            "image_size": "1536x1024",
+            "count": 4,
+            "image_quality": "standard",
+            "image_background": "transparent",
+        },
     )
     assert (await submit(state)).status_code == 202
     task = await latest(state)
@@ -194,6 +201,7 @@ async def test_multi_image_and_explicit_size(fixture: ImageFixture) -> None:
     assert len(set(task["asset_ids"])) == 4
     payload = json.loads(next(req for req in state.requests if req.method == "POST").content)
     assert payload["size"] == "1536x1024" and payload["n"] == 4
+    assert payload["quality"] == "standard" and payload["background"] == "transparent"
     assert "resolution" not in payload and "aspect_ratio" not in payload
 
 
@@ -206,7 +214,15 @@ async def test_image_edit_uses_local_multipart_without_public_base(fixture: Imag
             files={"file": ("reference.png", PNG, "image/png")},
         )
     ).json()
-    await save_node(state, generation={"model": "gpt-image-2", "mode": "reference"})
+    await save_node(
+        state,
+        generation={
+            "model": "gpt-image-2",
+            "mode": "reference",
+            "image_quality": "high",
+            "image_background": "opaque",
+        },
+    )
     current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
     node_id = str(uuid4())
     current["document"]["nodes"].append(
@@ -232,6 +248,8 @@ async def test_image_edit_uses_local_multipart_without_public_base(fixture: Imag
     assert post.url.path == "/v1/images/edits"
     assert post.headers["content-type"].startswith("multipart/form-data;")
     assert b'name="image"' in post.content and PNG in post.content
+    assert b'name="quality"\r\n\r\nhigh' in post.content
+    assert b'name="background"\r\n\r\nopaque' in post.content
     assert b"image_urls" not in post.content
     assert (await latest(state))["status"] == "completed"
 

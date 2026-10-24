@@ -200,6 +200,18 @@
 .media-editor .media-video-generation-actions .media-video-submit:disabled { background:#303030; color:#888; cursor:default; }
 .media-editor .media-video-generation-actions .media-video-spec:disabled { cursor:default; color:#aaa; }
 .media-editor .media-generation-popover { position:fixed; inset:auto; margin:0; padding:12px; display:grid; grid-template-columns:minmax(0,1fr); gap:8px; border:0; border-radius:12px; background:#303030; color:var(--media-ink); font-size:var(--media-node-font-size); overflow:auto; box-sizing:border-box; }
+.media-editor .media-image-parameters { padding:14px; gap:14px; background:#252525; }
+.media-image-parameters fieldset { position:relative; min-width:0; margin:0; padding:0; border:0; }
+.media-image-parameters legend { padding:0; margin:0 0 8px; color:#aaa; font-size:var(--media-node-font-size); }
+.media-image-options { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.media-editor .media-image-parameters button { display:flex; align-items:center; justify-content:center; min-width:0; min-height:32px; padding:6px; border:0; border-radius:8px; background:#303030; color:#aaa; font:inherit; cursor:pointer; }
+.media-editor .media-image-parameters button:hover,.media-editor .media-image-parameters button:focus-visible { background:#383838; color:#eee; }
+.media-editor .media-image-parameters button[aria-pressed=true] { background:#484848; color:#fff; }
+.media-editor .media-image-parameters .media-image-default { position:absolute; top:-26px; right:0; min-height:20px; padding:1px 5px; border-radius:4px; background:transparent; color:#888; font-size:11px; }
+.media-editor .media-image-parameters .media-image-default[aria-pressed=true] { color:#ddd; }
+.media-image-ratios { grid-template-columns:repeat(5,minmax(0,1fr)); }
+.media-editor .media-image-ratios button { flex-direction:column; gap:2px; min-height:54px; padding:6px 2px; }
+.media-image-ratios svg { flex:none; }
 .media-generation-popover:not(:popover-open):not([data-open=true]) { display:none; }
 .media-generation-popover::backdrop { background:transparent; }
 .media-editor .media-generation-popover label { min-height:30px; display:flex; align-items:center; justify-content:space-between; gap:12px; }

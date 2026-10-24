@@ -23,6 +23,25 @@ class GenerationSettings(BaseModel):
     count: Literal[1, 2, 4] = 1
     sound: bool = True
     image_size: str = Field(default="", pattern=r"^(?:auto|[1-9]\d{1,4}x[1-9]\d{1,4})?$")
+    image_quality: Literal["", "low", "standard", "medium", "high"] = ""
+    image_background: Literal["", "auto", "opaque", "transparent"] = ""
+    image_resolution: Literal["", "1K", "2K", "4K"] = ""
+    image_ratio: Literal[
+        "",
+        "1:1",
+        "1:2",
+        "2:1",
+        "9:16",
+        "16:9",
+        "3:4",
+        "4:3",
+        "3:2",
+        "2:3",
+        "5:4",
+        "4:5",
+        "21:9",
+        "9:21",
+    ] = ""
 
 
 class GenerationSubmit(BaseModel):

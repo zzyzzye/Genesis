@@ -226,6 +226,10 @@ async def test_video_node_metadata_and_asset_reference(media_client: AsyncClient
         "count": 2,
         "sound": False,
         "image_size": "",
+        "image_quality": "",
+        "image_background": "",
+        "image_resolution": "",
+        "image_ratio": "",
     }
     for invalid in (2.5, True, "10"):
         assert (

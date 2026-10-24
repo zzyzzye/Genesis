@@ -140,6 +140,10 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
     }
     if node.generation.image_size:
         payload["size"] = node.generation.image_size
+    if node.generation.image_quality:
+        payload["quality"] = node.generation.image_quality
+    if node.generation.image_background:
+        payload["background"] = node.generation.image_background
     sent = False
     try:
         with ExitStack() as files:
