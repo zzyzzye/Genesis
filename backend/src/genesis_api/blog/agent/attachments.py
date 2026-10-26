@@ -20,6 +20,7 @@ from genesis_api.ai.schemas import AiAttachment, AiChatRequest, AiMessage
 from genesis_api.blog import attachments as storage
 from genesis_api.blog.models import BlogAttachment
 from genesis_api.core.config import Settings
+from genesis_api.core.uploads import media_filename
 from genesis_api.llm.capabilities import model_capabilities_for
 from genesis_api.llm.profiles import transport_provider_for
 
@@ -59,7 +60,8 @@ def _attachment(session: Session, user_id: UUID, item_id: UUID) -> AiAttachment:
         )
     else:
         raise HTTPException(422, "暂不支持此附件，请使用文本文档、PDF、DOCX、常见图片或 MP4/WebM")
-    return AiAttachment(id=item.id, name=item.name, size=item.size, mime_type=mime, kind=kind)
+    name = media_filename(item.name, mime) if kind in {"image", "video"} else item.name
+    return AiAttachment(id=item.id, name=name, size=item.size, mime_type=mime, kind=kind)
 
 
 def prepare_attachments(
@@ -216,11 +218,14 @@ def attachment_input(
                         }
                     )
                 else:
+                    # 文件名放在用户消息中，确保适配器忽略 extras 时模型仍能对应参考。
+                    blocks[0]["text"] = f"{blocks[0]['text']}\n用户参考附件：{item.name}"
                     blocks.append(
                         {
                             "type": item.kind,
                             "base64": base64.b64encode(path.read_bytes()).decode("ascii"),
                             "mime_type": item.mime_type,
+                            "extras": {"filename": item.name},
                         }
                     )
             except Exception:

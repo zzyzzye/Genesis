@@ -20,6 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from genesis_api.core.config import Settings
+from genesis_api.core.uploads import media_filename
 from genesis_api.database.session import SessionLocal
 from genesis_api.media import service
 from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset
@@ -154,13 +155,7 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
                     (
                         "image",
                         (
-                            "reference"
-                            + {
-                                "image/jpeg": ".jpg",
-                                "image/webp": ".webp",
-                                "image/gif": ".gif",
-                                "image/avif": ".avif",
-                            }.get(asset.mime_type, ".png"),
+                            media_filename(asset.name, asset.mime_type),
                             source,
                             asset.mime_type,
                         ),

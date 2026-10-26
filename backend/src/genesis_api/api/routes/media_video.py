@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
 from genesis_api.core.config import get_settings
+from genesis_api.core.uploads import media_filename, media_suffix
 from genesis_api.media import service, video
 from genesis_api.media.models import VideoGeneration
 from genesis_api.media.schemas import CanvasDocument
@@ -161,7 +162,7 @@ def retry_video_download(
 @router.get("/video-references/{task_id}/{asset_id}")
 def video_reference(
     task_id: UUID,
-    asset_id: UUID,
+    asset_id: str,
     session: SessionDependency,
     token: str = Query(max_length=2000),
 ) -> FileResponse:
@@ -169,7 +170,7 @@ def video_reference(
 
     Args:
         task_id: 创建参考链接的本地任务标识。
-        asset_id: 必须出现在该任务参考清单中的素材标识。
+        asset_id: 素材 UUID，可带与媒体类型一致的后缀；兼容旧无后缀链接。
         session: 再次检查任务、作品和素材归属的会话。
         token: 带有效期、受众和任务范围的签名，不写入访问日志。
 
@@ -179,6 +180,11 @@ def video_reference(
     Raises:
         HTTPException: 授权过期、范围不符或文件不可用时统一返回 404。
     """
+    raw_id, separator, extension = asset_id.partition(".")
+    try:
+        asset_uuid = UUID(raw_id)
+    except ValueError:
+        raise HTTPException(404, "素材授权无效或已过期") from None
     try:
         claims = jwt.decode(
             token,
@@ -192,14 +198,22 @@ def video_reference(
     task = session.get(VideoGeneration, task_id)
     if (
         task is None
-        or claims["sub"] != str(asset_id)
+        or claims["sub"] != str(asset_uuid)
         or claims["task"] != str(task_id)
-        or str(asset_id) not in task.reference_ids
+        or str(asset_uuid) not in task.reference_ids
     ):
         raise HTTPException(404, "素材授权无效或已过期")
     service.project_for(session, task.owner_id, task.project_id)
-    asset = service.asset_for(session, task.owner_id, asset_id)
-    path = service.STORAGE_ROOT / str(asset_id)
+    asset = service.asset_for(session, task.owner_id, asset_uuid)
+    if separator and f".{extension.lower()}" != media_suffix(asset.mime_type):
+        raise HTTPException(404, "素材授权无效或已过期")
+    path = service.STORAGE_ROOT / str(asset_uuid)
     if not path.is_file():
         raise HTTPException(404, "素材文件不可用")
-    return FileResponse(path, media_type=asset.mime_type, headers={"Cache-Control": "no-store"})
+    return FileResponse(
+        path,
+        media_type=asset.mime_type,
+        filename=media_filename(asset.name, asset.mime_type),
+        content_disposition_type="inline",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )

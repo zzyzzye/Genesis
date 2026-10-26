@@ -124,6 +124,31 @@ def test_foreign_or_missing_attachment_is_not_exposed(session: Session) -> None:
         assert caught.value.status_code == 404
 
 
+@pytest.mark.parametrize("name", ["参考.png", "参考", "参考.jpg"])
+def test_chat_media_keeps_filename_in_native_block_and_prompt(session: Session, name: str) -> None:
+    """聊天按真实内容补后缀；模型适配器能接收标准块且保留文件身份。"""
+    from langchain_core.messages import HumanMessage
+    from langchain_google_genai.chat_models import _convert_to_parts
+    from langchain_openai.chat_models.base import _convert_message_to_dict
+
+    user = owner(session)
+    content = b"\x89PNG\r\n\x1a\n" + b"0" * 40
+    item_id = file(session, user.id, name, content)
+    messages, files = attachment_input(session, user.id, request(user.id, [item_id]))
+    assert not files
+    blocks = messages[0]["content"]
+    assert isinstance(blocks, list)
+    assert "参考.png" in blocks[0]["text"]
+    assert blocks[1]["extras"]["filename"] == "参考.png"
+    assert blocks[1]["mime_type"] == "image/png"
+    assert base64.b64decode(blocks[1]["base64"]) == content
+    converted = _convert_message_to_dict(HumanMessage(content=blocks))
+    assert converted["content"][1]["image_url"]["url"].startswith("data:image/png;base64,")
+    parts = _convert_to_parts(blocks)
+    assert parts[1].inline_data is not None
+    assert parts[1].inline_data.mime_type == "image/png"
+
+
 @pytest.mark.parametrize(
     "name, content",
     [

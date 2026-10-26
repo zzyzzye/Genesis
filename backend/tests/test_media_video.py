@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 from uuid import UUID, uuid4
 
 import httpx
@@ -347,13 +347,24 @@ async def test_running_video_prevents_project_deletion(fixture: VideoFixture) ->
 
 
 @pytest.mark.anyio
-async def test_reference_links_are_task_scoped_and_expiring(fixture: VideoFixture) -> None:
+@pytest.mark.parametrize(
+    ("name", "mime", "suffix", "download_name"),
+    [
+        ("reference.png", "image/png", ".png", "reference.png"),
+        ("人物.jpeg", "image/jpeg", ".jpg", "人物.jpeg"),
+        ("reference", "image/webp", ".webp", "reference.webp"),
+        ("wrong.jpg", "image/png", ".png", "wrong.png"),
+    ],
+)
+async def test_reference_links_are_task_scoped_and_expiring(
+    fixture: VideoFixture, name: str, mime: str, suffix: str, download_name: str
+) -> None:
     state = fixture
     image = (
         await state.client.post(
             f"projects/{state.project_id}/assets",
             files={
-                "file": ("reference.png", b"reference", "image/png"),
+                "file": (name, b"reference", mime),
             },
         )
     ).json()
@@ -387,9 +398,19 @@ async def test_reference_links_are_task_scoped_and_expiring(fixture: VideoFixtur
     payload = json.loads(next(r for r in state.requests if r.method == "POST").content)
     parts = urlsplit(payload["image_urls"][0])
     assert parts.netloc == "serenova.cn"
+    assert parts.path.endswith(f"/{image['id']}{suffix}")
     result = await state.client.get(f"http://test{parts.path}?{parts.query}")
     assert result.status_code == 200 and result.content == b"reference"
     assert result.headers["cache-control"] == "no-store"
+    assert result.headers["content-type"] == mime
+    assert download_name in unquote(result.headers["content-disposition"])
+    legacy = parts.path.removesuffix(suffix)
+    assert (await state.client.get(f"http://test{legacy}?{parts.query}")).content == b"reference"
+    assert (await state.client.get(f"http://test{legacy}.exe?{parts.query}")).status_code == 404
+    ranged = await state.client.get(
+        f"http://test{parts.path}?{parts.query}", headers={"Range": "bytes=0-2"}
+    )
+    assert ranged.status_code == 206 and ranged.content == b"ref"
     expired = jwt.encode(
         {
             "sub": image["id"],

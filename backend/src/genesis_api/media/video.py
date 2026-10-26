@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from genesis_api.core.config import Settings, get_settings
+from genesis_api.core.uploads import media_suffix
 from genesis_api.database.session import SessionLocal
 from genesis_api.media import service
 from genesis_api.media.models import MediaAsset, ProjectAsset, VideoGeneration
@@ -168,7 +169,8 @@ def build_payload(
             token = reference_token(task, asset.id, settings)
             references[asset.kind].append(
                 f"{settings.video_public_base_url.rstrip('/')}{settings.api_v1_prefix}"
-                f"/media/video-references/{task.id}/{asset.id}?token={token}"
+                f"/media/video-references/{task.id}/{asset.id}"
+                f"{media_suffix(asset.mime_type)}?token={token}"
             )
         if not ids:
             raise HTTPException(422, "请先连接参考素材节点")

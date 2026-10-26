@@ -206,12 +206,18 @@ async def test_multi_image_and_explicit_size(fixture: ImageFixture) -> None:
 
 
 @pytest.mark.anyio
-async def test_image_edit_uses_local_multipart_without_public_base(fixture: ImageFixture) -> None:
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [("reference.png", "reference.png"), ("人物参考", "人物参考.png"), ("wrong.jpg", "wrong.png")],
+)
+async def test_image_edit_uses_local_multipart_without_public_base(
+    fixture: ImageFixture, name: str, expected: str
+) -> None:
     state = fixture
     asset = (
         await state.client.post(
             f"projects/{state.project_id}/assets",
-            files={"file": ("reference.png", PNG, "image/png")},
+            files={"file": (name, PNG, "image/png")},
         )
     ).json()
     await save_node(
@@ -248,6 +254,7 @@ async def test_image_edit_uses_local_multipart_without_public_base(fixture: Imag
     assert post.url.path == "/v1/images/edits"
     assert post.headers["content-type"].startswith("multipart/form-data;")
     assert b'name="image"' in post.content and PNG in post.content
+    assert f'filename="{expected}"'.encode() in post.content
     assert b'name="quality"' not in post.content
     assert b'name="background"\r\n\r\nopaque' in post.content
     assert b"image_urls" not in post.content
