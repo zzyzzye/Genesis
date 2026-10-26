@@ -9,6 +9,21 @@ from fastapi import HTTPException, UploadFile
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 
 
+def image_header_mime(header: bytes) -> str | None:
+    """从签名识别可内嵌位图，不接受 SVG 或 HTML 等主动内容。"""
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if header.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if header.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return "image/webp"
+    if header[4:8] == b"ftyp" and header[8:12] in (b"avif", b"avis"):
+        return "image/avif"
+    return None
+
+
 def media_suffix(mime_type: str) -> str:
     """按媒体类型生成稳定后缀，不将用户文件名用于参考链接路径。"""
     return {

@@ -4,7 +4,8 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
@@ -12,6 +13,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
+from genesis_api.core.config import get_settings
+from genesis_api.core.uploads import image_header_mime, media_suffix
+from genesis_api.identity import avatars
 from genesis_api.identity.models import User, UserCredential, UserRole
 from genesis_api.identity.passwords import hash_password, verify_password
 from genesis_api.identity.sessions import refresh_session, revoke_session, start_session
@@ -203,6 +207,58 @@ def logout(request: Request, response: Response, session: SessionDependency) -> 
 def get_me(current_user: CurrentUserDependency) -> CurrentUser:
     """返回身份依赖已经认证的当前用户资料，不暴露凭据。"""
     return CurrentUser.model_validate(current_user)
+
+
+@router.put("/me/avatar", response_model=CurrentUser)
+def update_avatar(
+    file: UploadFile,
+    current_user: CurrentUserDependency,
+    session: SessionDependency,
+    display_name: Annotated[str, Form(min_length=1, max_length=100)],
+    bio: Annotated[str, Form(max_length=1000)] = "",
+) -> CurrentUser:
+    """与资料一起保存头像，文件或数据库失败时保留原资料，清理本次上传。"""
+    if not display_name.strip():
+        raise HTTPException(422, "昵称不能为空")
+    path, _ = avatars.save_upload(file)
+    try:
+        current_user.display_name = display_name.strip()
+        current_user.bio = bio.strip()
+        current_user.avatar_url = f"{get_settings().api_v1_prefix}/auth/avatars/{path.name}"
+        session.commit()
+    except Exception:
+        session.rollback()
+        path.unlink(missing_ok=True)
+        raise
+    session.refresh(current_user)
+    return CurrentUser.model_validate(current_user)
+
+
+@router.get("/avatars/{filename}")
+def read_avatar(filename: str, session: SessionDependency) -> FileResponse:
+    """只公开当前资料引用的头像，不开放媒体目录或历史上传。"""
+    raw_id, separator, suffix = filename.partition(".")
+    try:
+        canonical = str(UUID(raw_id))
+    except ValueError:
+        raise HTTPException(404, "头像不存在") from None
+    if not separator or raw_id != canonical or suffix not in {"png", "jpg", "webp", "gif", "avif"}:
+        raise HTTPException(404, "头像不存在")
+    url = f"{get_settings().api_v1_prefix}/auth/avatars/{filename}"
+    if session.scalar(select(User.id).where(User.avatar_url == url).limit(1)) is None:
+        raise HTTPException(404, "头像不存在")
+    path = avatars.STORAGE_ROOT / filename
+    if not path.is_file():
+        raise HTTPException(404, "头像不存在")
+    with path.open("rb") as source:
+        mime = image_header_mime(source.read(32))
+    if mime is None or media_suffix(mime) != f".{suffix}":
+        raise HTTPException(404, "头像不存在")
+    return FileResponse(
+        path,
+        media_type=mime,
+        headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "no-cache"},
+    )
 
 
 @router.put("/me", response_model=CurrentUser)

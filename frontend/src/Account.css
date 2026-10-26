@@ -83,6 +83,12 @@ body:has(.account-shell) { min-width: 0; }
 .account-profile-heading { display: flex; min-width: 0; align-items: center; gap: 16px; margin-bottom: 32px; }
 .account-avatar { display: flex; width: 56px; height: 56px; flex: none; align-items: center; justify-content: center; overflow: hidden; border-radius: 50%; background: var(--account-soft); color: var(--account-ink); font-size: 23px; }
 .account-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.account-avatar-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.account-avatar-actions button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 8px; border: 0; border-radius: 6px; outline: 0; box-shadow: none; background: var(--account-soft); color: var(--account-ink); font-size: 12px; }
+.account-avatar-actions button:hover:not(:disabled), .account-avatar-actions button:focus-visible { background: var(--account-hover); }
+.account-avatar-actions button:disabled { opacity: .6; }
+.account-profile-identity .account-avatar-hint, .account-profile-identity .account-avatar-error { margin-top: 5px; font-size: 11px; }
+.account-profile-identity .account-avatar-error { color: var(--account-error); }
 .account-profile-identity { flex: 1; min-width: 0; }
 .account-profile-identity h2 { display: -webkit-box; margin: 0 0 4px; overflow: hidden; font-size: 16px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .account-profile-identity p { margin: 0; color: var(--account-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }

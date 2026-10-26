@@ -1,7 +1,7 @@
 import './Account.css'
 
 import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle, Upload } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { GenesisLogo } from './components/GenesisLogo'
 import { FpsStatusSlot } from './features/performance/FpsMonitor'
@@ -135,25 +135,43 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
   feedback: string | null
   busy: boolean
   onLogout: () => void
-  onSave: (displayName: string, bio: string, avatarUrl: string) => void
+  onSave: (displayName: string, bio: string, avatarUrl: string, avatar?: File) => Promise<CurrentUser | null> | void
 }) {
   const [displayName, setDisplayName] = useState(user.display_name)
   const [bio, setBio] = useState(user.bio)
   const [avatarUrl, setAvatarUrl] = useState(user.avatar_url ?? '')
+  const [selectedAvatar, setSelectedAvatar] = useState<{ file: File; preview: string } | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null)
   const [errors, setErrors] = useState<Partial<Record<'displayName' | 'bio' | 'avatarUrl', string>>>({})
   const nameInput = useRef<HTMLInputElement>(null)
   const bioInput = useRef<HTMLTextAreaElement>(null)
   const avatarInput = useRef<HTMLInputElement>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const previewAvatar = selectedAvatar?.preview ?? user.avatar_url
+  useEffect(() => () => { if (selectedAvatar) URL.revokeObjectURL(selectedAvatar.preview) }, [selectedAvatar])
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  function selectAvatar(file?: File) {
+    if (!file || busy) return
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'].includes(file.type)) {
+      setUploadError('请选择 PNG、JPEG、WebP、GIF 或 AVIF 图片。'); return
+    }
+    if (!file.size || file.size > 5 * 1024 * 1024) {
+      setUploadError('请选择非空且不超过 5 MiB 的图片。'); return
+    }
+    setUploadError(null)
+    setSelectedAvatar({ file, preview: URL.createObjectURL(file) })
+    setErrors(current => ({ ...current, avatarUrl: undefined }))
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (busy) return
     const next: typeof errors = {}
     if (!displayName.trim()) next.displayName = '请输入昵称。'
     else if (displayName.length > 100) next.displayName = '昵称最多 100 个字符。'
     if (bio.length > 1000) next.bio = '个人简介最多 1000 个字符。'
-    if (avatarUrl.trim()) {
+    if (!selectedAvatar && avatarUrl.trim() && avatarUrl.trim() !== user.avatar_url) {
       try {
         const address = new URL(avatarUrl.trim())
         if (!['https:', 'http:'].includes(address.protocol)) throw new Error('unsupported')
@@ -164,7 +182,8 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
     if (next.displayName) { nameInput.current?.focus(); return }
     if (next.bio) { bioInput.current?.focus(); return }
     if (next.avatarUrl) { avatarInput.current?.focus(); return }
-    onSave(displayName.trim(), bio.trim(), avatarUrl.trim())
+    const saved = await onSave(displayName.trim(), bio.trim(), avatarUrl.trim(), selectedAvatar?.file)
+    if (saved) { setAvatarUrl(saved.avatar_url ?? ''); setSelectedAvatar(null); setUploadError(null) }
   }
 
   return (
@@ -176,16 +195,22 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
         </div>
         <div className="account-profile-heading">
           <div className="account-avatar" aria-hidden="true">
-            {user.avatar_url && failedAvatar !== user.avatar_url ? <img alt="" src={user.avatar_url} onError={() => setFailedAvatar(user.avatar_url)} /> : user.display_name.slice(0, 1)}
+            {previewAvatar && failedAvatar !== previewAvatar ? <img alt="" src={previewAvatar} onError={() => setFailedAvatar(previewAvatar)} /> : user.display_name.slice(0, 1)}
           </div>
           <div className="account-profile-identity">
             <h2 title={user.display_name}>{user.display_name}</h2>
             <p>@{user.handle} · {user.role === 'owner' ? '站点作者' : '社区成员'}</p>
+            <div className="account-avatar-actions">
+              <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}><Upload size={14} aria-hidden="true" />上传头像</button>
+              {selectedAvatar && <button type="button" disabled={busy} onClick={() => { setSelectedAvatar(null); setUploadError(null) }}>取消选择</button>}
+            </div>
+            <input ref={fileInput} type="file" hidden accept="image/png,image/jpeg,image/webp,image/gif,image/avif" aria-label="选择头像图片" disabled={busy} onChange={event => { selectAvatar(event.currentTarget.files?.[0]); event.currentTarget.value = '' }} />
+            <p className={uploadError ? 'account-avatar-error' : 'account-avatar-hint'} role={uploadError ? 'alert' : undefined} aria-live="polite">{uploadError || (selectedAvatar ? '已选图片，保存资料后生效。' : '图片最大 5 MiB')}</p>
           </div>
           {user.role === 'owner' && <Link className="account-studio-entry" to="/blog/studio">写作台<ArrowUpRight size={15} aria-hidden="true" /></Link>}
         </div>
         <nav className="account-profile-navigation" aria-label="账户服务"><Link className="account-studio-entry" to="/account/wallet">我的钱包<ArrowUpRight size={15} aria-hidden="true" /></Link>{user.role === 'owner' && <Link className="account-studio-entry" to="/account/billing">账务管理<ArrowUpRight size={15} aria-hidden="true" /></Link>}</nav>
-        <form className="account-form account-profile-form" aria-label="个人资料" noValidate aria-busy={busy} onSubmit={submit} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }}>
+        <form className="account-form account-profile-form" aria-label="个人资料" noValidate aria-busy={busy} onSubmit={event => { void submit(event) }} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }}>
           <div className="account-field account-profile-field">
             <label htmlFor="profile-display-name">昵称</label>
             <div className="account-profile-control">
@@ -203,7 +228,7 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
           <div className="account-field account-profile-field">
             <label htmlFor="profile-avatar-url">头像地址</label>
             <div className="account-profile-control">
-              <input ref={avatarInput} id="profile-avatar-url" autoCapitalize="none" spellCheck={false} maxLength={500} readOnly={busy} aria-invalid={Boolean(errors.avatarUrl)} aria-describedby={errors.avatarUrl ? 'profile-avatar-error' : undefined} onChange={(event) => { setAvatarUrl(event.currentTarget.value); setErrors(current => ({ ...current, avatarUrl: undefined })) }} placeholder="https://example.com/avatar.png" type="url" value={avatarUrl} />
+              <input ref={avatarInput} id="profile-avatar-url" autoCapitalize="none" spellCheck={false} maxLength={500} readOnly={busy} disabled={Boolean(selectedAvatar)} aria-invalid={Boolean(errors.avatarUrl)} aria-describedby={errors.avatarUrl ? 'profile-avatar-error' : undefined} onChange={(event) => { setAvatarUrl(event.currentTarget.value); setErrors(current => ({ ...current, avatarUrl: undefined })) }} placeholder="也可以粘贴图片链接" type="url" value={selectedAvatar ? '' : avatarUrl} />
               <div className="account-field-help">{errors.avatarUrl && <p id="profile-avatar-error" className="account-field-error" role="alert">{errors.avatarUrl}</p>}</div>
             </div>
           </div>
@@ -307,13 +332,14 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
     }
   }
 
-  function saveProfile(displayName: string, bio: string, avatarUrl: string) {
-    if (token === null || state.status !== 'ready' || pending.current) return
+  async function saveProfile(displayName: string, bio: string, avatarUrl: string, avatar?: File) {
+    if (token === null || state.status !== 'ready' || pending.current) return null
     pending.current = true; setSubmitting(true)
     const current = ++attempt.current
-    void updateCurrentUser(token, { display_name: displayName, bio, avatar_url: avatarUrl || null })
-      .then((user) => { if (current === attempt.current) setState({ status: 'ready', user, feedback: '个人资料已保存。' }) })
-      .catch(() => { if (current === attempt.current) setState({ status: 'ready', user: state.user, feedback: '保存失败，输入已保留，请稍后重试。' }) })
+    const data = { display_name: displayName, bio, avatar_url: avatarUrl || null }
+    return (avatar ? updateCurrentUser(token, data, avatar) : updateCurrentUser(token, data))
+      .then((user) => { if (current === attempt.current) { setState({ status: 'ready', user, feedback: '个人资料已保存。' }); return user } return null })
+      .catch(() => { if (current === attempt.current) setState({ status: 'ready', user: state.user, feedback: '保存失败，输入已保留，请稍后重试。' }); return null })
       .finally(() => { if (current === attempt.current) { pending.current = false; setSubmitting(false) } })
   }
 

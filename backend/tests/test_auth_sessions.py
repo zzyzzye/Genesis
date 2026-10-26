@@ -2,9 +2,11 @@
 
 from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 from jwt import decode, encode
 from pydantic import SecretStr
@@ -16,7 +18,7 @@ from genesis_api.core import config
 from genesis_api.core.config import Settings
 from genesis_api.database.base import Base
 from genesis_api.database.session import get_session
-from genesis_api.identity import sessions, tokens
+from genesis_api.identity import avatars, sessions, tokens
 from genesis_api.identity.models import AuthSession, User, UserCredential, UserRole
 from genesis_api.identity.passwords import hash_password
 from genesis_api.main import app
@@ -76,6 +78,95 @@ async def login(client: AsyncClient) -> str:
     )
     assert response.status_code == 200
     return str(response.json()["access_token"])
+
+
+@pytest.mark.anyio
+async def test_avatar_upload_and_public_read(
+    state: tuple[AsyncClient, Session, Settings], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """保存头像和资料，按实际内容定后缀，替换后旧地址不再公开。"""
+    client, _, _ = state
+    monkeypatch.setattr(avatars, "STORAGE_ROOT", tmp_path)
+    token = await login(client)
+    image = b"\x89PNG\r\n\x1a\n" + b"synthetic-image"
+    result = await client.put(
+        "/api/v1/auth/me/avatar",
+        headers=auth(token),
+        files={"file": ("../portrait.jpg", image, "image/jpeg")},
+        data={"display_name": " 新昵称 ", "bio": " 简介 "},
+    )
+    assert result.status_code == 200
+    user = result.json()
+    assert user["display_name"] == "新昵称" and user["bio"] == "简介"
+    url = user["avatar_url"]
+    assert url.endswith(".png") and "portrait" not in url
+    public = await client.get(url)
+    assert public.status_code == 200 and public.content == image
+    assert public.headers["content-type"] == "image/png"
+    assert public.headers["x-content-type-options"] == "nosniff"
+    assert (await client.get(url.replace(".png", ".jpg"))).status_code == 404
+    response = await client.put(
+        "/api/v1/auth/me",
+        headers=auth(token),
+        json={"display_name": "新昵称", "bio": "简介", "avatar_url": None},
+    )
+    assert response.status_code == 200
+    assert (await client.get(url)).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_avatar_rejects_invalid_oversized_and_unauthenticated_uploads(
+    state: tuple[AsyncClient, Session, Settings], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """拒绝主动内容、超限与未登录上传，失败不改变资料或遗留文件。"""
+    client, _, _ = state
+    monkeypatch.setattr(avatars, "STORAGE_ROOT", tmp_path)
+    token = await login(client)
+    for content, code in [
+        (b"<svg></svg>", 422),
+        (b"\x89PNG\r\n\x1a\n" + b"x" * (5 * 1024 * 1024), 413),
+    ]:
+        result = await client.put(
+            "/api/v1/auth/me/avatar",
+            headers=auth(token),
+            files={"file": ("image.png", content, "image/png")},
+            data={"display_name": "不应保存"},
+        )
+        assert result.status_code == code
+    assert list(tmp_path.iterdir()) == []
+    profile = (await client.get("/api/v1/auth/me", headers=auth(token))).json()
+    assert profile["display_name"] == "测试账户"
+    anonymous = await client.put(
+        "/api/v1/auth/me/avatar",
+        files={"file": ("image.png", b"x")},
+        data={"display_name": "不应保存"},
+    )
+    assert anonymous.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_avatar_database_failure_removes_new_file(
+    state: tuple[AsyncClient, Session, Settings], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """资料提交失败时回滚用户字段并删除本次上传，允许使用原资料重试。"""
+    client, session, _ = state
+    monkeypatch.setattr(avatars, "STORAGE_ROOT", tmp_path)
+    token = await login(client)
+
+    def fail_commit() -> None:
+        raise HTTPException(503, "测试数据库暂不可用")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(session, "commit", fail_commit)
+        result = await client.put(
+            "/api/v1/auth/me/avatar",
+            headers=auth(token),
+            files={"file": ("image.png", b"\x89PNG\r\n\x1a\ncontent", "image/png")},
+            data={"display_name": "不应保存"},
+        )
+    assert result.status_code == 503 and list(tmp_path.iterdir()) == []
+    profile = (await client.get("/api/v1/auth/me", headers=auth(token))).json()
+    assert profile["display_name"] == "测试账户" and profile["avatar_url"] is None
 
 
 def auth(token: str) -> dict[str, str]:

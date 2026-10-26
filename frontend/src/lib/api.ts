@@ -277,7 +277,14 @@ export async function getCurrentUser(token: string): Promise<CurrentUser> {
   return user
 }
 
-export function updateCurrentUser(token: string, data: ProfileUpdateData): Promise<CurrentUser> {
+export function updateCurrentUser(token: string, data: ProfileUpdateData, avatar?: File): Promise<CurrentUser> {
+  if (avatar) {
+    const body = new FormData()
+    body.append('file', avatar)
+    body.append('display_name', data.display_name)
+    body.append('bio', data.bio)
+    return request<CurrentUser>('/auth/me/avatar', { method: 'PUT', headers: authHeaders(token), body })
+  }
   return request<CurrentUser>('/auth/me', {
     method: 'PUT',
     headers: { ...authHeaders(token), 'Content-Type': 'application/json' },

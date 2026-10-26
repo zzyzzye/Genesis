@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from genesis_api.blog.models import BlogAttachment
+from genesis_api.core.uploads import image_header_mime
 
 STORAGE_ROOT = Path("/data/media/blog")
 MAX_DEPTH = 30
@@ -35,17 +36,7 @@ def image_mime_type(item_id: UUID) -> str | None:
             header = source.read(32)
     except OSError:
         return None
-    if header.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if header.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if header.startswith((b"GIF87a", b"GIF89a")):
-        return "image/gif"
-    if header[:4] == b"RIFF" and header[8:12] == b"WEBP":
-        return "image/webp"
-    if header[4:8] == b"ftyp" and header[8:12] in (b"avif", b"avis"):
-        return "image/avif"
-    return None
+    return image_header_mime(header)
 
 
 def valid_name(value: str) -> str:
