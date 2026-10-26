@@ -17,7 +17,8 @@ Genesis 是一个工程化的前后端 Monorepo：
 推荐使用 Docker 开发，本地只需要保留源码、配置和锁文件：
 
 ```bash
-make docker-up
+cp -n .env.development.example .env.development
+make docker-dev
 ```
 
 首次启动会构建镜像，后续修改 React 或 FastAPI 源码时会自动热更新。
@@ -38,7 +39,7 @@ make docker-down
 
 公开文章的摘要与正文之间提供默认收起的「AI 导读」，展开查看三个要点和阅读重点。发布或更新文章后，后端复用站点默认文本模型生成当前版本的缓存；旧文章会逐批补齐，读者展开和重试只读取缓存。模型未配置、生成失败或正文超过 60,000 字符时仍可直接阅读正文，作者再次保存已发布文章可重试生成。
 
-更新环境先通过现有容器执行 `docker compose exec -T backend uv run alembic upgrade head`。缓存、版本隔离与恢复规则见 [文章导读说明](docs/article-guides.md)。
+更新开发环境先通过现有容器执行 `docker compose --env-file .env.development -f compose.yml exec -T backend uv run alembic upgrade head`；生产使用 `make docker-prod` 自动迁移。缓存、版本隔离与恢复规则见 [文章导读说明](docs/article-guides.md)。
 
 ## 文章回收站
 
@@ -72,7 +73,7 @@ Markdown 保留原始正文，并通过 YAML front matter 记录标题、摘要�
 
 在 `/blog/studio/pages` 创建关于、站点说明和专题页面，支持 Markdown 编辑与预览、草稿保存、发布、撤回和删除。公开目录位于 `/blog/pages`，发布后的正文地址为 `/blog/pages/:slug`；草稿不会公开，也不会混入文章列表。
 
-已有环境更新代码后，使用现有后端容器执行 `docker compose exec -T backend uv run alembic upgrade head`，应用独立页面数据表迁移。
+已有开发环境更新代码后，使用现有后端容器执行 `docker compose --env-file .env.development -f compose.yml exec -T backend uv run alembic upgrade head`；生产使用 `make docker-prod` 自动迁移。
 
 ## 博客附件与文件夹
 
@@ -80,7 +81,7 @@ Markdown 保留原始正文，并通过 YAML front matter 记录标题、摘要�
 
 单个文件上限 200 MiB，支持零字节文件。上传队列显示真实传输进度，收到服务端回执后才标记成功；失败可用同一标识重试。停止上传仅停止客户端等待，服务端可能已保存，重试会核对内容并返回已有回执。队列只保存在当前页面内存，刷新或离开需重新选择未完成文件。
 
-附件默认私有，只有作者能下载。确认公开后可复制固定下载链接，重命名、移动不改变链接，撤回公开或删除后链接失效；任意类型均强制下载，不作为网页执行。文件复用现有持久化卷的 `/data/media/blog`，目录为数据库逻辑层级。更新代码后在现有后端容器执行 `docker compose exec -T backend uv run alembic upgrade head` 应用迁移。
+附件默认私有，只有作者能下载。确认公开后可复制固定下载链接，重命名、移动不改变链接，撤回公开或删除后链接失效；任意类型均强制下载，不作为网页执行。文件复用现有持久化卷的 `/data/media/blog`，目录为数据库逻辑层级。开发环境更新后在现有后端容器执行 `docker compose --env-file .env.development -f compose.yml exec -T backend uv run alembic upgrade head` 应用迁移；生产使用 `make docker-prod` 自动迁移。
 
 文章和独立页面编辑器的正文工具栏提供「插入附件」，富文本与源码模式均可使用。可浏览附件库文件夹、搜索当前目录、分页选择已有文件，或直接上传任意类型文件到当前目录；上传失败、停止后可沿用同一标识重试核对结果。上传成功先选中，点击插入才进入下一步。
 
@@ -98,10 +99,15 @@ make lint          # 检查前后端代码规范
 make test          # 运行前后端测试
 make build         # 构建前端并检查后端包
 make check         # 依次执行 lint、test、build
-make docker-up     # 构建并启动 Docker 开发环境
+make docker-dev    # 读取 .env.development，后台启动开发 / 测试环境
+make docker-up     # docker-dev 的兼容别名
 make docker-down   # 停止 Docker 开发环境
+make docker-logs   # 查看开发环境日志
 make docker-check  # 在容器中运行全部检查和测试
-make docker-prod   # 构建并启动生产镜像（端口 8090）
+make docker-prod   # 读取 .env.production，后台启动生产环境（8090）
+make docker-prod-status # 查看生产容器状态
+make docker-prod-logs   # 查看生产环境日志
+make docker-prod-down   # 停止生产环境，保留数据卷
 ```
 
 ## 目录结构
@@ -149,16 +155,55 @@ make dev-frontend
 
 ## 配置
 
-本地配置文件不会进入 Git。使用 Docker 开发时，复制项目根目录的示例文件，文本生成模型的配置会由 Compose 传给后端：
+Docker 配置按环境分开，实际配置文件不会进入 Git；启动命令显式指定文件，不再自动读取原来的根目录 `.env`。开发和生产的项目名、数据库与素材卷也保持独立。
+
+| 环境 | Git 中的示例 | 本地 / 服务器实际配置 | 启动命令 | 入口 |
+| --- | --- | --- | --- | --- |
+| 开发 / 测试 | `.env.development.example` | `.env.development` | `make docker-dev` | 前端 5173、后端 8000 |
+| 生产 | `.env.production.example` | `.env.production` | `make docker-prod` | 8090 |
+
+### 开发 / 测试
 
 ```bash
-cp .env.example .env
-make docker-up
+cp -n .env.development.example .env.development
+# 在 .env.development 中填写需要使用的模型 API Key。
+make docker-dev
 ```
 
-文本生成通过 `GENESIS_TEXT_PROVIDER` 选择 `openai`、`grok` 或 `claude`，并分别填写对应的 API Key 和模型名。视频生成配置见下文，图片与音频生成仍为参数草稿。
+开发示例使用明确标注的本地签名值和示例账号密码，不用于公网部署。数据库连接使用开发 Compose 默认配置。
 
-后端已预留 LangChain、LangGraph、Deep Agents 依赖，并提供站点所有者权限的动态模型发现接口：GET /api/v1/llm/providers/{provider}/models。模型名称会根据配置的 URL 和 API Key 从供应商接口获取，.env 中的模型名仅作为自定义网关不可发现时的 fallback。
+### 生产部署（1Panel / 云服务器）
+
+```bash
+cp -n .env.production.example .env.production
+# 先填写下述三项必填配置和需要使用的模型 API Key，再启动。
+chmod 600 .env.production
+make docker-prod
+```
+
+生产示例的 `GENESIS_POSTGRES_PASSWORD`、`GENESIS_JWT_SECRET` 和 `GENESIS_AGENT_ACTION_SECRET` 均留空；未填写时 Compose 会在启动前报出变量名。全新数据库的密码和两个签名密钥应分别生成，`openssl rand -hex 32` 可生成一个随机值。已有生产数据库必须沿用其当前数据库密码，修改配置文件本身不会修改数据库内的密码。生产环境不自动创建开发账号；首次通过网站注册账号后，再将指定账号授予 owner 权限。
+
+从旧 `.env` 升级时，手动把有效的数据库密码、生产签名密钥和模型配置填入 `.env.production`；本地开发则填写 `.env.development`。旧文件保留但不再作为这些命令的配置来源，不自动复制密钥，也不要用示例覆盖已有实际配置。修改生产模型配置后重新执行启动命令即可应用；数据库迁移会先于后端启动。
+
+不使用 Make 时，两种启动命令分别为：
+
+```bash
+# 开发 / 测试
+docker compose --env-file .env.development -f compose.yml up -d --build
+
+# 生产；只使用 compose.prod.yml，不与开发 Compose 合并。
+docker compose --env-file .env.production -f compose.prod.yml up -d --build
+
+# 生产状态和迁移日志
+docker compose --env-file .env.production -f compose.prod.yml ps
+docker compose --env-file .env.production -f compose.prod.yml logs --tail 80 migrate
+```
+
+1Panel OpenResty 可继续代理到 `http://127.0.0.1:8090`，沿用原有域名和 HTTPS。`GENESIS_VIDEO_PUBLIC_BASE_URL` 应填写实际公网 HTTPS 地址；外部代理的上传大小需容纳 201 MiB 请求体。
+
+文本生成通过 `GENESIS_TEXT_PROVIDER` 选择 `openai`、`grok`、`gemini`、`claude` 或 `mimo`，并填写对应的 API Key 和模型名。生图、生视频配置见下文。
+
+后端已预留 LangChain、LangGraph、Deep Agents 依赖，并提供站点所有者权限的动态模型发现接口：GET /api/v1/llm/providers/{provider}/models。模型名称会根据配置的 URL 和 API Key 从供应商接口获取，对应环境配置中的模型名仅作为自定义网关不可发现时的 fallback。
 
 如果临时脱离 Docker 运行服务，再分别复制后端和前端示例文件：
 
@@ -179,7 +224,7 @@ Agent 的 `tools.py`、工具列表 `tools` 与第三方框架工具 API 保留�
 
 ### 图片生成
 
-生图节点接入[云影 OpenAI Images 兼容接口](https://ai-document.yyapi.cloud/zh/image-api)。在项目根目录的本地配置中自行填写 `GENESIS_IMAGE_API_KEY`，`GENESIS_IMAGE_API_BASE_URL` 默认 `https://zl.yyapi.cloud`。配置后运行 `docker compose up -d --no-deps backend`；容器会自动迁移图片任务表。不要将 Key 写入源码或发到聊天。
+生图节点接入[云影 OpenAI Images 兼容接口](https://ai-document.yyapi.cloud/zh/image-api)。在对应环境配置中自行填写 `GENESIS_IMAGE_API_KEY`，`GENESIS_IMAGE_API_BASE_URL` 默认 `https://zl.yyapi.cloud`。开发环境配置后运行 `docker compose --env-file .env.development -f compose.yml up -d --no-deps backend`；生产环境运行 `make docker-prod`，先完成迁移再启动。不要将 Key 写入源码或发到聊天。
 
 模型完整读取当前图片 Key 的实时 `/v1/models`，不按文档白名单隐藏新模型。文生图提交 JSON；文档明确支持编辑的模型可使用图生图，服务端直接上传本地图片，无需部署公网地址。生图编辑区的「上传」「作品素材」建立图片参考节点与连线，并切换为图生图；画布中的图片节点也可手动连入。生成结果预览与参考图片相互独立。
 
@@ -192,8 +237,8 @@ Agent 的 `tools.py`、工具列表 `tools` 与第三方框架工具 API 保留�
 修改配置后，通过现有 Compose 服务应用配置和数据库迁移：
 
 ```bash
-docker compose up -d --no-deps backend
-docker compose exec -T backend uv run alembic upgrade head
+docker compose --env-file .env.development -f compose.yml up -d --no-deps backend
+docker compose --env-file .env.development -f compose.yml exec -T backend uv run alembic upgrade head
 ```
 
 模型名完整展示实时 `/v1/models` 目录，不以本地参数表筛除新模型。已验证参数的模型支持调整比例、清晰度和时长；未声明参数范围的模型仅提交 `model` 和 `prompt`，使用服务商默认画幅、清晰度和时长，暂不发送参考素材。服务端仍验证模型在实时目录中，每次生成一个视频。文档未明确模型声音开关能力，因此省略 `generate_audio`，声音沿用模型默认。保存节点只保存草稿；点击「生成视频」才创建任务。

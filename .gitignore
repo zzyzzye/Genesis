@@ -31,6 +31,8 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.development.example
+!.env.production.example
 
 # 编辑器和 IDE 配置
 .idea/
