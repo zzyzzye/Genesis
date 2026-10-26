@@ -111,7 +111,7 @@ services:
       context: ./frontend
       target: production
     ports:
-      - "8080:80"
+      - "8090:80"
     restart: unless-stopped
     depends_on:
       backend:

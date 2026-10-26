@@ -101,7 +101,7 @@ make check         # 依次执行 lint、test、build
 make docker-up     # 构建并启动 Docker 开发环境
 make docker-down   # 停止 Docker 开发环境
 make docker-check  # 在容器中运行全部检查和测试
-make docker-prod   # 构建并启动生产镜像（端口 8080）
+make docker-prod   # 构建并启动生产镜像（端口 8090）
 ```
 
 ## 目录结构
