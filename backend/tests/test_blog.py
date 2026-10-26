@@ -1,6 +1,8 @@
 """验证博客公开查询、后台写入、分类标签与共享账号权限。"""
 
 import json
+import subprocess
+import sys
 from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -267,6 +269,17 @@ def test_development_seed_is_idempotent(
     database_engine: Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """重复初始化只补齐开发账号，不创建文章或额外标签。"""
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from genesis_api.database import seed; "
+            "from sqlalchemy.orm import configure_mappers; configure_mappers()",
+        ],
+        check=True,
+        capture_output=True,
+    )
     factory = sessionmaker[Session](bind=database_engine, expire_on_commit=False)
     with Session(database_engine) as session:
         session.add(BlogTag(name="产品", slug="product"))
@@ -281,8 +294,8 @@ def test_development_seed_is_idempotent(
         assert owner is not None
         assert owner.credential is not None
         assert owner.credential.password_hash != "genesis-local-only"
-        assert session.scalars(select(BlogPost)).all()
-        assert len(session.scalars(select(BlogTag)).all()) == 3
+        assert session.scalars(select(BlogPost)).all() == []
+        assert [tag.slug for tag in session.scalars(select(BlogTag)).all()] == ["product"]
 
 
 def test_get_session_creates_a_session() -> None:
@@ -1483,11 +1496,11 @@ async def test_retired_pages_keep_historical_data(
         created_at=now,
         updated_at=now,
     )
+    database_session.add(page)
     database_session.commit()
 
     assert (await client.get("/api/v1/blog/pages/retired-about")).status_code == 404
     token = await authenticate_owner(client, database_session)
-    database_session.add(page)
     assert (
         await client.delete(
             f"/api/v1/admin/blog/pages/{page.id}",
