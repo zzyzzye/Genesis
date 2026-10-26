@@ -27,7 +27,7 @@ it('确认后回传服务端报价标识', async () => {
   fireEvent.click(await screen.findByText('冻结预算并生成'))
   await waitFor(() => expect(done).toHaveBeenCalledWith(quote))
 })
-it('零余额钱包仍提示免费 MiMo 与 SVG，空态不冒充读取失败', async () => {
+it('零余额钱包展示真实空态，充值说明留在账务流程内', async () => {
   localStorage.setItem('genesis-account-token','synthetic-test-token')
   vi.spyOn(globalThis,'fetch').mockImplementation(async input => {
     await Promise.resolve()
@@ -38,8 +38,11 @@ it('零余额钱包仍提示免费 MiMo 与 SVG，空态不冒充读取失败', 
   })
   render(<MemoryRouter><WalletPage /></MemoryRouter>)
   expect(await screen.findByText('暂无生成账单。')).toBeVisible()
-  expect(screen.getByText(/MiMo 与 SVG 免费/)).toBeVisible()
   expect(screen.getAllByText('¥0.00')).toHaveLength(2)
+  expect(screen.queryByRole('link', { name:/SVG/ })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name:'查看充值说明' }))
+  expect(await screen.findByRole('dialog')).toHaveTextContent('站长人工充值')
+  expect(screen.getByRole('dialog')).toHaveTextContent('余额流水')
 })
 
 it('人工入账响应未知后刷新，继续确认沿用原操作标识且不自动入账', async () => {

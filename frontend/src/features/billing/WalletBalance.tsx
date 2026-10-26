@@ -40,6 +40,6 @@ export function WalletPreview({ userId }: { userId: string }) {
       {loading && <p className="wallet-preview-loading" role="status">正在读取余额…</p>}
     </>}
     <Link className="wallet-preview-link" to="/account/wallet">查看钱包与账单<ArrowUpRight size={16} aria-hidden="true" /></Link>
-    <p className="wallet-preview-note">MiMo 与 SVG 免费使用，付费创作从余额中结算。</p>
+    <p className="wallet-preview-note">充值、消费与退款记录可在钱包中查看。</p>
   </aside>
 }
