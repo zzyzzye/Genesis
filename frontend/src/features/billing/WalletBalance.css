@@ -1,0 +1,17 @@
+.wallet-balance { display:flex; align-items:flex-start; flex-wrap:wrap; gap:32px 64px; margin:0; font-variant-numeric:tabular-nums; }
+.wallet-balance>div { min-width:0; max-width:100%; }.wallet-balance dt { color:var(--account-muted); font-size:12px; line-height:1.6; }.wallet-balance dd { margin:12px 0 0; color:var(--account-ink); overflow-wrap:anywhere; }
+.wallet-balance-available { width:320px; }
+.wallet-balance-available dd { font-size:clamp(36px,4.4vw,62px); font-weight:500; letter-spacing:-.055em; line-height:1.15; overflow-wrap:anywhere; }
+.wallet-balance-available .wallet-amount-long { font-size:clamp(28px,3.3vw,46px); }
+.wallet-balance-frozen { padding-bottom:5px; }.wallet-balance-frozen dd { font-size:25px; letter-spacing:-.035em; }.wallet-balance-frozen small { display:block; margin-top:10px; color:var(--account-muted); font-size:11px; }
+.wallet-preview { align-self:start; padding:26px; border-radius:16px; background:var(--account-surface); }
+.wallet-preview h2 { margin:0 0 26px; font-size:13px; font-weight:550; }.wallet-balance--compact { display:grid; gap:22px; }
+.wallet-balance--compact .wallet-balance-available { width:auto; min-width:140px; }.wallet-balance--compact .wallet-balance-frozen { min-width:80px; }
+.wallet-balance--compact .wallet-balance-available dd { margin-top:8px; font-size:30px; letter-spacing:-.04em; }.wallet-balance--compact .wallet-balance-available .wallet-amount-long { font-size:23px; }
+.wallet-balance--compact .wallet-balance-frozen dd { font-size:18px; margin-top:6px; }.wallet-balance--compact .wallet-balance-frozen small { display:none; }
+.wallet-preview-link { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:24px -8px 0; padding:10px 8px; min-height:40px; border-radius:6px; font-size:12px; }
+.wallet-preview-link:is(:hover,:focus-visible) { background:var(--account-hover); }
+.wallet-preview-note { margin:20px 0 0; color:var(--account-muted); font-size:11px; line-height:1.8; }
+.wallet-preview-feedback { min-height:136px; color:var(--account-muted); font-size:13px; }.wallet-preview-feedback button { display:inline-flex; align-items:center; gap:6px; background:transparent; padding:8px 0; color:var(--account-ink); font-size:12px; }
+.wallet-preview-feedback button:is(:hover,:focus-visible) { color:var(--account-muted); }.wallet-preview-loading { margin:10px 0 0; color:var(--account-muted); font-size:11px; }
+@media(max-width:760px) { .wallet-balance { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,.7fr); gap:24px; }.wallet-balance-available { width:auto; }.wallet-balance:has(.wallet-amount-long) { grid-template-columns:minmax(0,1fr); }.wallet-balance-available dd { font-size:40px; }.wallet-balance-available .wallet-amount-long { font-size:28px; }.wallet-balance-frozen dd { font-size:22px; }.wallet-preview { padding:24px; }.wallet-balance--compact { display:flex; flex-wrap:wrap; justify-content:space-between; gap:24px; }.wallet-balance--compact .wallet-balance-available dd { font-size:30px; }.wallet-balance--compact .wallet-balance-frozen { align-self:end; }.wallet-preview h2 { margin-bottom:22px; } }

@@ -2,10 +2,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Account } from '../src/Account'
-import { getCurrentUser, login, registerAccount, updateCurrentUser } from '../src/lib/api'
+import { getCurrentUser, login, registerAccount, request, updateCurrentUser } from '../src/lib/api'
 import { getStoredAuthToken, storeAuthToken } from '../src/lib/auth'
 
-vi.mock('../src/lib/api', () => ({ getCurrentUser: vi.fn(), login: vi.fn(), registerAccount: vi.fn(), updateCurrentUser: vi.fn() }))
+vi.mock('../src/lib/api', () => ({ getCurrentUser: vi.fn(), login: vi.fn(), registerAccount: vi.fn(), request: vi.fn(), updateCurrentUser: vi.fn() }))
 const user = { id: 'account-ui-reader', handle: 'reader', display_name: '测试读者', bio: '', avatar_url: null, role: 'member' }
 type AccessToken = Awaited<ReturnType<typeof login>>
 const session: AccessToken = { access_token: 'account-ui-test-session', token_type: 'bearer' }
@@ -37,6 +37,7 @@ describe('账户登录与注册', () => {
     vi.mocked(getCurrentUser).mockResolvedValue(user)
     vi.mocked(registerAccount).mockResolvedValue(user)
     vi.mocked(updateCurrentUser).mockResolvedValue(user)
+    vi.mocked(request).mockResolvedValue({ available:'0.00000000',frozen:'0.00000000',currency:'CNY' })
   })
   afterEach(() => { cleanup(); localStorage.clear(); vi.resetAllMocks() })
 
@@ -109,8 +110,8 @@ describe('账户登录与注册', () => {
     vi.mocked(getCurrentUser).mockResolvedValueOnce({ ...user, role: 'owner', avatar_url: '/missing-avatar.jpg' })
     const view = setup()
     await screen.findByRole('heading', { name: user.display_name })
-    expect(screen.getByRole('link', { name: '返回首页' })).toHaveAttribute('href', '/')
-    expect(screen.getByRole('link', { name: '写作台' })).toHaveAttribute('href', '/blog/studio')
+    expect(screen.getByRole('link', { name: 'Genesis 首页' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: '进入写作台' })).toHaveAttribute('href', '/blog/studio')
     const avatar = view.container.querySelector('.account-avatar')!
     fireEvent.error(avatar.querySelector('img')!)
     expect(avatar.querySelector('img')).toBeNull()
@@ -118,7 +119,7 @@ describe('账户登录与注册', () => {
     view.unmount()
     setup()
     await screen.findByRole('heading', { name: user.display_name })
-    expect(screen.queryByRole('link', { name: '写作台' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '进入写作台' })).not.toBeInTheDocument()
   })
 
   it('资料使用关联错误与首错聚焦，保存防重且失败保留输入', async () => {
@@ -127,6 +128,7 @@ describe('账户登录与注册', () => {
     await screen.findByRole('heading', { name: user.display_name })
     const form = screen.getByRole('form', { name: '个人资料' })
     const name = screen.getByRole('textbox', { name: '昵称' })
+    fireEvent.click(screen.getByText('使用头像链接'))
     const avatar = screen.getByRole('textbox', { name: '头像地址' })
     expect(form).toHaveAttribute('novalidate')
     fireEvent.change(name, { target: { value: ' ' } })

@@ -77,3 +77,38 @@ it('人工入账响应未知后刷新，继续确认沿用原操作标识且不�
   expect(requests).toHaveLength(2)
   expect(requests[0]).toBe(requests[1])
 })
+
+it('余额流水分区可从地址恢复，分页使用当前分区总数', async () => {
+  localStorage.setItem('genesis-account-token','synthetic-test-token')
+  vi.spyOn(globalThis,'fetch').mockImplementation(async input => {
+    await Promise.resolve()
+    const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input
+    const reply = (body: unknown) => new Response(JSON.stringify(body))
+    if (url.endsWith('/auth/me')) return reply({ id:'member',role:'member' })
+    if (url.endsWith('/billing/wallet')) return reply({ available:'10.00000001',frozen:'0' })
+    if (url.includes('/billing/entries')) return reply({ items:[{ id:'entry',kind:'credit',amount:'0.00000001',frozen_delta:'0',reason:'微小金额精度验证',created_at:'2026-10-26T00:00:00Z' }],total:25 })
+    return reply({ items:[],total:0 })
+  })
+  render(<MemoryRouter initialEntries={['/account/wallet?tab=entries&page=2']}><WalletPage /></MemoryRouter>)
+  expect(await screen.findByText('+¥0.00000001')).toBeVisible()
+  expect(screen.getByRole('link',{ name:'余额流水，共 25 条' })).toHaveAttribute('aria-current','page')
+  expect(screen.getByRole('button',{ name:'上一页' })).toBeEnabled()
+  expect(screen.getByRole('button',{ name:'下一页' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('link',{ name:'创作账单，共 0 条' }))
+  expect(await screen.findByText('暂无生成账单。')).toBeVisible()
+  expect(screen.queryByText('微小金额精度验证')).not.toBeInTheDocument()
+})
+
+it('读取失败显示恢复入口，不同时展示空账单或零余额', async () => {
+  localStorage.setItem('genesis-account-token','synthetic-test-token')
+  vi.spyOn(globalThis,'fetch').mockImplementation(async input => {
+    await Promise.resolve()
+    const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input
+    return url.endsWith('/auth/me') ? new Response(JSON.stringify({ id:'member',role:'member' })) : new Response(JSON.stringify({ detail:'合成服务错误' }),{ status:503 })
+  })
+  render(<MemoryRouter><WalletPage /></MemoryRouter>)
+  expect(await screen.findByRole('alert')).toHaveTextContent('账务暂时无法读取')
+  expect(screen.queryByText('暂无生成账单。')).not.toBeInTheDocument()
+  expect(screen.queryByText('¥0.00')).not.toBeInTheDocument()
+  expect(screen.getByRole('button',{ name:'重新读取' })).toBeEnabled()
+})

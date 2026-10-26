@@ -1,9 +1,11 @@
 import './Account.css'
 
 import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle, Upload } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle, Upload } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { GenesisLogo } from './components/GenesisLogo'
+import { AccountWorkspace } from './features/account/AccountWorkspace'
+import { WalletPreview } from './features/billing/WalletBalance'
 import { FpsStatusSlot } from './features/performance/FpsMonitor'
 import { authTokenChangedEvent, clearStoredAuthToken, getStoredAuthToken, latestAuthToken, logoutAuthSession, storeAuthToken, studioAuthTokenKey } from './lib/auth'
 import { getCurrentUser, login, registerAccount, updateCurrentUser, type CurrentUser } from './lib/api'
@@ -16,21 +18,8 @@ type AccountState =
   | { status: 'ready'; user: CurrentUser; feedback: string | null }
 type AccountField = 'handle' | 'displayName' | 'password'
 
-function AccountLayout({ children, profile = false }: { children: ReactNode; profile?: boolean }) {
+function AccountLayout({ children }: { children: ReactNode }) {
   const [coverFailed, setCoverFailed] = useState(false)
-  if (profile) return <main className="account-shell account-profile-shell">
-    <aside className="account-profile-visual" aria-hidden="true">
-      {!coverFailed && <img src="/images/account/still-life.jpg" alt="" width={1024} height={1536} onError={() => setCoverFailed(true)} />}
-    </aside>
-    <div className="account-profile-main">
-      <header className="account-profile-header">
-        <Link className="account-header-back" to="/"><ArrowLeft size={17} aria-hidden="true" />返回首页</Link>
-        <FpsStatusSlot />
-      </header>
-      <div className="account-profile-content">{children}</div>
-      <footer className="account-profile-footer">Genesis · 你的个人空间</footer>
-    </div>
-  </main>
   return <main className="account-shell account-auth">
     <div className="account-auth-main">
       <header className="account-auth-header">
@@ -181,18 +170,20 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
     setErrors(next)
     if (next.displayName) { nameInput.current?.focus(); return }
     if (next.bio) { bioInput.current?.focus(); return }
-    if (next.avatarUrl) { avatarInput.current?.focus(); return }
+    if (next.avatarUrl) {
+      const settings = avatarInput.current?.closest('details')
+      if (settings) settings.open = true
+      avatarInput.current?.focus(); return
+    }
     const saved = await onSave(displayName.trim(), bio.trim(), avatarUrl.trim(), selectedAvatar?.file)
     if (saved) { setAvatarUrl(saved.avatar_url ?? ''); setSelectedAvatar(null); setUploadError(null) }
   }
 
   return (
-    <AccountLayout profile>
+    <AccountWorkspace user={user} active="profile">
+      <header className="account-workspace-heading"><div><h1 id="profile-title">个人资料</h1><p>管理个人信息，也照顾每一次创作。</p></div><FpsStatusSlot /></header>
+      <div className="account-profile-layout">
       <section className="account-card account-card--profile" aria-labelledby="profile-title">
-        <div className="account-profile-intro">
-          <h1 id="profile-title">个人资料</h1>
-          <p>让大家认识你，也让这里更像你。</p>
-        </div>
         <div className="account-profile-heading">
           <div className="account-avatar" aria-hidden="true">
             {previewAvatar && failedAvatar !== previewAvatar ? <img alt="" src={previewAvatar} onError={() => setFailedAvatar(previewAvatar)} /> : user.display_name.slice(0, 1)}
@@ -207,9 +198,7 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
             <input ref={fileInput} type="file" hidden accept="image/png,image/jpeg,image/webp,image/gif,image/avif" aria-label="选择头像图片" disabled={busy} onChange={event => { selectAvatar(event.currentTarget.files?.[0]); event.currentTarget.value = '' }} />
             <p className={uploadError ? 'account-avatar-error' : 'account-avatar-hint'} role={uploadError ? 'alert' : undefined} aria-live="polite">{uploadError || (selectedAvatar ? '已选图片，保存资料后生效。' : '图片最大 5 MiB')}</p>
           </div>
-          {user.role === 'owner' && <Link className="account-studio-entry" to="/blog/studio">写作台<ArrowUpRight size={15} aria-hidden="true" /></Link>}
         </div>
-        <nav className="account-profile-navigation" aria-label="账户服务"><Link className="account-studio-entry" to="/account/wallet">我的钱包<ArrowUpRight size={15} aria-hidden="true" /></Link>{user.role === 'owner' && <Link className="account-studio-entry" to="/account/billing">账务管理<ArrowUpRight size={15} aria-hidden="true" /></Link>}</nav>
         <form className="account-form account-profile-form" aria-label="个人资料" noValidate aria-busy={busy} onSubmit={event => { void submit(event) }} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }}>
           <div className="account-field account-profile-field">
             <label htmlFor="profile-display-name">昵称</label>
@@ -225,13 +214,13 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
               <div className="account-field-help">{errors.bio && <p id="profile-bio-error" className="account-field-error" role="alert">{errors.bio}</p>}</div>
             </div>
           </div>
-          <div className="account-field account-profile-field">
+          <details className="account-avatar-settings"><summary>使用头像链接</summary><div className="account-field account-profile-field">
             <label htmlFor="profile-avatar-url">头像地址</label>
             <div className="account-profile-control">
               <input ref={avatarInput} id="profile-avatar-url" autoCapitalize="none" spellCheck={false} maxLength={500} readOnly={busy} disabled={Boolean(selectedAvatar)} aria-invalid={Boolean(errors.avatarUrl)} aria-describedby={errors.avatarUrl ? 'profile-avatar-error' : undefined} onChange={(event) => { setAvatarUrl(event.currentTarget.value); setErrors(current => ({ ...current, avatarUrl: undefined })) }} placeholder="也可以粘贴图片链接" type="url" value={selectedAvatar ? '' : avatarUrl} />
               <div className="account-field-help">{errors.avatarUrl && <p id="profile-avatar-error" className="account-field-error" role="alert">{errors.avatarUrl}</p>}</div>
             </div>
-          </div>
+          </div></details>
           <div className="account-profile-form-footer">
             <div className="account-profile-actions">
               <button className="primary-button" type="submit" disabled={busy}>{busy && <LoaderCircle className="account-submit-spinner" size={16} aria-hidden="true" />}{busy ? '正在保存…' : '保存资料'}</button>
@@ -241,7 +230,9 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
           </div>
         </form>
       </section>
-    </AccountLayout>
+      <WalletPreview userId={user.id} />
+      </div>
+    </AccountWorkspace>
   )
 }
 

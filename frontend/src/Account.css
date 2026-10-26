@@ -3,6 +3,7 @@
   --account-ink: #171717;
   --account-muted: #686868;
   --account-soft: #f4f4f4;
+  --account-surface: #f7f7f5;
   --account-hover: #eaeaea;
   --account-error: #a43f34;
   min-height: 100dvh;
@@ -67,20 +68,10 @@ body:has(.account-shell) { min-width: 0; }
 .account-feature-copy > a:hover, .account-feature-copy > a:focus-visible { background: #e6e6e6; }
 .account-auth-loading { display: flex; min-height: 400px; align-items: center; justify-content: center; gap: 12px; color: var(--account-muted); font-size: 14px; }
 
-/* 左侧静物与右侧资料共享一个页面，窄屏直接呈现可编辑内容。 */
-.account-profile-shell { display: grid; grid-template-columns: minmax(0, 34fr) minmax(0, 66fr); }
-.account-profile-visual { position: sticky; top: 0; height: 100dvh; overflow: hidden; background: #c0cbce; }
-.account-profile-visual img { width: 100%; height: 100%; object-fit: cover; object-position: 38% center; }
-.account-profile-main { --account-profile-width: 560px; --account-profile-label-width: 88px; --account-profile-column-gap: 24px; display: flex; min-width: 0; flex-direction: column; padding-inline: clamp(32px, 4vw, 72px); }
-.account-profile-header, .account-profile-content, .account-profile-footer { width: min(100%, var(--account-profile-width)); margin-inline: auto; }
-.account-profile-header { display: flex; min-height: 88px; align-items: center; justify-content: space-between; gap: 16px; }
-.account-profile-header .account-header-back { margin-left: -8px; font-size: 13px; }
-.account-profile-content { display: flex; flex: 1; min-width: 0; align-items: center; padding-block: 32px 24px; }
+/* 资料与钱包共用账户导航，余额预览保留独立的阅读空间。 */
+.account-profile-layout { display:grid; grid-template-columns:minmax(0,1fr) 260px; align-items:start; gap:56px; }
 .account-card--profile { width: 100%; min-width: 0; }
-.account-profile-intro { margin-bottom: 28px; }
-.account-profile-intro h1 { margin: 0; font-size: 30px; font-weight: 650; letter-spacing: -.035em; line-height: 1.4; }
-.account-profile-intro p { margin: 10px 0 0; color: var(--account-muted); font-size: 13px; line-height: 1.8; }
-.account-profile-heading { display: flex; min-width: 0; align-items: center; gap: 16px; margin-bottom: 32px; }
+.account-profile-heading { display: flex; min-width: 0; align-items: flex-start; gap: 16px; margin-bottom: 36px; }
 .account-avatar { display: flex; width: 56px; height: 56px; flex: none; align-items: center; justify-content: center; overflow: hidden; border-radius: 50%; background: var(--account-soft); color: var(--account-ink); font-size: 23px; }
 .account-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .account-avatar-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
@@ -92,18 +83,17 @@ body:has(.account-shell) { min-width: 0; }
 .account-profile-identity { flex: 1; min-width: 0; }
 .account-profile-identity h2 { display: -webkit-box; margin: 0 0 4px; overflow: hidden; font-size: 16px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .account-profile-identity p { margin: 0; color: var(--account-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
-.account-studio-entry { display: inline-flex; flex: none; min-height: 40px; align-items: center; gap: 4px; padding: 8px; border-radius: 8px; color: var(--account-muted); font-size: 12px; }
-.account-studio-entry:hover, .account-studio-entry:focus-visible { background: var(--account-hover); }
-.account-profile-navigation { display:flex; flex-wrap:wrap; gap:8px; margin:-16px 0 24px; }
-.account-card--profile .account-form { gap: 20px; }
-.account-profile-field { display: grid; grid-template-columns: var(--account-profile-label-width) minmax(0, 1fr); column-gap: var(--account-profile-column-gap); align-items: start; }
-.account-profile-field > label { display: flex; min-height: 48px; align-items: center; margin: 0; font-size: 13px; font-weight: 550; line-height: 1.5; }
+.account-card--profile .account-form { gap:24px; }
+.account-profile-field { display:grid; gap:10px; min-width:0; }
+.account-profile-field > label { margin:0; font-size:13px; font-weight:500; line-height:1.5; }
 .account-profile-control { min-width: 0; }
 .account-profile-field :is(input, textarea) { min-height: 48px; padding: 13px 16px; font-size: 14px; font-weight: 400; }
 .account-profile-field textarea { height: 112px; resize: none; }
 .account-profile-control .account-field-help { min-height: 0; padding-top: 6px; }
 .account-profile-control .account-field-help:empty { display: none; }
-.account-profile-form-footer { margin-left: calc(var(--account-profile-label-width) + var(--account-profile-column-gap)); }
+.account-avatar-settings { min-width:0; }.account-avatar-settings summary { width:fit-content; min-height:36px; padding:8px 0; color:var(--account-muted); font-size:12px; cursor:pointer; border:0; outline:0; box-shadow:none; }
+.account-avatar-settings summary:is(:hover,:focus-visible) { color:var(--account-ink); }.account-avatar-settings[open] summary { margin-bottom:12px; }
+.account-profile-form-footer { margin:0; }
 .account-profile-feedback { min-height: 32px; padding-top: 8px; }
 .account-feedback { margin: 0; color: var(--account-muted); font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
 .account-profile-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
@@ -111,17 +101,7 @@ body:has(.account-shell) { min-width: 0; }
 .account-profile-actions button:disabled { opacity: .6; }
 .account-profile-actions .account-logout { min-height: 44px; padding: 10px 12px; border-radius: 10px; background: transparent; color: var(--account-muted); font-size: 13px; }
 .account-logout:hover, .account-logout:focus-visible { background: var(--account-soft); color: var(--account-ink); }
-.account-profile-footer { padding-block: 12px 28px; color: var(--account-muted); font-size: 11px; line-height: 1.6; }
-
-@media (min-width: 761px) and (max-height: 780px) {
-  .account-profile-header { min-height: 76px; }
-  .account-profile-content { padding-block: 16px 24px; }
-  .account-profile-intro, .account-profile-heading { margin-bottom: 18px; }
-  .account-card--profile .account-form { gap: 14px; }
-  .account-profile-field textarea { height: 88px; }
-  .account-profile-actions { margin-top: 2px; }
-  .account-profile-footer { padding-bottom: 18px; }
-}
+@media(max-width:1100px) { .account-profile-layout { grid-template-columns:minmax(0,1fr); gap:36px; }.account-profile-layout .wallet-preview { grid-row:1; }.account-profile-layout .wallet-balance--compact { display:flex; flex-wrap:wrap; gap:24px 64px; }.account-profile-layout .wallet-preview-note { max-width:400px; } }
 
 @media (max-width: 1000px) {
   .account-auth { grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 8px; padding: 16px; }
@@ -130,16 +110,10 @@ body:has(.account-shell) { min-width: 0; }
   .account-feature-copy { right: 26px; bottom: 32px; left: 26px; }.account-feature-brand { top: 26px; left: 26px; }
 }
 @media (max-width: 760px) {
-  .account-profile-shell { display: block; }
-  .account-profile-visual { display: none; }
-  .account-profile-main { min-height: 100dvh; padding-inline: 24px; }
-  .account-profile-header { min-height: 80px; }
-  .account-profile-content { justify-content: center; padding-block: 24px 40px; }
   .account-profile-field { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
   .account-profile-field > label { min-height: 0; }
   .account-profile-form-footer { margin-left: 0; }
   .account-profile-field textarea { height: 112px; }
-  .account-profile-footer { padding-bottom: 20px; }
   .account-auth { display: block; padding: 12px 16px; }
   .account-auth-main { min-height: calc(100dvh - 24px); }
   .account-auth-feature { display: none; }
@@ -150,10 +124,8 @@ body:has(.account-shell) { min-width: 0; }
   .account-brand { font-size: 18px; }.account-header-back { font-size: 12px; }
 }
 @media (max-width: 360px) {
-  .account-profile-main { padding-inline: 20px; }
   .account-profile-heading { gap: 10px; }
   .account-avatar { width: 40px; height: 40px; font-size: 18px; }
-  .account-studio-entry { padding-inline: 4px; }
   .account-auth { padding-inline: 12px; }.account-auth-content { padding-inline: 4px; }
   .account-auth-header { gap: 10px; }.account-brand { gap: 8px; font-size: 17px; }.account-header-back { gap: 3px; padding-inline: 4px; }
   .account-form-heading h1 { font-size: 28px; }

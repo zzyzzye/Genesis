@@ -12,6 +12,15 @@ export type QuoteInput = { kind: 'agent' | 'image' | 'video'; provider?: string;
 export type Wallet = { available: string; frozen: string; currency: string }
 export type Page<T> = { items: T[]; total: number }
 
+/** 读取失败或响应结构异常时不能将未知余额展示为零。 */
+export function isWallet(value: unknown): value is Wallet {
+  if (!value || typeof value !== 'object') return false
+  const data = value as Record<string, unknown>
+  return typeof data.available === 'string' && /^\d+(?:\.\d{1,8})?$/.test(data.available)
+    && typeof data.frozen === 'string' && /^\d+(?:\.\d{1,8})?$/.test(data.frozen)
+    && (data.currency === undefined || data.currency === 'CNY')
+}
+
 export function billingApi<T>(path: string, method = 'GET', body?: unknown, token?: string, signal?: AbortSignal): Promise<T> {
   return request<T>(path, { method, signal, headers: {
     Authorization: `Bearer ${token ?? getStoredAuthToken() ?? ''}`,

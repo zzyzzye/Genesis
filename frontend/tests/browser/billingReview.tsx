@@ -14,19 +14,20 @@ if (!import.meta.env.DEV || !['127.0.0.1','localhost'].includes(location.hostnam
 const parameters = new URLSearchParams(location.search)
 const view = parameters.get('view') ?? 'wallet'
 const state = parameters.get('state') ?? 'full'
-const account: CurrentUser = { id:'11111111-1111-4111-8111-111111111111',handle:'qa-synthetic',display_name:'合成验收账户',role:['admin','account'].includes(view) ? 'owner' : 'member',bio:'',avatar_url:null }
+const account: CurrentUser = { id:'11111111-1111-4111-8111-111111111111',handle:'qa-synthetic',display_name:state === 'long' ? '这是用于核验长昵称折行与页面稳定性的合成账户名称' : '合成验收账户',role:parameters.get('role') === 'member' ? 'member' : ['admin','account'].includes(view) ? 'owner' : 'member',bio:'',avatar_url:null }
 const token = 'genesis-browser-review-synthetic-token'
 localStorage.setItem('genesis-account-token',token)
 const project = { id:'22222222-2222-4222-8222-222222222222',name:'账务验收画布',version:1,updated_at:'2026-10-26T06:00:00Z' }
 const node = { id:'33333333-3333-4333-8333-333333333333',type:'image_generation',name:'生图节点',text:'月光下的安静森林',x:100,y:100,width:480,height:302,asset_id:null,duration_seconds:5,generation:{ ...defaultGenerationSettings(),model:'gpt-image-2' } }
 const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 360"><rect width="480" height="360" rx="24" fill="#18212d"/><path d="M310 68a116 116 0 1 0 70 195 105 105 0 0 1-70-195" fill="#e1c47e"/><path d="M165 215q-12-48 18-61l-7-27 27 19 30-6 24-22 2 36q27 22 9 61z" fill="#f0e7d7"/><path d="M173 211q-23 27-40 2t-20-12" fill="none" stroke="#f0e7d7" stroke-width="13" stroke-linecap="round"/><circle cx="198" cy="170" r="3" fill="#18212d"/><circle cx="237" cy="170" r="3" fill="#18212d"/><path d="m213 182 5 4 5-4" fill="none" stroke="#18212d" stroke-width="3"/><g fill="#e1c47e"><circle cx="102" cy="83" r="3"/><circle cx="383" cy="66" r="3"/><circle cx="396" cy="213" r="2"/><circle cx="340" cy="302" r="3"/></g></svg>'
-const bill = { id:'44444444-4444-4444-8444-444444444444',kind:'agent',provider:'openai',model:'gpt-5.6-luna',mode:'paid',status:'settled',reserved_amount:'0.00800000',charged_amount:'0.00025200',cost_amount:'0.00025200',currency:'CNY',note:'',expires_at:'2099-01-01T00:00:00Z' }
+const bill = { id:'44444444-4444-4444-8444-444444444444',kind:'agent',provider:'openai',model:state === 'long' ? 'gpt-5.6-luna-long-model-identifier-for-narrow-layout-verification' : 'gpt-5.6-luna',mode:'paid',status:'settled',reserved_amount:'0.00800000',charged_amount:'0.00025200',cost_amount:'0.00025200',currency:'CNY',note:state === 'long' ? '账单正在核对，已保留冻结金额。此处为用于检查长说明折行的合成数据，不会产生真实费用。' : '',expires_at:'2099-01-01T00:00:00Z' }
 let started = state === 'result', completed = state === 'result', stopped = false
-let balance = state === 'empty' ? '0.00000000' : '9.99974800'
+let balance = state === 'empty' ? '0.00000000' : state === 'long' ? '123456789.12345678' : '9.99974800'
 let ledger = state === 'empty' ? [] : [{ id:'entry',kind:'settle',amount:'0.00774800',frozen_delta:'-0.00800000',reason:'按上游实账结算，退回未用冻结',created_at:'2026-10-26T06:50:52Z' }]
 const reply = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status,headers:{ 'Content-Type':'application/json' } })
 window.fetch = async (input, init) => {
   await Promise.resolve()
+  if (state === 'slow') await new Promise(resolve => setTimeout(resolve,1600))
   const path = new URL(input instanceof Request ? input.url : input instanceof URL ? input.href : input,location.origin).pathname
   const method = init?.method ?? 'GET'
   const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : {}
