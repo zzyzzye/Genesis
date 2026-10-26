@@ -52,13 +52,15 @@
 .studio-assistant__context svg { width: 13px; height: 13px; flex: none; }
 .studio-assistant__messages { display: grid; flex: none; gap: 20px; min-width: 0; }
 .studio-assistant__message { display: flex; align-items: flex-start; min-width: 0; gap: 8px; }
-.studio-assistant__response { display: grid; flex: 1; min-width: 0; gap: 8px; }
+.studio-assistant__response { display: grid; flex: 1; min-width: 0; gap: 6px; }
+/* 同一回复由容器统一留白，避免段落、状态和结果卡片的外边距叠加。 */
+.studio-assistant__response > :is(.studio-assistant__stream-text, .studio-assistant__message-status, .studio-assistant__action-card) { margin-block: 0; }
 .studio-assistant__message > p { margin: 0; padding: 9px 12px; max-width: 90%; border-radius: 9px; background: var(--assistant-surface); white-space: pre-wrap; overflow-wrap: anywhere; }
 .studio-assistant__message--user { justify-content: flex-end; }
 .studio-assistant__markdown { min-width: 0; overflow-wrap: anywhere; font-size: 13px; line-height: 1.8; }
 .studio-assistant__markdown > :first-child { margin-top: 0; }
 .studio-assistant__markdown > :last-child { margin-bottom: 0; }
-.studio-assistant__markdown p { margin: 0 0 10px; }
+.studio-assistant__markdown p { margin: 0 0 8px; }
 .studio-assistant__markdown h1, .studio-assistant__markdown h2, .studio-assistant__markdown h3, .studio-assistant__markdown h4 { margin: 14px 0 6px; font-size: 14px; line-height: 1.6; font-weight: 600; }
 .studio-assistant__markdown ul, .studio-assistant__markdown ol { margin: 8px 0 10px; padding-left: 20px; }
 .studio-assistant__markdown li { margin-block: 4px; }
@@ -141,7 +143,7 @@
 .studio-assistant .studio-assistant__action-card button { flex: none; min-height: 30px; padding: 5px 12px; border: 0; outline: none; box-shadow: none; border-radius: 5px; background: var(--assistant-ink); color: #fff; font-size: 12px; }
 .studio-assistant .studio-assistant__action-card button:is(:hover, :focus-visible):not(:disabled) { background: #373737; }
 .studio-assistant .studio-assistant__action-card button:disabled { background: var(--assistant-hover); color: var(--assistant-muted); cursor: default; }
-.studio-assistant__timing { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px 12px; margin-block: 4px 8px; padding-block: 8px; border-top: 1px solid var(--assistant-line); color: var(--assistant-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.studio-assistant__timing { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 4px 12px; margin: 0; padding-block: 6px 0; border-top: 1px solid var(--assistant-line); color: var(--assistant-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .studio-assistant__timing > span:not(.studio-assistant__wait-hint) { display: inline-flex; align-items: center; gap: 4px; }
 .studio-assistant .studio-assistant__timing svg { width: 12px; height: 12px; flex: none; opacity: .8; }
 .studio-assistant__timing > span:not(.studio-assistant__speed) { white-space: nowrap; }
