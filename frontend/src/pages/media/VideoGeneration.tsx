@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowUp, Check, LoaderCircle, RefreshCw } from 'lucide-react'
-import { api, defaultGenerationSettings, type Asset, type GenerationSettings, type Node } from './api'
+import { api, MediaError, defaultGenerationSettings, type Asset, type GenerationSettings, type Node } from './api'
 import { AssetPreview } from './AssetPreview'
+import { BillingStatus } from '../../features/billing/BillingControls'
+import { useBillingQuote } from '../../features/billing/useBillingQuote'
+import type { BillingOperation } from '../../features/billing/api'
 
 export type VideoModel = { id: string; parameters_known?: boolean; ratios: string[]; resolutions: string[]; durations: number[]; images: number; videos: number; audio: boolean; image_edit?: boolean }
-type ModelList = { configured: boolean; references_ready: boolean; models: VideoModel[] }
-type Task = { id: string; node_id: string; status: string; progress: number; error: string; asset_id: string | null; asset_ids?: string[] }
+type ModelList = { configured: boolean; references_ready: boolean; models: VideoModel[]; billing_required?: boolean }
+type Task = { id: string; node_id: string; status: string; progress: number; error: string; asset_id: string | null; asset_ids?: string[]; billing?: BillingOperation | null }
 const running = (status: string) => ['submitting', 'queued', 'processing', 'downloading'].includes(status)
 const statusText: Record<string, string> = { submitting:'正在提交', queued:'排队中', processing:'生成中', downloading:'正在保存视频', download_failed:'视频保存失败', completed:'视频已生成', failed:'生成失败', unknown:'创建结果待核实', acknowledged:'已核实旧任务' }
 const imageStatusText: Record<string, string> = { submitting:'正在提交',processing:'生成中',downloading:'正在保存图片',download_failed:'图片保存失败',completed:'图片已生成',failed:'生成失败',unknown:'创建结果待核实',acknowledged:'已核实旧任务' }
@@ -39,6 +42,8 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onMode
   const [acknowledged, setAcknowledged] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const requestId = useRef<string | null>(null)
+  const quoteId = useRef<string | null>(null)
+  const { confirmQuote, quoteDialog } = useBillingQuote()
   const active = useRef(false)
   const [results, setResults] = useState<Asset[]>([])
   const model = catalog?.models.find((item) => item.id === node.generation?.model)
@@ -68,6 +73,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onMode
         const tasks = await api<Task[]>(`${tasksPath}?node_id=${node.id}`)
         if (!current) return
         setTask(tasks[0] ?? null)
+        if (tasks.some(row => row.id === requestId.current)) { requestId.current = null; quoteId.current = null }
         setError('')
         if (tasks[0] && running(tasks[0].status)) timer = setTimeout(() => { void refresh() }, isImage ? 2000 : 15000)
       } catch (reason) {
@@ -103,17 +109,26 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onMode
     try {
       await onSave()
       // 主动核实后的重新提交是新意图；普通断网重试继续复用原标识。
-      if (acknowledged) requestId.current = null
+      if (acknowledged) { requestId.current = null; quoteId.current = null }
+      if (catalog?.billing_required && !quoteId.current) {
+        const quote = await confirmQuote({ kind, project_id:projectId, node_id:node.id })
+        if (!quote) return
+        quoteId.current = quote.id
+      }
       requestId.current ??= crypto.randomUUID()
-      const created = await api<Task>(tasksPath, 'POST', { request_id:requestId.current, node_id:node.id, acknowledge_unknown:acknowledged })
-      setTask(created); requestId.current = null; setAcknowledged(false); setAttempt((value) => value + 1)
+      const created = await api<Task>(tasksPath, 'POST', { request_id:requestId.current, node_id:node.id, acknowledge_unknown:acknowledged, ...(quoteId.current ? { quote_id:quoteId.current } : {}) })
+      setTask(created); requestId.current = null; quoteId.current = null; setAcknowledged(false); setAttempt((value) => value + 1)
     } catch (reason) {
-      setError(`${(reason as Error).message}。请先刷新任务状态；再次点击会使用同一请求标识。`)
+      if (reason instanceof MediaError && reason.status >= 400 && reason.status < 500) {
+        requestId.current = null; quoteId.current = null
+        setError(`${reason.message}。请核对参数与余额后重新确认预算。`)
+      } else setError(`${(reason as Error).message}。请先刷新任务状态；再次点击会使用同一请求标识。`)
     } finally { active.current = false; setBusy(false) }
-  }, [onSave, tasksPath, node.id, acknowledged])
+  }, [onSave, tasksPath, node.id, acknowledged, catalog, confirmQuote, kind, projectId])
   const blocked = busy || Boolean(task && running(task.status)) || task?.status === 'unknown' && !acknowledged
   const referenceBlocked = (node.generation?.mode ?? 'text') !== 'text' && catalog && (!catalog.references_ready || isImage && model?.image_edit === false)
   return <div className="media-video-generation">
+    {quoteDialog}
     <div className="media-video-generation-actions">
       <select aria-label={`${noun}生成模型`} title={model ? model.parameters_known === false ? `${model.id} · 使用模型默认参数` : model.id : `选择${noun}模型`} value={model?.id ?? ''} disabled={busy || !catalog?.models.length} onChange={(event) => chooseModel(event.target.value)}>
         <option value="">{catalog ? catalog.configured ? `选择${noun}模型` : `尚未配置${noun}服务` : `加载${noun}模型…`}</option>
@@ -134,6 +149,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onMode
     }}>使用生成结果</button>}</div>}
     {isImage && task?.status === 'completed' && <div className="media-generated-results" aria-label="生成图片结果">{results.filter((asset) => resultKey.split(',').includes(asset.id)).map((asset, index) => <div className="media-generated-result" key={asset.id}><AssetPreview asset={asset} thumbnail /><button type="button" className="media-generated-use" aria-label={`使用第 ${index + 1} 张生成图片`} title={`使用第 ${index + 1} 张生成图片`} aria-pressed={node.asset_id === asset.id} onClick={() => onResult(asset)}>{node.asset_id === asset.id && <Check size={12} aria-hidden="true" />}</button></div>)}</div>}
     {task?.error && <p role="status">{task.error}</p>}
+    <BillingStatus initial={task?.billing} />
     {task?.status === 'download_failed' && <button type="button" disabled={busy} onClick={() => {
       setBusy(true)
       void api<Task>(`${tasksPath}/${task.id}/retry-download`, 'POST').then((next) => { setTask(next); setAttempt((value) => value + 1) }).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false))

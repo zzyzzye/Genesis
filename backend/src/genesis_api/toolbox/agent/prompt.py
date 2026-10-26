@@ -1,4 +1,17 @@
-"""工具箱助手的系统指令，明确当前未接入真实业务工具。"""
+"""工具箱文字建议和专用 SVG 生成提示词。"""
+
+
+def svg_system_message() -> str:
+    """只生成静态、自包含的 SVG，不加载或执行外部资源。"""
+    return (
+        "你是 Genesis SVG 设计助手。按用户描述生成精致、清晰的静态 SVG。"
+        "只返回一份完整的 <svg> XML，不使用 Markdown 代码围栏，不附说明。"
+        "必须包含 xmlns 和 viewBox，合理留白，中文文字清晰。"
+        "只使用静态图形、内联展示属性、defs 和局部 #id 引用。"
+        "禁止 script、foreignObject、style 标签、动画、事件属性、外链、"
+        "外部字体、图片资源、HTML、实体声明及网络请求。"
+        "保持源码简洁，必须在输出限制内闭合全部标签。"
+    )
 
 
 class ToolboxAgentPrompt:

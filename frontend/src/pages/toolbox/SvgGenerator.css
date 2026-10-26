@@ -1,0 +1,14 @@
+.svg-page { min-height:100dvh; padding:36px max(40px,calc((100vw - 1320px)/2)); background:#dfe8e9; color:#15242c; }
+.svg-page header,.svg-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.svg-page a { color:inherit; text-decoration:none; }.svg-page a:is(:hover,:focus-visible) { color:#aaa; }
+.svg-heading { max-width:720px; margin:56px 0 32px; }.svg-heading>span { color:#4b6468; font-size:13px; }.svg-heading h1 { font-size:clamp(28px,4vw,46px); font-weight:500; letter-spacing:-1px; margin:12px 0; }
+.svg-heading p,.svg-actions>span,.svg-preview>p { color:#4b6468; line-height:1.8; }.svg-actions>span { font-size:12px; }
+.svg-page form { max-width:900px; }.svg-page label { font-size:13px; color:#4b6468; }.svg-page textarea { display:block; width:100%; margin:12px 0; min-height:110px; max-height:320px; padding:0; resize:none; background:transparent; border:0; outline:none; box-shadow:none; color:inherit; font:inherit; line-height:1.8; }
+.svg-page textarea:focus { background:transparent; border:0; outline:none; box-shadow:none; }
+.svg-page button { background:rgb(21 36 44 / 9%); border:0; outline:none; box-shadow:none; border-radius:6px; padding:9px 14px; color:inherit; cursor:pointer; font-size:12px; }
+.svg-page button:is(:hover,:focus-visible) { background:rgb(21 36 44 / 15%); }.svg-page button:disabled { opacity:.4; cursor:default; }.svg-actions>div { display:flex; gap:8px; }
+.svg-feedback { min-height:48px; padding-top:12px; font-size:13px; color:#4b6468; }.svg-feedback p { margin:0; line-height:1.8; }
+.svg-workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:32px; margin-top:20px; }.svg-workspace h2 { font-size:14px; font-weight:500; color:#4b6468; margin:0 0 16px; }
+.svg-preview { min-height:380px; }.svg-preview img { display:block; width:100%; height:360px; object-fit:contain; background:#edf2f2; border-radius:8px; }.svg-preview>p { padding-top:100px; text-align:center; }
+.svg-source { min-width:0; }.svg-source pre { margin:0; height:360px; overflow:auto; background:#e8efef; border:0; outline:none; box-shadow:none; padding:16px; border-radius:8px; font-size:12px; line-height:1.7; tab-size:2; }.svg-source pre:focus-visible { background:#e2ebeb; }.svg-source .svg-actions { min-height:34px; margin-bottom:8px; }.svg-source h2 { margin:0; }
+@media(max-width:700px) { .svg-page { padding:24px 18px; }.svg-heading { margin-top:36px; }.svg-workspace { grid-template-columns:minmax(0,1fr); gap:24px; }.svg-preview { min-height:280px; }.svg-preview img { height:280px; }.svg-source pre { height:300px; }.svg-actions { gap:10px; } }

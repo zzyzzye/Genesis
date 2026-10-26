@@ -92,6 +92,10 @@ class AiChatRequest(BaseModel):
     """对话请求；API 在执行前覆盖调用身份，恢复标记由后台任务管理器设置。"""
 
     surface: AiSurface
+    request_id: UUID | None = None
+    quote_id: UUID | None = None
+    billing_source_id: UUID | None = Field(default=None, exclude=True)
+    purpose: Literal["chat", "svg"] = "chat"
     conversation_id: UUID | None = None
     messages: list[AiMessage] = Field(min_length=1, max_length=40)
     context: AiContext | None = None
@@ -195,6 +199,7 @@ class AiConversationMessage(BaseModel):
     status: AiChatRunStatus
     error: str | None = None
     metrics: AiGenerationMetrics | None = None
+    billing: dict[str, object] | None = None
     proposals: list[AgentActionProposal] = Field(default_factory=list)
     tool_calls: list[AgentToolCall] = Field(default_factory=list)
     attachments: list[AiAttachment] = Field(default_factory=list, exclude_if=lambda v: not v)
@@ -218,6 +223,7 @@ class AiChatRunSnapshot(BaseModel):
     """
 
     id: UUID
+    billing: dict[str, object] | None = None
     status: AiChatRunStatus
     content: str
     sequence: int

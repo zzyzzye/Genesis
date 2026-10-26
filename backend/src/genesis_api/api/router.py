@@ -6,6 +6,7 @@ from genesis_api.api.routes import (
     admin_blog,
     ai,
     auth,
+    billing,
     blog,
     blog_attachments,
     blog_comments,
@@ -21,6 +22,7 @@ api_router = APIRouter()
 # 平台级能力只负责健康检查和身份认证；业务路由按系统独立挂载，避免跨系统互相引用。
 api_router.include_router(health.router, tags=["platform"])
 api_router.include_router(auth.router)
+api_router.include_router(billing.router)
 api_router.include_router(blog.router)
 api_router.include_router(blog_attachments.public_router)
 api_router.include_router(blog_attachments.admin_router)

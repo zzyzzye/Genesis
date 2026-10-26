@@ -29,6 +29,7 @@ function ProviderIcon({ provider }: { provider: AiProvider }) {
   return <svg className={`provider-icon provider-icon--${provider}`} {...common} aria-label="Claude / Anthropic 官方标识"><path d="M17.3041 3.541h-3.6718l6.696 16.918H24Zm-10.6082 0L0 20.459h3.7442l1.3693-3.5527h7.0052l1.3693 3.5528h3.7442L10.5363 3.5409Zm-.3712 10.2232 2.2914-5.9456 2.2914 5.9456Z" /></svg>
 }
 import {
+  ApiError,
   AiChatRunTerminalError,
   cancelAiChatRun,
   confirmAiAction,
@@ -64,9 +65,13 @@ import { questionAnswers, splitAgentQuestion } from './questionProtocol'
 import { modelDisplayName } from './modelDisplayName'
 import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from './useReasoningEffort'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
+import { BillingStatus } from '../billing/BillingControls'
+import { useBillingQuote } from '../billing/useBillingQuote'
+import type { BillingOperation } from '../billing/api'
+import type { AiChatRequest } from '../../lib/api'
 
 type AssistantTiming = { startedAt: number; firstTokenAt?: number; completedAt?: number }
-type AssistantMessage = { role: 'assistant' | 'user'; content: string; attachments?: AiAttachment[]; status?: string; error?: string | null; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; executedProposals?: string[]; tool_calls?: AiToolCall[] }
+type AssistantMessage = { role: 'assistant' | 'user'; content: string; attachments?: AiAttachment[]; status?: string; error?: string | null; timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; executedProposals?: string[]; tool_calls?: AiToolCall[]; billing?: BillingOperation | null }
 export type AssistantEditorContext = { id: string | null; title: string; excerpt: string; contentMarkdown: string; slug: string; status: 'draft' | 'published' }
 export type AssistantPageContext = { route: string; section: string; pageType: 'overview' | 'posts_list' | 'post_editor' | 'post_preview' | 'section' }
 type ActiveAssistantRun = { id: string; assistantMessageIndex: number }
@@ -302,6 +307,9 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   const [model, setModel] = useState(initialModel.model)
   const [models, setModels] = useState<AvailableModel[]>([])
   const [modelsLoading, setModelsLoading] = useState(true)
+  const [modelsError, setModelsError] = useState('')
+  const { confirmQuote, quoteDialog } = useBillingQuote()
+  const pendingRequest = useRef<AiChatRequest | null>(null)
   const modelsCache = useRef<Partial<Record<AiProvider, AvailableModel[]>>>({})
   const selectedModels = useRef<Partial<Record<AiProvider, string>>>({ [initialModel.provider]: initialModel.model })
   const modelTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -362,13 +370,17 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
 
     let cancelled = false
     setModelsLoading(true)
+    setModelsError('')
     const load = async () => {
       let availableModels = modelsCache.current[provider]
       if (!availableModels) {
         try {
           availableModels = (await getProviderModels(token, provider)).models
           modelsCache.current[provider] = availableModels
-        } catch { availableModels = [] }
+        } catch (reason) {
+          availableModels = []
+          if (!cancelled) setModelsError(reason instanceof Error ? reason.message : '模型列表获取失败，请重新打开助手重试。')
+        }
       }
       if (cancelled) return
       setModelsLoading(false)
@@ -440,8 +452,8 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
       setConversation(result)
       const restored: AssistantMessage[] = [
         ...welcomeMessages(),
-        ...result.messages.map(({ role, content, metrics, proposals, status, error, attachments, tool_calls }) => ({
-          role, content, metrics, proposals, status, error, attachments, tool_calls,
+        ...result.messages.map(({ role, content, metrics, proposals, status, error, attachments, tool_calls, billing }) => ({
+          role, content, metrics, proposals, status, error, attachments, tool_calls, billing,
           ...((status === 'pending' || status === 'running') ? {
             timing: { startedAt: Date.now() - (metrics?.total_seconds ?? 0) * 1000 },
           } : {}),
@@ -641,6 +653,10 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
               setMessages((current) => current.map((message, index) => index === run.assistantMessageIndex
                 ? { ...message, metrics } : message))
             },
+            onBilling: (billing) => {
+              if (cancelled || selection !== selectionVersion.current) return
+              setMessages(current => current.map((message, index) => index === run.assistantMessageIndex ? { ...message, billing } : message))
+            },
             onSnapshot: (content) => { received = content; activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }; markFirstToken(content); queue(); setStreamStatus('正在生成…') },
             onToken: (content) => { received += content; activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }; markFirstToken(content); queue() },
           }, controller.signal)
@@ -694,6 +710,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   }
 
   function resetConversation() {
+    pendingRequest.current = null
     ++selectionVersion.current
     streamControllerRef.current?.abort()
     setActiveRun(null)
@@ -732,6 +749,19 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
       return
     }
     const retainedMessages = messages.filter((message) => message.content.trim().length > 0 || message.attachments?.length || message.proposals?.length || message.status)
+    let quoteId: string | undefined
+    const previousRequest = pendingRequest.current
+    if (previousRequest && (previousRequest.messages[0]?.content !== content || previousRequest.provider !== provider || previousRequest.model !== (model || undefined))) {
+      setError('上次提交结果尚未确认，请先重新打开助手核对会话，再发起不同请求。')
+      return
+    }
+    if (!previousRequest && selectedModel?.billing_mode) {
+      try {
+        const quote = await confirmQuote({ kind:'agent',provider,model }, token)
+        if (!quote) return
+        quoteId = quote.id
+      } catch (reason) { setError((reason as Error).message); return }
+    }
     const assistantMessageIndex = retainedMessages.length + 1
     scrollToLatest()
     setMessages([...retainedMessages, { role: 'user', content, attachments: selectedAttachments }, { role: 'assistant', content: '', timing: { startedAt: Date.now() } }])
@@ -749,7 +779,9 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
         setConversationId(id)
         attachments.moveTo(id)
       }
-      const run = await createAiChatRun(token, {
+      const body: AiChatRequest = previousRequest ?? {
+        request_id: crypto.randomUUID(),
+        ...(quoteId ? { quote_id:quoteId } : {}),
         surface,
         conversation_id: id,
         messages: [{ role: 'user', content, ...(selectedAttachments.length ? { attachment_ids: selectedAttachments.map(item => item.id) } : {}) }],
@@ -771,11 +803,15 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             editor_status: editor.status,
           } : {}),
         },
-      })
+      }
+      pendingRequest.current = body
+      const run = await createAiChatRun(token, body)
+      pendingRequest.current = null
       setActiveRun({ id: run.id, assistantMessageIndex })
       attachments.clear(id)
       setStreamStatus('正在生成…')
     } catch (caught) {
+      if (caught instanceof ApiError && caught.status >= 400 && caught.status < 500) pendingRequest.current = null
       setError(caught instanceof Error ? caught.message : 'AI 请求失败，请稍后再试。')
       setStreamStatus(null)
       setMessages((current) => current.slice(0, assistantMessageIndex - 1))
@@ -836,7 +872,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   }, [onExecuted, authKey])
 
   return (
-    <AnimatePresence initial={false}>
+    <>{quoteDialog}<AnimatePresence initial={false}>
     {isOpen ? <motion.div key="assistant" ref={rootRef} className={`studio-assistant${media ? ` media-assistant ${media.className}` : ''} is-open${expanded ? ' is-expanded' : ''}`}
       initial={{ opacity: 0, x: reducedMotion ? 0 : media ? 24 : '100%', y: reducedMotion || !media ? 0 : 16, '--assistant-motion-width': `${panelWidth}px` }} animate={{ opacity: 1, x: 0, y: 0, '--assistant-motion-width': expanded ? '960px' : `${panelWidth}px` }} exit={{ opacity: 0, x: reducedMotion ? 0 : media ? 24 : '100%', y: reducedMotion || !media ? 0 : 16 }}
       transition={resizing ? { ...transition, duration: 0 } : transition}>
@@ -892,6 +928,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
                 if (message.role === 'user' && previousQuestion && questionAnswers(previousQuestion, message.content)) return null
                 return (
                 <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={(message.role === 'assistant' ? splitAgentQuestion(message.content).request?.id : null) ?? `${conversationId ?? 'new'}-${message.role}-${index}`}>
+                  {message.role === 'assistant' && <BillingStatus initial={message.billing} token={getStoredAuthToken(authKey) ?? undefined} />}
                   {message.role === 'assistant' ? <><MarkdownMessage {...message} {...(media ? { content: message.content.replace(/```canvas-plan[\s\S]*?(?:```|$)/ig, '').trim() } : {})} targetPost={editor} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} onAnswer={(answer) => { void sendMessage(answer) }} questionDisabled={isBusy || conversationLoading} questionAnswer={messages.slice(index + 1).find((item) => item.role === 'user')?.content} />{media?.renderResponse(message.content, `${conversationId ?? 'new'}:${index}`, isBusy)}</> : <div className="blog-agent-user-content">{message.content && <p>{message.content}</p>}{!!message.attachments?.length && <BlogMessageAttachments items={message.attachments} authKey={authKey} />}</div>}
                 </div>
               )})}
@@ -958,7 +995,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
                 <span className="studio-assistant__ring-tooltip" aria-hidden="true">{contextDescription}</span>
               </span>
               {modelMenuOpen && <div ref={modelMenuRef} className="studio-assistant__model-menu">
-                <AgentModelPicker provider={provider} models={models} model={model} loading={modelsLoading} disabled={isBusy} effort={reasoning.effort} onProviderChange={(next) => {
+                <AgentModelPicker provider={provider} models={models} model={model} loading={modelsLoading} error={modelsError} disabled={isBusy} effort={reasoning.effort} onProviderChange={(next) => {
                   if (next === provider) return
                   setModelsLoading(true)
                   setProvider(next)
@@ -984,6 +1021,6 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
         {!isOpen && <span className="studio-assistant__launcher-signal" />}
       </button>
     </motion.div>}
-    </AnimatePresence>
+    </AnimatePresence></>
   )
 }

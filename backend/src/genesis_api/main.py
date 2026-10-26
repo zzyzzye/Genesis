@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from genesis_api.agent.runtime import embedded_agent_runtime
 from genesis_api.ai.runs import ai_chat_run_manager
 from genesis_api.api.router import api_router
+from genesis_api.billing.reconciliation import reconcile_forever
 from genesis_api.blog.agent.guide import refresh_article_guides
 from genesis_api.blog.publication import refresh_scheduled_posts
 from genesis_api.core.access_logging import protect_media_reference_logs
@@ -38,6 +39,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     )
     video_task = asyncio.create_task(refresh_videos(), name="media-video-generations")
     image_task = asyncio.create_task(recover_images(), name="media-image-generations")
+    billing_task = asyncio.create_task(reconcile_forever(settings), name="billing-reconciliation")
     try:
         yield
     finally:
@@ -45,8 +47,14 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         publication_task.cancel()
         video_task.cancel()
         image_task.cancel()
+        billing_task.cancel()
         await asyncio.gather(
-            guide_task, publication_task, video_task, image_task, return_exceptions=True
+            guide_task,
+            publication_task,
+            video_task,
+            image_task,
+            billing_task,
+            return_exceptions=True,
         )
         # 等待生成任务退出后才关闭 checkpoint，避免取消过程中仍访问已关闭连接。
         await ai_chat_run_manager.shutdown()

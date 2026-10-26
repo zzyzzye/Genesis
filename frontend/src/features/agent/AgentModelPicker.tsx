@@ -9,11 +9,12 @@ import './AgentModelPicker.css'
 const providers: AiProvider[] = ['openai', 'grok', 'gemini', 'claude', 'mimo']
 const labels: Record<AiProvider, string> = { openai: 'OpenAI', grok: 'Grok', gemini: 'Gemini', claude: 'Claude', mimo: 'MiMo' }
 
-export function AgentModelPicker({ provider, models, model, loading = false, disabled, effort, thinkingMode, onThinkingModeChange, onProviderChange, onModelChange, onEffortChange }: {
+export function AgentModelPicker({ provider, models, model, loading = false, error = '', disabled, effort, thinkingMode, onThinkingModeChange, onProviderChange, onModelChange, onEffortChange }: {
   provider: AiProvider
   models: AvailableModel[]
   model: string
   loading?: boolean
+  error?: string
   disabled: boolean
   effort: string | undefined
   thinkingMode?: ThinkingMode
@@ -32,8 +33,10 @@ export function AgentModelPicker({ provider, models, model, loading = false, dis
     </div>
     <label className="agent-picker__search"><Search aria-hidden="true" /><input aria-label="搜索模型" placeholder="搜索模型…" value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.preventDefault() }} /></label>
     <div className="agent-picker__models" aria-label={`${provider} 模型列表`} aria-busy={loading}>
-      {loading ? <p role="status">正在加载模型…</p> : !models.length ? <p>当前服务商没有可用模型。</p> : !filtered.length ? <p>没有匹配的模型，试试其他名称。</p> : filtered.map((item) => <button type="button" key={item.id} title={item.name || item.id} aria-pressed={model === item.id} disabled={disabled} onClick={() => onModelChange(item.id)}>
+      {error && <p role="alert">{error} 切换供应商或重新打开助手可重试。</p>}
+      {error ? null : loading ? <p role="status">正在加载模型…</p> : !models.length ? <p>当前服务商没有可用模型。</p> : !filtered.length ? <p>没有匹配的模型，试试其他名称。</p> : filtered.map((item) => <button type="button" key={item.id} title={item.name || item.id} aria-pressed={model === item.id} disabled={disabled} onClick={() => onModelChange(item.id)}>
         <span className="agent-picker__name">{modelDisplayName(item.name || item.id)}</span>
+        {item.billing_mode && <small>{({ free:'免费',paid:'按量付费',platform:'站点承担',unavailable:'暂未开放计费' })[item.billing_mode]}</small>}
         {item.context_window != null && <small>{item.context_window >= 1_000_000 ? `${Number((item.context_window / 1_000_000).toFixed(2))}M` : `${Math.round(item.context_window / 1000)}K`}</small>}
         <span className="agent-picker__check" aria-hidden="true">{model === item.id && <Check />}</span>
       </button>)}

@@ -250,3 +250,7 @@ docker compose --env-file .env.development -f compose.yml exec -T backend uv run
 参考素材取生视频节点的直接连入素材，按连线顺序传递。当前本地环境保留 `GENESIS_VIDEO_PUBLIC_BASE_URL` 为空，文生视频可独立使用；参考模式会明确提示需要公网部署。待 `https://serenova.cn` 部署完成、可从公网访问 `/api/v1/media/video-references/` 后，再设置 `GENESIS_VIDEO_PUBLIC_BASE_URL=https://serenova.cn` 并通过 Compose 应用。素材按任务签发两小时读取链接，不改变账户素材的私有状态；提交前先检查公网 GET 和媒体类型。自带 Nginx 与后端访问日志不记录这些链接的授权参数，外层反向代理也应过滤该路径的查询串。
 
 视频参考链接在素材 UUID 后按 MIME 类型带上 `.png`、`.jpg`、`.mp4`、`.wav` 等后缀，下载响应同时携带与类型一致的文件名；原有无后缀链接仍兼容，后缀不匹配返回 404，授权仍绑定任务与素材。生图的 multipart 参考文件同样携带规范的原文件名和后缀。存储仍使用私有 UUID 文件，不需要移动已有素材或执行数据库迁移。
+
+### 钱包与免费 SVG
+
+登录用户可使用影音助手与生成工具。MiMo 和 `/toolbox/svg` 免费；YYAPI 付费模型按已审核的预算先冻结，再按上游实账结算，未用部分退回。钱包位于 `/account/wallet`，站长在 `/account/billing` 人工入账和审核价格，新用户不赠送付费额度。上线先执行账务迁移，未核验价格和账单的模型不能向普通用户开放付费调用。详见 [账务规则与发布步骤](docs/billing.md)。

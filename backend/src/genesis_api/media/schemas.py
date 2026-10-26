@@ -48,6 +48,7 @@ class GenerationSubmit(BaseModel):
     """一次生成意图的幂等标识与目标节点，不接受前端指定文件地址。"""
 
     request_id: UUID
+    quote_id: UUID | None = None
     node_id: UUID
     acknowledge_unknown: bool = False
 

@@ -28,8 +28,9 @@ export function ToolboxPage() {
           <p className="toolbox-lead">这是独立的个人工具箱。每个工具只解决一个明确问题，保持快速、安静、随开随用。</p>
         </section>
         <section className="toolbox-directory" aria-labelledby="toolbox-directory-title">
-          <div className="toolbox-section-title"><span>AVAILABLE MODULES</span><h2 id="toolbox-directory-title">工具目录</h2><strong>00 / 03 ONLINE</strong></div>
+          <div className="toolbox-section-title"><span>AVAILABLE MODULES</span><h2 id="toolbox-directory-title">工具目录</h2><strong>01 / 04 ONLINE</strong></div>
           <div className="toolbox-grid">
+            <article className="tool-tile"><span>SVG</span><div className="tool-glyph" aria-hidden="true">SVG</div><h3>免费 SVG 生成器</h3><p>用文字描述生成矢量图，支持预览、复制与下载。</p><Link to="/toolbox/svg">使用 MiMo 免费生成 ↗</Link></article>
             {utilities.map((tool, index) => (
               <article className="tool-tile" key={tool.code}>
                 <span>{String(index + 1).padStart(2, '0')}</span>

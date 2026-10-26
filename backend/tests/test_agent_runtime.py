@@ -336,6 +336,7 @@ async def test_runtime_streams_only_ai_text_and_resumes_checkpoint(
     assert received_inputs == [None]
 
     service = AgentService(settings, runtime)
+    request.billing_source_id = uuid4()
     assert [item async for item in service.stream(request, thread_id="thread")] == ["保留"]
 
 

@@ -183,7 +183,7 @@ async function requestResponse(path: string, init?: RequestInit): Promise<Respon
   return response
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await requestResponse(path, init)
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
@@ -452,6 +452,7 @@ export type ThinkingMode = 'enabled' | 'disabled'
 
 export interface AvailableModel {
   id: string
+  billing_mode?: 'free' | 'paid' | 'platform' | 'unavailable'
   name: string | null
   created: number | null
   context_window: number | null
@@ -505,6 +506,9 @@ export interface AiChatContext {
 
 export interface AiChatRequest {
   surface: AiSurface
+  request_id?: string
+  quote_id?: string
+  purpose?: 'chat' | 'svg'
   conversation_id?: string
   messages: AiChatMessage[]
   context?: AiChatContext
@@ -524,6 +528,7 @@ export interface AiChatRunCreated {
 
 export interface AiChatRunSnapshot {
   id: string
+  billing?: import('../features/billing/api').BillingOperation | null
   status: AiChatRunStatus
   content: string
   sequence: number
@@ -566,7 +571,7 @@ export interface AiConversation {
 }
 
 export interface AiConversationDetail extends AiConversation {
-  messages: (AiChatMessage & { run_id: string; status: AiChatRunStatus; error: string | null; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; tool_calls?: AiToolCall[] })[]
+  messages: (AiChatMessage & { run_id: string; status: AiChatRunStatus; error: string | null; metrics?: AiGenerationMetrics | null; proposals?: AiActionProposal[]; tool_calls?: AiToolCall[]; billing?: import('../features/billing/api').BillingOperation | null })[]
 }
 
 export function listAiConversations(token: string, offset = 0, surface: 'studio' | 'media' = 'studio'): Promise<AiConversation[]> {
@@ -654,6 +659,7 @@ export async function streamAiChatRun(
   token: string,
   runId: string,
   handlers: {
+    onBilling?: (billing: import('../features/billing/api').BillingOperation | null) => void
     onSnapshot: (content: string, sequence: number) => void
     onToken: (content: string, sequence: number) => void
     onMetrics?: (metrics: AiGenerationMetrics | null) => void
@@ -696,11 +702,13 @@ export async function streamAiChatRun(
         message?: string
         sequence?: number
         metrics?: AiGenerationMetrics | null
+        billing?: import('../features/billing/api').BillingOperation | null
         proposals?: AiActionProposal[]
         tool_calls?: AiToolCall[]
       }
       const sequence = payload.sequence ?? 0
       if ('metrics' in payload) handlers.onMetrics?.(payload.metrics ?? null)
+      if ('billing' in payload) handlers.onBilling?.(payload.billing ?? null)
       if (payload.type === 'proposals') handlers.onProposals?.(payload.proposals ?? [])
       if ('tool_calls' in payload) handlers.onToolCalls?.(payload.tool_calls ?? [])
       if (payload.type === 'snapshot') handlers.onSnapshot(payload.content ?? '', sequence)

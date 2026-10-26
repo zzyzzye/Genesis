@@ -59,7 +59,8 @@ def _check_conversation_access(user: User, surface: ConversationSurface) -> None
 
 @router.post("/chat/conversations", response_model=AiConversationSummary, status_code=201)
 def create_conversation(
-    current_user: CurrentUserDependency, session: SessionDependency,
+    current_user: CurrentUserDependency,
+    session: SessionDependency,
     surface: ConversationSurface = "studio",
 ) -> AiConversationSummary:
     """在指定模块创建私有会话，复用现有生成任务。"""
@@ -73,18 +74,24 @@ def create_conversation(
 
 @router.get("/chat/conversations", response_model=list[AiConversationSummary])
 def list_conversations(
-    current_user: CurrentUserDependency, session: SessionDependency,
-    offset: int = Query(default=0, ge=0), limit: int = Query(default=30, ge=1, le=100),
+    current_user: CurrentUserDependency,
+    session: SessionDependency,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=30, ge=1, le=100),
     surface: ConversationSurface = "studio",
 ) -> list[AiConversationSummary]:
     """分页列出当前用户在指定模块的会话。"""
     _check_conversation_access(current_user, surface)
-    conversations = session.scalars(select(AiConversation).where(
-        AiConversation.user_id == current_user.id,
-        AiConversation.surface == surface,
-    ).order_by(
-        AiConversation.updated_at.desc(), AiConversation.id.desc()
-    ).offset(offset).limit(limit))
+    conversations = session.scalars(
+        select(AiConversation)
+        .where(
+            AiConversation.user_id == current_user.id,
+            AiConversation.surface == surface,
+        )
+        .order_by(AiConversation.updated_at.desc(), AiConversation.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
     return [AiConversationSummary.model_validate(item) for item in conversations]
 
 
@@ -104,7 +111,9 @@ def bulk_delete_conversations(
 
 @router.get("/chat/conversations/{conversation_id}", response_model=AiConversationDetail)
 def get_conversation(
-    conversation_id: UUID, current_user: CurrentUserDependency, session: SessionDependency,
+    conversation_id: UUID,
+    current_user: CurrentUserDependency,
+    session: SessionDependency,
     surface: ConversationSurface = "studio",
 ) -> AiConversationDetail:
     """读取会话正文及任务状态，以便刷新后继续订阅未完成回答。"""
@@ -115,8 +124,10 @@ def get_conversation(
 
 @router.patch("/chat/conversations/{conversation_id}", response_model=AiConversationSummary)
 def rename_conversation(
-    conversation_id: UUID, payload: AiConversationRename,
-    current_user: CurrentUserDependency, session: SessionDependency,
+    conversation_id: UUID,
+    payload: AiConversationRename,
+    current_user: CurrentUserDependency,
+    session: SessionDependency,
     surface: ConversationSurface = "studio",
 ) -> AiConversationSummary:
     """手动命名后标记来源，后台自动标题不能覆盖用户选择。"""
@@ -153,6 +164,23 @@ def _prepare_request(
     Raises:
         HTTPException: 非所有者访问 studio 返回 403，后台模块或栏目不支持返回 422。
     """
+    if request.purpose == "svg":
+        if (
+            request.surface != "toolbox"
+            or request.conversation_id is not None
+            or len(request.messages) != 1
+        ):
+            raise HTTPException(422, "SVG 生成必须使用工具箱的独立描述请求")
+        settings = get_settings()
+        request = request.model_copy(
+            update={
+                "provider": "mimo",
+                "model": settings.text_mimo_model,
+                "billing_source_id": None,
+            }
+        )
+    else:
+        request = request.model_copy(update={"billing_source_id": None})
     if request.surface == "studio" and current_user_role is not UserRole.OWNER:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -190,11 +218,13 @@ def _prepare_request(
     if request.conversation_id is not None:
         agent_context["action_results"] = [
             item["execution_result"]
-            for run in session.scalars(select(AiChatRun).where(
-                AiChatRun.user_id == current_user.id,
-                AiChatRun.conversation_id == request.conversation_id,
-                AiChatRun.proposals.is_not(None),
-            ))
+            for run in session.scalars(
+                select(AiChatRun).where(
+                    AiChatRun.user_id == current_user.id,
+                    AiChatRun.conversation_id == request.conversation_id,
+                    AiChatRun.proposals.is_not(None),
+                )
+            )
             for item in run.proposals or []
             if item.get("executed") and isinstance(item.get("execution_result"), dict)
         ]
@@ -264,6 +294,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                         "type": "snapshot",
                         "run_id": str(snapshot.id),
                         "content": snapshot.content,
+                        "billing": snapshot.billing,
                         "tool_calls": [
                             item.model_dump(mode="json") for item in snapshot.tool_calls
                         ],
@@ -282,7 +313,8 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                                 "content": delta,
                                 "sequence": snapshot.sequence,
                                 "metrics": snapshot.metrics.model_dump()
-                                if snapshot.metrics else None,
+                                if snapshot.metrics
+                                else None,
                             },
                             event_id=snapshot.sequence,
                         )
@@ -312,16 +344,22 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
 
             proposals = [item.model_dump(mode="json") for item in snapshot.proposals]
             if proposals != last_proposals:
-                yield _encode_event({
-                    "type": "proposals",
-                    "proposals": proposals,
-                })
+                yield _encode_event(
+                    {
+                        "type": "proposals",
+                        "proposals": proposals,
+                    }
+                )
                 last_proposals = proposals
 
             if snapshot.status is AiChatRunStatus.COMPLETED:
                 yield _encode_event(
-                    {"type": "done", "sequence": snapshot.sequence,
-                     "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None},
+                    {
+                        "type": "done",
+                        "sequence": snapshot.sequence,
+                        "billing": snapshot.billing,
+                        "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
+                    },
                     event_id=snapshot.sequence,
                 )
                 return
@@ -330,6 +368,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
                     {
                         "type": "error",
                         "message": snapshot.error or "AI 生成失败",
+                        "billing": snapshot.billing,
                         "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
                         "sequence": snapshot.sequence,
                     },
@@ -390,7 +429,8 @@ def _start_run(
         settings=settings,
     )
     # 数据库记录已提交后再启动独立任务，SSE 的生命周期不拥有生成任务。
-    ai_chat_run_manager.start(run.id, prepared_request, settings)
+    if run.status is AiChatRunStatus.PENDING:
+        ai_chat_run_manager.start(run.id, prepared_request, settings)
     return run
 
 
@@ -575,11 +615,15 @@ def confirm_agent_action(
     # 仅查当前用户的结构化提议；执行记录供历史卡片恢复，避免刷新后再次确认。
     proposal_id = str(proposal.get("proposal_id"))
     stored_run = None
-    for run in session.scalars(select(AiChatRun).where(
-        AiChatRun.user_id == current_user.id, AiChatRun.proposals.is_not(None),
-    )):
-        matching = next((item for item in run.proposals or []
-                         if item.get("proposal_id") == proposal_id), None)
+    for run in session.scalars(
+        select(AiChatRun).where(
+            AiChatRun.user_id == current_user.id,
+            AiChatRun.proposals.is_not(None),
+        )
+    ):
+        matching = next(
+            (item for item in run.proposals or [] if item.get("proposal_id") == proposal_id), None
+        )
         if matching is not None:
             if matching.get("executed"):
                 raise HTTPException(status_code=409, detail="此操作已经执行，请刷新对话查看结果")
@@ -592,7 +636,8 @@ def confirm_agent_action(
         if stored_run is not None:
             stored_run.proposals = [
                 {**item, "executed": True, "execution_result": result}
-                if item.get("proposal_id") == proposal_id else item
+                if item.get("proposal_id") == proposal_id
+                else item
                 for item in stored_run.proposals or []
             ]
             session.commit()

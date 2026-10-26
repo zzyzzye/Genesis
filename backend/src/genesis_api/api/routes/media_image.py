@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from sqlalchemy import select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
+from genesis_api.billing import service as billing
 from genesis_api.core.config import get_settings
 from genesis_api.media import image, service
 from genesis_api.media.models import ImageGeneration
@@ -22,6 +23,7 @@ async def image_models(user: CurrentUserDependency) -> dict[str, object]:
         return {"configured": False, "references_ready": False, "models": []}
     return {
         "configured": True,
+        "billing_required": user.role.value != "owner",
         "references_ready": True,
         "models": await image.available_models(settings),
     }
@@ -104,6 +106,17 @@ async def create_image_task(
     models = await image.available_models(settings)
     if not any(model["id"] == node.generation.model for model in models):
         raise HTTPException(422, "该图片模型当前不可用，请刷新模型目录")
+    billing.admit(
+        session,
+        user,
+        source_id=task.id,
+        kind="image",
+        provider="image",
+        model=node.generation.model,
+        quote_id=data.quote_id,
+        settings=settings,
+        parameters=billing.media_parameters(node),
+    )
     session.add(task)
     session.commit()
     background_tasks.add_task(image.submit_saved_task, task.id, settings)

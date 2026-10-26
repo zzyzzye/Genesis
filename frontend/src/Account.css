@@ -88,6 +88,7 @@ body:has(.account-shell) { min-width: 0; }
 .account-profile-identity p { margin: 0; color: var(--account-muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .account-studio-entry { display: inline-flex; flex: none; min-height: 40px; align-items: center; gap: 4px; padding: 8px; border-radius: 8px; color: var(--account-muted); font-size: 12px; }
 .account-studio-entry:hover, .account-studio-entry:focus-visible { background: var(--account-hover); }
+.account-profile-navigation { display:flex; flex-wrap:wrap; gap:8px; margin:-16px 0 24px; }
 .account-card--profile .account-form { gap: 20px; }
 .account-profile-field { display: grid; grid-template-columns: var(--account-profile-label-width) minmax(0, 1fr); column-gap: var(--account-profile-column-gap); align-items: start; }
 .account-profile-field > label { display: flex; min-height: 48px; align-items: center; margin: 0; font-size: 13px; font-weight: 550; line-height: 1.5; }

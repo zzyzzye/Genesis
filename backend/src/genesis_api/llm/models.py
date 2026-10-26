@@ -13,6 +13,7 @@ class AvailableModel(BaseModel):
     """可选模型及统一能力元数据；数值限制单位为 token，未知字段为空。"""
 
     id: str
+    billing_mode: Literal["free", "paid", "platform", "unavailable"] = "unavailable"
     name: str | None = None
     created: int | None = None
     context_window: int | None = None

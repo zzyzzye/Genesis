@@ -67,7 +67,7 @@ async def fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncGener
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
     with Session(engine, expire_on_commit=False) as session:
-        user = User(id=uuid4(), handle="video-test", display_name="视频验收", role=UserRole.MEMBER)
+        user = User(id=uuid4(), handle="video-test", display_name="视频验收", role=UserRole.OWNER)
         session.add(user)
         session.commit()
         app.dependency_overrides[get_session] = lambda: session

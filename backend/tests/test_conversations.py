@@ -88,7 +88,12 @@ async def test_title_generation_does_not_overwrite_manual_rename(
     sessions: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with sessions() as session:
-        conversation = AiConversation(user_id=uuid4())
+        user = User(
+            id=uuid4(), handle="title-rename", display_name="标题测试", role=UserRole.OWNER
+        )
+        session.add(user)
+        session.flush()
+        conversation = AiConversation(user_id=user.id)
         session.add(conversation)
         session.commit()
         conversation_id = conversation.id
@@ -120,7 +125,12 @@ async def test_title_success_and_fallback(
     sessions: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch, failure: str,
 ) -> None:
     with sessions() as session:
-        conversation = AiConversation(user_id=uuid4())
+        user = User(
+            id=uuid4(), handle="title-fallback", display_name="标题测试", role=UserRole.OWNER
+        )
+        session.add(user)
+        session.flush()
+        conversation = AiConversation(user_id=user.id)
         session.add(conversation)
         session.commit()
         conversation_id = conversation.id

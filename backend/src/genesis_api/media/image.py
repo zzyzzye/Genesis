@@ -17,8 +17,10 @@ import httpx
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
+from genesis_api.billing import service as billing
+from genesis_api.billing.transport import after_response, before_request, execution_context
 from genesis_api.core.config import Settings
 from genesis_api.core.uploads import media_filename
 from genesis_api.database.session import SessionLocal
@@ -62,6 +64,9 @@ async def available_models(settings: Settings) -> list[dict[str, object]]:
 def task_data(task: ImageGeneration) -> dict[str, object]:
     """只返回本地状态和私有素材标识，不返回上游地址、原始响应或凭据。"""
     return {
+        "billing": billing.source_billing(session, task.id)
+        if (session := object_session(task))
+        else None,
         "id": str(task.id),
         "node_id": str(task.node_id),
         "status": task.status,
@@ -172,7 +177,9 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
                 else {"json": payload}
             )
             async with httpx.AsyncClient(
-                timeout=httpx.Timeout(930, connect=10), trust_env=False
+                timeout=httpx.Timeout(930, connect=10),
+                trust_env=False,
+                event_hooks={"request": [before_request], "response": [after_response]},
             ) as client:
                 sent = True
                 async with client.stream(
@@ -249,7 +256,12 @@ async def submit_saved_task(task_id: UUID, settings: Settings) -> None:
             .with_for_update(skip_locked=True)
         )
         if task is not None:
-            await request_image(task, session, settings)
+            try:
+                with execution_context(task.id, settings, SessionLocal):
+                    await request_image(task, session, settings)
+            finally:
+                billing.finish_operation(session, task.id)
+                session.commit()
 
 
 async def public_image(url: str) -> bytes:

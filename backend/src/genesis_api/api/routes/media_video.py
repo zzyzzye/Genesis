@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
+from genesis_api.billing import service as billing
 from genesis_api.core.config import get_settings
 from genesis_api.core.uploads import media_filename, media_suffix
 from genesis_api.media import service, video
@@ -27,6 +28,7 @@ async def video_models(user: CurrentUserDependency) -> dict[str, object]:
     ids = await video.available_models(settings)
     return {
         "configured": True,
+        "billing_required": user.role.value != "owner",
         "references_ready": settings.video_public_base_url.startswith("https://"),
         "models": [
             {**CATALOG[item].data(), "parameters_known": True}
@@ -125,6 +127,18 @@ async def create_video_task(
         snapshot=document.model_dump(mode="json"),
     )
     payload = video.build_payload(task, document, session, settings)
+    node = next(n for n in document.nodes if n.id == data.node_id)
+    billing.admit(
+        session,
+        user,
+        source_id=task.id,
+        kind="video",
+        provider="video",
+        model=node.generation.model,
+        quote_id=data.quote_id,
+        settings=settings,
+        parameters=billing.media_parameters(node),
+    )
     task.snapshot = {
         "node": next(
             node.model_dump(mode="json") for node in document.nodes if node.id == data.node_id

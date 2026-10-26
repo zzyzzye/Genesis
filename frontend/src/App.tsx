@@ -8,6 +8,8 @@ import { Home } from './pages/home/Home'
 import { PublicBlog } from './pages/blog/BlogPage'
 import { MediaPage } from './pages/media/MediaPage'
 import { ToolboxPage } from './pages/toolbox/ToolboxPage'
+import { SvgGenerator } from './pages/toolbox/SvgGenerator'
+import { WalletPage } from './features/billing/WalletPage'
 import { motionCssVariables, pageTransition } from './lib/motion'
 import { SessionRecovery } from './SessionRecovery'
 import { CursorEffects } from './features/cursor/CursorEffects'
@@ -61,6 +63,7 @@ function PageRoutes({ location }: { location: Location }) {
         <Route path="/blog/studio/pages/*" element={<Navigate replace to="/blog/studio" />} />
         <Route path="/articles/:slug" element={<PublicBlog />} />
         <Route path="/toolbox/*" element={<ToolboxPage />} />
+        <Route path="/toolbox/svg" element={<SvgGenerator />} />
         <Route path="/tools/*" element={<LegacyToolboxRedirect />} />
         <Route path="/media/*" element={<MediaPage />} />
         <Route path="/media/projects/:projectId" element={<MediaPage />} />
@@ -69,6 +72,8 @@ function PageRoutes({ location }: { location: Location }) {
         <Route path="/studio/blog/*" element={<LegacyStudioRedirect />} />
         <Route path="/studio" element={<LegacyStudioRedirect />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/account/wallet" element={<WalletPage />} />
+        <Route path="/account/billing" element={<WalletPage admin />} />
       </Routes>
     </motion.div>
   </AnimatePresence>

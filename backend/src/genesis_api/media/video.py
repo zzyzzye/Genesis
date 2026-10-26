@@ -12,8 +12,10 @@ import jwt
 from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
+from genesis_api.billing import service as billing
+from genesis_api.billing.transport import after_response, before_request, execution_context
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.core.uploads import media_suffix
 from genesis_api.database.session import SessionLocal
@@ -31,6 +33,7 @@ class VideoSubmit(BaseModel):
     """一次明确提交的请求标识与目标节点，不接受前端指定文件地址。"""
 
     request_id: UUID
+    quote_id: UUID | None = None
     node_id: UUID
     acknowledge_unknown: bool = False
 
@@ -82,6 +85,9 @@ async def available_models(settings: Settings) -> list[str]:
 def task_data(task: VideoGeneration) -> dict[str, object]:
     """返回任务状态，公开任务标识始终取本地创建记录。"""
     return {
+        "billing": billing.source_billing(session, task.id)
+        if (session := object_session(task))
+        else None,
         "id": str(task.id),
         "node_id": str(task.node_id),
         "status": task.status,
@@ -223,7 +229,9 @@ async def submit_task(
     """
     try:
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(930, connect=10), trust_env=False
+            timeout=httpx.Timeout(930, connect=10),
+            trust_env=False,
+            event_hooks={"request": [before_request], "response": [after_response]},
         ) as client:
             response = await client.post(
                 f"{settings.video_api_base_url.rstrip('/')}/v1/videos",
@@ -246,6 +254,7 @@ async def submit_task(
     except (httpx.HTTPError, ValueError, TypeError):
         task.status = "unknown"
         task.error = "创建结果未知，未自动重提。请先核实供应商任务，避免重复扣费。"
+    billing.finish_operation(session, task.id)
     session.commit()
 
 
@@ -277,9 +286,11 @@ async def submit_saved_task(
             except (httpx.HTTPError, ValueError):
                 task.status = "failed"
                 task.error = "参考素材公网地址不可读取，请检查部署地址、HTTPS 与素材访问后重试"
+                billing.finish_operation(session, task.id)
                 session.commit()
                 return
-            await submit_task(task, payload, session, settings)
+            with execution_context(task.id, settings, SessionLocal):
+                await submit_task(task, payload, session, settings)
 
 
 async def check_references(payload: dict[str, object]) -> None:

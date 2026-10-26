@@ -184,6 +184,7 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
           </div>
           {user.role === 'owner' && <Link className="account-studio-entry" to="/blog/studio">写作台<ArrowUpRight size={15} aria-hidden="true" /></Link>}
         </div>
+        <nav className="account-profile-navigation" aria-label="账户服务"><Link className="account-studio-entry" to="/account/wallet">我的钱包<ArrowUpRight size={15} aria-hidden="true" /></Link>{user.role === 'owner' && <Link className="account-studio-entry" to="/account/billing">账务管理<ArrowUpRight size={15} aria-hidden="true" /></Link>}</nav>
         <form className="account-form account-profile-form" aria-label="个人资料" noValidate aria-busy={busy} onSubmit={submit} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }}>
           <div className="account-field account-profile-field">
             <label htmlFor="profile-display-name">昵称</label>

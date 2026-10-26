@@ -7,7 +7,7 @@ import logging
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol, cast
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -27,9 +27,13 @@ from genesis_api.ai.schemas import (
     AiGenerationMetrics,
 )
 from genesis_api.ai.service import AgentService
+from genesis_api.billing import service as billing
+from genesis_api.billing.models import BillingOperation, UpstreamCharge
+from genesis_api.billing.transport import execution_context
 from genesis_api.blog.agent.attachments import prepare_attachments
 from genesis_api.core.config import Settings
 from genesis_api.database.session import SessionLocal
+from genesis_api.identity.models import User
 
 logger = logging.getLogger(__name__)
 SessionFactory = Callable[[], Session]
@@ -96,6 +100,35 @@ def create_ai_chat_run(
         已持久化的任务 ID 与初始状态，不负责启动后台协程。
     """
     provider = request.provider or settings.text_provider
+    source_id = request.request_id or uuid4()
+    existing = session.get(AiChatRun, source_id)
+    if existing is not None:
+        if existing.user_id != user_id:
+            raise HTTPException(409, "请求标识已被使用")
+        # 请求标识重放只恢复同一任务，不重复发起上游调用。
+        expected = request.model_dump(mode="json", exclude={"billing_source_id"})
+        old = {
+            k: v for k, v in existing.request_payload.items() if k not in {"actor_id", "actor_role"}
+        }
+        if expected != old:
+            raise HTTPException(409, "请求标识已用于不同的消息")
+        request.billing_source_id = existing.id
+        return AiChatRunCreated(id=existing.id, status=existing.status)
+    user = session.get(User, user_id)
+    if user is None:
+        raise HTTPException(404, "账户不存在")
+    model = request.model or _configured_model(settings, provider) or ""
+    billing.admit(
+        session,
+        user,
+        source_id=source_id,
+        kind="agent",
+        provider=provider,
+        model=model,
+        quote_id=request.quote_id,
+        settings=settings,
+    )
+    request.billing_source_id = source_id
     # 调用方随后用此请求启动任务，持久化、执行与历史展示必须使用同一份资料。
     request.messages = prepare_attachments(session, user_id, request, settings).messages
     if request.conversation_id is not None:
@@ -103,6 +136,7 @@ def create_ai_chat_run(
         if len(request.messages) != 1 or request.messages[0].role != "user":
             raise HTTPException(422, "历史会话每次只提交一条新的用户消息")
     run = AiChatRun(
+        id=source_id,
         user_id=user_id,
         surface=request.surface,
         provider=provider,
@@ -148,7 +182,9 @@ def get_ai_chat_run_snapshot(
         proposals=run.proposals or [],
         tool_calls=run.tool_calls or [],
         metrics=AiGenerationMetrics.model_validate(run.generation_metrics)
-        if run.generation_metrics is not None else None,
+        if run.generation_metrics is not None
+        else None,
+        billing=billing.source_billing(session, run.id),
     )
 
 
@@ -241,6 +277,7 @@ class AiChatRunManager:
             run.error = "生成已由用户停止。"
             run.tool_calls = _interrupt_tool_calls(run.tool_calls)
             run.completed_at = datetime.now(UTC)
+            billing.finish_operation(session, run_id)
             session.commit()
 
     async def recover_interrupted_runs(self, settings: Settings) -> None:
@@ -286,6 +323,7 @@ class AiChatRunManager:
                 streamer = self._chat_service_factory(settings)
                 history = getattr(streamer, "tool_history", None)
                 if isinstance(history, ToolCallHistory):
+
                     async def save_tool_call(call: AgentToolCall) -> None:
                         """接收原生回调的安全投影，不接触原始工具载荷。"""
                         await asyncio.to_thread(self._persist_tool_call_sync, run_id, call)
@@ -312,12 +350,11 @@ class AiChatRunManager:
                     pending += token
                     # 按长度或间隔批量写入快照，避免每个文本片段都产生数据库提交。
                     now = asyncio.get_running_loop().time()
-                    if (
-                        len(pending) >= self._flush_size
-                        or now - last_flush >= self._flush_interval
-                    ):
+                    if len(pending) >= self._flush_size or now - last_flush >= self._flush_interval:
                         await self._persist(
-                            run_id, append_content=pending, metrics=metrics.snapshot(),
+                            run_id,
+                            append_content=pending,
+                            metrics=metrics.snapshot(),
                         )
                         pending = ""
                         last_flush = now
@@ -433,15 +470,22 @@ class AiChatRunManager:
         """修正旧的无效自动标题，再恢复待命名会话；不改变正文或用户改名。"""
         requests: dict[UUID, AiChatRequest] = {}
         with self._session_factory() as session:
-            for conversation in session.scalars(select(AiConversation).where(
-                AiConversation.title_source == "model",
-            )):
+            for conversation in session.scalars(
+                select(AiConversation).where(
+                    AiConversation.title_source == "model",
+                )
+            ):
                 try:
                     AiConversationTitle(title=conversation.title)
                 except ValidationError:
-                    first_run = session.scalar(select(AiChatRun).where(
-                        AiChatRun.conversation_id == conversation.id,
-                    ).order_by(AiChatRun.created_at, AiChatRun.id).limit(1))
+                    first_run = session.scalar(
+                        select(AiChatRun)
+                        .where(
+                            AiChatRun.conversation_id == conversation.id,
+                        )
+                        .order_by(AiChatRun.created_at, AiChatRun.id)
+                        .limit(1)
+                    )
                     if first_run is None:
                         continue
                     try:
@@ -454,20 +498,31 @@ class AiChatRunManager:
                         item.name for item in first.attachments
                     )
                     # 条件更新避免修复过程覆盖用户刚刚手动指定的标题。
-                    session.execute(update(AiConversation).where(
-                        AiConversation.id == conversation.id,
-                        AiConversation.title_source == "model",
-                        AiConversation.title == conversation.title,
-                    ).values(
-                        title=topic.replace("\n", " ")[:32] or "新对话", title_source="fallback",
-                    ))
+                    session.execute(
+                        update(AiConversation)
+                        .where(
+                            AiConversation.id == conversation.id,
+                            AiConversation.title_source == "model",
+                            AiConversation.title == conversation.title,
+                        )
+                        .values(
+                            title=topic.replace("\n", " ")[:32] or "新对话",
+                            title_source="fallback",
+                        )
+                    )
             session.commit()
-            runs = session.scalars(select(AiChatRun).join(
-                AiConversation, AiChatRun.conversation_id == AiConversation.id,
-            ).where(
-                AiConversation.title_source == "pending",
-                AiChatRun.status.in_([AiChatRunStatus.COMPLETED, AiChatRunStatus.FAILED]),
-            ).order_by(AiChatRun.created_at, AiChatRun.id))
+            runs = session.scalars(
+                select(AiChatRun)
+                .join(
+                    AiConversation,
+                    AiChatRun.conversation_id == AiConversation.id,
+                )
+                .where(
+                    AiConversation.title_source == "pending",
+                    AiChatRun.status.in_([AiChatRunStatus.COMPLETED, AiChatRunStatus.FAILED]),
+                )
+                .order_by(AiChatRun.created_at, AiChatRun.id)
+            )
             for run in runs:
                 if run.conversation_id is not None and run.conversation_id not in requests:
                     requests[run.conversation_id] = _request_from_payload(run.request_payload)
@@ -485,21 +540,59 @@ class AiChatRunManager:
         fallback = topic.replace("\n", " ")[:32] or "新对话"
         source = "fallback"
         title = fallback
+        title_source_id = uuid5(NAMESPACE_URL, f"genesis-title:{conversation_id}")
         try:
-            title = AiConversationTitle(title=await asyncio.wait_for(
-                AgentService(settings).generate_title(request), timeout=60,
-            )).title
+            with self._session_factory() as session:
+                if (
+                    session.scalar(
+                        select(BillingOperation.id).where(
+                            BillingOperation.source_id == title_source_id
+                        )
+                    )
+                    is not None
+                ):
+                    raise RuntimeError("标题调用已提交，使用已有摘要避免重复请求")
+                user = session.get(User, conversation.user_id)
+                if user is None:
+                    raise RuntimeError("标题所属账户不存在")
+                provider = request.provider or settings.text_provider
+                row = billing.create_quote(
+                    session,
+                    user,
+                    kind="agent",
+                    provider=provider,
+                    model=request.model or _configured_model(settings, provider) or "",
+                    settings=settings,
+                    funded_by_platform=True,
+                )
+                row.source_id, row.status = title_source_id, "running"
+                session.commit()
+            with execution_context(title_source_id, settings, self._session_factory):
+                title = AiConversationTitle(
+                    title=await asyncio.wait_for(
+                        AgentService(settings).generate_title(request),
+                        timeout=60,
+                    )
+                ).title
             source = "model"
         except asyncio.CancelledError:
+            with self._session_factory() as session:
+                billing.finish_operation(session, title_source_id)
+                session.commit()
             raise
         except Exception:
             # 不记录模型异常正文，避免上游响应携带敏感信息。
             logger.warning("会话标题生成失败，使用首句摘要：conversation_id=%s", conversation_id)
         with self._session_factory() as session:
-            session.execute(update(AiConversation).where(
-                AiConversation.id == conversation_id,
-                AiConversation.title_source == "pending",
-            ).values(title=title, title_source=source))
+            billing.finish_operation(session, title_source_id)
+            session.execute(
+                update(AiConversation)
+                .where(
+                    AiConversation.id == conversation_id,
+                    AiConversation.title_source == "pending",
+                )
+                .values(title=title, title_source=source)
+            )
             session.commit()
 
     def _persist_sync(
@@ -531,6 +624,7 @@ class AiChatRunManager:
                 if status in (AiChatRunStatus.COMPLETED, AiChatRunStatus.FAILED):
                     run.completed_at = datetime.now(UTC)
                     run.tool_calls = _interrupt_tool_calls(run.tool_calls)
+                    billing.finish_operation(session, run_id)
             if error is not None:
                 run.error = error
             if metrics is not None:
@@ -555,6 +649,24 @@ class AiChatRunManager:
             )
             for run in runs:
                 run.tool_calls = _interrupt_tool_calls(run.tool_calls)
+                operation = session.scalar(
+                    select(BillingOperation).where(BillingOperation.source_id == run.id)
+                )
+                if operation is not None and operation.mode != "free":
+                    unresolved = session.scalar(
+                        select(UpstreamCharge.id)
+                        .where(
+                            UpstreamCharge.operation_id == operation.id,
+                            UpstreamCharge.status != "settled",
+                        )
+                        .limit(1)
+                    )
+                    if unresolved is not None:
+                        run.status = AiChatRunStatus.FAILED
+                        run.error = "上次模型请求状态待核对，未自动重放。请稍后查看账单。"
+                        run.completed_at = datetime.now(UTC)
+                        billing.finish_operation(session, run.id)
+                        continue
                 try:
                     request = _request_from_payload(run.request_payload)
                 except ValueError:
@@ -570,7 +682,12 @@ class AiChatRunManager:
                 run.completed_at = None
                 run.generation_metrics = None
                 recovered.append(
-                    (run.id, request.model_copy(update={"resume_from_checkpoint": True}))
+                    (
+                        run.id,
+                        request.model_copy(
+                            update={"resume_from_checkpoint": True, "billing_source_id": run.id}
+                        ),
+                    )
                 )
             session.commit()
         return recovered
@@ -584,7 +701,8 @@ def _interrupt_tool_calls(
         return None
     return [
         {**call, "status": "interrupted", "result_summary": "调用已中断"}
-        if call.get("status") == "running" else call
+        if call.get("status") == "running"
+        else call
         for call in calls
     ]
 

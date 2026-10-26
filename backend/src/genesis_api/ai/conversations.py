@@ -16,10 +16,14 @@ from genesis_api.ai.schemas import (
     AiConversationMessage,
     AiGenerationMetrics,
 )
+from genesis_api.billing.service import source_billing
 
 
 def delete_conversations(
-    session: Session, user_id: UUID, selection: AiConversationDelete, surface: str = "studio",
+    session: Session,
+    user_id: UUID,
+    selection: AiConversationDelete,
+    surface: str = "studio",
 ) -> int:
     """原子删除当前用户选中的历史、回复快照与框架执行记录。
 
@@ -67,7 +71,10 @@ def delete_conversations(
 
 
 def owned_conversation(
-    session: Session, user_id: UUID, conversation_id: UUID, surface: str = "studio",
+    session: Session,
+    user_id: UUID,
+    conversation_id: UUID,
+    surface: str = "studio",
 ) -> AiConversation:
     """按登录用户读取并锁定会话，隐藏其他用户记录是否存在。"""
     conversation = session.scalar(
@@ -97,39 +104,61 @@ def conversation_detail(session: Session, conversation: AiConversation) -> AiCon
         if isinstance(inputs, list):
             for message in inputs:
                 if isinstance(message, dict) and message.get("role") == "user":
-                    messages.append(AiConversationMessage(
-                        role="user", content=str(message.get("content", "")),
-                        run_id=run.id, status=run.status,
-                        attachments=[
-                            AiAttachment.model_validate(item)
-                            for item in message.get("attachments", [])
-                        ],
-                    ))
-        messages.append(AiConversationMessage(
-            role="assistant", content=run.content, run_id=run.id,
-            status=run.status, error=run.error,
-            proposals=run.proposals or [],
-            tool_calls=run.tool_calls or [],
-            metrics=AiGenerationMetrics.model_validate(run.generation_metrics)
-            if run.generation_metrics is not None else None,
-        ))
+                    messages.append(
+                        AiConversationMessage(
+                            role="user",
+                            content=str(message.get("content", "")),
+                            run_id=run.id,
+                            status=run.status,
+                            attachments=[
+                                AiAttachment.model_validate(item)
+                                for item in message.get("attachments", [])
+                            ],
+                        )
+                    )
+        messages.append(
+            AiConversationMessage(
+                role="assistant",
+                content=run.content,
+                run_id=run.id,
+                status=run.status,
+                error=run.error,
+                proposals=run.proposals or [],
+                tool_calls=run.tool_calls or [],
+                metrics=AiGenerationMetrics.model_validate(run.generation_metrics)
+                if run.generation_metrics is not None
+                else None,
+                billing=source_billing(session, run.id),
+            )
+        )
     return AiConversationDetail(
-        id=conversation.id, title=conversation.title, title_source=conversation.title_source,
-        created_at=conversation.created_at, updated_at=conversation.updated_at, messages=messages,
+        id=conversation.id,
+        title=conversation.title,
+        title_source=conversation.title_source,
+        created_at=conversation.created_at,
+        updated_at=conversation.updated_at,
+        messages=messages,
     )
 
 
 def prepare_conversation_run(
-    session: Session, user_id: UUID, conversation_id: UUID, surface: str,
+    session: Session,
+    user_id: UUID,
+    conversation_id: UUID,
+    surface: str,
 ) -> None:
     """串行创建同一会话的任务，避免并发写入同一个 checkpoint。"""
     if surface not in ("studio", "media"):
         raise HTTPException(422, "当前模块尚不支持历史对话")
     conversation = owned_conversation(session, user_id, conversation_id, surface)
-    active = session.scalar(select(AiChatRun.id).where(
-        AiChatRun.conversation_id == conversation.id,
-        AiChatRun.status.in_([AiChatRunStatus.PENDING, AiChatRunStatus.RUNNING]),
-    ).limit(1))
+    active = session.scalar(
+        select(AiChatRun.id)
+        .where(
+            AiChatRun.conversation_id == conversation.id,
+            AiChatRun.status.in_([AiChatRunStatus.PENDING, AiChatRunStatus.RUNNING]),
+        )
+        .limit(1)
+    )
     if active is not None:
         raise HTTPException(409, "这段对话仍在生成，请等待完成或停止后再发送")
     conversation.updated_at = datetime.now(UTC)

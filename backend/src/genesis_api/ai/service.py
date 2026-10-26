@@ -9,6 +9,7 @@ from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.runtime import EmbeddedAgentRuntime, embedded_agent_runtime
 from genesis_api.agent.tool_history import ToolCallHistory
 from genesis_api.ai.schemas import AiChatRequest
+from genesis_api.billing.transport import execution_context
 from genesis_api.core.config import Settings
 
 
@@ -54,11 +55,17 @@ class AgentService:
             ValueError: 供应商、业务模块不受支持，或模型客户端配置无效。
         """
         # 服务层只传递请求和线程标识，图创建与模型协议适配统一由 runtime 负责。
-        async for text in self.runtime.stream(
-            request, self.settings, thread_id=thread_id, metrics=self.metrics,
-            tool_history=self.tool_history,
-        ):
-            yield text
+        if request.billing_source_id is None:
+            raise RuntimeError("生成任务缺少计费归属")
+        with execution_context(request.billing_source_id, self.settings):
+            async for text in self.runtime.stream(
+                request,
+                self.settings,
+                thread_id=thread_id,
+                metrics=self.metrics,
+                tool_history=self.tool_history,
+            ):
+                yield text
 
     async def generate_title(self, request: AiChatRequest) -> str:
         """复用运行时的模型适配生成会话名，不调用业务工具。"""

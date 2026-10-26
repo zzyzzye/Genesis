@@ -147,7 +147,9 @@ async def test_mimo_discovery_and_fallback(status: int) -> None:
             {"id": "mimo-v2.6-flash"}, {"id": "mimo-v2.5-tts"}, {"id": "mimo-v2.5-asr"},
         ]})
 
-    settings = Settings(text_mimo_api_key=SecretStr("test-placeholder"))
+    settings = Settings(
+        text_mimo_api_key=SecretStr("test-placeholder"), text_mimo_model="mimo-v2.6-flash"
+    )
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         result = await ModelDiscoveryService(settings, client).list_models("mimo")
     assert result.models[0].id == "mimo-v2.6-flash"

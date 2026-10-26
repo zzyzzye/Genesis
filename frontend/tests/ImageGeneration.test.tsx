@@ -11,6 +11,32 @@ const catalog = {configured:true,references_ready:true,models:[model]}
 afterEach(()=>vi.restoreAllMocks())
 
 describe('生图节点',()=>{
+  it('报价失效后重新报价确认，网络结果未知时才保留原标识',async()=>{
+    let quotes = 0, submissions = 0
+    vi.spyOn(globalThis,'fetch').mockImplementation(async()=>{
+      await Promise.resolve()
+      quotes++
+      return new Response(JSON.stringify({id:`quote-${quotes}`,mode:'paid',model:model.id,reserved_amount:'0.01'}),{status:201})
+    })
+    const api=vi.spyOn(media,'api').mockImplementation((path,method)=>{
+      if(method==='POST') {
+        submissions++
+        return submissions===1 ? Promise.reject(new media.MediaError(409,'报价已过期')) : Promise.resolve({id:'task',status:'processing',asset_id:null,error:'',progress:0})
+      }
+      return Promise.resolve(path==='/image-models'?{...catalog,billing_required:true}:[])
+    })
+    render(<ImageGeneration {...props()} />)
+    await waitFor(()=>expect(screen.getByRole('button',{name:'生成图片'})).toBeEnabled())
+    fireEvent.click(screen.getByRole('button',{name:'生成图片'}))
+    fireEvent.click(await screen.findByText('冻结预算并生成'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('报价已过期')
+    fireEvent.click(screen.getByRole('button',{name:'生成图片'}))
+    fireEvent.click(await screen.findByText('冻结预算并生成'))
+    await waitFor(()=>expect(submissions).toBe(2))
+    expect(quotes).toBe(2)
+    expect(api.mock.calls.filter(call=>call[1]==='POST').map(call=>(call[2] as {quote_id:string}).quote_id)).toEqual(['quote-1','quote-2'])
+  })
+
   it('未配置、空目录与目录失败均保留刷新入口',async()=>{
     const api=vi.spyOn(media,'api').mockImplementation(path=>Promise.resolve(path==='/image-models'?{configured:false,references_ready:false,models:[]}:[]))
     render(<ImageGeneration {...props()} />)
