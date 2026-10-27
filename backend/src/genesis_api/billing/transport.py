@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 from uuid import UUID
 
 import httpx
@@ -35,17 +37,17 @@ _execution: ContextVar[Execution | None] = ContextVar("billing_execution", defau
 def execution_context(
     source_id: UUID,
     settings: Settings,
-    factory: Callable[[], Session] = SessionLocal,
+    factory: Callable[[], Session] | None = None,
 ) -> Iterator[None]:
     """绑定业务任务的费用归属，退出时恢复外层上下文。"""
-    token = _execution.set(Execution(source_id, settings, factory))
+    token = _execution.set(Execution(source_id, settings, factory or SessionLocal))
     try:
         yield
     finally:
         _execution.reset(token)
 
 
-def _before(execution: Execution, size: int) -> UUID | None:
+def _before(execution: Execution, size: int, request: httpx.Request) -> UUID | None:
     with execution.factory() as session:
         operation = session.scalar(
             select(BillingOperation)
@@ -63,6 +65,8 @@ def _before(execution: Execution, size: int) -> UUID | None:
         max_bytes = int(str(operation.policy.get("max_input_bytes", 1_000_000)))
         if operation.mode != "platform" and size > max_bytes:
             raise RuntimeError("输入超出已审核的计费上限，请减少上下文或参考素材")
+        if operation.mode == "paid" and operation.kind == "agent":
+            _validate_chat_budget(operation, execution.settings, request)
         channel = channel_id(execution.settings, operation.kind, operation.provider)
         if operation.mode == "paid" and operation.policy.get("channel") != channel:
             raise RuntimeError("计费渠道已变化，本轮已停止，请等待已有请求核对")
@@ -76,6 +80,42 @@ def _before(execution: Execution, size: int) -> UUID | None:
         session.add(charge)
         session.commit()
         return charge.id
+
+
+def _validate_chat_budget(
+    operation: BillingOperation, settings: Settings, request: httpx.Request
+) -> None:
+    """在实际发送边界核验型号和输出预算，子调用也不能改用更贵的模型。"""
+    base, _ = connection(settings, "agent", operation.provider)
+    parsed = urlsplit(base)
+    if (
+        request.url.scheme != parsed.scheme
+        or request.url.host != parsed.hostname
+        or request.url.port != parsed.port
+        or request.url.path not in {"/v1/chat/completions", "/v1/responses"}
+    ):
+        raise RuntimeError("模型请求地址与已审核的聊天渠道不一致")
+    try:
+        body = json.loads(request.content)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise RuntimeError("无法核验模型请求的计费预算") from exc
+    if not isinstance(body, dict) or body.get("model") != operation.model:
+        raise RuntimeError("模型子调用与已确认的报价不一致")
+    limits = [
+        body[field]
+        for field in ("max_tokens", "max_completion_tokens", "max_output_tokens")
+        if field in body
+    ]
+    cap = min(4096, int(str(operation.policy.get("max_output_tokens", 4096))))
+    if not limits or any(type(value) is not int or not 0 < value <= cap for value in limits):
+        raise RuntimeError("模型请求缺少有效输出上限或超出已确认的预算")
+    if body.get("n", 1) != 1 or body.get("best_of", 1) != 1:
+        raise RuntimeError("当前付费聊天只允许单份输出")
+    tools = body.get("tools", [])
+    if not isinstance(tools, list) or any(
+        not isinstance(tool, dict) or tool.get("type") != "function" for tool in tools
+    ):
+        raise RuntimeError("当前价格策略尚未核验供应商内置工具的附加费用")
 
 
 def _after(execution: Execution, charge_id: UUID, request_id: str | None) -> None:
@@ -93,9 +133,8 @@ async def before_request(request: httpx.Request) -> None:
     if execution is None or request.method != "POST":
         return
     # 图片 multipart 可能流式读取；实际构造后再发送，不重复请求上游。
-    length = request.headers.get("content-length", "")
-    size = int(length) if length.isdigit() else len(await request.aread())
-    charge_id = await asyncio.to_thread(_before, execution, size)
+    size = len(await request.aread())
+    charge_id = await asyncio.to_thread(_before, execution, size, request)
     if charge_id is not None:
         request.extensions["genesis_billing_charge"] = charge_id
 

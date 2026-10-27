@@ -252,6 +252,28 @@ async def test_full_pagination_and_cache_keep_key_group_correlated() -> None:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("quota,price,expected", [(500000, 1, 500000), (500000, 2, None)])
+async def test_catalog_separately_verifies_billing_conversion(
+    quota: int,
+    price: int,
+    expected: int | None,
+) -> None:
+    original = transport(requests=[])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        response = original.handle_request(request)
+        if request.url.path == "/api/status":
+            payload = response.json()
+            payload["data"].update(quota_per_unit=quota, price=price)
+            return httpx.Response(200, json=payload)
+        return response
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        catalog = await YyapiPricingService(client).catalog(settings())
+    assert catalog.quota_per_cny == expected
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("failure", ["auth", "collision", "incomplete", "missing_ratio"])
 async def test_failed_sync_does_not_guess_group_or_expose_authentication(failure: str) -> None:
     requests: list[httpx.Request] = []

@@ -51,6 +51,7 @@ class PricingCatalog:
     currency: Literal["CNY", "USD"]
     currency_rate: Decimal
     updated_at: str
+    quota_per_cny: int | None = None
 
 
 def mask_key(value: str) -> str:
@@ -85,6 +86,13 @@ class YyapiPricingService:
         self._cache: dict[str, tuple[float, PricingCatalog]] = {}
         self._lock = asyncio.Lock()
 
+    async def catalog(self, settings: Settings) -> PricingCatalog:
+        """读取用于管理员审核的完整目录，缺少凭据时不发送请求。"""
+        secret = settings.yyapi_access_token
+        if secret is None or not secret.get_secret_value().strip():
+            raise PricingLookupError("价格服务尚未配置，暂无法预览。")
+        return await self._catalog(settings, secret.get_secret_value())
+
     async def for_models(
         self, settings: Settings, provider: str, models: list[str]
     ) -> dict[str, ModelPricePreview]:
@@ -111,10 +119,7 @@ class YyapiPricingService:
             base, key = connection(settings, "agent", provider)
             if not is_yyapi(base):
                 raise PricingLookupError("此渠道暂未接入价格预览。")
-            secret = settings.yyapi_access_token
-            if secret is None or not secret.get_secret_value().strip():
-                raise PricingLookupError("价格服务尚未配置，暂无法预览。")
-            catalog = await self._catalog(settings, secret.get_secret_value())
+            catalog = await self.catalog(settings)
             group = match_group(catalog.tokens, key)
             ratio = decimal_value(catalog.group_ratios.get(group))
             previews = {}
@@ -250,6 +255,15 @@ class YyapiPricingService:
             currency=currency,
             currency_rate=rate,
             updated_at=datetime.now(UTC).isoformat(),
+            # 仅开放已经用实际账单核验过的 YYAPI 人民币额度口径。
+            quota_per_cny=(
+                500000
+                if currency == "CNY"
+                and rate == 1
+                and data.get("quota_per_unit") == 500000
+                and data.get("price") == 1
+                else None
+            ),
         )
 
     async def _tokens(

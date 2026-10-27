@@ -166,6 +166,48 @@ def test_real_bill_dynamic_cost_and_safe_projection() -> None:
         billing_details({**sample(), "quota": 127}, 500000)
 
 
+def test_chat_policy_apply_is_idempotent_and_does_not_credit_wallets(
+    state: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from genesis_api.billing.chat_policies import apply_candidates, policy_candidate
+    from genesis_api.billing.schemas import ModelPricePreview, TokenPriceTier
+    from genesis_api.llm.models import AvailableModel
+
+    session, user, owner, settings, factory, _ = state
+    monkeypatch.setattr("genesis_api.database.session.SessionLocal", factory)
+    monkeypatch.setattr(routes, "get_settings", lambda: settings)
+    candidate = policy_candidate(
+        settings,
+        "openai",
+        AvailableModel(id="gpt-5.6-luna", name="Luna", created=None, context_window=1050000),
+        ModelPricePreview(
+            status="available",
+            tiers=[
+                TokenPriceTier(name="short", input="0.4", output="2.4"),
+            ],
+        ),
+        500000,
+    )
+    assert apply_candidates([candidate]) == 1
+    assert apply_candidates([candidate]) == 1
+    session.expire_all()
+    assert session.scalar(select(func.count()).select_from(PricePolicy)) == 2
+    assert (
+        session.scalar(
+            select(func.count()).select_from(WalletEntry).where(WalletEntry.kind == "policy")
+        )
+        == 1
+    )
+    assert wallet_data(session, user.id)["available"] == "1.00000000"
+    assert wallet_data(session, owner.id)["available"] == "0.00000000"
+    row = session.get(PricePolicy, candidate.request_id)
+    assert row is not None
+    row.active = False
+    session.commit()
+    assert apply_candidates([candidate]) == 0
+
+
 @pytest.mark.parametrize(
     "other", ["{", "[]", {"billing_formula": []}, {"billing_formula": {"final_quota": -1}}]
 )
@@ -440,7 +482,8 @@ async def test_transport_persists_before_send_captures_header_and_enforces_share
         with execution_context(operation.source_id, settings, factory):
             for _ in range(8):
                 await client.post(
-                    "https://www.yyapi.cloud/v1/chat/completions", json={"model": operation.model}
+                    "https://www.yyapi.cloud/v1/chat/completions",
+                    json={"model": operation.model, "max_tokens": 64},
                 )
             with pytest.raises(RuntimeError, match="调用次数"):
                 await client.post("https://www.yyapi.cloud/v1/chat/completions", json={})
@@ -482,6 +525,166 @@ async def test_reconciliation_delayed_bill_and_restart_preserve_hold(state: Any)
         await reconcile_once(settings, factory, client)
     session.expire_all()
     assert wallet_data(session, user.id)["available"] == "0.99974800"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"model": "unreviewed-expensive-model"},
+        {"max_tokens": 8192},
+        {"max_tokens": True},
+        {"max_tokens": None},
+        {"n": 2},
+        {"tools": [{"type": "web_search"}]},
+    ],
+)
+async def test_paid_http_request_cannot_bypass_model_or_output_budget(
+    state: Any,
+    extra: dict[str, Any],
+) -> None:
+    session, user, _, settings, factory, _ = state
+    operation = quote_and_admit(state)
+    assert operation.source_id is not None
+    sent: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={})
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(respond),
+        event_hooks={"request": [before_request], "response": [after_response]},
+    ) as client:
+        with execution_context(operation.source_id, settings, factory):
+            with pytest.raises(RuntimeError):
+                await client.post(
+                    "https://www.yyapi.cloud/v1/chat/completions",
+                    json={"model": operation.model, "max_tokens": 64, **extra},
+                )
+    assert sent == []
+    session.expire_all()
+    assert session.scalar(select(func.count()).select_from(UpstreamCharge)) == 0
+    finish_operation(session, operation.source_id)
+    session.commit()
+    assert wallet_data(session, user.id) == {
+        "currency": "CNY",
+        "available": "1.00000000",
+        "frozen": "0.00000000",
+    }
+
+
+@pytest.mark.anyio
+async def test_native_agent_http_stream_to_actual_bill_settlement(
+    state: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """真实 DeepAgents/LangChain 请求经过账务钩子，再用持久订单匹配延迟账单。"""
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    import genesis_api.agent.runtime as runtime_module
+    import genesis_api.billing.transport as transport_module
+    from genesis_api.ai.service import AgentService
+
+    session, user, _, settings, factory, policy = state
+    policy.max_input_bytes = 200000
+    session.commit()
+    operation = quote_and_admit(state)
+    assert operation.source_id is not None
+    monkeypatch.setattr(transport_module, "SessionLocal", factory)
+    # 运行时的方法内导入同一公共 SessionLocal；替换工厂不改变真实请求适配器。
+    monkeypatch.setattr("genesis_api.database.session.SessionLocal", factory)
+    sent: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        body = json.loads(request.content)
+        assert body["model"] == operation.model
+        assert body.get("max_completion_tokens", body.get("max_tokens")) == 4096
+        chunks = [
+            {
+                "id": "chatcmpl-synthetic",
+                "object": "chat.completion.chunk",
+                "created": 100,
+                "model": operation.model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "delta": {"role": "assistant", "content": "连接成功"},
+                        "finish_reason": None,
+                    }
+                ],
+            },
+            {
+                "id": "chatcmpl-synthetic",
+                "object": "chat.completion.chunk",
+                "created": 100,
+                "model": operation.model,
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 4391, "completion_tokens": 7, "total_tokens": 4398},
+            },
+        ]
+        content = "".join(f"data: {json.dumps(chunk)}\n\n" for chunk in chunks)
+        return httpx.Response(
+            200,
+            headers={"x-oneapi-request-id": "gateway-request", "content-type": "text/event-stream"},
+            content=content + "data: [DONE]\n\n",
+        )
+
+    runtime = runtime_module.EmbeddedAgentRuntime()
+    runtime._checkpointer = InMemorySaver()  # type: ignore[assignment]
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(respond),
+        event_hooks=transport_module.billing_hooks(),
+    ) as client:
+        runtime._http_clients[True] = client
+        request = AiChatRequest(
+            surface="media",
+            provider="openai",
+            model=operation.model,
+            actor_id=str(user.id),
+            actor_role="member",
+            billing_source_id=operation.source_id,
+            messages=[AiMessage(role="user", content="请仅回答连接成功")],
+        )
+        output = [
+            part
+            async for part in AgentService(settings, runtime).stream(
+                request, thread_id=str(uuid4())
+            )
+        ]
+    assert "连接成功" in "".join(part for part in output if isinstance(part, str))
+    assert len(sent) == 1
+    session.expire_all()
+    finish_operation(session, operation.source_id)
+    session.commit()
+    charge = session.scalar(select(UpstreamCharge))
+    assert charge is not None and charge.request_id == "gateway-request"
+    assert wallet_data(session, user.id)["frozen"] == "0.00800000"
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"success": True, "data": [sample()]})
+        )
+    ) as client:
+        await reconcile_once(settings, factory, client)
+        session.expire_all()
+        operation = session.get(BillingOperation, operation.id)
+        assert operation is not None and operation.status == "settled"
+        operation.next_check_at = None
+        session.commit()
+        await reconcile_once(settings, factory, client)
+    session.expire_all()
+    assert wallet_data(session, user.id) == {
+        "currency": "CNY",
+        "available": "0.99974800",
+        "frozen": "0.00000000",
+    }
+    assert (
+        session.scalar(
+            select(func.count()).select_from(WalletEntry).where(WalletEntry.kind == "settle")
+        )
+        == 1
+    )
 
 
 @pytest.mark.anyio
