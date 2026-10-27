@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
-from typing import Any, Protocol, cast
+from typing import Protocol, cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from ag_ui.core import (
@@ -51,7 +51,7 @@ class ChatStreamer(Protocol):
 
     def stream(
         self, request: AiChatRequest, *, thread_id: str
-    ) -> AsyncIterator[str | BaseEvent | AgentActionProposal]:
+    ) -> AsyncIterator[BaseEvent | AgentActionProposal]:
         """提供后台管理器所需的流式调用接口。
 
         Args:
@@ -59,7 +59,7 @@ class ChatStreamer(Protocol):
             thread_id: 本次执行对应的 checkpoint 线程标识。
 
         Returns:
-            产出正文片段或操作提议的异步迭代器；无需等待整个回答完成。
+            产出官方公开事件或操作提议的异步迭代器；无需等待整个回答完成。
         """
         ...
 
@@ -354,54 +354,43 @@ class AiChatRunManager:
                 service_metrics = getattr(streamer, "metrics", None)
                 if isinstance(service_metrics, GenerationMetrics):
                     metrics = service_metrics
-                try:
-                    token_stream = streamer.stream(
-                        request, thread_id=str(request.conversation_id or run_id)
-                    )
-                except TypeError as exc:
-                    # 兼容旧流式实现的签名；其他 TypeError 必须交给正常错误处理。
-                    if "thread_id" not in str(exc):
-                        raise
-                    token_stream = cast(Any, streamer).stream(request)
+                token_stream = streamer.stream(
+                    request, thread_id=str(request.conversation_id or run_id)
+                )
                 async for token in token_stream:
                     if isinstance(token, AgentActionProposal):
                         await asyncio.to_thread(self._persist_proposal_sync, run_id, token)
                         continue
-                    if isinstance(token, BaseEvent):
-                        pending_events.append(token)
-                        if token.type == EventType.RUN_FINISHED:
-                            # 图完成不等于账务收尾完成，终态与最终任务状态原子提交。
-                            continue
-                        if isinstance(token, TextMessageContentEvent):
-                            pending += token.delta
-                        elif isinstance(token, MessagesSnapshotEvent):
-                            content = "".join(
-                                message.content or "" for message in token.messages
-                                if message.role == "assistant" and (message.metadata or {}).get(
-                                    "genesis", {},
-                                ).get("run_id") == str(run_id)
-                            ) + question_content
-                            await self._persist(
-                                run_id, replace_content=content, events=pending_events,
-                                metrics=metrics.snapshot(),
-                            )
-                            pending, pending_events = "", []
-                            continue
-                        elif isinstance(token, CustomEvent) and token.name == "genesis.question":
-                            question_content = str(token.value["content"])
-                            pending += question_content
-                        elif token.type == EventType.RUN_ERROR:
-                            raise RuntimeError("AI 生成失败，请稍后重试。")
-                    else:
-                        if not isinstance(service_metrics, GenerationMetrics):
-                            metrics.observe(None, token)
-                        pending += token
+                    pending_events.append(token)
+                    if token.type == EventType.RUN_FINISHED:
+                        # 图完成不等于账务收尾完成，终态与最终任务状态原子提交。
+                        continue
+                    if isinstance(token, TextMessageContentEvent):
+                        pending += token.delta
+                    elif isinstance(token, MessagesSnapshotEvent):
+                        content = "".join(
+                            message.content or "" for message in token.messages
+                            if message.role == "assistant" and (message.metadata or {}).get(
+                                "genesis", {},
+                            ).get("run_id") == str(run_id)
+                        ) + question_content
+                        await self._persist(
+                            run_id, replace_content=content, events=pending_events,
+                            metrics=metrics.snapshot(),
+                        )
+                        pending, pending_events = "", []
+                        continue
+                    elif isinstance(token, CustomEvent) and token.name == "genesis.question":
+                        question_content = str(token.value["content"])
+                        pending += question_content
+                    elif token.type == EventType.RUN_ERROR:
+                        raise RuntimeError("AI 生成失败，请稍后重试。")
                     # 按长度或间隔批量写入快照，避免每个文本片段都产生数据库提交。
                     now = asyncio.get_running_loop().time()
                     if (
                         len(pending) >= self._flush_size or len(pending_events) >= 64
                         or now - last_flush >= self._flush_interval
-                        or (isinstance(token, BaseEvent) and token.type == EventType.RUN_STARTED)
+                        or token.type == EventType.RUN_STARTED
                     ):
                         await self._persist(
                             run_id,

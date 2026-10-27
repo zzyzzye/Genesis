@@ -63,14 +63,13 @@ class ToolCallHistory(AsyncCallbackHandler):
         self.on_change = on_change
         self._calls: dict[UUID, AgentToolCall] = {}
         self.protocol_calls: dict[str, AgentToolCall] = {}
-        self._protocol_ids: dict[UUID, str] = {}
         self._started: dict[UUID, float] = {}
 
     async def _publish(self, call: AgentToolCall) -> None:
         """更新本地投影并等待调用方保存，保证开始记录先于结束记录。"""
         self._calls[call.id] = call
-        if protocol_id := self._protocol_ids.get(call.id):
-            self.protocol_calls[protocol_id] = call
+        if call.protocol_id:
+            self.protocol_calls[call.protocol_id] = call
         if self.on_change is not None:
             await self.on_change(call)
 
@@ -79,7 +78,6 @@ class ToolCallHistory(AsyncCallbackHandler):
         for call in calls:
             self._calls[call.id] = call
             if call.protocol_id:
-                self._protocol_ids[call.id] = call.protocol_id
                 self.protocol_calls[call.protocol_id] = call
 
     async def on_tool_start(
@@ -93,8 +91,7 @@ class ToolCallHistory(AsyncCallbackHandler):
     ) -> None:
         """记录真实开始时间，只保留工具定义和合法参数名称。"""
         name = str(serialized.get("name", "tool"))[:128]
-        if isinstance(kwargs.get("tool_call_id"), str):
-            self._protocol_ids[run_id] = kwargs["tool_call_id"]
+        protocol_id = kwargs.get("tool_call_id")
         description = str(serialized.get("description") or "").strip().splitlines()
         label = _FRAMEWORK_LABELS.get(name) or (
             description[0].rstrip("。.")[:60] if description else "调用工具"
@@ -104,7 +101,7 @@ class ToolCallHistory(AsyncCallbackHandler):
         await self._publish(
             AgentToolCall(
                 id=run_id,
-                protocol_id=self._protocol_ids.get(run_id),
+                protocol_id=protocol_id if isinstance(protocol_id, str) else None,
                 name=name,
                 label=label,
                 status="running",

@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from pydantic import SecretStr
 
 from genesis_api.agent.mimo import ChatMiMo
-from genesis_api.agent.runtime import EmbeddedAgentRuntime, _message_text
+from genesis_api.agent.runtime import EmbeddedAgentRuntime
 from genesis_api.ai.runs import _configured_model
 from genesis_api.ai.schemas import AiChatRequest
 from genesis_api.core.config import Settings
@@ -185,7 +185,6 @@ async def test_mimo_stream_uses_chat_completions() -> None:
         chunks = [chunk async for chunk in model.astream("你好")]
     assert "".join(str(chunk.content) for chunk in chunks) == "你好"
     assert any(chunk.additional_kwargs.get("reasoning_content") == "思考" for chunk in chunks)
-    assert "".join(text for chunk in chunks for text in _message_text(chunk)) == "你好"
 
 
 @pytest.mark.anyio

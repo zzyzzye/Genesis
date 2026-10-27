@@ -55,7 +55,10 @@ def native_runtime(monkeypatch: pytest.MonkeyPatch) -> EmbeddedAgentRuntime:
             "name": "synthetic_lookup", "id": "official-call-id",
             "args": {"query": "private-input-marker"},
         }]),
-        AIMessage(content="公开正文"),
+        AIMessage(content=[
+            {"type": "reasoning", "reasoning": "private-reasoning-marker"},
+            {"type": "text", "text": "公开正文"},
+        ], additional_kwargs={"reasoning_content": "private-provider-reasoning-marker"}),
     ])
     checkpointer = InMemorySaver()
     graph = create_deep_agent(
@@ -88,6 +91,8 @@ async def test_official_adapter_keeps_native_ids_and_filters_private_payloads(
     assert "private-system-marker" not in wire
     assert "private-input-marker" not in wire
     assert "private-result-marker" not in wire
+    assert "private-reasoning-marker" not in wire
+    assert "private-provider-reasoning-marker" not in wire
     kinds = [event.type for event in events if isinstance(event, BaseEvent)]
     assert kinds[0] == EventType.RUN_STARTED and kinds[-1] == EventType.RUN_FINISHED
     assert EventType.TOOL_CALL_ARGS not in kinds

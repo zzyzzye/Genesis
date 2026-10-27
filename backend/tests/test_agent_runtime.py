@@ -21,7 +21,7 @@ from ag_ui.core import (
     ToolCallStartEvent,
 )
 from fastapi import HTTPException
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import SecretStr
 
@@ -31,7 +31,6 @@ from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.runtime import (
     EmbeddedAgentRuntime,
     YyapiAsyncTransport,
-    _message_text,
 )
 from genesis_api.ai.schemas import AiChatRequest, AiMessage
 from genesis_api.ai.service import AgentService
@@ -59,13 +58,8 @@ class FakeSession:
         return []
 
 
-def test_prompt_and_message_text() -> None:
+def test_prompt_contains_write_policy() -> None:
     assert "写入任务" in BlogAgentPrompt.system_message()
-    assert _message_text(AIMessage(content="回答")) == ["回答"]
-    assert _message_text(AIMessageChunk(content="流式回答")) == ["流式回答"]
-    assert _message_text(AIMessage(content=[{"type": "text", "text": "分块"}])) == ["分块"]
-    assert _message_text(HumanMessage(content="问题")) == []
-    assert _message_text(object()) == []
 
 
 @pytest.mark.anyio
@@ -131,21 +125,6 @@ async def test_native_blog_boundary_corrects_errors_then_ends_after_write(
         assert AgentActionProposal.model_validate_json(outputs[-1].content).executed is automatic
         again = await graph.ainvoke({"messages": [HumanMessage(content="继续聊")]}, config)
         assert again["messages"][-1].content == "下一轮正常回答"
-
-
-def test_visible_text_excludes_reasoning_and_non_text_blocks() -> None:
-    """不同供应商的非正文块即使含 text 字段，也不能进入可见回答。"""
-    message = AIMessageChunk(content=[
-        {"type": "thinking", "thinking": "测试内部标记甲", "text": "测试内部标记乙"},
-        {"type": "reasoning", "reasoning": "测试内部标记丙", "text": "测试内部标记丁"},
-        {"type": "text", "text": "可见正文甲"},
-        {"type": "image", "text": "图片元数据"},
-        "可见正文乙",
-    ], additional_kwargs={"reasoning_content": "测试内部标记戊"})
-    assert _message_text(message) == ["可见正文甲可见正文乙"]
-    assert _message_text(AIMessageChunk(content=[], additional_kwargs={
-        "reasoning_content": "测试内部标记",
-    })) == []
 
 
 def test_automatic_execution_is_scoped_to_trusted_invocation() -> None:

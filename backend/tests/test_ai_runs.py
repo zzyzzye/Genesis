@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import pytest
 from ag_ui.core import (
+    BaseEvent,
     EventType,
     RunFinishedEvent,
     RunStartedEvent,
@@ -24,6 +25,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from genesis_api.agent.contracts import AgentActionProposal
+from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.tool_history import AgentToolCall, ToolCallHistory
 from genesis_api.ai.ag_ui import legacy_snapshot
 from genesis_api.ai.conversations import conversation_detail
@@ -48,13 +50,19 @@ class FakeChatService:
 
     def __init__(self, _: Settings) -> None:
         """保留生产工厂的配置入参，不创建模型客户端。"""
-        pass
+        self.metrics = GenerationMetrics()
 
-    async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
+    async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
         """分两次产出固定文本，中间让出事件循环以触发异步持久化。"""
-        yield "断点"
+        self.metrics.observe(None, "断点")
+        yield TextMessageContentEvent(
+            type=EventType.TEXT_MESSAGE_CONTENT, message_id="synthetic", delta="断点",
+        )
         await asyncio.sleep(0.01)
-        yield "续传"
+        self.metrics.observe(None, "续传")
+        yield TextMessageContentEvent(
+            type=EventType.TEXT_MESSAGE_CONTENT, message_id="synthetic", delta="续传",
+        )
 
 
 @pytest.mark.anyio
@@ -73,7 +81,7 @@ async def test_tool_history_persists_updates_and_closes_unfinished_calls() -> No
     class ToolService:
         tool_history = ToolCallHistory()
 
-        async def stream(self, *_: object, **__: object) -> AsyncIterator[str]:
+        async def stream(self, *_: object, **__: object) -> AsyncIterator[BaseEvent]:
             call_id = uuid4()
             await self.tool_history.on_tool_start({"name": "lookup"}, "", run_id=call_id)
             with factory() as session:
@@ -86,7 +94,9 @@ async def test_tool_history_persists_updates_and_closes_unfinished_calls() -> No
             await self.tool_history.on_tool_end("[]", run_id=call_id)
             await self.tool_history.on_tool_end("[]", run_id=call_id)
             await self.tool_history.on_tool_start({"name": "slow_tool"}, "", run_id=uuid4())
-            yield "完成"
+            yield TextMessageContentEvent(
+                type=EventType.TEXT_MESSAGE_CONTENT, message_id="synthetic", delta="完成",
+            )
 
     manager = AiChatRunManager(factory, lambda _: ToolService())
     manager._semaphore = asyncio.Semaphore(1)
@@ -417,9 +427,11 @@ async def test_run_manager_persists_runtime_and_provider_errors() -> None:
         def __init__(self, _: Settings) -> None:
             pass
 
-        async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
+        async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
             if False:
-                yield thread_id
+                yield RunStartedEvent(
+                    type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test",
+                )
             raise RuntimeError("配置错误")
 
     class PermissionDeniedError(Exception):
@@ -429,9 +441,11 @@ async def test_run_manager_persists_runtime_and_provider_errors() -> None:
         def __init__(self, _: Settings) -> None:
             pass
 
-        async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
+        async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
             if False:
-                yield thread_id
+                yield RunStartedEvent(
+                    type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test",
+                )
             raise PermissionDeniedError("blocked")
 
     async def execute(factory: object) -> AiChatRun:
@@ -479,9 +493,9 @@ async def test_shutdown_leaves_cancelled_run_recoverable() -> None:
         def __init__(self, _: Settings) -> None:
             pass
 
-        async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
+        async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
             await asyncio.sleep(10)
-            yield thread_id
+            yield RunStartedEvent(type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test")
 
     manager = AiChatRunManager(session_factory, cast(type[ChatStreamer], SlowService))
     manager.start(created.id, request, Settings())
@@ -511,9 +525,9 @@ async def test_user_cancel_marks_run_failed_instead_of_recoverable() -> None:
         def __init__(self, _: Settings) -> None:
             pass
 
-        async def stream(self, _: AiChatRequest, *, thread_id: str = "") -> AsyncIterator[str]:
+        async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
             await asyncio.sleep(10)
-            yield thread_id
+            yield RunStartedEvent(type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test")
 
     manager = AiChatRunManager(session_factory, cast(type[ChatStreamer], SlowService))
     manager.start(created.id, request, Settings())
@@ -618,15 +632,3 @@ async def test_stream_response_replays_snapshot_before_live_delta(
     assert all("tool_calls" not in state for state in states)
     assert str(tool_call.id) in body
     assert states[-1]["proposals"][0]["proposal_token"] == "test-proposal"
-
-
-def test_extract_stream_text_supports_langgraph_message_shapes() -> None:
-    from langchain_core.messages import AIMessage, HumanMessage
-
-    from genesis_api.agent.runtime import _message_text
-
-    assert _message_text(AIMessage(content="纯文本")) == ["纯文本"]
-    assert _message_text(AIMessage(content=[{"type": "text", "text": "块一"}])) == [
-        "块一",
-    ]
-    assert _message_text(HumanMessage(content="用户消息")) == []

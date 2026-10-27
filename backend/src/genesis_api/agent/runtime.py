@@ -21,7 +21,7 @@ from langchain.agents.middleware import ModelCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
+from langchain_core.messages import BaseMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from openai import APIStatusError as OpenAIStatusError
@@ -562,7 +562,7 @@ class EmbeddedAgentRuntime:
             schema: 由 LangChain/Pydantic 校验的结果契约。
 
         Returns:
-            完整流结束后最后一份通过契约校验的结果。
+            由框架聚合完整响应并通过契约校验的结果。
 
         Raises:
             RuntimeError: 未配置模型，或模型没有返回完整结构化结果。
@@ -576,23 +576,24 @@ class EmbeddedAgentRuntime:
         effort = "low" if "low" in levels else None
         thinking = "disabled" if "disabled" in (capabilities.thinking_modes or []) else None
         client = self._build_model(settings, provider, model, effort, thinking)
-        result: StructuredResult | None = None
         for attempt in range(2):
             try:
-                async for value in client.with_structured_output(schema).astream(
+                # 保留流式网关兼容，由 ainvoke 聚合后交给官方结构化解析器校验一次。
+                if "streaming" in type(client).model_fields:
+                    client = client.model_copy(update={"streaming": True})
+                result = await client.with_structured_output(schema).ainvoke(
                     [SystemMessage(content=prompt), {"role": "user", "content": content}]
-                ):
-                    result = schema.model_validate(value)
-                break
+                )
+                if not isinstance(result, schema):
+                    raise RuntimeError("模型未返回完整结构化结果")
+                return result
             except OpenAIStatusError as error:
                 if attempt or not unsupported_responses(error):
                     raise
                 client = self._build_model(
                     settings, provider, model, effort, thinking, use_responses_api=False,
                 )
-        if result is None:
-            raise RuntimeError("模型未返回完整结构化结果")
-        return result
+        raise RuntimeError("模型未返回完整结构化结果")
 
     async def generate_title(self, request: AiChatRequest, settings: Settings) -> str:
         """复用公共模型适配总结首条用户消息，不运行 Agent 或写入聊天状态。"""
@@ -651,24 +652,11 @@ class EmbeddedAgentRuntime:
                     settings, provider, model, effort, thinking, use_responses_api=False,
                 )
                 value = await fallback.with_structured_output(AiConversationTitle).ainvoke(messages)
-            return AiConversationTitle.model_validate(value).title
+            if not isinstance(value, AiConversationTitle):
+                raise RuntimeError("模型未返回有效的会话标题")
+            return value.title
         except ValueError:
             raise RuntimeError("模型未返回有效的会话标题") from None
-
-
-def _message_text(message: object) -> list[str]:
-    """复用 LangChain 的可见文本投影，忽略推理块、工具结果及元数据。
-
-    Args:
-        message: 框架产出的消息，支持纯字符串与列表形式的文本内容。
-
-    Returns:
-        非空文本片段列表；非模型消息或没有文本时返回空列表。
-    """
-    if not isinstance(message, AIMessage):
-        return []
-    text = str(message.text)
-    return [text] if text else []
 
 
 embedded_agent_runtime = EmbeddedAgentRuntime()

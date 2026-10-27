@@ -46,6 +46,21 @@ SVG 使用 LangChain 原生无工具 Agent 图，也经由同一个官方适配�
 
 `genesis_api/ai/ag_ui.py` 只为接入前没有事件日志的终态任务构建一次静态安全消息快照，方便读取既有历史。它不生成实时增量、不模拟工具执行，也不参与新任务的事件转换。原 `AgUiRunStream.project` 已删除。
 
+## 重复实现复查
+
+后台流式服务只接收官方 `BaseEvent` 和业务提议，不再兼容旧字符串流或旧服务签名。旧的 `_message_text` 提取函数和未使用的 `AiProviderError` 已删除。结构化生成使用 `with_structured_output(schema).ainvoke()`，完整响应的聚合与 Pydantic 校验交给 LangChain；项目不再遍历结构化流或重复解析结果。工具展示直接复用记录内的 `protocol_id`，不另存一份 ID 映射。
+
+| 能力 | 实际负责方与保留边界 |
+| --- | --- |
+| 模型循环、工具调度、任务清单、虚拟文件与上下文管理 | DeepAgents / LangChain 原生图和默认中间件；附件中间件只将业务授权文件交给 `StateBackend.aupload_files`。 |
+| checkpoint、恢复与清理 | 原生 checkpointer、图恢复及 `PostgresSaver.delete_thread`；业务层只决定哪些用户任务可恢复、何时取消及如何核账。 |
+| 消息、工具协议事件及前端归并 | 官方 LangGraphAgent 与 HttpAgent；项目只过滤私有载荷、补充安全展示并持久化公开事件。 |
+| 澄清或博客写操作后结束本轮 | 原生 `before_model` 跳转扩展点，补充“成功且符合业务契约才结束”的条件；`return_direct` 会连工具校验失败一起结束，不能保持错误修正行为。 |
+| 供应商与文档回退 | 仅保留 MiMo 思考字段回传、明确不支持 Responses 时的单次协议切换，以及已授权 PDF / DOCX 的文本转换；不替代原生模型或工具重试循环。 |
+| 任务快照、工具摘要、统计与账务 | 业务展示与归属数据，不保存第二份图执行状态；事件订阅与后台执行的生命周期独立。 |
+
+以上对照当前锁定依赖的实际源码检查；未以删除业务权限、审阅签名、计费或恢复能力换取代码量减少。LangChain 原生结构化输出说明见[官方模型文档](https://docs.langchain.com/oss/python/langchain/models#structured-output)。
+
 ## 验证
 
 工程检查通过已运行的 Docker Compose 服务执行。后端覆盖真实 DeepAgents 图、官方适配器、原生 checkpoint 恢复、安全过滤、事件持久化、归属隔离、重连重放和最终账务顺序。前端覆盖官方多消息 ID、工具先于正文、快照覆盖、业务澄清、分片与换行、终态释放、取消和错误。
@@ -53,3 +68,5 @@ SVG 使用 LangChain 原生无工具 Agent 图，也经由同一个官方适配�
 浏览器验收入口为 `tests/browser/ag-ui.html` 和 `tests/browser/billing.html?view=svg`，使用真实组件和合成 API；不调用真实模型、不产生费用。
 
 2026-10-27 验证：Compose 内 Ruff、mypy、ESLint、TypeScript 和生产构建通过；后端 523 项测试通过，覆盖率 91.38%，前端 455 项测试通过。真实 DeepAgents 图经过官方 Python 适配器与安全过滤后的输出交给官方 JS 客户端验证，协议校验无警告；另外验证 SVG 原生无工具图保留固定输出限制。浏览器检查桌面与 390px 窄屏的正常、空回复、失败、重连、工具展开、澄清选择以及影音和 SVG 展示；strict UI 审计零发现。保留官方适配器的 LangGraph 弃用提示、既有 Pydantic 警告与构建大分块提示。
+
+同日重复实现复查后的验证：Compose 内 Ruff、mypy（145 个源文件）通过；完整后端 521 项测试通过，覆盖率 91.42%（移除两项仅测试废弃文本提取函数的测试）。补充真实官方适配器的推理内容隔离与结构化响应分片回归，定向 23 项通过；前端 AG-UI/API 协议测试 9 项通过。本轮未修改前端代码；既有弃用及序列化警告保留。

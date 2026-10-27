@@ -72,10 +72,3 @@ class AgentService:
     async def generate_title(self, request: AiChatRequest) -> str:
         """复用运行时的模型适配生成会话名，不调用业务工具。"""
         return await self.runtime.generate_title(request, self.settings)
-
-
-class AiProviderError(RuntimeError):
-    """表示上游模型提供商调用错误，供调用方按错误类型处理。
-
-    stream 不会自动把运行时或 SDK 异常转换为此类型。
-    """

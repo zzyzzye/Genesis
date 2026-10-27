@@ -227,10 +227,16 @@ async def test_structured_generation_and_title_share_protocol_fallback(structure
         body = json.loads(request.content)
         content = json.dumps({"title": "协议回退"}, ensure_ascii=False)
         if body.get("stream"):
+            # 契约完整前分片不能被提前校验或作为最终结果返回。
+            split = content.index("回退")
             chunks = [{
                 "id": "chat-title", "object": "chat.completion.chunk", "created": 1,
                 "model": model, "choices": [{"index": 0, "finish_reason": None,
-                "delta": {"role": "assistant", "content": content}}],
+                "delta": {"role": "assistant", "content": content[:split]}}],
+            }, {
+                "id": "chat-title", "object": "chat.completion.chunk", "created": 1,
+                "model": model, "choices": [{"index": 0, "finish_reason": None,
+                "delta": {"content": content[split:]}}],
             }, {
                 "id": "chat-title", "object": "chat.completion.chunk", "created": 1,
                 "model": model, "choices": [{"index": 0, "finish_reason": "stop", "delta": {}}],

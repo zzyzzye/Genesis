@@ -1,14 +1,11 @@
 """验证导读缓存、发布边界、旧结果隔离与无工具的结构化生成。"""
 
 import asyncio
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from pydantic import ValidationError
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -242,21 +239,15 @@ async def test_failed_or_cancelled_generation_does_not_break_post(
 async def test_structured_runtime_uses_framework_without_graph_or_tools(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from langchain_core.language_models.fake_chat_models import FakeListChatModel
+    from langchain_core.output_parsers import PydanticOutputParser
+
     runtime = EmbeddedAgentRuntime()
-    values: list[Any] = [content().model_dump(mode="json")]
-
-    async def stream(messages: object) -> AsyncIterator[Any]:
-        assert "待概括" in str(messages)
-        for value in values:
-            yield value
-
-    monkeypatch.setattr(
-        runtime,
-        "_build_model",
-        lambda *_: SimpleNamespace(
-            with_structured_output=lambda schema: SimpleNamespace(astream=stream),
-        ),
-    )
+    model = FakeListChatModel(responses=[content().model_dump_json(), '{"points":[]}'])
+    monkeypatch.setattr(FakeListChatModel, "with_structured_output", lambda self, schema: (
+        self | PydanticOutputParser(pydantic_object=schema)
+    ))
+    monkeypatch.setattr(runtime, "_build_model", lambda *_: model)
     monkeypatch.setattr(runtime, "_graph", lambda *_: pytest.fail("导读不能运行私有 Agent"))
     settings = Settings(text_provider="openai", text_openai_model="test")
     assert (
@@ -268,13 +259,18 @@ async def test_structured_runtime_uses_framework_without_graph_or_tools(
         )
         == content()
     )
-    values.clear()
-    with pytest.raises(RuntimeError, match="完整结构化"):
+    with pytest.raises(ValueError):
         await runtime.generate_structured(
             settings, prompt="待概括", content="正文", schema=ArticleGuideContent
         )
-    values.append({"points": []})
-    with pytest.raises(ValidationError):
+
+    async def empty(_: object) -> None:
+        return None
+
+    monkeypatch.setattr(FakeListChatModel, "with_structured_output", lambda *_: (
+        SimpleNamespace(ainvoke=empty)
+    ))
+    with pytest.raises(RuntimeError, match="完整结构化"):
         await runtime.generate_structured(
             settings, prompt="待概括", content="正文", schema=ArticleGuideContent
         )
