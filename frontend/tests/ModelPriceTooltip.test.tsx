@@ -5,7 +5,7 @@ import type { AvailableModel } from '../src/lib/api'
 
 afterEach(cleanup)
 const luna: AvailableModel = {
-  id: 'gpt-5.6-luna', name: 'GPT 5.6 Luna', created: null, context_window: 1050000,
+  id: 'gpt-5.6-luna', name: 'GPT 5.6 Luna', created: null, context_window: 1050000, billing_mode: 'platform',
   pricing: {
     status: 'available', currency: 'CNY', unit: '1M tokens', group: 'codex-pro', group_ratio: '0.2',
     updated_at: '2026-10-27T00:00:00Z', note: '价格仅供核对，实际费用以上游账单为准。',
@@ -24,6 +24,7 @@ function setup(models = [luna]) {
 
 it('鼠标悬停展示已含分组倍率的分档输入输出价，不改变当前选择', () => {
   const { button, onModelChange } = setup()
+  expect(button).not.toHaveTextContent('站点承担')
   expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
   fireEvent.pointerEnter(button, { pointerType: 'mouse' })
   const tooltip = screen.getByRole('tooltip')
