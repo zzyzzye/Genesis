@@ -18,7 +18,8 @@ from sqlalchemy.orm import Session
 
 from genesis_api.billing.models import BillingOperation, UpstreamCharge
 from genesis_api.billing.service import (
-    SCALE,
+    MONEY_QUANTUM,
+    ZERO,
     aware,
     channel_id,
     connection,
@@ -33,7 +34,7 @@ from genesis_api.database.session import SessionLocal
 logger = logging.getLogger(__name__)
 
 
-def billing_details(row: dict[str, Any], quota_per_cny: int) -> tuple[int, int, dict[str, Any]]:
+def billing_details(row: dict[str, Any], quota_per_cny: int) -> tuple[int, Decimal, dict[str, Any]]:
     """解析实账白名单，零价占位字段不参与计费，不执行供应商表达式。"""
     other = row.get("other", {})
     if isinstance(other, str):
@@ -48,9 +49,7 @@ def billing_details(row: dict[str, Any], quota_per_cny: int) -> tuple[int, int, 
         raise ValueError("缺少有效结算额度")
     if "quota" in row and (type(row["quota"]) is not int or row["quota"] != quota):
         raise ValueError("结算额度与公式结果不一致，需要人工核对")
-    amount = int(
-        (Decimal(quota) * SCALE / quota_per_cny).quantize(Decimal(1), rounding=ROUND_HALF_UP)
-    )
+    amount = (Decimal(quota) / quota_per_cny).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
     safe_formula = {
         k: formula[k]
         for k in (
@@ -123,14 +122,14 @@ def apply_rows(session: Session, channel: str, rows: list[dict[str, Any]]) -> No
             refund_id = f"{row.get('request_id')}:{row.get('created_at')}:{quota}"
             if refund_id in charge.refund_ids or charge.status != "settled":
                 continue
-            refund = min(amount, charge.units)
+            refund = min(amount, charge.amount)
             charge.refund_ids = [*charge.refund_ids, refund_id]
-            charge.units -= refund
+            charge.amount -= refund
             if operation.status == "settled":
                 old_charged = operation.charged
-                operation.cost = max(0, operation.cost - refund)
+                operation.cost = max(ZERO, operation.cost - refund)
                 operation.charged = (
-                    min(operation.cost, operation.reserved) if operation.mode == "paid" else 0
+                    min(operation.cost, operation.reserved) if operation.mode == "paid" else ZERO
                 )
                 if old_charged > operation.charged:
                     post_entry(
@@ -142,8 +141,12 @@ def apply_rows(session: Session, channel: str, rows: list[dict[str, Any]]) -> No
                         reason="供应商退回已结算费用",
                         operation_id=operation.id,
                     )
-        elif row.get("type") == 2 and charge.status != "settled":
-            charge.quota, charge.units, charge.details = quota, amount, details
+        elif row.get("type") in {2, 5} and charge.status != "settled":
+            # 错误日志只有明确的零额度才可证明未收费；缺失账单仍不视为零。
+            if row.get("type") == 5 and quota != 0:
+                operation.note = "上游错误账单包含非零额度，保留冻结等待核对"
+                continue
+            charge.quota, charge.amount, charge.details = quota, amount, details
             charge.status = "settled"
         touched.add(operation.id)
         session.flush()

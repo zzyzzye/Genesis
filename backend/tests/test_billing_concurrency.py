@@ -1,6 +1,7 @@
 """在现有 Compose PostgreSQL 的独立临时 schema 验证并发冻结，不接触业务数据。"""
 
 from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
 from threading import Barrier
 from uuid import uuid4
 
@@ -16,8 +17,8 @@ from genesis_api.billing.service import (
     channel_id,
     create_quote,
     lock_wallet,
+    parse_amount,
     post_entry,
-    units,
     wallet_data,
 )
 from genesis_api.core.config import Settings
@@ -55,7 +56,7 @@ def test_postgres_concurrent_reservations_cannot_overspend() -> None:
                 lock_wallet(session, user.id),
                 key="seed",
                 kind="credit",
-                available=units("0.01"),
+                available=parse_amount("0.01"),
                 reason="合成入账",
             )
             session.add(
@@ -64,7 +65,7 @@ def test_postgres_concurrent_reservations_cannot_overspend() -> None:
                     provider="openai",
                     model="test-model",
                     channel=channel_id(settings, "agent", "openai"),
-                    max_request_units=100000,
+                    max_request_amount=Decimal("0.001"),
                     max_input_bytes=10000,
                     max_output_tokens=4096,
                     quota_per_cny=500000,

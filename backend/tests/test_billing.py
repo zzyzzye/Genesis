@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -31,8 +32,8 @@ from genesis_api.billing.service import (
     finish_operation,
     lock_wallet,
     money,
+    parse_amount,
     post_entry,
-    units,
     wallet_data,
 )
 from genesis_api.billing.transport import after_response, before_request, execution_context
@@ -70,7 +71,7 @@ def state() -> Any:
             provider="openai",
             model="gpt-5.6-luna",
             channel=channel_id(settings, "agent", "openai"),
-            max_request_units=100_000,
+            max_request_amount=Decimal("0.001"),
             max_input_bytes=10000,
             max_output_tokens=4096,
             quota_per_cny=500000,
@@ -82,7 +83,7 @@ def state() -> Any:
             lock_wallet(session, user.id),
             key="seed",
             kind="credit",
-            available=units("1"),
+            available=parse_amount("1"),
             reason="测试入账",
             actor_id=owner.id,
         )
@@ -146,13 +147,13 @@ def sample(request_id: str = "gateway-request", quota: int = 126, kind: int = 2)
 
 @pytest.mark.parametrize("amount", ["0", "0.00000001", "0.000252", "10.12345678", "-0.01"])
 def test_money_round_trip(amount: str) -> None:
-    assert units(money(units(amount))) == units(amount)
+    assert parse_amount(money(parse_amount(amount))) == parse_amount(amount)
 
 
 @pytest.mark.parametrize("amount", ["NaN", "Infinity", "0.000000001", "wat", "1e1000"])
 def test_money_rejects_invalid(amount: str) -> None:
     with pytest.raises(HTTPException):
-        units(amount)
+        parse_amount(amount)
 
 
 def test_real_bill_dynamic_cost_and_safe_projection() -> None:
@@ -164,6 +165,34 @@ def test_real_bill_dynamic_cost_and_safe_projection() -> None:
     assert "unneeded_debug" not in details["response_model"]
     with pytest.raises(ValueError, match="不一致"):
         billing_details({**sample(), "quota": 127}, 500000)
+
+
+@pytest.mark.parametrize("quota", [0, 126])
+def test_gateway_error_only_releases_hold_with_explicit_zero_bill(state: Any, quota: int) -> None:
+    """错误响应不等于免费，只有精确匹配的零额度错误实账允许退回冻结。"""
+    session, user, _, _, _, _ = state
+    operation = quote_and_admit(state)
+    operation.call_count = 1
+    session.add(
+        UpstreamCharge(
+            operation_id=operation.id,
+            channel="test",
+            request_id="gateway-request",
+        )
+    )
+    finish_operation(session, operation.source_id)
+    session.commit()
+    row = sample(quota=quota, kind=5)
+    apply_rows(session, "test", [row, row])
+    session.commit()
+    balance = wallet_data(session, user.id)
+    if quota == 0:
+        assert operation.status == "settled"
+        assert balance["available"] == "1.00000000"
+        assert balance["frozen"] == "0.00000000"
+    else:
+        assert operation.status == "pending"
+        assert balance["frozen"] == "0.00800000"
 
 
 def test_chat_policy_apply_is_idempotent_and_does_not_credit_wallets(
@@ -333,7 +362,7 @@ def test_quote_cannot_be_reused_or_changed(state: Any, case: str) -> None:
 def test_free_mimo_shares_concurrency_and_needs_no_money(state: Any) -> None:
     session, user, _, settings, _, _ = state
     wallet = lock_wallet(session, user.id)
-    wallet.available = 0
+    wallet.available = Decimal(0)
     session.commit()
     source = uuid4()
     free = admit(
@@ -433,7 +462,7 @@ def test_ledger_idempotency_rejects_changed_credit_and_insufficient_funds(state:
         wallet,
         key="credit:test",
         kind="credit",
-        available=1,
+        available=Decimal("0.00000001"),
         reason="测试",
         actor_id=owner.id,
     )
@@ -442,7 +471,7 @@ def test_ledger_idempotency_rejects_changed_credit_and_insufficient_funds(state:
         wallet,
         key="credit:test",
         kind="credit",
-        available=1,
+        available=Decimal("0.00000001"),
         reason="测试",
         actor_id=owner.id,
     )
@@ -452,13 +481,18 @@ def test_ledger_idempotency_rejects_changed_credit_and_insufficient_funds(state:
             wallet,
             key="credit:test",
             kind="credit",
-            available=2,
+            available=Decimal("0.00000002"),
             reason="测试",
             actor_id=owner.id,
         )
     with pytest.raises(HTTPException):
         post_entry(
-            session, wallet, key="negative", kind="correction", available=-units("2"), reason="测试"
+            session,
+            wallet,
+            key="negative",
+            kind="correction",
+            available=-parse_amount("2"),
+            reason="测试",
         )
 
 
@@ -603,21 +637,38 @@ async def test_native_agent_http_stream_to_actual_bill_settlement(
         assert request.url.path == "/v1/responses"
         assert body["max_output_tokens"] == 4096
         response = {
-            "id": "resp-synthetic", "object": "response", "created_at": 100,
-            "status": "completed", "model": operation.model,
-            "output": [{
-                "type": "message", "id": "msg-synthetic", "role": "assistant",
-                "status": "completed",
-                "content": [{"type": "output_text", "text": "连接成功", "annotations": []}],
-            }],
+            "id": "resp-synthetic",
+            "object": "response",
+            "created_at": 100,
+            "status": "completed",
+            "model": operation.model,
+            "output": [
+                {
+                    "type": "message",
+                    "id": "msg-synthetic",
+                    "role": "assistant",
+                    "status": "completed",
+                    "content": [{"type": "output_text", "text": "连接成功", "annotations": []}],
+                }
+            ],
             "usage": {"input_tokens": 4391, "output_tokens": 7, "total_tokens": 4398},
         }
         chunks = [
             {"type": "response.created", "response": {**response, "output": []}},
-            {"type": "response.output_text.delta", "item_id": "msg-synthetic",
-             "output_index": 0, "content_index": 0, "delta": "连接成功"},
-            {"type": "response.output_text.done", "item_id": "msg-synthetic",
-             "output_index": 0, "content_index": 0, "text": "连接成功"},
+            {
+                "type": "response.output_text.delta",
+                "item_id": "msg-synthetic",
+                "output_index": 0,
+                "content_index": 0,
+                "delta": "连接成功",
+            },
+            {
+                "type": "response.output_text.done",
+                "item_id": "msg-synthetic",
+                "output_index": 0,
+                "content_index": 0,
+                "text": "连接成功",
+            },
             {"type": "response.completed", "response": response},
         ]
         content = "".join(f"data: {json.dumps(chunk)}\n\n" for chunk in chunks)
@@ -748,7 +799,10 @@ def test_manual_resolution_keeps_matched_cost_and_is_idempotent(state: Any) -> N
     session.add_all(
         [
             UpstreamCharge(
-                operation_id=operation.id, channel="synthetic", status="settled", units=25200
+                operation_id=operation.id,
+                channel="synthetic",
+                status="settled",
+                amount=Decimal("0.000252"),
             ),
             UpstreamCharge(operation_id=operation.id, channel="synthetic", status="unknown"),
         ]
@@ -764,7 +818,7 @@ def test_manual_resolution_keeps_matched_cost_and_is_idempotent(state: Any) -> N
     balance = wallet_data(session, user.id)
     assert routes.resolve(operation.id, request, owner, session) == first
     assert wallet_data(session, user.id) == balance
-    assert operation.charged == 30000
+    assert operation.charged == Decimal("0.00030000")
     assert (
         session.scalar(
             select(func.count())

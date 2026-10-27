@@ -11,6 +11,7 @@ from genesis_api.api.dependencies import CurrentUserDependency, OwnerDependency,
 from genesis_api.billing.models import BillingOperation, PricePolicy, UpstreamCharge, WalletEntry
 from genesis_api.billing.schemas import CreditRequest, PolicyRequest, QuoteRequest
 from genesis_api.billing.service import (
+    ZERO,
     channel_id,
     connection,
     create_quote,
@@ -19,9 +20,9 @@ from genesis_api.billing.service import (
     media_parameters,
     money,
     operation_data,
+    parse_amount,
     post_entry,
     settle,
-    units,
     wallet_data,
 )
 from genesis_api.core.config import get_settings
@@ -40,7 +41,7 @@ def _details(session: Session, row: BillingOperation) -> dict[str, Any]:
             {
                 "request_id": c.request_id,
                 "status": c.status,
-                "amount": money(c.units),
+                "amount": money(c.amount),
                 "details": c.details,
             }
             for c in session.scalars(
@@ -106,7 +107,7 @@ def operation(
             {
                 "request_id": c.request_id,
                 "status": c.status,
-                "amount": money(c.units),
+                "amount": money(c.amount),
                 "details": c.details,
             }
             for c in session.scalars(
@@ -198,7 +199,7 @@ def credit(
     data: CreditRequest, owner: OwnerDependency, session: SessionDependency
 ) -> dict[str, str]:
     """确认后的人工充值或更正只新增流水，不能覆盖既有余额。"""
-    amount = units(data.amount)
+    amount = parse_amount(data.amount)
     if amount == 0 or not data.reason.strip():
         raise HTTPException(422, "请填写非零金额和入账原因")
     row = lock_wallet(session, data.user_id)
@@ -225,7 +226,7 @@ def policies(_: OwnerDependency, session: SessionDependency) -> list[dict[str, A
             "kind": p.kind,
             "provider": p.provider,
             "model": p.model,
-            "max_request_amount": money(p.max_request_units),
+            "max_request_amount": money(p.max_request_amount),
             "max_input_bytes": p.max_input_bytes,
             "max_output_tokens": p.max_output_tokens,
             "quota_per_cny": p.quota_per_cny,
@@ -241,7 +242,7 @@ def add_policy(
     data: PolicyRequest, owner: OwnerDependency, session: SessionDependency
 ) -> dict[str, str]:
     """新审核版本替代旧版本，旧报价失效，已冻结订单继续使用原快照。"""
-    amount = units(data.max_request_amount)
+    amount = parse_amount(data.max_request_amount)
     if amount <= 0 or not data.evidence.strip():
         raise HTTPException(422, "必须填写正数费用上限和审核依据")
     previous = session.get(PricePolicy, data.request_id)
@@ -250,7 +251,7 @@ def add_policy(
             previous.kind,
             previous.provider,
             previous.model,
-            previous.max_request_units,
+            previous.max_request_amount,
             previous.max_input_bytes,
             previous.max_output_tokens,
             previous.quota_per_cny,
@@ -291,7 +292,7 @@ def add_policy(
         provider=data.provider,
         model=data.model,
         channel=channel_id(settings, data.kind, data.provider),
-        max_request_units=amount,
+        max_request_amount=amount,
         max_input_bytes=data.max_input_bytes,
         max_output_tokens=data.max_output_tokens,
         quota_per_cny=data.quota_per_cny,
@@ -303,7 +304,7 @@ def add_policy(
         lock_wallet(session, owner.id),
         key=f"policy:{data.request_id}",
         kind="policy",
-        available=0,
+        available=ZERO,
         actor_id=owner.id,
         reason=f"审核价格策略：{data.kind}/{data.provider}/{data.model}",
     )
@@ -360,7 +361,7 @@ def resolve(
         ):
             raise HTTPException(409, "操作标识已用于其他人工核对")
         previous = session.get(BillingOperation, operation_id)
-        if previous is None or previous.cost != units(data.amount):
+        if previous is None or previous.cost != parse_amount(data.amount):
             raise HTTPException(409, "操作标识已用于其他核对金额")
         return operation_data(previous)
     row = session.scalar(
@@ -370,18 +371,18 @@ def resolve(
     )
     if row is None:
         raise HTTPException(404, "账单不存在")
-    cost = units(data.amount)
+    cost = parse_amount(data.amount)
     if not row.finished or row.status not in {"pending", "review"} or cost < 0:
         raise HTTPException(409, "只能核对已结束且未结算的订单")
     charges = list(
         session.scalars(select(UpstreamCharge).where(UpstreamCharge.operation_id == row.id))
     )
-    known_cost = sum(c.units for c in charges if c.status == "settled")
+    known_cost = sum((c.amount for c in charges if c.status == "settled"), ZERO)
     if cost < known_cost:
         raise HTTPException(422, "核对金额不能低于已匹配的实账，请先核实退款或使用账务更正")
     for c in charges:
         if c.status != "settled":
-            c.status, c.units = "settled", 0
+            c.status, c.amount = "settled", ZERO
             c.details = {"manual_resolution": data.reason}
     if cost > known_cost:
         session.add(
@@ -389,7 +390,7 @@ def resolve(
                 operation_id=row.id,
                 channel="manual",
                 status="settled",
-                units=cost - known_cost,
+                amount=cost - known_cost,
                 details={"manual_resolution": data.reason},
             )
         )
@@ -398,7 +399,7 @@ def resolve(
         wallet,
         key=f"resolve:{data.request_id}",
         kind="review",
-        available=0,
+        available=ZERO,
         actor_id=owner.id,
         reason=data.reason,
         operation_id=row.id,

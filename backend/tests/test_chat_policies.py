@@ -10,7 +10,6 @@ from pydantic import SecretStr
 import genesis_api.billing.chat_policies as chat_policies
 from genesis_api.billing.chat_policies import policy_candidate
 from genesis_api.billing.schemas import ModelPricePreview, PolicyRequest, TokenPriceTier
-from genesis_api.billing.service import SCALE
 from genesis_api.core.config import Settings
 from genesis_api.llm.models import AvailableModel
 
@@ -44,7 +43,7 @@ def test_policy_covers_full_input_cache_output_and_gateway_rounding() -> None:
     assert basis["output_tokens"] == 4096
     assert Decimal(basis["input_rate_bound"]) == Decimal("0.10")
     assert "synthetic-policy-key" not in result.model_dump_json()
-    assert int(Decimal(result.max_request_amount) * SCALE) % 200 == 0
+    assert Decimal(result.max_request_amount) % Decimal("0.000002") == 0
     # 只刷新同步时间不会制造重复审核版本。
     changed_time = price.model_copy(update={"updated_at": "later"})
     assert policy_candidate(settings, "grok", model, changed_time, 500000) == result

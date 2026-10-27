@@ -24,23 +24,27 @@ from genesis_api.billing.models import (
 from genesis_api.core.config import Settings
 from genesis_api.identity.models import User, UserRole
 
-SCALE = 100_000_000
+MONEY_QUANTUM = Decimal("0.00000001")
+ZERO = Decimal("0.00000000")
 CALL_LIMIT = 8
 OUTPUT_LIMIT = 4096
 
 
-def money(units: int) -> str:
-    """将内部整数转换成固定八位的小数金额。"""
-    return f"{Decimal(units) / SCALE:.8f}"
+def money(amount: Decimal) -> str:
+    """将人民币元输出为固定八位字符串，避免经过浮点数。"""
+    return f"{amount:.8f}"
 
 
-def units(amount: str) -> int:
+def parse_amount(amount: str) -> Decimal:
     """精确解析金额，拒绝非有限数、超出精度及过大金额。"""
     try:
-        value = Decimal(amount) * SCALE
-        if not value.is_finite() or value != value.to_integral_value() or abs(value) > 10**17:
+        value = Decimal(amount)
+        if not value.is_finite() or abs(value) > 10**9:
             raise ValueError
-        return int(value)
+        result = value.quantize(MONEY_QUANTUM)
+        if result != value:
+            raise ValueError
+        return result
     except (ValueError, InvalidOperation, OverflowError) as exc:
         raise HTTPException(422, "金额无效，最多支持八位小数") from exc
 
@@ -78,7 +82,7 @@ def lock_wallet(session: Session, user_id: UUID) -> Wallet:
         raise HTTPException(404, "账户不存在")
     wallet = session.get(Wallet, user_id)
     if wallet is None:
-        wallet = Wallet(user_id=user_id, available=0, frozen=0)
+        wallet = Wallet(user_id=user_id, available=ZERO, frozen=ZERO)
         session.add(wallet)
         session.flush()
     return wallet
@@ -89,8 +93,8 @@ def wallet_data(session: Session, user_id: UUID) -> dict[str, str]:
     wallet = session.get(Wallet, user_id)
     return {
         "currency": "CNY",
-        "available": money(wallet.available if wallet else 0),
-        "frozen": money(wallet.frozen if wallet else 0),
+        "available": money(wallet.available if wallet else ZERO),
+        "frozen": money(wallet.frozen if wallet else ZERO),
     }
 
 
@@ -100,8 +104,8 @@ def post_entry(
     *,
     key: str,
     kind: str,
-    available: int,
-    frozen: int = 0,
+    available: Decimal,
+    frozen: Decimal = ZERO,
     reason: str,
     operation_id: UUID | None = None,
     actor_id: UUID | None = None,
@@ -197,7 +201,7 @@ def create_quote(
     if policy is not None:
         snapshot = {
             "id": str(policy.id),
-            "max_request_units": policy.max_request_units,
+            "max_request_amount": money(policy.max_request_amount),
             "max_input_bytes": policy.max_input_bytes,
             "max_output_tokens": policy.max_output_tokens,
             "quota_per_cny": policy.quota_per_cny,
@@ -213,9 +217,9 @@ def create_quote(
         fingerprint=fingerprint(kind, provider, model, parameters),
         policy=snapshot,
         reserved=(
-            policy.max_request_units * (CALL_LIMIT if kind == "agent" else 1)
+            policy.max_request_amount * (CALL_LIMIT if kind == "agent" else 1)
             if policy and mode == "paid"
-            else 0
+            else ZERO
         ),
     )
     session.add(operation)
@@ -365,7 +369,7 @@ def settle(session: Session, operation: BillingOperation) -> None:
         and any(c.status != "settled" for c in charges)
     ):
         return
-    cost = sum(c.units for c in charges)
+    cost = sum((c.amount for c in charges), ZERO)
     operation.cost = cost
     if operation.mode == "paid":
         wallet = lock_wallet(session, operation.user_id)

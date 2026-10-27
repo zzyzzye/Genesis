@@ -20,8 +20,8 @@ from genesis_api.billing.reconciliation import billing_details
 from genesis_api.billing.schemas import ModelPricePreview, PolicyRequest
 from genesis_api.billing.service import (
     CALL_LIMIT,
+    MONEY_QUANTUM,
     OUTPUT_LIMIT,
-    SCALE,
     channel_id,
     connection,
     money,
@@ -82,7 +82,7 @@ def policy_candidate(
     output_rate = max(decimal_value(tier.output) for tier in price.tiers)
     cost = (limit * input_rate + output_limit * output_rate) / 1_000_000
     quota = int((cost * quota_per_cny).to_integral_value(rounding=ROUND_CEILING)) + 1
-    amount = (Decimal(quota) * SCALE / quota_per_cny).to_integral_value(rounding=ROUND_CEILING)
+    amount = (Decimal(quota) / quota_per_cny).quantize(MONEY_QUANTUM, rounding=ROUND_CEILING)
     evidence = json.dumps(
         {
             "audit": "YYAPI 目录、实际账单字段和额度换算核验；所有分档及缓存项目取上界",
@@ -104,7 +104,7 @@ def policy_candidate(
         kind="agent",
         provider=provider,
         model=model.id,
-        max_request_amount=money(int(amount)),
+        max_request_amount=money(amount),
         max_input_bytes=1_000_000,
         max_output_tokens=output_limit,
         quota_per_cny=quota_per_cny,
@@ -217,7 +217,7 @@ async def run(apply: bool) -> dict[str, Any]:
                 "provider": p.provider,
                 "model": p.model,
                 "max_request_amount": p.max_request_amount,
-                "max_round_reserve": money(int(Decimal(p.max_request_amount) * SCALE) * CALL_LIMIT),
+                "max_round_reserve": money(Decimal(p.max_request_amount) * CALL_LIMIT),
                 "max_output_tokens": p.max_output_tokens,
             }
             for p in candidates

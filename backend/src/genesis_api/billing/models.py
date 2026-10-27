@@ -1,6 +1,7 @@
-"""账务凭证独立于可删除的业务任务，金额单位为一亿分之一元。"""
+"""账务凭证独立于业务对象，金额统一以八位小数的人民币元存储。"""
 
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -11,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
     Uuid,
@@ -29,8 +31,8 @@ class Wallet(Base):
     __tablename__ = "billing_wallets"
     __table_args__ = (CheckConstraint("available >= 0 AND frozen >= 0"),)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"), primary_key=True)
-    available: Mapped[int] = mapped_column(BigInteger, default=0)
-    frozen: Mapped[int] = mapped_column(BigInteger, default=0)
+    available: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=Decimal(0))
+    frozen: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=Decimal(0))
 
 
 class PricePolicy(Base):
@@ -42,7 +44,7 @@ class PricePolicy(Base):
     provider: Mapped[str] = mapped_column(String(20))
     model: Mapped[str] = mapped_column(String(255), index=True)
     channel: Mapped[str] = mapped_column(String(100), default="", server_default="")
-    max_request_units: Mapped[int] = mapped_column(BigInteger)
+    max_request_amount: Mapped[Decimal] = mapped_column(Numeric(20, 8))
     max_input_bytes: Mapped[int] = mapped_column(Integer)
     max_output_tokens: Mapped[int] = mapped_column(Integer, default=4096)
     quota_per_cny: Mapped[int] = mapped_column(BigInteger)
@@ -66,9 +68,9 @@ class BillingOperation(Base):
     status: Mapped[str] = mapped_column(String(30), default="quoted", index=True)
     fingerprint: Mapped[str] = mapped_column(String(64))
     policy: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
-    reserved: Mapped[int] = mapped_column(BigInteger, default=0)
-    charged: Mapped[int] = mapped_column(BigInteger, default=0)
-    cost: Mapped[int] = mapped_column(BigInteger, default=0)
+    reserved: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=Decimal(0))
+    charged: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=Decimal(0))
+    cost: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=Decimal(0))
     call_count: Mapped[int] = mapped_column(Integer, default=0)
     finished: Mapped[bool] = mapped_column(Boolean, default=False)
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -89,8 +91,8 @@ class WalletEntry(Base):
     actor_id: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     event_key: Mapped[str] = mapped_column(String(200), unique=True)
     kind: Mapped[str] = mapped_column(String(30))
-    available_delta: Mapped[int] = mapped_column(BigInteger)
-    frozen_delta: Mapped[int] = mapped_column(BigInteger)
+    available_delta: Mapped[Decimal] = mapped_column(Numeric(20, 8))
+    frozen_delta: Mapped[Decimal] = mapped_column(Numeric(20, 8))
     reason: Mapped[str] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -114,7 +116,7 @@ class UpstreamCharge(Base):
     channel: Mapped[str] = mapped_column(String(80))
     request_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(30), default="sending")
-    units: Mapped[int] = mapped_column(BigInteger, default=0)
+    amount: Mapped[Decimal] = mapped_column(Numeric(20, 8), default=Decimal(0))
     quota: Mapped[int] = mapped_column(BigInteger, default=0)
     details: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
     refund_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
