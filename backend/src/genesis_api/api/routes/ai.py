@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from collections.abc import AsyncIterator
 from time import monotonic
 from typing import Annotated, Literal
 from uuid import UUID
 
+from ag_ui.core import EventType, RunErrorEvent
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from jwt import InvalidTokenError, decode
@@ -17,6 +17,7 @@ from sqlalchemy import select
 
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.contracts import AgentActionConfirmation
+from genesis_api.ai.ag_ui import AgUiRunStream
 from genesis_api.ai.conversations import (
     conversation_detail,
     delete_conversations,
@@ -243,20 +244,6 @@ def _load_snapshot(run_id: UUID, user_id: UUID) -> AiChatRunSnapshot | None:
         return get_ai_chat_run_snapshot(session, run_id=run_id, user_id=user_id)
 
 
-def _encode_event(payload: dict[str, object], *, event_id: int | None = None) -> str:
-    """编码一条 SSE 数据事件，以空行结束供客户端分帧。
-
-    Args:
-        payload: 可 JSON 序列化的事件载荷，type 字段由调用方决定。
-        event_id: 可选内容修订序号，不是 token 数。
-
-    Returns:
-        可直接写入 SSE 响应的文本，中文不转换为转义序列。
-    """
-    prefix = f"id: {event_id}\n" if event_id is not None else ""
-    return f"{prefix}data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-
-
 def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> StreamingResponse:
     """订阅已持久化的输出快照，连接断开不取消后台生成。
 
@@ -266,7 +253,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
         request: HTTP 请求，用于检测客户端是否断开连接。
 
     Returns:
-        禁用响应缓存与代理缓冲的 SSE 响应，首帧包含完整文本快照。
+        禁用响应缓存与代理缓冲的 AG-UI SSE 响应，首轮包含完整展示快照。
     """
 
     async def events() -> AsyncIterator[str]:
@@ -275,105 +262,19 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
         Yields:
             已编码的 SSE 事件或心跳注释，终态与断开连接后停止轮询。
         """
-        last_sequence = -1
-        last_content = ""
-        last_proposals: list[dict[str, object]] = []
-        last_tool_calls: list[dict[str, object]] = []
+        stream = AgUiRunStream(str(run_id))
         last_heartbeat = monotonic()
 
         while True:
             snapshot = await asyncio.to_thread(_load_snapshot, run_id, user_id)
             if snapshot is None:
-                yield _encode_event({"type": "error", "message": "AI 生成任务不存在"})
+                yield stream.encode(RunErrorEvent(
+                    type=EventType.RUN_ERROR, message="AI 生成任务不存在",
+                ))
                 return
-
-            if last_sequence < 0:
-                # 每次新连接先发送完整内容，不要求浏览器保留上次连接的增量状态。
-                yield _encode_event(
-                    {
-                        "type": "snapshot",
-                        "run_id": str(snapshot.id),
-                        "content": snapshot.content,
-                        "billing": snapshot.billing,
-                        "tool_calls": [
-                            item.model_dump(mode="json") for item in snapshot.tool_calls
-                        ],
-                        "sequence": snapshot.sequence,
-                        "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
-                    },
-                    event_id=snapshot.sequence,
-                )
-            elif snapshot.sequence != last_sequence:
-                if snapshot.content.startswith(last_content):
-                    delta = snapshot.content[len(last_content) :]
-                    if delta:
-                        yield _encode_event(
-                            {
-                                "type": "token",
-                                "content": delta,
-                                "sequence": snapshot.sequence,
-                                "metrics": snapshot.metrics.model_dump()
-                                if snapshot.metrics
-                                else None,
-                            },
-                            event_id=snapshot.sequence,
-                        )
-                else:
-                    # 后台恢复可能重置内容，此时整段替换，不能继续追加旧文本。
-                    yield _encode_event(
-                        {
-                            "type": "snapshot",
-                            "run_id": str(snapshot.id),
-                            "content": snapshot.content,
-                            "tool_calls": [
-                                item.model_dump(mode="json") for item in snapshot.tool_calls
-                            ],
-                            "sequence": snapshot.sequence,
-                            "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
-                        },
-                        event_id=snapshot.sequence,
-                    )
-
-            last_sequence = snapshot.sequence
-            last_content = snapshot.content
-
-            tool_calls = [item.model_dump(mode="json") for item in snapshot.tool_calls]
-            if tool_calls != last_tool_calls:
-                yield _encode_event({"type": "tool_calls", "tool_calls": tool_calls})
-                last_tool_calls = tool_calls
-
-            proposals = [item.model_dump(mode="json") for item in snapshot.proposals]
-            if proposals != last_proposals:
-                yield _encode_event(
-                    {
-                        "type": "proposals",
-                        "proposals": proposals,
-                    }
-                )
-                last_proposals = proposals
-
-            if snapshot.status is AiChatRunStatus.COMPLETED:
-                yield _encode_event(
-                    {
-                        "type": "done",
-                        "sequence": snapshot.sequence,
-                        "billing": snapshot.billing,
-                        "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
-                    },
-                    event_id=snapshot.sequence,
-                )
-                return
-            if snapshot.status is AiChatRunStatus.FAILED:
-                yield _encode_event(
-                    {
-                        "type": "error",
-                        "message": snapshot.error or "AI 生成失败",
-                        "billing": snapshot.billing,
-                        "metrics": snapshot.metrics.model_dump() if snapshot.metrics else None,
-                        "sequence": snapshot.sequence,
-                    },
-                    event_id=snapshot.sequence,
-                )
+            for event in stream.project(snapshot):
+                yield stream.encode(event)
+            if snapshot.status in (AiChatRunStatus.COMPLETED, AiChatRunStatus.FAILED):
                 return
             if await request.is_disconnected():
                 # 用户主动停止使用独立取消接口，离开页面仍可稍后重新订阅。

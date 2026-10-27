@@ -175,6 +175,7 @@ def get_ai_chat_run_snapshot(
         return None
     return AiChatRunSnapshot(
         id=run.id,
+        conversation_id=run.conversation_id,
         status=run.status,
         content=run.content,
         sequence=run.sequence,

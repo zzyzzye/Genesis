@@ -1,6 +1,9 @@
 import { authFetch, handleStudioUnauthorized, latestAuthToken, rememberSessionUser } from './auth'
 import { collectCommentDeviceHints } from './commentDeviceHints'
 import { downloadBlob } from './download'
+import { AiChatRunTerminalError, consumeAgUiStream, type AiRunStreamHandlers } from './agUiStream'
+
+export { AiChatRunTerminalError } from './agUiStream'
 
 export interface BlogAuthor {
   id: string
@@ -589,8 +592,6 @@ export interface AiGenerationMetrics {
   total_seconds: number
 }
 
-export class AiChatRunTerminalError extends Error {}
-
 export interface AiConversation {
   id: string
   title: string
@@ -687,18 +688,11 @@ export function cancelAiChatRun(token: string, runId: string): Promise<void> {
 export async function streamAiChatRun(
   token: string,
   runId: string,
-  handlers: {
-    onBilling?: (billing: import('../features/billing/api').BillingOperation | null) => void
-    onSnapshot: (content: string, sequence: number) => void
-    onToken: (content: string, sequence: number) => void
-    onMetrics?: (metrics: AiGenerationMetrics | null) => void
-    onProposals?: (proposals: AiActionProposal[]) => void
-    onToolCalls?: (calls: AiToolCall[]) => void
-  },
+  handlers: AiRunStreamHandlers,
   signal?: AbortSignal,
 ): Promise<'completed' | 'disconnected'> {
   const response = await authFetch(`${apiBaseUrl}/ai/chat/runs/${encodeURIComponent(runId)}/stream`, {
-    headers: authHeaders(token),
+    headers: { ...authHeaders(token), Accept: 'text/event-stream' },
     signal,
   })
   handleStudioUnauthorized(response.status, authHeaders(token))
@@ -706,49 +700,7 @@ export async function streamAiChatRun(
     throw new AiChatRunTerminalError(`AI 续传失败：HTTP ${response.status}`)
   }
 
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  while (true) {
-    const { done, value } = await reader.read()
-    buffer += decoder.decode(value, { stream: !done })
-    const events = buffer.split('\n\n')
-    buffer = events.pop() ?? ''
-    if (done && buffer.trim()) {
-      events.push(buffer)
-      buffer = ''
-    }
-    for (const event of events) {
-      const data = event
-        .split('\n')
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trimStart())
-        .join('\n')
-      if (!data) continue
-      const payload = JSON.parse(data) as {
-        type: string
-        content?: string
-        message?: string
-        sequence?: number
-        metrics?: AiGenerationMetrics | null
-        billing?: import('../features/billing/api').BillingOperation | null
-        proposals?: AiActionProposal[]
-        tool_calls?: AiToolCall[]
-      }
-      const sequence = payload.sequence ?? 0
-      if ('metrics' in payload) handlers.onMetrics?.(payload.metrics ?? null)
-      if ('billing' in payload) handlers.onBilling?.(payload.billing ?? null)
-      if (payload.type === 'proposals') handlers.onProposals?.(payload.proposals ?? [])
-      if ('tool_calls' in payload) handlers.onToolCalls?.(payload.tool_calls ?? [])
-      if (payload.type === 'snapshot') handlers.onSnapshot(payload.content ?? '', sequence)
-      if (payload.type === 'token' && payload.content) handlers.onToken(payload.content, sequence)
-      if (payload.type === 'error') {
-        throw new AiChatRunTerminalError(payload.message ?? 'AI 生成失败')
-      }
-      if (payload.type === 'done') return 'completed'
-    }
-    if (done) return 'disconnected'
-  }
+  return consumeAgUiStream(response, runId, handlers, signal)
 }
 
 export async function streamAiChat(

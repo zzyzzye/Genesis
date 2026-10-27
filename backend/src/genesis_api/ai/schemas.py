@@ -223,6 +223,7 @@ class AiChatRunSnapshot(BaseModel):
     """
 
     id: UUID
+    conversation_id: UUID | None = None
     billing: dict[str, object] | None = None
     status: AiChatRunStatus
     content: str

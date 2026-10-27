@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from typing import cast
 from uuid import uuid4
@@ -551,15 +552,19 @@ async def test_stream_response_replays_snapshot_before_live_delta(
         body_parts.append(chunk if isinstance(chunk, str) else bytes(chunk).decode())
     body = "".join(body_parts)
 
-    assert '"type": "snapshot"' in body
-    assert '"content": "刷新前已生成"' in body
-    assert '"type": "token"' in body
-    assert '"content": "，刷新后继续"' in body
-    assert '"type": "done"' in body
-    assert body.count('"type": "proposals"') == 1
-    assert body.count('"type": "tool_calls"') == 1
+    events = [json.loads(line[6:]) for line in body.splitlines() if line.startswith("data: ")]
+    assert events[0]["type"] == "RUN_STARTED"
+    assert events[1]["type"] == "MESSAGES_SNAPSHOT"
+    assert events[1]["messages"][0]["content"] == "刷新前已生成"
+    assert next(e for e in events if e["type"] == "TEXT_MESSAGE_CONTENT")["delta"] == "，刷新后继续"
+    assert events[-1]["type"] == "RUN_FINISHED"
+    states = [e["snapshot"]["genesis"] for e in events if e["type"] == "STATE_SNAPSHOT"]
+    assert len(states) == 2
+    assert states[0]["proposals"][0]["proposal_id"] == str(proposal.proposal_id)
+    assert [e["type"] for e in events].count("TOOL_CALL_START") == 1
+    assert [e["type"] for e in events].count("TOOL_CALL_RESULT") == 1
     assert str(tool_call.id) in body
-    assert '"proposal_token": "test-proposal"' in body
+    assert states[-1]["proposals"][0]["proposal_token"] == "test-proposal"
 
 
 def test_extract_stream_text_supports_langgraph_message_shapes() -> None:

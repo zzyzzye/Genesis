@@ -50,9 +50,22 @@ window.fetch = async (input, init) => {
     const encoder = new TextEncoder()
     const stream = new ReadableStream({ start(controller) {
       const emit = (data: unknown) => controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
-      emit({ type:'snapshot',content:'',sequence:0 })
-      setTimeout(() => { emit({ type:'token',content:svg.slice(0,300),sequence:1 }) },300)
-      setTimeout(() => { completed = !stopped; emit(stopped ? { type:'error',message:'生成已由用户停止。' } : { type:'token',content:svg.slice(300),sequence:2 }); if (!stopped) emit({ type:'done',sequence:2 }); controller.close() },2000)
+      const runId = '55555555-5555-4555-8555-555555555555'
+      const messageId = `${runId}:assistant`
+      emit({ type:'RUN_STARTED',threadId:runId,runId })
+      emit({ type:'MESSAGES_SNAPSHOT',messages:[{ id:messageId,role:'assistant',content:'' }] })
+      emit({ type:'TEXT_MESSAGE_START',messageId,role:'assistant' })
+      setTimeout(() => { emit({ type:'TEXT_MESSAGE_CONTENT',messageId,delta:svg.slice(0,300) }) },300)
+      setTimeout(() => {
+        completed = !stopped
+        if (stopped) emit({ type:'RUN_ERROR',message:'生成已由用户停止。' })
+        else {
+          emit({ type:'TEXT_MESSAGE_CONTENT',messageId,delta:svg.slice(300) })
+          emit({ type:'TEXT_MESSAGE_END',messageId })
+          emit({ type:'RUN_FINISHED',threadId:runId,runId })
+        }
+        controller.close()
+      },2000)
     } })
     return new Response(stream,{ headers:{ 'Content-Type':'text/event-stream' } })
   }

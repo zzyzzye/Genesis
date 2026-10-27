@@ -320,9 +320,12 @@ describe('App', () => {
       }
       if (url.includes('/ai/chat/runs/resumable-run/stream')) {
         return Promise.resolve(new Response([
-          'data: {"type":"snapshot","run_id":"resumable-run","content":"恢复后的完整回复","sequence":2}',
+          'data: {"type":"RUN_STARTED","threadId":"conversation","runId":"resumable-run"}',
           '',
-          'data: {"type":"done","sequence":2}',
+          'data: {"type":"MESSAGES_SNAPSHOT","messages":[{"id":"resumable-run:assistant","role":"assistant","content":"恢复后的完整回复"}]}',
+          '',
+          'data: {"type":"RUN_FINISHED","threadId":"conversation","runId":"resumable-run"}',
+          '',
           '',
         ].join('\n'), {
           status: 200,
