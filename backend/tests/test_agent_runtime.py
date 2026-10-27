@@ -12,11 +12,20 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from ag_ui.core import (
+    EventType,
+    TextMessageContentEvent,
+    TextMessageEndEvent,
+    TextMessageStartEvent,
+    ToolCallResultEvent,
+    ToolCallStartEvent,
+)
 from fastapi import HTTPException
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import SecretStr
 
+from agent_events import public_text
 from genesis_api.agent.context import agent_invocation_context, automatic_actions_allowed
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.runtime import (
@@ -179,9 +188,9 @@ async def test_conversation_checkpoint_keeps_turns_and_replaces_page_context(
         context=AiContext(title="文章甲"),
     )
     settings = Settings(text_openai_model="test")
-    assert "".join([text async for text in runtime.stream(
+    assert public_text([text async for text in runtime.stream(
         request, settings, thread_id="conversation",
-    ) if isinstance(text, str)]) == "第一轮回答"
+    )]) == "第一轮回答"
     first_snapshot = await graph.aget_state({"configurable": {"thread_id": "conversation"}})
     first_context = next(
         message for message in first_snapshot.values["messages"] if message.type == "system"
@@ -192,9 +201,9 @@ async def test_conversation_checkpoint_keeps_turns_and_replaces_page_context(
         "context": AiContext(title="文章乙"),
         "provider": "mimo", "model": "mimo-v2.6-pro",
     })
-    assert "".join([text async for text in runtime.stream(
+    assert public_text([text async for text in runtime.stream(
         await_input, settings, thread_id="conversation",
-    ) if isinstance(text, str)]) == "第二轮回答"
+    )]) == "第二轮回答"
     snapshot = await graph.aget_state({"configurable": {"thread_id": "conversation"}})
     messages = snapshot.values["messages"]
     assert [message.content for message in messages if message.type == "human"] == [
@@ -313,10 +322,21 @@ async def test_runtime_streams_only_ai_text_and_resumes_checkpoint(
             return object()
 
     class FakeGraph:
-        async def astream(self, graph_input: object, **_: object) -> Any:
+        async def aget_state(self, _: object) -> Any:
+            return SimpleNamespace(values={"messages": []})
+
+    class FakeAdapter:
+        def __init__(self, *, graph_input: object, **_: object) -> None:
             received_inputs.append(graph_input)
-            yield "messages", (HumanMessage(content="忽略"), {})
-            yield "messages", (AIMessage(content="保留"), {})
+
+        async def run(self, _: object) -> Any:
+            yield TextMessageStartEvent(type=EventType.TEXT_MESSAGE_START, message_id="answer")
+            yield TextMessageContentEvent(
+                type=EventType.TEXT_MESSAGE_CONTENT, message_id="answer", delta="保留",
+            )
+            yield TextMessageEndEvent(type=EventType.TEXT_MESSAGE_END, message_id="answer")
+
+    monkeypatch.setattr("genesis_api.agent.runtime.AuthorizedLangGraphAgent", FakeAdapter)
 
     runtime = EmbeddedAgentRuntime()
     runtime._checkpointer = cast(Any, FakeCheckpointer())
@@ -330,14 +350,16 @@ async def test_runtime_streams_only_ai_text_and_resumes_checkpoint(
         resume_from_checkpoint=True,
     )
 
-    assert [item async for item in runtime.stream(request, settings, thread_id="thread")] == [
-        "保留"
-    ]
+    assert public_text([item async for item in runtime.stream(
+        request, settings, thread_id="thread",
+    )]) == "保留"
     assert received_inputs == [None]
 
     service = AgentService(settings, runtime)
     request.billing_source_id = uuid4()
-    assert [item async for item in service.stream(request, thread_id="thread")] == ["保留"]
+    assert public_text([
+        item async for item in service.stream(request, thread_id="thread")
+    ]) == "保留"
 
 
 @pytest.mark.anyio
@@ -350,24 +372,35 @@ async def test_tool_proposal_is_forwarded_without_model_repeating_json(
         summary="创建草稿", expires_at="2099-01-01T00:00:00Z", proposal_token="test",
     )
 
-    class FakeGraph:
-        async def astream(self, *_: object, **kwargs: object) -> Any:
-            assert kwargs["stream_mode"] == ["messages", "updates"]
-            yield "updates", {"tools": {"messages": [
-                ToolMessage(content="普通搜索结果", tool_call_id="search"),
-                ToolMessage(content=proposal.model_dump_json(), tool_call_id="draft"),
-            ]}}
-            yield "messages", (AIMessage(content="请点击确认执行"), {})
+    class FakeAdapter:
+        def __init__(self, **_: object) -> None:
+            pass
+
+        async def run(self, _: object) -> Any:
+            yield ToolCallStartEvent(
+                type=EventType.TOOL_CALL_START, tool_call_id="draft", tool_call_name="create_draft",
+            )
+            yield ToolCallResultEvent(
+                type=EventType.TOOL_CALL_RESULT, tool_call_id="draft",
+                message_id="result", content=proposal.model_dump_json(),
+            )
+            yield TextMessageStartEvent(type=EventType.TEXT_MESSAGE_START, message_id="answer")
+            yield TextMessageContentEvent(
+                type=EventType.TEXT_MESSAGE_CONTENT, message_id="answer", delta="请点击确认执行",
+            )
 
     runtime = EmbeddedAgentRuntime()
-    monkeypatch.setattr(runtime, "_graph", lambda *_: FakeGraph())
+    monkeypatch.setattr(runtime, "_graph", lambda *_: object())
+    monkeypatch.setattr("genesis_api.agent.runtime.AuthorizedLangGraphAgent", FakeAdapter)
     request = AiChatRequest(
         surface="studio", messages=[AiMessage(role="user", content="写文章")],
         actor_id=uuid4(), actor_role="owner",
     )
-    assert [item async for item in runtime.stream(
+    events = [item async for item in runtime.stream(
         request, Settings(text_openai_model="test"), thread_id="proposal-thread",
-    )] == [proposal, "请点击确认执行"]
+    )]
+    assert [item for item in events if isinstance(item, AgentActionProposal)] == [proposal]
+    assert public_text(events) == "请点击确认执行"
 
 
 @pytest.mark.anyio

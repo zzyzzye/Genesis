@@ -9,16 +9,23 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
+from ag_ui.core import (
+    BaseEvent,
+    CustomEvent,
+    EventType,
+    MessagesSnapshotEvent,
+    TextMessageContentEvent,
+)
 from fastapi import HTTPException
 from pydantic import ValidationError
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.tool_history import AgentToolCall, ToolCallHistory
 from genesis_api.ai.conversations import conversation_detail, prepare_conversation_run
-from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
+from genesis_api.ai.models import AiChatRun, AiChatRunEvent, AiChatRunStatus, AiConversation
 from genesis_api.ai.schemas import (
     AiChatRequest,
     AiChatRunCreated,
@@ -44,7 +51,7 @@ class ChatStreamer(Protocol):
 
     def stream(
         self, request: AiChatRequest, *, thread_id: str
-    ) -> AsyncIterator[str | AgentActionProposal]:
+    ) -> AsyncIterator[str | BaseEvent | AgentActionProposal]:
         """提供后台管理器所需的流式调用接口。
 
         Args:
@@ -164,7 +171,7 @@ def get_ai_chat_run_snapshot(
         session: 查询使用的数据库会话。
         run_id: 目标任务 UUID。
         user_id: 服务端认证的用户 UUID。
-        include_history: 首次订阅时读取安全会话历史；普通轮询不重复加载。
+        include_history: 为旧任务的静态兼容快照读取历史；事件日志订阅不需要它。
 
     Returns:
         任务文本、状态与修订序号；不存在或不属于该用户时返回 None。
@@ -328,12 +335,16 @@ class AiChatRunManager:
             # 状态在获得执行名额后才改为 running，排队期间仍保持 pending。
             await self._persist(run_id, status=AiChatRunStatus.RUNNING)
             pending = ""
+            pending_events: list[BaseEvent] = []
+            question_content = ""
             last_flush = asyncio.get_running_loop().time()
             metrics = GenerationMetrics()
             try:
                 streamer = self._chat_service_factory(settings)
                 history = getattr(streamer, "tool_history", None)
                 if isinstance(history, ToolCallHistory):
+                    if request.resume_from_checkpoint:
+                        await asyncio.to_thread(self._restore_tool_history_sync, run_id, history)
 
                     async def save_tool_call(call: AgentToolCall) -> None:
                         """接收原生回调的安全投影，不接触原始工具载荷。"""
@@ -356,30 +367,66 @@ class AiChatRunManager:
                     if isinstance(token, AgentActionProposal):
                         await asyncio.to_thread(self._persist_proposal_sync, run_id, token)
                         continue
-                    if not isinstance(service_metrics, GenerationMetrics):
-                        metrics.observe(None, token)
-                    pending += token
+                    if isinstance(token, BaseEvent):
+                        pending_events.append(token)
+                        if token.type == EventType.RUN_FINISHED:
+                            # 图完成不等于账务收尾完成，终态与最终任务状态原子提交。
+                            continue
+                        if isinstance(token, TextMessageContentEvent):
+                            pending += token.delta
+                        elif isinstance(token, MessagesSnapshotEvent):
+                            content = "".join(
+                                message.content or "" for message in token.messages
+                                if message.role == "assistant" and (message.metadata or {}).get(
+                                    "genesis", {},
+                                ).get("run_id") == str(run_id)
+                            ) + question_content
+                            await self._persist(
+                                run_id, replace_content=content, events=pending_events,
+                                metrics=metrics.snapshot(),
+                            )
+                            pending, pending_events = "", []
+                            continue
+                        elif isinstance(token, CustomEvent) and token.name == "genesis.question":
+                            question_content = str(token.value["content"])
+                            pending += question_content
+                        elif token.type == EventType.RUN_ERROR:
+                            raise RuntimeError("AI 生成失败，请稍后重试。")
+                    else:
+                        if not isinstance(service_metrics, GenerationMetrics):
+                            metrics.observe(None, token)
+                        pending += token
                     # 按长度或间隔批量写入快照，避免每个文本片段都产生数据库提交。
                     now = asyncio.get_running_loop().time()
-                    if len(pending) >= self._flush_size or now - last_flush >= self._flush_interval:
+                    if (
+                        len(pending) >= self._flush_size or len(pending_events) >= 64
+                        or now - last_flush >= self._flush_interval
+                        or (isinstance(token, BaseEvent) and token.type == EventType.RUN_STARTED)
+                    ):
                         await self._persist(
                             run_id,
                             append_content=pending,
                             metrics=metrics.snapshot(),
+                            events=pending_events,
                         )
                         pending = ""
+                        pending_events = []
                         last_flush = now
                 await self._persist(
                     run_id,
                     append_content=pending,
                     status=AiChatRunStatus.COMPLETED,
                     metrics=metrics.snapshot(),
+                    events=pending_events,
                 )
                 if request.conversation_id is not None:
                     self._start_title(request, settings)
             except asyncio.CancelledError:
                 # 保留已到达的正文与统计；用户取消后的终态仍由 cancel 保存。
-                await self._persist(run_id, append_content=pending, metrics=metrics.snapshot())
+                await self._persist(
+                    run_id, append_content=pending,
+                    metrics=metrics.snapshot(), events=pending_events,
+                )
                 raise
             except RuntimeError as exc:
                 await self._persist(
@@ -388,6 +435,7 @@ class AiChatRunManager:
                     status=AiChatRunStatus.FAILED,
                     error=str(exc),
                     metrics=metrics.snapshot(),
+                    events=pending_events,
                 )
             except Exception as exc:
                 logger.exception("AI 后台生成任务失败：run_id=%s", run_id)
@@ -400,7 +448,17 @@ class AiChatRunManager:
                     status=AiChatRunStatus.FAILED,
                     error=error,
                     metrics=metrics.snapshot(),
+                    events=pending_events,
                 )
+
+    def _restore_tool_history_sync(self, run_id: UUID, history: ToolCallHistory) -> None:
+        """复用已保存的协议 ID 与安全摘要，使 checkpoint 恢复后的工具状态完整。"""
+        with self._session_factory() as session:
+            run = session.get(AiChatRun, run_id)
+            if run is not None:
+                history.restore([
+                    AgentToolCall.model_validate(item) for item in run.tool_calls or []
+                ])
 
     def _persist_tool_call_sync(self, run_id: UUID, call: AgentToolCall) -> None:
         """按回调 ID 更新单项快照，行锁避免并行工具覆盖彼此的记录。"""
@@ -450,6 +508,8 @@ class AiChatRunManager:
         status: AiChatRunStatus | None = None,
         error: str | None = None,
         metrics: AiGenerationMetrics | None = None,
+        events: list[BaseEvent] | None = None,
+        replace_content: str | None = None,
     ) -> None:
         """将快照写入交给工作线程，避免同步数据库提交阻塞事件循环。
 
@@ -466,6 +526,8 @@ class AiChatRunManager:
             status,
             error,
             metrics,
+            events,
+            replace_content,
         )
 
     def _start_title(self, request: AiChatRequest, settings: Settings) -> None:
@@ -613,6 +675,8 @@ class AiChatRunManager:
         status: AiChatRunStatus | None,
         error: str | None,
         metrics: AiGenerationMetrics | None = None,
+        events: list[BaseEvent] | None = None,
+        replace_content: str | None = None,
     ) -> None:
         """在独立事务中追加文本并更新状态，任务已不存在时直接返回。
 
@@ -626,6 +690,15 @@ class AiChatRunManager:
             run = session.scalar(select(AiChatRun).where(AiChatRun.id == run_id).with_for_update())
             if run is None:
                 return
+            session.add_all([
+                AiChatRunEvent(run_id=run_id, payload=event.model_dump(
+                    mode="json", by_alias=True, exclude_none=True,
+                )) for event in events or []
+                if event.type != EventType.RUN_FINISHED or status == AiChatRunStatus.COMPLETED
+            ])
+            if replace_content is not None:
+                run.content = replace_content
+                run.sequence += 1
             if append_content:
                 run.content += append_content
                 # 序号随内容提交递增；SSE 仍单独检查状态，终态可没有新增文本。
@@ -688,6 +761,7 @@ class AiChatRunManager:
                 run.status = AiChatRunStatus.PENDING
                 # 清空展示文本并递增序号，恢复时由图重新输出，不把旧快照重复拼接。
                 run.content = ""
+                session.execute(delete(AiChatRunEvent).where(AiChatRunEvent.run_id == run.id))
                 run.sequence += 1
                 run.error = None
                 run.completed_at = None

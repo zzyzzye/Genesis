@@ -5,6 +5,7 @@ description = "Genesis FastAPI backend"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "ag-ui-langgraph==0.0.47",
     "ag-ui-protocol>=0.1.22,<1",
     "alembic>=1.19.1",
     "anthropic>=1.7.0",

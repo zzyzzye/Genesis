@@ -1,6 +1,7 @@
 """验证工具历史复用原生回调、并行状态及安全摘要。"""
 
 import asyncio
+import json
 from uuid import uuid4
 
 import pytest
@@ -80,7 +81,11 @@ async def test_native_parallel_tools_emit_safe_history(monkeypatch: pytest.Monke
             tool_history=history,
         )
     ]
-    assert output == []
+    from agent_events import public_text
+
+    assert public_text(output) == ""
+    wire = json.dumps([item.model_dump(mode="json") for item in output])
+    assert "input-private-marker" not in wire and "result-private-marker" not in wire
     assert len(changes) == 4
     starts = [call for call in changes if call.status == "running"]
     ends = [call for call in changes if call.status == "succeeded"]
@@ -91,6 +96,10 @@ async def test_native_parallel_tools_emit_safe_history(monkeypatch: pytest.Monke
     assert all(call.duration_ms is not None and call.duration_ms >= 0 for call in ends)
     assert all(call.result_summary == "返回 1 项结果" for call in ends)
     assert "private-marker" not in "".join(call.model_dump_json() for call in changes)
+    restored = ToolCallHistory()
+    restored.restore(changes)
+    assert set(restored.protocol_calls) == {"first", "second"}
+    assert all(call.status == "succeeded" for call in restored.protocol_calls.values())
 
 
 @pytest.mark.anyio

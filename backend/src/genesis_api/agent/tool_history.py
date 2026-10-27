@@ -22,6 +22,7 @@ class AgentToolCall(BaseModel):
     """单次真实工具调用的展示投影；回调 ID 区分并行调用及恢复后的新尝试。"""
 
     id: UUID
+    protocol_id: str | None = None
     name: str
     label: str
     status: Literal["running", "succeeded", "failed", "awaiting_confirmation", "interrupted"]
@@ -61,13 +62,25 @@ class ToolCallHistory(AsyncCallbackHandler):
         """为本次生成创建独立观察器，不跨用户或任务共享内存。"""
         self.on_change = on_change
         self._calls: dict[UUID, AgentToolCall] = {}
+        self.protocol_calls: dict[str, AgentToolCall] = {}
+        self._protocol_ids: dict[UUID, str] = {}
         self._started: dict[UUID, float] = {}
 
     async def _publish(self, call: AgentToolCall) -> None:
         """更新本地投影并等待调用方保存，保证开始记录先于结束记录。"""
         self._calls[call.id] = call
+        if protocol_id := self._protocol_ids.get(call.id):
+            self.protocol_calls[protocol_id] = call
         if self.on_change is not None:
             await self.on_change(call)
+
+    def restore(self, calls: list[AgentToolCall]) -> None:
+        """恢复已持久化的安全展示信息，不重放工具或发布变更回调。"""
+        for call in calls:
+            self._calls[call.id] = call
+            if call.protocol_id:
+                self._protocol_ids[call.id] = call.protocol_id
+                self.protocol_calls[call.protocol_id] = call
 
     async def on_tool_start(
         self,
@@ -80,6 +93,8 @@ class ToolCallHistory(AsyncCallbackHandler):
     ) -> None:
         """记录真实开始时间，只保留工具定义和合法参数名称。"""
         name = str(serialized.get("name", "tool"))[:128]
+        if isinstance(kwargs.get("tool_call_id"), str):
+            self._protocol_ids[run_id] = kwargs["tool_call_id"]
         description = str(serialized.get("description") or "").strip().splitlines()
         label = _FRAMEWORK_LABELS.get(name) or (
             description[0].rstrip("。.")[:60] if description else "调用工具"
@@ -89,6 +104,7 @@ class ToolCallHistory(AsyncCallbackHandler):
         await self._publish(
             AgentToolCall(
                 id=run_id,
+                protocol_id=self._protocol_ids.get(run_id),
                 name=name,
                 label=label,
                 status="running",

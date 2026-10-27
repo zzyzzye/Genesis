@@ -88,3 +88,15 @@ class AiChatRun(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AiChatRunEvent(Base):
+    """按原顺序保存已脱敏的官方事件，订阅只重放，不重建生命周期。"""
+
+    __tablename__ = "ai_chat_run_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("ai_chat_runs.id", ondelete="CASCADE"), index=True,
+    )
+    payload: Mapped[dict[str, object]] = mapped_column(JSON)

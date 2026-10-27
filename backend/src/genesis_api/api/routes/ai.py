@@ -9,21 +9,31 @@ from time import monotonic
 from typing import Annotated, Literal
 from uuid import UUID
 
-from ag_ui.core import EventType, RunErrorEvent
+from ag_ui.core import (
+    BaseEvent,
+    Event,
+    EventType,
+    RunErrorEvent,
+    RunFinishedEvent,
+    RunStartedEvent,
+    StateSnapshotEvent,
+)
+from ag_ui.encoder import EventEncoder
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from jwt import InvalidTokenError, decode
+from pydantic import TypeAdapter
 from sqlalchemy import select
 
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.contracts import AgentActionConfirmation
-from genesis_api.ai.ag_ui import AgUiRunStream
+from genesis_api.ai.ag_ui import legacy_snapshot
 from genesis_api.ai.conversations import (
     conversation_detail,
     delete_conversations,
     owned_conversation,
 )
-from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
+from genesis_api.ai.models import AiChatRun, AiChatRunEvent, AiChatRunStatus, AiConversation
 from genesis_api.ai.runs import (
     ai_chat_run_manager,
     create_ai_chat_run,
@@ -248,8 +258,18 @@ def _load_snapshot(
         )
 
 
+def _load_events(run_id: UUID, user_id: UUID, after: int) -> list[tuple[int, BaseEvent]]:
+    """只读取归属当前用户的公开事件；每批有界，避免长对话占满订阅内存。"""
+    with SessionLocal() as session:
+        rows = session.scalars(select(AiChatRunEvent).join(AiChatRun).where(
+            AiChatRun.id == run_id, AiChatRun.user_id == user_id, AiChatRunEvent.id > after,
+        ).order_by(AiChatRunEvent.id).limit(512)).all()
+        adapter: TypeAdapter[Event] = TypeAdapter(Event)
+        return [(row.id, adapter.validate_python(row.payload)) for row in rows]
+
+
 def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> StreamingResponse:
-    """订阅已持久化的输出快照，连接断开不取消后台生成。
+    """重放已持久化的官方公开事件，连接断开不取消后台生成。
 
     Args:
         run_id: 已由路由检查访问权限的任务 UUID。
@@ -257,7 +277,7 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
         request: HTTP 请求，用于检测客户端是否断开连接。
 
     Returns:
-        禁用响应缓存与代理缓冲的 AG-UI SSE 响应，首轮包含完整展示快照。
+        禁用响应缓存与代理缓冲的 AG-UI SSE 响应，最终业务状态先于终态。
     """
 
     async def events() -> AsyncIterator[str]:
@@ -266,21 +286,60 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
         Yields:
             已编码的 SSE 事件或心跳注释，终态与断开连接后停止轮询。
         """
-        stream = AgUiRunStream(str(run_id))
+        encoder = EventEncoder()
         last_heartbeat = monotonic()
-        first_snapshot = True
+        cursor = 0
+        started = False
+        terminal: BaseEvent | None = None
+        previous_state: dict[str, object] | None = None
 
         while True:
-            snapshot = await asyncio.to_thread(_load_snapshot, run_id, user_id, first_snapshot)
-            first_snapshot = False
+            snapshot = await asyncio.to_thread(_load_snapshot, run_id, user_id)
             if snapshot is None:
-                yield stream.encode(RunErrorEvent(
+                yield str(encoder.encode(RunErrorEvent(
                     type=EventType.RUN_ERROR, message="AI 生成任务不存在",
-                ))
+                )))
                 return
-            for event in stream.project(snapshot):
-                yield stream.encode(event)
-            if snapshot.status in (AiChatRunStatus.COMPLETED, AiChatRunStatus.FAILED):
+            records = await asyncio.to_thread(_load_events, run_id, user_id, cursor)
+            for event_id, event in records:
+                cursor = event_id
+                if event.type in (EventType.RUN_FINISHED, EventType.RUN_ERROR):
+                    terminal = event
+                    continue
+                started = started or event.type == EventType.RUN_STARTED
+                yield str(encoder.encode(event))
+            if len(records) == 512:
+                continue
+            finished = snapshot.status in (AiChatRunStatus.COMPLETED, AiChatRunStatus.FAILED)
+            thread_id = str(snapshot.conversation_id or run_id)
+            if not started and finished:
+                # 仅兼容接入前没有事件日志的历史终态任务，不重建实时生命周期。
+                yield str(encoder.encode(RunStartedEvent(
+                    type=EventType.RUN_STARTED, thread_id=thread_id, run_id=str(run_id),
+                )))
+                legacy = await asyncio.to_thread(_load_snapshot, run_id, user_id, True)
+                if legacy is not None:
+                    yield str(encoder.encode(legacy_snapshot(legacy)))
+                started = True
+            state: dict[str, object] = {
+                "sequence": snapshot.sequence, "status": snapshot.status.value,
+                "metrics": snapshot.metrics.model_dump(mode="json") if snapshot.metrics else None,
+                "billing": snapshot.billing,
+                "proposals": [item.model_dump(mode="json") for item in snapshot.proposals],
+            }
+            if started and state != previous_state:
+                yield str(encoder.encode(StateSnapshotEvent(
+                    type=EventType.STATE_SNAPSHOT, snapshot={"genesis": state},
+                )))
+                previous_state = state
+            if finished:
+                # 最终账务与展示状态先于终态发出，官方终态事件本身保持原样。
+                terminal = terminal or (RunErrorEvent(
+                    type=EventType.RUN_ERROR, message=snapshot.error or "AI 生成失败",
+                ) if snapshot.status == AiChatRunStatus.FAILED else RunFinishedEvent(
+                    type=EventType.RUN_FINISHED, thread_id=thread_id, run_id=str(run_id),
+                ))
+                yield str(encoder.encode(terminal))
                 return
             if await request.is_disconnected():
                 # 用户主动停止使用独立取消接口，离开页面仍可稍后重新订阅。

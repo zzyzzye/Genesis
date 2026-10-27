@@ -50,13 +50,14 @@ window.fetch = async (input, init) => {
   if (path.includes('/ai/chat/runs/') && method === 'DELETE') { stopped = true; return new Response(null, { status: 204 }) }
   if (path.endsWith('/stream')) {
     connections++
-    const runId = `run-${runNumber}`, messageId = `${runId}:assistant`
+    const runId = `run-${runNumber}`, messageId = `native-model-${runId}`
+    const messageMetadata = { genesis: { run_id: runId } }
     const reconnect = mode === 'reconnect' && connections === 1
     const showTool = ['full', 'proposal', 'reconnect', 'reset'].includes(mode)
     const restoredTools = mode === 'reconnect' && connections > 1
     const snapshotMessages = (content: string, withTools: boolean) => [
       { id: `${runId}:user`, role: 'user', content: '合成验收问题' },
-      { id: messageId, role: 'assistant', content, toolCalls: withTools ? [{ id: toolId, type: 'function', function: { name: toolName, arguments: '{}' }, metadata: { genesis: toolDetails } }] : [] },
+      { id: messageId, role: 'assistant', content, metadata: messageMetadata, toolCalls: withTools ? [{ id: toolId, type: 'function', function: { name: toolName, arguments: '{}' }, metadata: { genesis: toolDetails } }] : [] },
       ...(withTools ? [{ id: `${runId}:tool:${toolId}`, role: 'tool', toolCallId: toolId, content: toolSummary, metadata: { genesis: toolDetails } }] : []),
     ]
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -64,7 +65,7 @@ window.fetch = async (input, init) => {
       const emit = (data: unknown) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`))
       emit({ type: 'RUN_STARTED', threadId: 'synthetic-conversation', runId })
       emit({ type: 'MESSAGES_SNAPSHOT', messages: snapshotMessages(mode === 'reconnect' ? '恢复前正文。' : '', restoredTools) })
-      emit({ type: 'TEXT_MESSAGE_START', messageId, role: 'assistant' })
+      emit({ type: 'TEXT_MESSAGE_START', messageId, role: 'assistant', metadata: messageMetadata })
       emit({ type: 'STATE_SNAPSHOT', snapshot: { genesis: { sequence: 0, metrics: null, billing: null, proposals: [] } } })
       if (showTool && !restoredTools) {
         emit({ type: 'TOOL_CALL_START', toolCallId: toolId, toolCallName: toolName, parentMessageId: messageId, metadata: { genesis: { ...toolDetails, status: 'running', duration_ms: null } } })
@@ -74,14 +75,15 @@ window.fetch = async (input, init) => {
       timer = setTimeout(() => {
         if (reconnect) { controller.close(); return }
         if (stopped || mode === 'error') { emit({ type: 'RUN_ERROR', message: stopped ? '生成已由用户停止。' : '合成测试：生成失败，可以继续对话。' }); controller.close(); return }
-        const content = mode === 'question' && runNumber === 1 ? '请先确认读者方向。' + question
+        const content = mode === 'question' && runNumber === 1 ? '请先确认读者方向。'
           : mode === 'question' ? '已按你的回答继续。' : mode === 'empty' ? '' : 'AG-UI 正文流已完成。'
         if (content) emit({ type: 'TEXT_MESSAGE_CONTENT', messageId, delta: content })
+        if (mode === 'question' && runNumber === 1) emit({ type: 'CUSTOM', name: 'genesis.question', value: { content: question } })
         if (showTool && !restoredTools) emit({ type: 'TOOL_CALL_RESULT', toolCallId: toolId, messageId: `${runId}:tool:${toolId}`, role: 'tool', content: toolSummary, metadata: { genesis: toolDetails } })
         if (mode === 'reset') {
           emit({ type: 'TEXT_MESSAGE_END', messageId })
           emit({ type: 'MESSAGES_SNAPSHOT', messages: snapshotMessages('重算后的正文，工具结果仍保留。', true) })
-          emit({ type: 'TEXT_MESSAGE_START', messageId, role: 'assistant' })
+          emit({ type: 'TEXT_MESSAGE_START', messageId, role: 'assistant', metadata: messageMetadata })
         }
         emit({ type: 'STATE_SNAPSHOT', snapshot: { genesis: { sequence: 1, metrics, billing,
           proposals: mode === 'proposal' ? [{ ...proposal, executed: confirmed }] : [],

@@ -1,56 +1,55 @@
-# Genesis Agent 运行时与 AG-UI 消息流
+# Genesis Agent 与官方 AG-UI 集成
 
-浏览器只访问 FastAPI。DeepAgents / LangGraph 在后端执行 Agent，负责工具调用、checkpoint 和恢复；前后端通过 AG-UI 事件同步回复，继续使用现有博客、影音和工具箱界面。
-
-## 执行与订阅边界
+DeepAgents / LangGraph 负责模型、工具和 checkpoint。后端直接使用官方 `ag-ui-langgraph.LangGraphAgent` 包装现有图，前端使用官方 `@ag-ui/client.HttpAgent` 解码、验证和归并消息。
 
 ```text
-Browser -> frontend:5173 -> backend:8000 /api/v1
-                           ├─ 身份、业务权限、任务与计费
-                           ├─ DeepAgents / LangGraph -> 模型与业务工具
-                           └─ PostgreSQL：业务数据、输出快照、checkpoint
+后台任务 → DeepAgents / LangGraph → 官方 LangGraphAgent → 安全过滤
+                                                      ↓
+                                            PostgreSQL 公开事件日志
+                                                      ↓
+                                    GET SSE 订阅 → 官方 HttpAgent → 界面
 ```
 
-- `POST /api/v1/ai/chat/runs` 保留业务请求契约，先授权、准备附件与计费，再创建后台任务，返回 `202` 和任务 ID。
-- `GET /api/v1/ai/chat/runs/{run_id}/stream` 输出 AG-UI SSE。每次查询仍按登录用户筛选；连接断开仅停止订阅，不取消生成。
-- `GET /api/v1/ai/chat/runs/{run_id}` 保留 JSON 任务快照接口，供历史恢复和停止后的核对。
-- `DELETE /api/v1/ai/chat/runs/{run_id}` 保留显式取消接口；已生成内容、统计与计费状态仍可读取。
-- 兼容入口 `POST /api/v1/ai/chat` 也使用同一 AG-UI 输出，不再发送旧的 `snapshot/token/done` 自定义事件。
+## 官方适配器与业务边界
 
-这是 AG-UI 输出协议适配，不是开放通用 `RunAgentInput` 执行端点。官方 `ag-ui-langgraph` 可包装后端图，但其 FastAPI 辅助端点将图执行直接绑定到响应流，不能直接替换现有后台任务与独立订阅。当前保留 `ai/ag_ui.py` 将已授权的安全快照投影成官方事件，复用 `ag-ui-protocol` 类型和 `EventEncoder`，不接管 Agent 编排；权限与计费并不妨碍未来在后台执行层复用官方适配器。
+`genesis_api/agent/ag_ui.py` 中的 `AuthorizedLangGraphAgent` 只使用官方扩展点传入服务端已授权的消息、附件和回调，并保留 `durability="sync"`。checkpoint 恢复时传入 None，不重复提交用户消息。模型循环、事件转换、消息标识和工具生命周期全部由框架与官方适配器负责。
 
-## AG-UI 事件契约
+`PublicAgentEvents` 仅控制公开数据：移除系统消息、原始图状态、推理内容、工具参数和原始结果；保留官方消息与工具 ID；工具摘要、中文标签、耗时与状态复用既有 LangChain 回调。回调的 `protocol_id` 将安全展示记录关联到官方调用 ID，并用于恢复后的展示。
 
-| 事件 | Genesis 行为 |
-| --- | --- |
-| `RUN_STARTED` | 每个订阅先初始化任务；`runId` 为任务 ID，`threadId` 为公开会话 ID，无会话时使用任务 ID。 |
-| `MESSAGES_SNAPSHOT` | 首次订阅、重连或正文重算时发送完整安全会话历史：用户正文、助手正文、工具调用与结果。当前任务使用最新正文和工具记录；无会话时仅包含当前任务。历史复用现有会话展示投影，不读取 checkpoint 或暴露系统提示词。 |
-| `TEXT_MESSAGE_START/CONTENT/END` | 稳定的 `${runId}:assistant` 标识；`CONTENT.delta` 追加正文。 |
-| `TOOL_CALL_START/ARGS/END/RESULT` | 首次快照以标准 `assistant.toolCalls` 与 `tool` 消息恢复已有工具，不再重复发送开始事件。后续调用通过标准增量传递；`ARGS` 固定为安全空对象 `{}`，`END` 表示参数流结束，执行完成看 `RESULT`。快照和事件的 `metadata.genesis` 只补充中文标签、状态、时间和提议关联；不发送原始参数值或原始结果。 |
-| `STATE_SNAPSHOT` | `snapshot.genesis` 仅保存 `sequence/status/metrics/billing/proposals`，完整覆盖业务展示状态。工具记录不再重复放入业务状态。无新增正文时也传播状态变更。 |
-| `RUN_FINISHED` | 先传播最终状态，再正常结束。 |
-| `RUN_ERROR` | 先传播已生成内容和最终业务状态，再显示失败或停止说明。 |
+写操作提议仍须通过业务契约校验，确认接口仍验证签名和当前权限。澄清问题使用 `CUSTOM(genesis.question)` 传递经过契约校验的业务内容，界面继续复用原有澄清组件。这些业务适配不生成模型文本和工具生命周期。
 
-消息快照与正文增量通过 `metadata.genesis.sequence` 携带内容修订号；它不是 token 数，也不是 SSE 事件总数。SSE 注释心跳仍为 `: keep-alive`。每次重连都先读取完整快照，无需依赖 `Last-Event-ID` 或浏览器保留旧增量。
+SVG 使用 LangChain 原生无工具 Agent 图，也经由同一个官方适配器，继续沿用服务端固定的 MiMo 模型和 4096 token 限制。
 
-前端 `lib/agUiStream.ts` 复用 `@ag-ui/client` 的 `HttpAgent` 处理解码、事件校验、消息和工具归并。子类仅把请求改成 GET，继续通过原有 `authFetch` 续期与鉴权。`onMessagesChanged` 向助手和 SVG 页面提供完整正文及工具展示，页面不再自行拼接 token；`onStateChanged` 转发计费、统计与操作提议。工具展示从官方消息状态读取，扩展字段优先使用结果消息上的最新 metadata，不维护第二套工具生命周期。
+## 后台执行、持久化与订阅
 
-当前锁定的 `@ag-ui/client@1.0.3` 解码器按 LF 分帧，因此传输层使用 Web Streams 规范化 CRLF/CR，包括跨字节、跨分片的换行；这层不解析 SSE 或协议事件。终态、异常、离开页面时中止传输，网络正常结束但没有终态时返回 `disconnected`，助手沿用重订阅逻辑。协议顺序校验失败作为终态错误处理，避免反复重订阅同一非法消息流。
+- `POST /api/v1/ai/chat/runs` 保留现有请求契约。授权、附件准备与计费准入后创建后台任务，返回 202 和任务 ID。
+- `ai_chat_run_events` 按顺序追加安全过滤后的官方事件，不保存原始参数或私有图状态。事件批次与正文展示记录在同一事务提交。
+- `ai_chat_runs` 继续保存任务状态、正文、安全工具历史、操作提议、统计和账务关联，供既有 JSON 接口与历史界面读取。
+- `GET /api/v1/ai/chat/runs/{run_id}/stream` 按归属读取并重放事件，每批最多 512 条。订阅不调用图、不从文本快照重建文本增量或工具生命周期。
+- `STATE_SNAPSHOT.genesis` 只承载业务的 `sequence/status/metrics/billing/proposals`。最终账务与业务状态发出后才发送终态。
+- `GET /api/v1/ai/chat/runs/{run_id}` 保留 JSON 展示快照；`DELETE` 保留显式取消。关闭订阅不取消后台执行。
+- 兼容入口 `POST /api/v1/ai/chat` 复用同一后台任务和订阅机制。
 
-首次订阅才加载安全会话历史，后续轮询只读取当前任务；正文重算复用该订阅的历史并替换当前任务的正文和工具消息。JSON 任务与历史接口继续保留原来的 `tool_calls` 展示结构，供页面初始加载与显式停止核对，不增加另一份持久化数据。
+每次重连从该任务事件日志的起点重放，前端创建独立的官方客户端状态，因此不会重复追加到旧正文。消息与工具 ID 保持官方适配器产生的值，`metadata.genesis.run_id` 仅标识哪些消息属于当前任务。一个任务可以包含多个助手消息，不再压成一个合成消息 ID。
 
-## 业务功能与权限
+服务端恢复仍由原有任务管理器和 LangGraph checkpoint 承担。恢复时清理上次执行的展示事件，由官方适配器重新输出 checkpoint 的安全快照；已持久化的工具协议 ID 和摘要用于还原展示。已有账单未核对时，仍禁止自动重放付费请求。
 
-- `ai_chat_runs` 保存用户归属、展示快照、修订号、工具记录和任务状态；LangGraph checkpoint 保存实际执行状态。AG-UI 不替代任一持久化层。
-- 操作提议随 `snapshot.genesis.proposals` 传递，确认仍走独立的签名业务接口，服务端重新检查当前用户和权限；自动执行模式沿用原策略。
-- 澄清问题、影音画布方案、Markdown 和 SVG 仍通过原正文与组件渲染；附件准备、模型选择、思考设置和对话历史请求保持现有业务契约。
-- 工具标准消息与事件只包含已允许展示的名称、结果摘要与 metadata；不为协议完整性额外暴露工具原始输入、异常或文件内容。
-- 不向前端发送内部 checkpoint、可信身份上下文或上游请求载荷。
+## 前端消费
+
+`lib/agUiStream.ts` 中的 `RunSubscriptionAgent` 只把 HttpAgent 请求改成 GET，并复用原有 `authFetch` 的登录续期与权限处理。标准事件解码、顺序验证、消息快照、正文归并和工具调用状态均由官方客户端完成。页面只接收完整正文及安全工具展示。
+
+`@ag-ui/client@1.0.3` 的 SSE 解码器按 LF 分帧，因此传输层仅规范化跨分片 CRLF/CR，不自行解析 SSE 或协议事件。终态、错误与离开页面会释放传输；普通断线沿用业务重订阅，非法协议与权限失败不会被伪装成可无限重试的网络中断。
+
+新接入不挂载官方 FastAPI 辅助端点：HTTP API 仍由现有任务系统拥有，后台执行则直接调用官方适配器。这不妨碍复用官方适配器，也不要求改动权限与计费边界。
+
+## 既有记录兼容
+
+`genesis_api/ai/ag_ui.py` 只为接入前没有事件日志的终态任务构建一次静态安全消息快照，方便读取既有历史。它不生成实时增量、不模拟工具执行，也不参与新任务的事件转换。原 `AgUiRunStream.project` 已删除。
 
 ## 验证
 
-后端运行 Ruff、mypy 和 pytest；协议测试覆盖重连、正文重置、同序号业务更新、工具去重、失败、空回复、心跳和连接断开。前端运行 ESLint、类型检查、测试与构建，验证 AG-UI 分帧、结束后资源释放及原有助手业务回调。
+工程检查通过已运行的 Docker Compose 服务执行。后端覆盖真实 DeepAgents 图、官方适配器、原生 checkpoint 恢复、安全过滤、事件持久化、归属隔离、重连重放和最终账务顺序。前端覆盖官方多消息 ID、工具先于正文、快照覆盖、业务澄清、分片与换行、终态释放、取消和错误。
 
-通过已运行的 Compose 前端打开 `tests/browser/ag-ui.html`，使用真实组件与合成 API 验收正文、工具记录、提议确认、澄清提问、断线恢复、错误和停止；`tests/browser/billing.html?view=svg` 验证工具箱流式 SVG。验收页仅在本地开发模式运行，不调用真实模型或产生费用。
+浏览器验收入口为 `tests/browser/ag-ui.html` 和 `tests/browser/billing.html?view=svg`，使用真实组件和合成 API；不调用真实模型、不产生费用。
 
-2026-10-27 官方客户端接入验收：Compose 容器内 Ruff、mypy、ESLint、TypeScript 与生产构建通过；后端 521 项测试通过，覆盖率 91.38%，前端 454 项测试通过（单 worker）。另将 Python 编码器实际产出的快照、工具增量和重算事件直接交给官方 JS 客户端，确认消息、工具结果和去重一致。浏览器检查博客、影音与 SVG，覆盖 1440px 桌面和 390px 窄屏，以及空态、正常、失败、停止、重连、重算、工具详情、提议确认和澄清选择；全部使用合成数据，未调用真实模型或产生费用。strict UI 静态审计零发现。保留既有 Pydantic 序列化警告与生产构建大分块提示。
+2026-10-27 验证：Compose 内 Ruff、mypy、ESLint、TypeScript 和生产构建通过；后端 523 项测试通过，覆盖率 91.38%，前端 455 项测试通过。真实 DeepAgents 图经过官方 Python 适配器与安全过滤后的输出交给官方 JS 客户端验证，协议校验无警告；另外验证 SVG 原生无工具图保留固定输出限制。浏览器检查桌面与 390px 窄屏的正常、空回复、失败、重连、工具展开、澄清选择以及影音和 SVG 展示；strict UI 审计零发现。保留官方适配器的 LangGraph 弃用提示、既有 Pydantic 警告与构建大分块提示。

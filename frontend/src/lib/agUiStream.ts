@@ -1,4 +1,4 @@
-import { AGUIError, HttpAgent, type HttpAgentConfig, type Message } from '@ag-ui/client'
+import { AGUIError, HttpAgent, type AssistantMessage, type HttpAgentConfig, type Message } from '@ag-ui/client'
 
 import type { AiActionProposal, AiGenerationMetrics, AiToolCall } from './api'
 import type { BillingOperation } from '../features/billing/api'
@@ -48,17 +48,25 @@ function normalizeSseResponse(response: Response, signal: AbortSignal): Response
 }
 
 /** 工具生命周期来自官方消息状态，metadata 只补充中文展示与业务关联。 */
-function toolPresentation(messages: ReadonlyArray<Readonly<Message>>, messageId: string): AiToolCall[] {
-  const assistant = messages.find(message => message.id === messageId)
-  if (assistant?.role !== 'assistant') return []
-  return (assistant.toolCalls ?? []).map(call => {
+function runMessages(messages: ReadonlyArray<Readonly<Message>>, runId: string) {
+  return messages.filter((message): message is Readonly<AssistantMessage> => message.role === 'assistant' && (
+    (message.metadata?.genesis as { run_id?: string } | undefined)?.run_id === runId
+    || message.id === `${runId}:assistant`
+    || (message.toolCalls ?? []).some(call => (
+      (call.metadata?.genesis as { run_id?: string } | undefined)?.run_id === runId
+    ))
+  ))
+}
+
+function toolPresentation(messages: ReadonlyArray<Readonly<Message>>, runId: string): AiToolCall[] {
+  return runMessages(messages, runId).flatMap(assistant => (assistant.toolCalls ?? []).map(call => {
     const result = messages.find(message => message.role === 'tool' && message.toolCallId === call.id)
     const details = { ...call.metadata?.genesis, ...result?.metadata?.genesis } as Omit<AiToolCall, 'id' | 'name' | 'result_summary'>
     return {
       ...details, id: call.id, name: call.function.name,
       result_summary: typeof result?.content === 'string' ? result.content : null,
     }
-  })
+  }))
 }
 
 /** 复用官方解码、事件顺序校验与消息归并，只保留业务回调和订阅生命周期。 */
@@ -78,6 +86,22 @@ export async function consumeAgUiStream(
   let terminalError: AiChatRunTerminalError | undefined
   let lastContent: string | undefined
   let lastTools: string | undefined
+  let questionContent = ''
+  const publishMessages = (messages: ReadonlyArray<Readonly<Message>>, state: Readonly<Record<string, unknown>>) => {
+    if (terminalError || signal?.aborted) return
+    const content = runMessages(messages, runId).map(message => message.content ?? '').join('') + questionContent
+    if (content !== lastContent) {
+      lastContent = content
+      const sequence = (state.genesis as GenesisRunState | undefined)?.sequence ?? 0
+      handlers.onSnapshot(content, sequence)
+    }
+    const tools = toolPresentation(messages, runId)
+    const signature = JSON.stringify(tools)
+    if (signature !== lastTools) {
+      lastTools = signature
+      handlers.onToolCalls?.(tools)
+    }
+  }
   const abort = () => controller.abort()
   signal?.addEventListener('abort', abort, { once: true })
   try {
@@ -89,19 +113,13 @@ export async function consumeAgUiStream(
         }
       },
       onMessagesChanged: ({ messages, state }) => {
-        if (terminalError || signal?.aborted) return
-        const message = messages.find(item => item.id === `${runId}:assistant`)
-        const content = typeof message?.content === 'string' ? message.content : ''
-        if (content !== lastContent) {
-          lastContent = content
-          const sequence = (state.genesis as GenesisRunState | undefined)?.sequence ?? 0
-          handlers.onSnapshot(content, sequence)
-        }
-        const tools = toolPresentation(messages, `${runId}:assistant`)
-        const signature = JSON.stringify(tools)
-        if (signature !== lastTools) {
-          lastTools = signature
-          handlers.onToolCalls?.(tools)
+        publishMessages(messages, state)
+      },
+      onCustomEvent: ({ event, messages, state }) => {
+        const value = event.value as { content?: unknown }
+        if (event.name === 'genesis.question' && typeof value?.content === 'string') {
+          questionContent = value.content
+          publishMessages(messages, state)
         }
       },
       onStateChanged: ({ state }) => {

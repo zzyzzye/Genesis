@@ -140,6 +140,37 @@ describe('AI 可恢复流', () => {
     expect(handlers.onSnapshot).not.toHaveBeenCalled()
   })
 
+  it('保留官方多轮消息 ID，工具可先于正文出现，快照不丢失业务澄清', async () => {
+    const metadata = { genesis: { run_id: 'run-id' } }
+    const callMetadata = { genesis: { ...toolDetails, run_id: 'run-id' } }
+    const onSnapshot = vi.fn(), onToolCalls = vi.fn()
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(sse([
+      started,
+      { type: 'TOOL_CALL_START', parentMessageId: 'native-tool-message', toolCallId: 'native-call', toolCallName: 'list_posts', metadata: callMetadata },
+      { type: 'TOOL_CALL_END', toolCallId: 'native-call' },
+      { type: 'TOOL_CALL_RESULT', toolCallId: 'native-call', messageId: 'native-result', role: 'tool', content: '安全摘要', metadata: { genesis: { ...toolDetails, run_id: 'run-id', status: 'succeeded' } } },
+      { type: 'TEXT_MESSAGE_START', messageId: 'native-answer-1', role: 'assistant', metadata },
+      { type: 'TEXT_MESSAGE_CONTENT', messageId: 'native-answer-1', delta: '第一句。', metadata },
+      { type: 'TEXT_MESSAGE_END', messageId: 'native-answer-1' },
+      { type: 'TEXT_MESSAGE_START', messageId: 'native-answer-2', role: 'assistant', metadata },
+      { type: 'TEXT_MESSAGE_CONTENT', messageId: 'native-answer-2', delta: '第二句。', metadata },
+      { type: 'TEXT_MESSAGE_END', messageId: 'native-answer-2' },
+      { type: 'CUSTOM', name: 'genesis.question', value: { content: '业务澄清内容' } },
+      { type: 'MESSAGES_SNAPSHOT', messages: [
+        { id: 'previous-answer', role: 'assistant', content: '历史回答不应进入本轮' },
+        { id: 'native-tool-message', role: 'assistant', content: '', metadata, toolCalls: [{ id: 'native-call', type: 'function', function: { name: 'list_posts', arguments: '{}' }, metadata: callMetadata }] },
+        { id: 'native-result', role: 'tool', toolCallId: 'native-call', content: '安全摘要', metadata: { genesis: { ...toolDetails, status: 'succeeded' } } },
+        { id: 'native-answer-1', role: 'assistant', content: '第一句。', metadata },
+        { id: 'native-answer-2', role: 'assistant', content: '第二句。', metadata },
+      ] },
+      finished,
+    ]), { headers: { 'Content-Type': 'text/event-stream' } }))
+    expect(await streamAiChatRun('test-token', 'run-id', { onSnapshot, onToolCalls })).toBe('completed')
+    expect(onSnapshot).toHaveBeenLastCalledWith('第一句。第二句。业务澄清内容', expect.any(Number))
+    expect(onToolCalls).toHaveBeenCalledWith([expect.objectContaining({ id: 'native-call', status: 'running' })])
+    expect(onToolCalls).toHaveBeenLastCalledWith([expect.objectContaining({ id: 'native-call', status: 'succeeded', result_summary: '安全摘要' })])
+  })
+
   it('无终态的断线允许重连，结束事件立即释放未关闭的订阅', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(sse([started]), { headers: { 'Content-Type': 'text/event-stream' } }))
     const handlers = { onSnapshot: vi.fn() }

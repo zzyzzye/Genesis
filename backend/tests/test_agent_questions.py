@@ -5,11 +5,13 @@ from typing import Any, cast
 from uuid import uuid4
 
 import pytest
+from ag_ui.core import EventType, RunFinishedEvent, ToolCallResultEvent, ToolCallStartEvent
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import ValidationError
 
+from agent_events import public_text
 from genesis_api.agent.questions import QuestionRequest, ask_user_question
 from genesis_api.agent.runtime import EmbeddedAgentRuntime
 from genesis_api.ai.schemas import AiChatRequest, AiMessage
@@ -48,18 +50,31 @@ async def test_question_error_does_not_leak_raw_tool_arguments(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """工具校验失败时只显示中文恢复提示，不把内部调用参数展示给用户。"""
-    class ErrorGraph:
+    class ErrorAdapter:
         """仅返回一次失败工具事件。"""
 
-        async def astream(self, _: object, **kwargs: Any) -> Any:
+        def __init__(self, **_: object) -> None:
+            pass
+
+        async def run(self, _: object) -> Any:
             """模拟框架的工具错误消息。"""
-            yield "updates", {"tools": {"messages": [ToolMessage(
+            yield ToolCallStartEvent(
+                type=EventType.TOOL_CALL_START, tool_call_id="invalid-question",
+                tool_call_name="ask_user_question",
+            )
+            yield ToolCallResultEvent(
+                type=EventType.TOOL_CALL_RESULT, message_id="result",
                 content="Error invoking tool with raw-placeholder arguments",
-                tool_call_id="invalid-question", name="ask_user_question", status="error",
-            )]}}
+                tool_call_id="invalid-question",
+            )
+            yield RunFinishedEvent(
+                type=EventType.RUN_FINISHED,
+                thread_id="invalid-question", run_id="invalid-question",
+            )
 
     runtime = EmbeddedAgentRuntime()
-    monkeypatch.setattr(runtime, "_graph", lambda *_: ErrorGraph())
+    monkeypatch.setattr(runtime, "_graph", lambda *_: object())
+    monkeypatch.setattr("genesis_api.agent.runtime.AuthorizedLangGraphAgent", ErrorAdapter)
     request = AiChatRequest(
         surface="media", actor_id=uuid4(), actor_role="owner",
         messages=[AiMessage(role="user", content="帮我做个视频")],
@@ -67,7 +82,7 @@ async def test_question_error_does_not_leak_raw_tool_arguments(
     events = [event async for event in runtime.stream(
         request, Settings(text_openai_model="test"), thread_id="invalid-question",
     )]
-    text = "".join(event for event in events if isinstance(event, str))
+    text = public_text(events)
     assert "请在聊天中补充需求" in text
     assert "raw-placeholder" not in text
 
@@ -107,7 +122,7 @@ async def test_native_question_repairs_invalid_options_before_waiting(
     )
     settings = Settings(text_openai_model="test")
     events = [event async for event in runtime.stream(request, settings, thread_id="repair")]
-    text = "".join(event for event in events if isinstance(event, str))
+    text = public_text(events)
     assert model.i == 2
     assert text.count("```user-question") == 1
     assert "文章面向谁？" in text
@@ -148,7 +163,7 @@ async def test_native_tool_ends_turn_and_checkpoint_continues_after_answer(
     )
     settings = Settings(text_openai_model="test")
     events = [event async for event in runtime.stream(request, settings, thread_id="questions")]
-    text = "".join(event for event in events if isinstance(event, str))
+    text = public_text(events)
     assert "```user-question" in text
     assert "准备给谁看？" in text
     assert "继续" not in text
@@ -157,6 +172,6 @@ async def test_native_tool_ends_turn_and_checkpoint_continues_after_answer(
         "messages": [AiMessage(role="user", content="给第一次接触产品的用户看")],
     })
     resumed = [event async for event in runtime.stream(answer, settings, thread_id="questions")]
-    assert "".join(event for event in resumed if isinstance(event, str)) == (
+    assert public_text(resumed) == (
         "按你补充的读者方向继续。"
     )

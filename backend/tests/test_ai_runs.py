@@ -10,6 +10,14 @@ from typing import cast
 from uuid import uuid4
 
 import pytest
+from ag_ui.core import (
+    EventType,
+    RunFinishedEvent,
+    RunStartedEvent,
+    TextMessageContentEvent,
+    TextMessageEndEvent,
+    TextMessageStartEvent,
+)
 from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -17,6 +25,7 @@ from sqlalchemy.pool import StaticPool
 
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.tool_history import AgentToolCall, ToolCallHistory
+from genesis_api.ai.ag_ui import legacy_snapshot
 from genesis_api.ai.conversations import conversation_detail
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
 from genesis_api.ai.runs import (
@@ -551,6 +560,33 @@ async def test_stream_response_replays_snapshot_before_live_delta(
         ]
     )
     monkeypatch.setattr(ai_route, "_load_snapshot", lambda *_: next(snapshots))
+    records = iter([
+        [
+            (1, RunStartedEvent(
+                type=EventType.RUN_STARTED, thread_id=str(run_id), run_id=str(run_id),
+            )),
+            (2, legacy_snapshot(AiChatRunSnapshot(
+                id=run_id, status="running", content="刷新前已生成", sequence=1,
+                tool_calls=[tool_call],
+            ))),
+            (3, TextMessageStartEvent(
+                type=EventType.TEXT_MESSAGE_START, message_id=f"{run_id}:assistant",
+            )),
+        ],
+        [
+            (4, TextMessageContentEvent(
+                type=EventType.TEXT_MESSAGE_CONTENT, message_id=f"{run_id}:assistant",
+                delta="，刷新后继续",
+            )),
+            (5, TextMessageEndEvent(
+                type=EventType.TEXT_MESSAGE_END, message_id=f"{run_id}:assistant",
+            )),
+            (6, RunFinishedEvent(
+                type=EventType.RUN_FINISHED, thread_id=str(run_id), run_id=str(run_id),
+            )),
+        ],
+    ])
+    monkeypatch.setattr(ai_route, "_load_events", lambda *_: next(records))
 
     class ConnectedRequest:
         async def is_disconnected(self) -> bool:

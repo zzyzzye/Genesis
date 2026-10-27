@@ -232,7 +232,7 @@ class AiChatRunSnapshot(BaseModel):
     metrics: AiGenerationMetrics | None = None
     proposals: list[AgentActionProposal] = Field(default_factory=list)
     tool_calls: list[AgentToolCall] = Field(default_factory=list)
-    # 仅供首次订阅构建协议快照，不改变现有 JSON 任务接口。
+    # 仅供旧任务构建静态兼容快照，不改变现有 JSON 任务接口。
     history: list[AiConversationMessage] = Field(default_factory=list, exclude=True)
 
 

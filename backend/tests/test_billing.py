@@ -719,7 +719,9 @@ async def test_native_agent_http_stream_to_actual_bill_settlement(
                 request, thread_id=str(uuid4())
             )
         ]
-    assert "连接成功" in "".join(part for part in output if isinstance(part, str))
+    from agent_events import public_text
+
+    assert "连接成功" in public_text(output)
     assert len(sent) == 1
     session.expire_all()
     finish_operation(session, operation.source_id)

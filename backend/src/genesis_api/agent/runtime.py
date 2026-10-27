@@ -7,13 +7,16 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any, TypeVar, cast
 from urllib.parse import urlparse
 
 import httpx
 import httpx2
+from ag_ui.core import BaseEvent, RunAgentInput, TextMessageContentEvent
 from anthropic import AsyncAnthropic
 from deepagents import create_deep_agent
+from langchain.agents import create_agent
 from langchain.agents.middleware import ModelCallLimitMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_anthropic import ChatAnthropic
@@ -24,6 +27,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from openai import APIStatusError as OpenAIStatusError
 from pydantic import BaseModel, SecretStr
 
+from genesis_api.agent.ag_ui import AuthorizedLangGraphAgent, PublicAgentEvents
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.context import agent_invocation_context
 from genesis_api.agent.contracts import AgentActionProposal
@@ -399,8 +403,8 @@ class EmbeddedAgentRuntime:
         thread_id: str,
         metrics: GenerationMetrics | None = None,
         tool_history: ToolCallHistory | None = None,
-    ) -> AsyncIterator[str | AgentActionProposal]:
-        """在独立用户身份上下文中执行图，产出正文及待确认工具提议。
+    ) -> AsyncIterator[BaseEvent | AgentActionProposal]:
+        """使用官方 AG-UI 适配器执行图，产出安全事件及待确认工具提议。
 
         恢复任务且存在 checkpoint 时从保存状态继续，不重复提交输入消息。
         普通工具结果与非文本元数据不作为模型回答返回；签名提议单独转发。
@@ -413,7 +417,7 @@ class EmbeddedAgentRuntime:
             tool_history: 原生工具回调观察器；None 不采集展示历史。
 
         Yields:
-            模型消息中的非空文本片段，或业务工具返回的结构化待确认提议。
+            官方适配器生成并经过安全过滤的事件，或结构化待确认提议。
 
         Raises:
             RuntimeError: 缺少用户身份、模型名称、API Key，
@@ -422,6 +426,7 @@ class EmbeddedAgentRuntime:
         """
         if request.actor_id is None or request.actor_role is None:
             raise RuntimeError("Agent 调用缺少用户上下文")
+        tool_history = tool_history or ToolCallHistory()
         provider = request.provider or settings.text_provider
         _, _, configured_model, _ = self._model_config(settings, provider)
         model = request.model or configured_model
@@ -446,27 +451,17 @@ class EmbeddedAgentRuntime:
                         output_cap = min(
                             4096, int(str(operation.policy.get("max_output_tokens", 4096)))
                         )
-        if request.purpose == "svg":
-            client = self._build_model(
-                settings, "mimo", model, thinking_mode="disabled", output_cap=4096
-            )
-            async for chunk in client.astream(
-                [
-                    SystemMessage(content=svg_system_message()),
-                    {"role": "user", "content": request.messages[-1].content},
-                ]
-            ):
-                for text in _message_text(chunk):
-                    if metrics is not None:
-                        metrics.observe(chunk, text)
-                    yield text
-            return
         module = (
             request.context.module
             if request.context and request.context.module
             else ("blog" if request.surface in ("blog", "studio") else request.surface)
         )
-        graph = self._graph(
+        graph = create_agent(
+            model=self._build_model(
+                settings, "mimo", model, thinking_mode="disabled", output_cap=4096,
+            ),
+            system_prompt=svg_system_message(), checkpointer=self._checkpointer,
+        ) if request.purpose == "svg" else self._graph(
             settings,
             provider,
             model,
@@ -518,47 +513,37 @@ class EmbeddedAgentRuntime:
         if resuming:
             # 已有 checkpoint 时不重复读取原文件或提交消息，由框架恢复执行状态。
             graph_input = None
-        question_failed = False
+        public_events = PublicAgentEvents(
+            str(request.billing_source_id or thread_id), tool_history or ToolCallHistory(),
+        )
+        if resuming:
+            saved = await graph.aget_state(config)
+            # 本轮从最后一条用户消息之后恢复，旧回复不混入当前任务展示。
+            for message in reversed(saved.values.get("messages", [])):
+                if message.type == "human":
+                    break
+                if message.type == "ai" and message.id:
+                    public_events.current_messages.add(message.id)
+        adapter = AuthorizedLangGraphAgent(
+            name="genesis", graph=graph, config=config, graph_input=graph_input,
+            public_events=public_events,
+        )
+        protocol_input = RunAgentInput(
+            thread_id=thread_id, run_id=public_events.run_id,
+            state={}, messages=[], tools=[], context=[],
+            forwarded_props={"stream_subgraphs": False},
+        )
         with (
             agent_invocation_context(
                 request.actor_id, request.actor_role, module, execution_mode=request.execution_mode
             ),
             agent_files_context(files),
         ):
-            async for mode, event in graph.astream(
-                graph_input,
-                config=config,
-                stream_mode=["messages", "updates"],
-                # 使用框架同步持久化策略，执行状态保存交给 checkpointer 管理。
-                durability="sync",
-            ):
-                if mode == "updates":
-                    for update in event.values():
-                        if not isinstance(update, dict):
-                            continue
-                        for message in update.get("messages", []):
-                            if getattr(message, "type", None) != "tool":
-                                continue
-                            if getattr(message, "name", None) == "ask_user_question":
-                                if getattr(message, "status", None) == "error":
-                                    question_failed = True
-                                else:
-                                    question_failed = False
-                                    yield str(message.content)
-                                continue
-                            try:
-                                proposal = AgentActionProposal.model_validate_json(message.content)
-                            except (ValueError, TypeError):
-                                continue
-                            yield proposal
-                    continue
-                message, _metadata = event
-                for text in _message_text(message):
-                    if metrics is not None:
-                        metrics.observe(message, text)
-                    yield text
-        if question_failed:
-            yield "澄清问题暂时无法显示，请在聊天中补充需求，或请助手重新提问。"
+            async for event in adapter.run(protocol_input):
+                for public in public_events.filter(event):
+                    if isinstance(public, TextMessageContentEvent) and metrics is not None:
+                        metrics.observe(SimpleNamespace(id=public.message_id), public.delta)
+                    yield public
 
     async def generate_structured(
         self,
