@@ -68,7 +68,6 @@ export function ModelPriceTooltip({ id, model, trigger, onDismiss, onEnter, onLe
   const symbol = pricing?.currency === 'USD' ? '$' : '¥'
   return createPortal(<div ref={panel} id={id} className="model-price-tooltip" popover={native ? 'manual' : undefined} role="tooltip" onPointerEnter={onEnter} onPointerLeave={onLeave}>
     <strong>{modelDisplayName(model.name || model.id)}</strong>
-    {pricing?.group && <p className="model-price-tooltip__group">{pricing.group}{pricing.group_ratio != null && <span> · {pricing.group_ratio} 倍</span>}</p>}
     {available && pricing.tiers.length ? <>
       <p className="model-price-tooltip__unit">{pricing.currency === 'USD' ? '美元' : '人民币'} / 100 万 Token</p>
       <table><caption>模型输入输出价格</caption><thead><tr><th>项目</th>{pricing.tiers.map((tier, index) => <th key={index}>{tierNames[tier.name] ?? tier.name}</th>)}</tr></thead>
