@@ -35,5 +35,5 @@ export function BillingStatus({ initial, token }: { initial: BillingOperation | 
     void refresh()
     return () => { controller.abort(); clearTimeout(timer) }
   }, [initial, token])
-  return value ? <p className="billing-status" role="status" title={value.note || undefined}>{billingLabel(value)} <Link to="/account/wallet">查看账单</Link></p> : null
+  return value?.mode === 'paid' ? <p className="billing-status" role="status" title={value.note || undefined}>{billingLabel(value)} <Link to="/account/wallet">查看账单</Link></p> : null
 }
