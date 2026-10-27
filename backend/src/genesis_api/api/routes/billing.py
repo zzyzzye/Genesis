@@ -96,7 +96,9 @@ def operation(
     """费用详情按当前身份隔离，未归属订单统一返回 404。"""
     row = session.scalar(
         select(BillingOperation).where(
-            BillingOperation.id == operation_id, BillingOperation.user_id == user.id
+            BillingOperation.id == operation_id,
+            BillingOperation.user_id == user.id,
+            BillingOperation.mode.in_(("free", "paid")),
         )
     )
     if row is None:
@@ -121,9 +123,11 @@ def operation(
 def my_operations(
     user: CurrentUserDependency, session: SessionDependency, page: int = Query(1, ge=1)
 ) -> dict[str, Any]:
-    """分页列出自己的免费、待结算和已结算生成任务。"""
+    """分页列出个人免费和付费任务，站点成本只在管理员账务中展示。"""
     query = select(BillingOperation).where(
-        BillingOperation.user_id == user.id, BillingOperation.source_id.is_not(None)
+        BillingOperation.user_id == user.id,
+        BillingOperation.source_id.is_not(None),
+        BillingOperation.mode.in_(("free", "paid")),
     )
     total = session.scalar(select(func.count()).select_from(query.subquery())) or 0
     rows = session.scalars(

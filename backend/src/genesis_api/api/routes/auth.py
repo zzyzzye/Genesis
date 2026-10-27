@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
+from genesis_api.billing.service import lock_wallet
 from genesis_api.core.config import get_settings
 from genesis_api.core.uploads import image_header_mime, media_suffix
 from genesis_api.identity import avatars
@@ -101,11 +102,11 @@ class ProfileUpdateRequest(BaseModel):
 
 @router.post("/register", response_model=CurrentUser, status_code=status.HTTP_201_CREATED)
 def register_account(data: RegistrationRequest, session: SessionDependency) -> CurrentUser:
-    """创建普通成员并保存密码哈希，不自动签发登录令牌。
+    """在同一事务创建普通成员、密码哈希和零余额钱包，不自动签发登录令牌。
 
     Args:
         data: 已校验的注册信息，不能由客户端指定所有者角色。
-        session: 当前请求会话，此处提交用户及凭据。
+        session: 当前请求会话，此处原子提交用户、凭据及钱包。
 
     Returns:
         新用户的公开资料。
@@ -121,6 +122,8 @@ def register_account(data: RegistrationRequest, session: SessionDependency) -> C
     )
     session.add(user)
     try:
+        session.flush()
+        lock_wallet(session, user.id)
         session.commit()
     except IntegrityError:
         session.rollback()

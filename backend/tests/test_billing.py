@@ -113,6 +113,25 @@ def quote_and_admit(state: Any) -> BillingOperation:
     return operation
 
 
+def test_personal_bills_exclude_platform_costs(state: Any) -> None:
+    """个人账单及明细不混入自动标题等站点成本，管理员仍可读取。"""
+    session, user, owner, _, _, _ = state
+    rows = [BillingOperation(
+        user_id=user.id, source_id=uuid4(), kind="agent", provider="openai", model="test",
+        mode=mode, status="settled", fingerprint=mode, policy={},
+    ) for mode in ("paid", "free", "platform")]
+    session.add_all(rows)
+    session.commit()
+    result = routes.my_operations(user, session, page=1)
+    assert result["total"] == 2
+    assert {item["mode"] for item in result["items"]} == {"paid", "free"}
+    assert routes.operation(rows[0].id, user, session)["id"] == str(rows[0].id)
+    with pytest.raises(HTTPException) as caught:
+        routes.operation(rows[2].id, user, session)
+    assert caught.value.status_code == 404
+    assert routes.admin_operation(rows[2].id, owner, session)["mode"] == "platform"
+
+
 def sample(request_id: str = "gateway-request", quota: int = 126, kind: int = 2) -> dict[str, Any]:
     """保留实际结算字段，去掉原账号、令牌名、渠道和个人信息。"""
     return {

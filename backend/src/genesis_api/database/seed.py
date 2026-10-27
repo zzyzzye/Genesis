@@ -2,6 +2,7 @@
 
 from sqlalchemy import select
 
+from genesis_api.billing.service import lock_wallet
 from genesis_api.blog import models as blog_models
 from genesis_api.core.config import get_settings
 from genesis_api.database.session import SessionLocal
@@ -15,7 +16,7 @@ _ = blog_models
 def seed_database() -> None:
     """初始化开发所有者及其凭据，并提交事务。
 
-    已有所有者不覆盖资料；缺少凭据时补建，不改动文章或标签。
+    已有所有者不覆盖资料；缺少凭据或钱包时补建，不改动余额、文章或标签。
     此函数自身不校验部署环境，调用方应确保仅在需要开发账号的环境执行。
     """
     settings = get_settings()
@@ -39,6 +40,8 @@ def seed_database() -> None:
                 password_hash=hash_password(settings.development_owner_password.get_secret_value())
             )
 
+        session.flush()
+        lock_wallet(session, owner.id)
         session.commit()
 
 

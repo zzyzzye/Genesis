@@ -5,7 +5,7 @@ import subprocess
 import sys
 from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -17,6 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 from genesis_api.agent.context import agent_invocation_context
 from genesis_api.api.routes.blog import router
+from genesis_api.billing.models import BillingOperation, Wallet, WalletEntry
 from genesis_api.blog.agent import actions as blog_actions
 from genesis_api.blog.agent import tools as blog_agent_tools
 from genesis_api.blog.agent.actions import confirm_blog_action
@@ -292,6 +293,9 @@ def test_development_seed_is_idempotent(
     with Session(database_engine) as session:
         owner = session.scalar(select(User).where(User.handle == "genesis"))
         assert owner is not None
+        wallet = session.get(Wallet, owner.id)
+        assert wallet is not None and wallet.available == 0 and wallet.frozen == 0
+        assert len(session.scalars(select(Wallet)).all()) == 1
         assert owner.credential is not None
         assert owner.credential.password_hash != "genesis-local-only"
         assert session.scalars(select(BlogPost)).all() == []
@@ -331,7 +335,9 @@ async def test_owner_can_log_in_and_read_own_profile(
 
 
 @pytest.mark.anyio
-async def test_member_can_register_and_manage_own_profile(client: AsyncClient) -> None:
+async def test_member_can_register_and_manage_own_profile(
+    client: AsyncClient, database_session: Session,
+) -> None:
     registration_data = {
         "handle": "reader_one",
         "display_name": "  新读者  ",
@@ -355,6 +361,12 @@ async def test_member_can_register_and_manage_own_profile(client: AsyncClient) -
     }
     assert duplicate_response.status_code == 409
     assert invalid_handle_response.status_code == 422
+    user_id = UUID(registration_response.json()["id"])
+    wallet = database_session.get(Wallet, user_id)
+    assert wallet is not None and wallet.available == 0 and wallet.frozen == 0
+    assert database_session.scalars(select(Wallet)).all() == [wallet]
+    assert not database_session.scalars(select(WalletEntry)).all()
+    assert not database_session.scalars(select(BillingOperation)).all()
 
     login_response = await client.post(
         "/api/v1/auth/login",
@@ -362,6 +374,9 @@ async def test_member_can_register_and_manage_own_profile(client: AsyncClient) -
     )
     token = login_response.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
+    balance = await client.get("/api/v1/billing/wallet", headers=headers)
+    assert balance.status_code == 200
+    assert balance.json() == {"currency": "CNY", "available": "0.00000000", "frozen": "0.00000000"}
     update_response = await client.put(
         "/api/v1/auth/me",
         headers=headers,
