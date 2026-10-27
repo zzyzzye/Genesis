@@ -34,12 +34,12 @@ def transport_provider_for(provider: str, base_url: str) -> str:
         base_url: 上游基础地址，用于识别已支持的兼容网关。
 
     Returns:
-        LangChain 供应商标识；已识别的兼容网关统一使用 openai。
+        LangChain 供应商标识；Claude 保留原生协议，其他已识别的兼容通道使用 openai。
 
     Raises:
         KeyError: 原生调用的供应商标识不受支持。
     """
-    if urlparse(base_url).hostname == "www.yyapi.cloud":
+    if provider != "claude" and urlparse(base_url).hostname == "www.yyapi.cloud":
         return "openai"
     return capability_provider_for(provider)
 

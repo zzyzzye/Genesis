@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 import httpx
+import httpx2
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -47,7 +48,9 @@ def execution_context(
         _execution.reset(token)
 
 
-def _before(execution: Execution, size: int, request: httpx.Request) -> UUID | None:
+def _before(
+    execution: Execution, size: int, request: httpx.Request | httpx2.Request,
+) -> UUID | None:
     with execution.factory() as session:
         operation = session.scalar(
             select(BillingOperation)
@@ -83,16 +86,21 @@ def _before(execution: Execution, size: int, request: httpx.Request) -> UUID | N
 
 
 def _validate_chat_budget(
-    operation: BillingOperation, settings: Settings, request: httpx.Request
+    operation: BillingOperation, settings: Settings, request: httpx.Request | httpx2.Request
 ) -> None:
     """在实际发送边界核验型号和输出预算，子调用也不能改用更贵的模型。"""
     base, _ = connection(settings, "agent", operation.provider)
     parsed = urlsplit(base)
+    allowed_paths = (
+        {"/v1/messages"}
+        if operation.provider == "claude"
+        else {"/v1/chat/completions", "/v1/responses"}
+    )
     if (
         request.url.scheme != parsed.scheme
         or request.url.host != parsed.hostname
         or request.url.port != parsed.port
-        or request.url.path not in {"/v1/chat/completions", "/v1/responses"}
+        or request.url.path not in allowed_paths
     ):
         raise RuntimeError("模型请求地址与已审核的聊天渠道不一致")
     try:
@@ -112,10 +120,22 @@ def _validate_chat_budget(
     if body.get("n", 1) != 1 or body.get("best_of", 1) != 1:
         raise RuntimeError("当前付费聊天只允许单份输出")
     tools = body.get("tools", [])
-    if not isinstance(tools, list) or any(
-        not isinstance(tool, dict) or tool.get("type") != "function" for tool in tools
-    ):
+    if not isinstance(tools, list):
         raise RuntimeError("当前价格策略尚未核验供应商内置工具的附加费用")
+    for tool in tools:
+        if not isinstance(tool, dict):
+            raise RuntimeError("当前价格策略尚未核验供应商内置工具的附加费用")
+        if operation.provider == "claude":
+            # Anthropic 自定义工具使用 name/input_schema，服务端工具有独立 type。
+            allowed = (
+                tool.get("type") in (None, "custom")
+                and isinstance(tool.get("name"), str)
+                and isinstance(tool.get("input_schema"), dict)
+            )
+        else:
+            allowed = tool.get("type") == "function"
+        if not allowed:
+            raise RuntimeError("当前价格策略尚未核验供应商内置工具的附加费用")
 
 
 def _after(execution: Execution, charge_id: UUID, request_id: str | None) -> None:
@@ -127,7 +147,7 @@ def _after(execution: Execution, charge_id: UUID, request_id: str | None) -> Non
             session.commit()
 
 
-async def before_request(request: httpx.Request) -> None:
+async def before_request(request: httpx.Request | httpx2.Request) -> None:
     """发送前持久化意图，读取请求仅用于字节上限，不保存内容和认证头。"""
     execution = _execution.get()
     if execution is None or request.method != "POST":
@@ -139,7 +159,7 @@ async def before_request(request: httpx.Request) -> None:
         request.extensions["genesis_billing_charge"] = charge_id
 
 
-async def after_response(response: httpx.Response) -> None:
+async def after_response(response: httpx.Response | httpx2.Response) -> None:
     """在响应正文消费前记录网关 ID，取消流或下载失败仍可核账。"""
     execution = _execution.get()
     charge_id = response.request.extensions.get("genesis_billing_charge")

@@ -600,35 +600,31 @@ async def test_native_agent_http_stream_to_actual_bill_settlement(
         sent.append(request)
         body = json.loads(request.content)
         assert body["model"] == operation.model
-        assert body.get("max_completion_tokens", body.get("max_tokens")) == 4096
+        assert request.url.path == "/v1/responses"
+        assert body["max_output_tokens"] == 4096
+        response = {
+            "id": "resp-synthetic", "object": "response", "created_at": 100,
+            "status": "completed", "model": operation.model,
+            "output": [{
+                "type": "message", "id": "msg-synthetic", "role": "assistant",
+                "status": "completed",
+                "content": [{"type": "output_text", "text": "连接成功", "annotations": []}],
+            }],
+            "usage": {"input_tokens": 4391, "output_tokens": 7, "total_tokens": 4398},
+        }
         chunks = [
-            {
-                "id": "chatcmpl-synthetic",
-                "object": "chat.completion.chunk",
-                "created": 100,
-                "model": operation.model,
-                "choices": [
-                    {
-                        "index": 0,
-                        "delta": {"role": "assistant", "content": "连接成功"},
-                        "finish_reason": None,
-                    }
-                ],
-            },
-            {
-                "id": "chatcmpl-synthetic",
-                "object": "chat.completion.chunk",
-                "created": 100,
-                "model": operation.model,
-                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 4391, "completion_tokens": 7, "total_tokens": 4398},
-            },
+            {"type": "response.created", "response": {**response, "output": []}},
+            {"type": "response.output_text.delta", "item_id": "msg-synthetic",
+             "output_index": 0, "content_index": 0, "delta": "连接成功"},
+            {"type": "response.output_text.done", "item_id": "msg-synthetic",
+             "output_index": 0, "content_index": 0, "text": "连接成功"},
+            {"type": "response.completed", "response": response},
         ]
         content = "".join(f"data: {json.dumps(chunk)}\n\n" for chunk in chunks)
         return httpx.Response(
             200,
             headers={"x-oneapi-request-id": "gateway-request", "content-type": "text/event-stream"},
-            content=content + "data: [DONE]\n\n",
+            content=content,
         )
 
     runtime = runtime_module.EmbeddedAgentRuntime()

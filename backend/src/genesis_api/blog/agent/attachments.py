@@ -3,18 +3,15 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import Iterator
 from pathlib import Path
 from uuid import UUID
-from zipfile import BadZipFile, ZipFile
 
 from fastapi import HTTPException
-from langchain_core.document_loaders import BaseLoader
-from langchain_core.documents import Document
 from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from genesis_api.agent.documents import document_text, validate_document
 from genesis_api.ai.models import AiChatRun
 from genesis_api.ai.schemas import AiAttachment, AiChatRequest, AiMessage
 from genesis_api.blog import attachments as storage
@@ -26,7 +23,6 @@ from genesis_api.llm.profiles import transport_provider_for
 
 MAX_FILES = 8
 MAX_BYTES = 20 * 1024 * 1024
-MAX_TEXT_CHARS = 500_000
 TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".csv", ".json", ".log", ".yaml", ".yml"}
 
 
@@ -129,56 +125,6 @@ def prepare_attachments(
     return request.model_copy(update={"messages": messages})
 
 
-class AgentDocumentLoader(BaseLoader):
-    """以标准 Loader 接口适配解析库，避免引入已归档的 langchain-community。"""
-
-    def __init__(self, item: AiAttachment, path: Path) -> None:
-        """只接受业务已校验的附件与 UUID 存储路径。"""
-        self.item = item
-        self.path = path
-
-    def lazy_load(self) -> Iterator[Document]:
-        """按页解析 PDF；文本和 DOCX 由现成解析库提取，不执行文件内容。"""
-        if self.item.mime_type == "application/pdf":
-            from pypdf import PdfReader
-
-            reader = PdfReader(self.path)
-            if reader.is_encrypted or len(reader.pages) > 200:
-                raise ValueError("PDF 需为未加密文件，且不能超过 200 页")
-            for index, page in enumerate(reader.pages):
-                yield Document(page_content=page.extract_text() or "", metadata={"page": index})
-        elif self.item.name.lower().endswith(".docx"):
-            import docx2txt  # type: ignore[import-untyped]
-
-            try:
-                with ZipFile(self.path) as archive:
-                    if (
-                        "word/document.xml" not in archive.namelist()
-                        or sum(entry.file_size for entry in archive.infolist()) > MAX_BYTES
-                    ):
-                        raise ValueError("DOCX 内容无效或解压后超过 20 MiB")
-            except BadZipFile as error:
-                raise ValueError("DOCX 文件内容无效") from error
-            yield Document(page_content=docx2txt.process(str(self.path)))
-        else:
-            yield Document(page_content=self.path.read_text(encoding="utf-8-sig"))
-
-
-def _document_text(item: AiAttachment, path: Path) -> str:
-    """通过标准 Loader 读取文档，限制总页数与输出文字。"""
-    parts = []
-    size = 0
-    for index, document in enumerate(AgentDocumentLoader(item, path).lazy_load()):
-        size += len(document.page_content)
-        if index >= 200 or size > MAX_TEXT_CHARS:
-            raise ValueError("文档最多 200 页、50 万字，请拆分后上传")
-        parts.append(document.page_content)
-    text = "\n\n".join(parts).strip()
-    if not text:
-        raise ValueError("未提取到文字，请使用可选取文字的文档，或上传页面图片")
-    return text
-
-
 def attachment_input(
     session: Session,
     user_id: UUID,
@@ -187,7 +133,8 @@ def attachment_input(
     """执行时再次校验文件，用标准多模态块与原生文件后端输入替代公开链接。
 
     原始文件始终保留在既有私有附件库；仅当前消息明确选择的附件会被读取。
-    文档不整篇塞进提示词，模型通过 DeepAgents 原生 read_file 分段读取。
+    PDF/DOCX 优先使用原生文件块，不支持时由运行时中间件通过 Docling 兜底。
+    纯文本仍导入 DeepAgents 原生文件后端，供 read_file 分段读取。
     """
     messages: list[dict[str, object]] = []
     files: list[tuple[str, bytes]] = []
@@ -204,8 +151,8 @@ def attachment_input(
             try:
                 if path.stat().st_size != item.size:
                     raise ValueError("附件大小已变化，请重新上传")
-                if item.kind == "document":
-                    text = _document_text(item, path)
+                if item.kind == "document" and item.mime_type == "text/plain":
+                    text = document_text(path, item.mime_type)
                     agent_path = f"/attachments/{item.id}/{Path(item.name).stem}.txt"
                     files.append((agent_path, text.encode("utf-8")))
                     blocks.append(
@@ -218,11 +165,13 @@ def attachment_input(
                         }
                     )
                 else:
+                    if item.kind == "document":
+                        validate_document(path, item.mime_type)
                     # 文件名放在用户消息中，确保适配器忽略 extras 时模型仍能对应参考。
                     blocks[0]["text"] = f"{blocks[0]['text']}\n用户参考附件：{item.name}"
                     blocks.append(
                         {
-                            "type": item.kind,
+                            "type": "file" if item.kind == "document" else item.kind,
                             "base64": base64.b64encode(path.read_bytes()).decode("ascii"),
                             "mime_type": item.mime_type,
                             "extras": {"filename": item.name},

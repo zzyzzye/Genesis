@@ -10,6 +10,12 @@ Genesis 的 FastAPI 后端服务。
 - 框架缺失的能力集中放在 `llm/capability_supplements.toml`，精确匹配供应商与模型 ID。配置经过 Pydantic 校验，仅填补缺失字段，不覆盖框架已有值；来源和核实日期写在配置旁。更新配置后重启后端。
 - `profiles.py` 仅负责框架 profile 读取与传输适配器选择。网关协议不改变模型能力来源；请求参数序列化继续交给 LangChain 和必要的 MiMo 协议适配。
 
+OpenAI 兼容通道和 Grok 优先使用 Responses API。LangChain 原生模型中间件仅在上游明确不支持该端点时回退 Chat Completions，并在当前模型图中复用回退结果；鉴权失败、限流、模型不存在、服务异常不会触发换协议。Claude 在直连与云影网关均使用 Anthropic Messages API，根地址和以 `/v1` 结尾的地址均可使用。MiMo 保留已验证的 Chat Completions 与工具轮次 `reasoning_content` 回传适配；Gemini 直连继续使用原生适配器。
+
+附件优先使用 LangChain 标准文件块。原生 profile 明确支持 PDF 的模型直接接收原 PDF；OpenAI Responses 直接接收 DOCX。其他组合或上游明确拒绝文件类型时，才通过 `langchain-docling` 的 `DoclingLoader` 将 PDF/DOCX 转为 Markdown，导入 DeepAgents 原生文件后端供 `read_file` 分段读取。转换后的消息沿用原 ID 写入 checkpoint，后续工具调用及恢复不会反复发送不支持的文件。纯文本直接保留原文并导入会话文件。文件不需要公开 URL。
+
+Docling 回退保留 DOCX 标题、列表和表格；PDF 使用无需模型下载的原生文本管线，暂不提供 OCR 或版面识别，扫描件应使用原生 PDF 输入或改传页面图片。转换最多 200 页、50 万字，所有附件仍遵循既有权限与 20 MiB 限制。当前 Docling 的转换模块会导入 PyTorch，因此 Linux 锁定 CPU 版依赖，避免引入 CUDA 运行库。Anthropic SDK 使用 `httpx2`，其连接池复用相同计费钩子并随运行时释放。
+
 目录响应的 `context_window` 沿用现有 API 字段，用框架输入上限补齐，不能理解为“输入上限加输出上限”。目录明确返回的有效 `context_window` / `context_length` / Gemini `inputTokenLimit` 与 `max_output_tokens` / Gemini `outputTokenLimit` 优先用于该目录展示。它们可能反映网关自身限制，不写入原生模型能力。已删除原来单独的上下文表；框架和官方资料都无法确认的旧型号保持未知。
 
 `max_output_tokens` 表示模型能力上限，`Settings.text_max_tokens` 表示本次请求预算。运行时发送两者较小值；上限未知时沿用请求预算，不自行设置无限大。网关若另有限制仍可能拒绝请求，不把原生上限当作网关保证。

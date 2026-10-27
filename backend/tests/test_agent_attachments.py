@@ -9,7 +9,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
-from zipfile import ZipFile
 
 import pytest
 from fastapi import HTTPException
@@ -18,6 +17,7 @@ from langchain_core.runnables import RunnableConfig
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from genesis_api.agent.documents import document_text
 from genesis_api.agent.files import AttachmentFilesMiddleware, agent_files_context
 from genesis_api.ai.conversations import conversation_detail
 from genesis_api.ai.models import AiChatRun, AiConversation
@@ -269,20 +269,21 @@ def test_total_size_role_scope_and_changed_file_are_rejected(session: Session) -
 
 
 def test_docx_and_pdf_use_real_loaders(session: Session) -> None:
+    """真实 DOCX 标题、表格和 PDF 正文经 Docling 读取，兼容 UUID 存储路径。"""
+    from docx import Document
     from pypdf import PdfWriter
     from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
     user = owner(session)
     docx = BytesIO()
-    with ZipFile(docx, "w") as archive:
-        archive.writestr(
-            "word/document.xml",
-            (
-                '<w:document xmlns:w="http://schemas.openxmlformats.org/'
-                'wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'
-                "DOCX attachment</w:t></w:r></w:p></w:body></w:document>"
-            ),
-        )
+    document = Document()
+    document.add_heading("参考文档", level=1)
+    document.add_paragraph("DOCX attachment")
+    table = document.add_table(rows=2, cols=2)
+    for row, values in zip(table.rows, [("人物", "场景"), ("苏晚", "雨夜")], strict=True):
+        for cell, value in zip(row.cells, values, strict=True):
+            cell.text = value
+    document.save(docx)
     pdf = BytesIO()
     writer = PdfWriter()
     page = writer.add_blank_page(width=400, height=400)
@@ -309,9 +310,39 @@ def test_docx_and_pdf_use_real_loaders(session: Session) -> None:
         file(session, user.id, "文档.docx", docx.getvalue()),
         file(session, user.id, "文档.pdf", pdf.getvalue()),
     ]
-    _, files = attachment_input(session, user.id, request(user.id, ids))
-    assert b"DOCX attachment" in files[0][1]
-    assert b"PDF attachment" in files[1][1]
+    messages, files = attachment_input(session, user.id, request(user.id, ids))
+    assert not files
+    assert len(messages[0]["content"]) == 3  # type: ignore[arg-type]
+    markdown = document_text(
+        storage.STORAGE_ROOT / str(ids[0]),
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+    assert "DOCX attachment" in markdown
+    assert "# 参考文档" in markdown
+    assert "| 人物" in markdown
+    assert "苏晚" in markdown and "雨夜" in markdown
+    assert "PDF attachment" in document_text(storage.STORAGE_ROOT / str(ids[1]), "application/pdf")
+
+
+@pytest.mark.parametrize("encrypted", [False, True])
+def test_docling_rejects_excessive_pages_and_encrypted_pdf(
+    session: Session, encrypted: bool,
+) -> None:
+    """页数上限在转换前执行，加密文档不绕过读取限制。"""
+    from docling.exceptions import ConversionError
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    for _ in range(1 if encrypted else 201):
+        writer.add_blank_page(width=100, height=100)
+    if encrypted:
+        writer.encrypt("test-only")
+    pdf = BytesIO()
+    writer.write(pdf)
+    user = owner(session)
+    item_id = file(session, user.id, "受限.pdf", pdf.getvalue())
+    with pytest.raises((ValueError, ConversionError)):
+        document_text(storage.STORAGE_ROOT / str(item_id), "application/pdf")
 
 
 def test_historical_media_prevents_switch_to_text_only_model(
@@ -368,10 +399,12 @@ def test_invalid_document_and_empty_pdf_have_actionable_error(session: Session) 
     writer = PdfWriter()
     writer.add_blank_page(width=100, height=100)
     writer.write(pdf)
-    for name, body in [("broken.docx", b"PKbroken"), ("blank.pdf", pdf.getvalue())]:
-        item_id = file(session, user.id, name, body)
-        with pytest.raises(RuntimeError, match="无法读取附件"):
-            attachment_input(session, user.id, request(user.id, [item_id]))
+    item_id = file(session, user.id, "broken.docx", b"PKbroken")
+    with pytest.raises(RuntimeError, match="无法读取附件"):
+        attachment_input(session, user.id, request(user.id, [item_id]))
+    blank = file(session, user.id, "blank.pdf", pdf.getvalue())
+    with pytest.raises(ValueError, match="未提取到文字"):
+        document_text(storage.STORAGE_ROOT / str(blank), "application/pdf")
     invalid = file(session, user.id, "encoding.txt", b"ok\n\xff")
     with pytest.raises(HTTPException):
         prepare_attachments(session, user.id, request(user.id, [invalid]), Settings())

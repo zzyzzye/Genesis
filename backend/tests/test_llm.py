@@ -17,10 +17,11 @@ from genesis_api.llm.service import ModelDiscoveryError, ModelDiscoveryService
 
 
 def test_capability_source_is_independent_of_gateway_transport() -> None:
-    """网关改变请求协议，但不改变 Gemini 与 Claude 的原生能力来源。"""
+    """Gemini 兼容通道与 Claude 原生通道共用各自的原生能力来源。"""
     for provider, native in (("gemini", "google_genai"), ("claude", "anthropic")):
         assert capability_provider_for(provider) == native
-        assert transport_provider_for(provider, "https://www.yyapi.cloud/v1") == "openai"
+        expected = "anthropic" if provider == "claude" else "openai"
+        assert transport_provider_for(provider, "https://www.yyapi.cloud/v1") == expected
         assert transport_provider_for(provider, "https://native.example") == native
     with pytest.raises(KeyError):
         capability_provider_for("unknown")

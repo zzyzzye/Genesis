@@ -11,19 +11,24 @@ from typing import Any, TypeVar, cast
 from urllib.parse import urlparse
 
 import httpx
+import httpx2
+from anthropic import AsyncAnthropic
 from deepagents import create_deep_agent
 from langchain.agents.middleware import ModelCallLimitMiddleware
 from langchain.chat_models import init_chat_model
+from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from openai import APIStatusError as OpenAIStatusError
 from pydantic import BaseModel, SecretStr
 
 from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.context import agent_invocation_context
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.files import AttachmentFilesMiddleware, agent_files_context
+from genesis_api.agent.input_fallback import InputFallbackMiddleware, unsupported_responses
 from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.mimo import ChatMiMo
 from genesis_api.agent.questions import (
@@ -44,6 +49,14 @@ from genesis_api.toolbox.agent.prompt import svg_system_message
 StructuredResult = TypeVar("StructuredResult", bound=BaseModel)
 
 
+async def clean_gateway_headers(request: httpx.Request | httpx2.Request) -> None:
+    """清理会被兼容网关错误拦截的 SDK 诊断头，不改变认证信息。"""
+    for header in tuple(request.headers):
+        if header.lower().startswith("x-stainless-"):
+            del request.headers[header]
+    request.headers["user-agent"] = "Genesis-Agent/0.1"
+
+
 class YyapiAsyncTransport(httpx.AsyncBaseTransport):
     """移除会被兼容网关错误拦截的 OpenAI SDK 诊断请求头。"""
 
@@ -60,10 +73,7 @@ class YyapiAsyncTransport(httpx.AsyncBaseTransport):
         Returns:
             底层传输器返回的 HTTP 响应，网络异常原样传播。
         """
-        for header in tuple(request.headers):
-            if header.lower().startswith("x-stainless-"):
-                del request.headers[header]
-        request.headers["user-agent"] = "Genesis-Agent/0.1"
+        await clean_gateway_headers(request)
         return await self._transport.handle_async_request(request)
 
     async def aclose(self) -> None:
@@ -80,6 +90,7 @@ class EmbeddedAgentRuntime:
         self._checkpointer: AsyncPostgresSaver | None = None
         self._graphs: dict[tuple[object, ...], Any] = {}
         self._http_clients: dict[bool, httpx.AsyncClient] = {}
+        self._anthropic_http_clients: dict[bool, httpx2.AsyncClient] = {}
 
     async def startup(self, settings: Settings) -> None:
         """由应用生命周期初始化共享的 PostgreSQL checkpoint 存储。
@@ -109,6 +120,9 @@ class EmbeddedAgentRuntime:
         for client in self._http_clients.values():
             await client.aclose()
         self._http_clients.clear()
+        for anthropic_client in self._anthropic_http_clients.values():
+            await anthropic_client.aclose()
+        self._anthropic_http_clients.clear()
         self._checkpointer = None
         self._checkpointer_context = None
         if context is not None:
@@ -124,6 +138,17 @@ class EmbeddedAgentRuntime:
                 trust_env=False,
             )
         return self._http_clients[yyapi]
+
+    def _anthropic_http_client(self, *, yyapi: bool = False) -> httpx2.AsyncClient:
+        """Anthropic SDK 使用 httpx2，沿用相同账务钩子与连接释放规则。"""
+        if yyapi not in self._anthropic_http_clients:
+            hooks = billing_hooks()
+            if yyapi:
+                hooks["request"].insert(0, clean_gateway_headers)
+            self._anthropic_http_clients[yyapi] = httpx2.AsyncClient(
+                timeout=60, event_hooks=hooks, trust_env=False,
+            )
+        return self._anthropic_http_clients[yyapi]
 
     @staticmethod
     def _model_config(
@@ -187,6 +212,7 @@ class EmbeddedAgentRuntime:
         thinking_mode: str | None = None,
         *,
         output_cap: int | None = None,
+        use_responses_api: bool | None = None,
     ) -> BaseChatModel:
         """构建模型客户端，补充兼容网关与 MiMo 所需的协议适配。
 
@@ -199,6 +225,8 @@ class EmbeddedAgentRuntime:
             model: 实际调用的模型名称。
             reasoning_effort: 思考强度；None 表示沿用模型默认设置。
             thinking_mode: 思考开关；None 时 MiMo 使用站点默认关闭，其他供应商沿用上游默认。
+            output_cap: 业务允许的最大输出预算；None 时沿用应用配置。
+            use_responses_api: None 时兼容通道优先 Responses；False 用于已确认的协议回退。
 
         Returns:
             供 DeepAgent 使用的聊天模型客户端。
@@ -240,6 +268,10 @@ class EmbeddedAgentRuntime:
             kwargs["max_tokens"] = output_budget
         if adapter_provider == "openai":
             kwargs["stream_usage"] = True
+        if adapter_provider in ("openai", "xai") and provider != "mimo":
+            kwargs["use_responses_api"] = (
+                True if use_responses_api is None else use_responses_api
+            )
         # 推理模型可能不接受 temperature；显式档位交由框架映射供应商参数。
         if profile.get("temperature") is not False and reasoning_effort is None:
             kwargs["temperature"] = settings.text_temperature
@@ -264,17 +296,30 @@ class EmbeddedAgentRuntime:
             )
         if is_compatible_gateway:
             normalized_base_url = base_url.rstrip("/")
-            if not normalized_base_url.endswith("/v1"):
+            if adapter_provider == "openai" and not normalized_base_url.endswith("/v1"):
                 normalized_base_url += "/v1"
             kwargs["base_url"] = normalized_base_url
-            kwargs["http_async_client"] = self._http_client(yyapi=True)
+            if adapter_provider == "openai":
+                kwargs["http_async_client"] = self._http_client(yyapi=True)
         elif provider in ("openai", "grok"):
             kwargs["base_url"] = base_url
-        if adapter_provider == "openai":
+        if adapter_provider == "anthropic":
+            # Anthropic SDK 自行添加 /v1/messages，配置可接受根地址或 /v1。
+            kwargs["base_url"] = base_url.rstrip("/").removesuffix("/v1")
+            kwargs["max_retries"] = 0
+        if adapter_provider in ("openai", "xai"):
             kwargs["max_retries"] = 0
             if "http_async_client" not in kwargs:
                 kwargs["http_async_client"] = self._http_client()
-        return cast(BaseChatModel, init_chat_model(**kwargs))
+        chat_model = init_chat_model(**kwargs)
+        if isinstance(chat_model, ChatAnthropic):
+            # ChatAnthropic 尚无 HTTP 客户端注入参数；仅替换 SDK 客户端以复用计费钩子，
+            # 消息、工具、流式事件和思考参数仍由原生适配器处理。
+            chat_model._async_client = AsyncAnthropic(
+                **chat_model._client_params,
+                http_client=self._anthropic_http_client(yyapi=is_compatible_gateway),
+            )
+        return cast(BaseChatModel, chat_model)
 
     def _graph(
         self,
@@ -315,6 +360,7 @@ class EmbeddedAgentRuntime:
         if key not in self._graphs:
             capability = agent_capabilities.resolve(module, settings)
             limits: list[Any] = [ModelCallLimitMiddleware(run_limit=8)] if output_cap else []
+            model_options: dict[str, Any] = {"output_cap": output_cap} if output_cap else {}
             # 业务模块只提供提示词和工具，模型循环、工具编排与 checkpoint 交给框架。
             self._graphs[key] = create_deep_agent(
                 model=self._build_model(
@@ -323,14 +369,21 @@ class EmbeddedAgentRuntime:
                     model,
                     reasoning_effort,
                     thinking_mode,
-                    **({"output_cap": output_cap} if output_cap else {}),
+                    **model_options,
                 ),
                 tools=[*capability.tools, ask_user_question],
                 system_prompt=capability.prompt + "\n" + COLLABORATION_PROMPT,
                 checkpointer=self._checkpointer,
                 middleware=[
                     *limits,
-                    *([AttachmentFilesMiddleware()] if module == "blog" else []),
+                    InputFallbackMiddleware(
+                        provider,
+                        lambda: self._build_model(
+                            settings, provider, model, reasoning_effort, thinking_mode,
+                            output_cap=output_cap, use_responses_api=False,
+                        ),
+                    ),
+                    *([AttachmentFilesMiddleware()] if module in ("blog", "media") else []),
                     finish_after_user_question,
                     *capability.middleware,
                 ],
@@ -539,13 +592,19 @@ class EmbeddedAgentRuntime:
         thinking = "disabled" if "disabled" in (capabilities.thinking_modes or []) else None
         client = self._build_model(settings, provider, model, effort, thinking)
         result: StructuredResult | None = None
-        async for value in client.with_structured_output(schema).astream(
-            [
-                SystemMessage(content=prompt),
-                {"role": "user", "content": content},
-            ]
-        ):
-            result = schema.model_validate(value)
+        for attempt in range(2):
+            try:
+                async for value in client.with_structured_output(schema).astream(
+                    [SystemMessage(content=prompt), {"role": "user", "content": content}]
+                ):
+                    result = schema.model_validate(value)
+                break
+            except OpenAIStatusError as error:
+                if attempt or not unsupported_responses(error):
+                    raise
+                client = self._build_model(
+                    settings, provider, model, effort, thinking, use_responses_api=False,
+                )
         if result is None:
             raise RuntimeError("模型未返回完整结构化结果")
         return result
@@ -598,7 +657,15 @@ class EmbeddedAgentRuntime:
             else client.with_structured_output(AiConversationTitle)
         )
         try:
-            value = await structured.ainvoke(messages)
+            try:
+                value = await structured.ainvoke(messages)
+            except OpenAIStatusError as error:
+                if not unsupported_responses(error):
+                    raise
+                fallback = self._build_model(
+                    settings, provider, model, effort, thinking, use_responses_api=False,
+                )
+                value = await fallback.with_structured_output(AiConversationTitle).ainvoke(messages)
             return AiConversationTitle.model_validate(value).title
         except ValueError:
             raise RuntimeError("模型未返回有效的会话标题") from None
