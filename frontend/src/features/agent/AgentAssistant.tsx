@@ -308,6 +308,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   const [models, setModels] = useState<AvailableModel[]>([])
   const [modelsLoading, setModelsLoading] = useState(true)
   const [modelsError, setModelsError] = useState('')
+  const [modelsRevision, setModelsRevision] = useState(0)
   const { confirmQuote, quoteDialog } = useBillingQuote()
   const pendingRequest = useRef<AiChatRequest | null>(null)
   const modelsCache = useRef<Partial<Record<AiProvider, AvailableModel[]>>>({})
@@ -393,7 +394,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
     }
     void load()
     return () => { cancelled = true }
-  }, [isOpen, provider, authKey])
+  }, [isOpen, provider, authKey, modelsRevision])
 
   const sessionRef = useRef({ isOpen, messages, activeRun, conversationId })
   const saveTimer = useRef<number | null>(null)
@@ -995,7 +996,10 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
                 <span className="studio-assistant__ring-tooltip" aria-hidden="true">{contextDescription}</span>
               </span>
               {modelMenuOpen && <div ref={modelMenuRef} className="studio-assistant__model-menu">
-                <AgentModelPicker provider={provider} models={models} model={model} loading={modelsLoading} error={modelsError} disabled={isBusy} effort={reasoning.effort} onProviderChange={(next) => {
+                <AgentModelPicker provider={provider} models={models} model={model} loading={modelsLoading} error={modelsError} disabled={isBusy} effort={reasoning.effort} onRefresh={() => {
+                  delete modelsCache.current[provider]
+                  setModelsRevision(value => value + 1)
+                }} onProviderChange={(next) => {
                   if (next === provider) return
                   setModelsLoading(true)
                   setProvider(next)

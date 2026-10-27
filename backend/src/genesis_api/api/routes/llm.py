@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
+from genesis_api.billing.pricing import yyapi_pricing_service
 from genesis_api.billing.service import policy_for
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.llm.models import ProviderModels, ProviderName
@@ -40,7 +41,11 @@ async def list_provider_models(
     """
     try:
         result = await ModelDiscoveryService(settings).list_models(provider)
+        prices = await yyapi_pricing_service.for_models(
+            settings, provider, [model.id for model in result.models]
+        )
         for model in result.models:
+            model.pricing = prices.get(model.id)
             model.billing_mode = (
                 "free"
                 if provider == "mimo"

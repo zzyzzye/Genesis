@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from genesis_api.billing.schemas import ModelPricePreview
+
 ProviderName = Literal["openai", "grok", "gemini", "claude", "mimo"]
 
 
@@ -14,6 +16,7 @@ class AvailableModel(BaseModel):
 
     id: str
     billing_mode: Literal["free", "paid", "platform", "unavailable"] = "unavailable"
+    pricing: ModelPricePreview | None = None
     name: str | None = None
     created: int | None = None
     context_window: int | None = None

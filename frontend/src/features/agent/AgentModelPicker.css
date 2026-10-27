@@ -4,7 +4,8 @@
 .agent-picker button { border:0; outline:0; box-shadow:none; cursor:pointer; }
 .agent-picker button:is(:hover,:focus-visible,[aria-pressed="true"]):not(:disabled) { background:var(--reasoning-hover); color:var(--reasoning-text); }
 .agent-picker button:disabled { opacity:.45; cursor:not-allowed; }
-.agent-picker__search { display:flex; align-items:center; gap:8px; padding:0 4px; color:var(--reasoning-muted); }
+.agent-picker__search-row { display:flex; align-items:center; gap:6px; min-width:0; }.agent-picker__search { display:flex; flex:1; min-width:0; align-items:center; gap:8px; padding:0 4px; color:var(--reasoning-muted); }
+.agent-picker .agent-picker__refresh { display:grid; place-items:center; width:28px; height:28px; padding:0; flex:none; background:transparent; color:var(--reasoning-muted); border-radius:5px; }
 .agent-picker__search svg { width:14px; height:14px; flex:none; }
 .agent-picker .agent-picker__search input { width:100%; min-width:0; height:28px; padding:0; border:0; outline:0; box-shadow:none; background:transparent; color:var(--reasoning-text); font-size:12px; }
 .agent-picker__search input::placeholder { color:var(--reasoning-muted); }

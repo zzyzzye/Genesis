@@ -6,6 +6,31 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class TokenPriceTier(BaseModel):
+    """每百万 Token 的精确十进制单价，缺失价格不以零代替。"""
+
+    name: str
+    condition: str | None = None
+    input: str
+    output: str
+    cache_read: str | None = None
+    cache_write: str | None = None
+    cache_write_1h: str | None = None
+
+
+class ModelPricePreview(BaseModel):
+    """仅用于核价展示，不作为已审核冻结上限或结算凭证。"""
+
+    status: Literal["available", "unavailable", "free"]
+    currency: Literal["CNY", "USD"] = "CNY"
+    unit: Literal["1M tokens"] = "1M tokens"
+    group: str | None = None
+    group_ratio: str | None = None
+    tiers: list[TokenPriceTier] = Field(default_factory=list)
+    note: str = "价格仅供核对，实际费用以上游账单为准。"
+    updated_at: str | None = None
+
+
 class QuoteRequest(BaseModel):
     """文本报价绑定供应商和模型，图片视频报价绑定已保存的节点。"""
 

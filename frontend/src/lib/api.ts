@@ -457,9 +457,31 @@ export type AiProvider = 'openai' | 'grok' | 'gemini' | 'claude' | 'mimo'
 
 export type ThinkingMode = 'enabled' | 'disabled'
 
+export interface TokenPriceTier {
+  name: string
+  condition: string | null
+  input: string
+  output: string
+  cache_read: string | null
+  cache_write: string | null
+  cache_write_1h: string | null
+}
+
+export interface ModelPricePreview {
+  status: 'available' | 'unavailable' | 'free'
+  currency: 'CNY' | 'USD'
+  unit: '1M tokens'
+  group: string | null
+  group_ratio: string | null
+  tiers: TokenPriceTier[]
+  note: string
+  updated_at: string | null
+}
+
 export interface AvailableModel {
   id: string
   billing_mode?: 'free' | 'paid' | 'platform' | 'unavailable'
+  pricing?: ModelPricePreview | null
   name: string | null
   created: number | null
   context_window: number | null

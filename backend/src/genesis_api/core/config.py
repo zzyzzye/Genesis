@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     text_temperature: float = 0.7
     text_max_tokens: int | None = None
 
+    yyapi_access_token: SecretStr | None = None
+    yyapi_user_id: int | None = None
+    yyapi_control_base_url: str = "https://www.yyapi.cloud"
+    yyapi_proxy_url: SecretStr | None = None
+
     agent_action_secret: SecretStr = SecretStr("development-only-agent-action-secret")
     agent_action_expire_seconds: int = 600
     agent_max_concurrent_runs: int = 4
