@@ -238,10 +238,14 @@ def _prepare_request(
     )
 
 
-def _load_snapshot(run_id: UUID, user_id: UUID) -> AiChatRunSnapshot | None:
+def _load_snapshot(
+    run_id: UUID, user_id: UUID, include_history: bool = False,
+) -> AiChatRunSnapshot | None:
     """为订阅轮询创建独立会话，返回当前用户的任务快照或 None。"""
     with SessionLocal() as session:
-        return get_ai_chat_run_snapshot(session, run_id=run_id, user_id=user_id)
+        return get_ai_chat_run_snapshot(
+            session, run_id=run_id, user_id=user_id, include_history=include_history,
+        )
 
 
 def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> StreamingResponse:
@@ -264,9 +268,11 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
         """
         stream = AgUiRunStream(str(run_id))
         last_heartbeat = monotonic()
+        first_snapshot = True
 
         while True:
-            snapshot = await asyncio.to_thread(_load_snapshot, run_id, user_id)
+            snapshot = await asyncio.to_thread(_load_snapshot, run_id, user_id, first_snapshot)
+            first_snapshot = False
             if snapshot is None:
                 yield stream.encode(RunErrorEvent(
                     type=EventType.RUN_ERROR, message="AI 生成任务不存在",

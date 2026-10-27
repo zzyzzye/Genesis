@@ -38,7 +38,7 @@ describe('助手失败后的继续对话', () => {
     vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
       callbacks.onToolCalls?.([{ ...call, status: 'running', duration_ms: null }])
       callbacks.onToolCalls?.([call])
-      callbacks.onToken('已读取文章。', 1)
+      callbacks.onSnapshot('已读取文章。', 1)
       return Promise.resolve('completed')
     })
     mount([{ role: 'assistant', content: '你好' }])
@@ -90,7 +90,7 @@ describe('助手失败后的继续对话', () => {
     }] }) + '\n```\n'
     vi.mocked(createAiChatRun).mockRejectedValueOnce(new Error('创建失败')).mockResolvedValue({ id: 'answer-run', status: 'pending' })
     vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
-      callbacks.onToken('按你的选择继续。', 1)
+      callbacks.onSnapshot('按你的选择继续。', 1)
       return Promise.resolve('completed')
     })
     mount([{ role: 'assistant', content: question }])
@@ -135,7 +135,7 @@ describe('助手失败后的继续对话', () => {
     }
     vi.mocked(createAiChatRun).mockResolvedValue({ id: 'proposal-run', status: 'pending' })
     vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
-      callbacks.onToken('请点击确认执行。', 1)
+      callbacks.onSnapshot('请点击确认执行。', 1)
       callbacks.onProposals?.([proposal])
       return Promise.resolve('completed')
     })
@@ -176,7 +176,7 @@ describe('助手失败后的继续对话', () => {
     vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
       callbacks.onProposals?.([proposal])
       callbacks.onProposals?.([proposal])
-      callbacks.onToken('发布成功。', 1)
+      callbacks.onSnapshot('发布成功。', 1)
       return Promise.resolve('completed')
     })
     const onExecuted = vi.fn()
@@ -194,7 +194,7 @@ describe('助手失败后的继续对话', () => {
     vi.mocked(createAiChatRun).mockResolvedValue({ id: 'burst-run', status: 'pending' })
     vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
       callbacks.onSnapshot('', 0)
-      for (let i = 0; i < 100; i++) callbacks.onToken('字', i + 1)
+      for (let i = 0; i < 100; i++) callbacks.onSnapshot('字'.repeat(i + 1), i + 1)
       return Promise.resolve('completed' as const)
     })
     mount([{ role: 'assistant', content: '你好' }])
@@ -206,7 +206,7 @@ describe('助手失败后的继续对话', () => {
   it('停止生成会取消服务端任务并保留已经收到的内容', async () => {
     vi.mocked(createAiChatRun).mockResolvedValue({ id: 'stop-run', status: 'pending' })
     vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks, signal) => new Promise((_resolve, reject) => {
-      callbacks.onToken('已经生成', 1)
+      callbacks.onSnapshot('已经生成', 1)
       signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
     }))
     mount([{ role: 'assistant', content: '你好' }])

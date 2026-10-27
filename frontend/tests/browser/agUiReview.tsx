@@ -32,6 +32,7 @@ const tool = {
   started_at: '2026-10-27T03:00:00Z', duration_ms: 120, input_summary: '无参数',
   result_summary: '返回 2 项结果', parameter_names: [], proposal_id: null,
 }
+const { id: toolId, name: toolName, result_summary: toolSummary, ...toolDetails } = tool
 const question = '\n```user-question\n' + JSON.stringify({ id: 'synthetic-question', questions: [{ question: '文章面向谁？', options: [{ label: '入门读者', description: '补充背景', recommended: true }, { label: '专业读者', description: '讨论细节', recommended: false }] }] }) + '\n```'
 const metrics = { output_tokens: 30, token_source: 'actual', output_seconds: 1, tokens_per_second: 30, first_token_seconds: 0.2, total_seconds: 1.2 }
 const billing = { id: 'synthetic-bill', mode: 'free', status: 'settled', charged_amount: '0.00000000', reserved_amount: '0.00000000', currency: 'CNY', provider: 'mimo', kind: 'agent', model: 'mimo-v2.6-flash' }
@@ -51,22 +52,39 @@ window.fetch = async (input, init) => {
     connections++
     const runId = `run-${runNumber}`, messageId = `${runId}:assistant`
     const reconnect = mode === 'reconnect' && connections === 1
+    const showTool = ['full', 'proposal', 'reconnect', 'reset'].includes(mode)
+    const restoredTools = mode === 'reconnect' && connections > 1
+    const snapshotMessages = (content: string, withTools: boolean) => [
+      { id: `${runId}:user`, role: 'user', content: '合成验收问题' },
+      { id: messageId, role: 'assistant', content, toolCalls: withTools ? [{ id: toolId, type: 'function', function: { name: toolName, arguments: '{}' }, metadata: { genesis: toolDetails } }] : [] },
+      ...(withTools ? [{ id: `${runId}:tool:${toolId}`, role: 'tool', toolCallId: toolId, content: toolSummary, metadata: { genesis: toolDetails } }] : []),
+    ]
     let timer: ReturnType<typeof setTimeout> | undefined
     const body = new ReadableStream({ start(controller) {
       const emit = (data: unknown) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(data)}\n\n`))
       emit({ type: 'RUN_STARTED', threadId: 'synthetic-conversation', runId })
-      emit({ type: 'MESSAGES_SNAPSHOT', messages: [{ id: messageId, role: 'assistant', content: mode === 'reconnect' ? '恢复前正文。' : '' }] })
+      emit({ type: 'MESSAGES_SNAPSHOT', messages: snapshotMessages(mode === 'reconnect' ? '恢复前正文。' : '', restoredTools) })
       emit({ type: 'TEXT_MESSAGE_START', messageId, role: 'assistant' })
-      emit({ type: 'STATE_SNAPSHOT', snapshot: { genesis: { sequence: 0, metrics: null, billing: null, proposals: [], tool_calls: [] } } })
+      emit({ type: 'STATE_SNAPSHOT', snapshot: { genesis: { sequence: 0, metrics: null, billing: null, proposals: [] } } })
+      if (showTool && !restoredTools) {
+        emit({ type: 'TOOL_CALL_START', toolCallId: toolId, toolCallName: toolName, parentMessageId: messageId, metadata: { genesis: { ...toolDetails, status: 'running', duration_ms: null } } })
+        emit({ type: 'TOOL_CALL_ARGS', toolCallId: toolId, delta: '{}' })
+        emit({ type: 'TOOL_CALL_END', toolCallId: toolId })
+      }
       timer = setTimeout(() => {
         if (reconnect) { controller.close(); return }
         if (stopped || mode === 'error') { emit({ type: 'RUN_ERROR', message: stopped ? '生成已由用户停止。' : '合成测试：生成失败，可以继续对话。' }); controller.close(); return }
         const content = mode === 'question' && runNumber === 1 ? '请先确认读者方向。' + question
           : mode === 'question' ? '已按你的回答继续。' : mode === 'empty' ? '' : 'AG-UI 正文流已完成。'
         if (content) emit({ type: 'TEXT_MESSAGE_CONTENT', messageId, delta: content })
+        if (showTool && !restoredTools) emit({ type: 'TOOL_CALL_RESULT', toolCallId: toolId, messageId: `${runId}:tool:${toolId}`, role: 'tool', content: toolSummary, metadata: { genesis: toolDetails } })
+        if (mode === 'reset') {
+          emit({ type: 'TEXT_MESSAGE_END', messageId })
+          emit({ type: 'MESSAGES_SNAPSHOT', messages: snapshotMessages('重算后的正文，工具结果仍保留。', true) })
+          emit({ type: 'TEXT_MESSAGE_START', messageId, role: 'assistant' })
+        }
         emit({ type: 'STATE_SNAPSHOT', snapshot: { genesis: { sequence: 1, metrics, billing,
           proposals: mode === 'proposal' ? [{ ...proposal, executed: confirmed }] : [],
-          tool_calls: mode === 'full' || mode === 'proposal' ? [tool] : [],
         } } })
         emit({ type: 'TEXT_MESSAGE_END', messageId })
         emit({ type: 'RUN_FINISHED', threadId: 'synthetic-conversation', runId })

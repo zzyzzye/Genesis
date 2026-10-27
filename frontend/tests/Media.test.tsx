@@ -570,7 +570,7 @@ describe('作品画布', () => {
   })
   it('Enter 发送保留用户原文，并将助手回复作为 Markdown 展示', async () => {
     vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })
-    const chat = vi.spyOn(ai, 'streamAiChatRun').mockImplementation((_token, _id, callbacks) => { callbacks.onToken('**助手标记**', 1); return Promise.resolve('completed') })
+    const chat = vi.spyOn(ai, 'streamAiChatRun').mockImplementation((_token, _id, callbacks) => { callbacks.onSnapshot('**助手标记**', 1); return Promise.resolve('completed') })
     render(<MediaAssistant userId="media-user" attachmentsAllowed page="canvas" projectId="project" selectedNode={null} />)
     fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
     const input = screen.getByRole('textbox', { name: '向镜头搭档提问' })
@@ -584,7 +584,7 @@ describe('作品画布', () => {
     vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })
     const applyPlan = vi.fn<(plan: MediaCanvasPlan) => void>()
     vi.spyOn(ai, 'streamAiChatRun').mockImplementation((_token, _id, callbacks) => {
-      callbacks.onToken('我整理了两个镜头。\n```canvas-plan\n{"title":"雨夜开场","operations":[{"action":"add_video","name":"开场空镜","text":"雨夜街道","duration_seconds":4},{"action":"add_note","text":"雨声先入"}]}\n```', 1)
+      callbacks.onSnapshot('我整理了两个镜头。\n```canvas-plan\n{"title":"雨夜开场","operations":[{"action":"add_video","name":"开场空镜","text":"雨夜街道","duration_seconds":4},{"action":"add_note","text":"雨声先入"}]}\n```', 1)
       return Promise.resolve('completed')
     })
     render(<MediaAssistant userId="media-user" attachmentsAllowed page="canvas" projectId="project" selectedNode={null} onApplyCanvasPlan={applyPlan} />)

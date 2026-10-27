@@ -659,7 +659,6 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
               setMessages(current => current.map((message, index) => index === run.assistantMessageIndex ? { ...message, billing } : message))
             },
             onSnapshot: (content) => { received = content; activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }; markFirstToken(content); queue(); setStreamStatus('正在生成…') },
-            onToken: (content) => { received += content; activeReceivedRef.current = { index: run.assistantMessageIndex, content: received }; markFirstToken(content); queue() },
           }, controller.signal)
           if (cancelled || selection !== selectionVersion.current) return
           if (result === 'completed') {

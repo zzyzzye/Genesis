@@ -60,7 +60,7 @@ export function SvgGenerator() {
           return
         }
         await streamAiChatRun(token!, runId!, {
-          onSnapshot: text => setSource(text), onToken: text => setSource(value => value+text),
+          onSnapshot: text => setSource(text),
         }, controller.signal)
         if (!controller.signal.aborted) timer = setTimeout(() => { void follow() }, 500)
       } catch (reason) {

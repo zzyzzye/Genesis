@@ -6,6 +6,8 @@ from ag_ui.core import (
     AssistantMessage,
     BaseEvent,
     EventType,
+    FunctionCall,
+    Message,
     MessagesSnapshotEvent,
     RunErrorEvent,
     RunFinishedEvent,
@@ -14,14 +16,43 @@ from ag_ui.core import (
     TextMessageContentEvent,
     TextMessageEndEvent,
     TextMessageStartEvent,
+    ToolCall,
+    ToolCallArgsEvent,
     ToolCallEndEvent,
     ToolCallResultEvent,
     ToolCallStartEvent,
+    ToolMessage,
+    UserMessage,
 )
 from ag_ui.encoder import EventEncoder
 
+from genesis_api.agent.tool_history import AgentToolCall
 from genesis_api.ai.models import AiChatRunStatus
-from genesis_api.ai.schemas import AiChatRunSnapshot
+from genesis_api.ai.schemas import AiChatRunSnapshot, AiConversationMessage
+
+
+def _tool_metadata(call: AgentToolCall) -> dict[str, object]:
+    """仅补充标准工具字段以外的安全展示信息，不包含参数值。"""
+    return {"genesis": call.model_dump(
+        mode="json", exclude={"id", "name", "result_summary"},
+    )}
+
+
+def _run_messages(run_id: str, content: str, calls: list[AgentToolCall]) -> list[Message]:
+    """快照和增量共用稳定 ID；工具参数使用空对象代替原始输入。"""
+    return [
+        AssistantMessage(
+            id=f"{run_id}:assistant", content=content,
+            tool_calls=[ToolCall(
+                id=str(call.id), function=FunctionCall(name=call.name, arguments="{}"),
+                metadata=_tool_metadata(call),
+            ) for call in calls],
+        ),
+        *[ToolMessage(
+            id=f"{run_id}:tool:{call.id}", tool_call_id=str(call.id),
+            content=call.result_summary or call.label, metadata=_tool_metadata(call),
+        ) for call in calls if call.status != "running"],
+    ]
 
 
 class AgUiRunStream:
@@ -39,11 +70,30 @@ class AgUiRunStream:
         self._state: dict[str, object] | None = None
         self._tools: set[str] = set()
         self._results: set[str] = set()
+        self._history: list[AiConversationMessage] = []
         self._encoder = EventEncoder()
 
     def encode(self, event: BaseEvent) -> str:
         """复用官方编码器，所有输出均为经过模型校验的 AG-UI 事件。"""
         return str(self._encoder.encode(event))
+
+    def _messages(self, snapshot: AiChatRunSnapshot) -> list[Message]:
+        """复用已授权会话历史，当前任务以最新快照覆盖，避免重算丢失工具。"""
+        messages: list[Message] = []
+        current_added = False
+        for index, item in enumerate(self._history):
+            run_id = str(item.run_id)
+            if item.role == "user":
+                messages.append(UserMessage(id=f"{run_id}:user:{index}", content=item.content))
+            elif item.role == "assistant":
+                if run_id == self.run_id:
+                    messages.extend(_run_messages(run_id, snapshot.content, snapshot.tool_calls))
+                    current_added = True
+                else:
+                    messages.extend(_run_messages(run_id, item.content, item.tool_calls))
+        if not current_added:
+            messages.extend(_run_messages(self.run_id, snapshot.content, snapshot.tool_calls))
+        return messages
 
     def project(self, snapshot: AiChatRunSnapshot) -> list[BaseEvent]:
         """从展示快照生成正文、工具与业务状态事件。
@@ -58,6 +108,7 @@ class AgUiRunStream:
         thread_id = str(snapshot.conversation_id or self.run_id)
         metadata = {"genesis": {"sequence": snapshot.sequence}}
         if self._content is None:
+            self._history = snapshot.history
             events.append(RunStartedEvent(
                 type=EventType.RUN_STARTED, thread_id=thread_id, run_id=self.run_id,
             ))
@@ -69,14 +120,16 @@ class AgUiRunStream:
                 ))
             events.append(MessagesSnapshotEvent(
                 type=EventType.MESSAGES_SNAPSHOT,
-                messages=[AssistantMessage(
-                    id=self.message_id, role="assistant", content=snapshot.content,
-                )],
+                messages=self._messages(snapshot),
                 metadata=metadata,
             ))
             events.append(TextMessageStartEvent(
                 type=EventType.TEXT_MESSAGE_START, message_id=self.message_id, role="assistant",
             ))
+            self._tools = {str(call.id) for call in snapshot.tool_calls}
+            self._results = {
+                str(call.id) for call in snapshot.tool_calls if call.status != "running"
+            }
         elif snapshot.content != self._content:
             events.append(TextMessageContentEvent(
                 type=EventType.TEXT_MESSAGE_CONTENT, message_id=self.message_id,
@@ -90,7 +143,6 @@ class AgUiRunStream:
             "metrics": snapshot.metrics.model_dump(mode="json") if snapshot.metrics else None,
             "billing": snapshot.billing,
             "proposals": [item.model_dump(mode="json") for item in snapshot.proposals],
-            "tool_calls": [item.model_dump(mode="json") for item in snapshot.tool_calls],
         }
         if state != self._state:
             events.append(StateSnapshotEvent(
@@ -105,6 +157,10 @@ class AgUiRunStream:
                     ToolCallStartEvent(
                         type=EventType.TOOL_CALL_START, tool_call_id=call_id,
                         tool_call_name=call.name, parent_message_id=self.message_id,
+                        metadata=_tool_metadata(call),
+                    ),
+                    ToolCallArgsEvent(
+                        type=EventType.TOOL_CALL_ARGS, tool_call_id=call_id, delta="{}",
                     ),
                     # END 表示参数流结束；工具是否完成以 RESULT 和展示状态为准。
                     ToolCallEndEvent(type=EventType.TOOL_CALL_END, tool_call_id=call_id),
@@ -114,7 +170,7 @@ class AgUiRunStream:
                 events.append(ToolCallResultEvent(
                     type=EventType.TOOL_CALL_RESULT, tool_call_id=call_id,
                     message_id=f"{self.run_id}:tool:{call_id}", role="tool",
-                    content=call.result_summary or call.label,
+                    content=call.result_summary or call.label, metadata=_tool_metadata(call),
                 ))
                 self._results.add(call_id)
 

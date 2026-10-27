@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.tool_history import AgentToolCall, ToolCallHistory
-from genesis_api.ai.conversations import prepare_conversation_run
+from genesis_api.ai.conversations import conversation_detail, prepare_conversation_run
 from genesis_api.ai.models import AiChatRun, AiChatRunStatus, AiConversation
 from genesis_api.ai.schemas import (
     AiChatRequest,
@@ -156,6 +156,7 @@ def get_ai_chat_run_snapshot(
     *,
     run_id: UUID,
     user_id: UUID,
+    include_history: bool = False,
 ) -> AiChatRunSnapshot | None:
     """按用户与任务 ID 读取输出快照，不返回内部请求载荷。
 
@@ -163,6 +164,7 @@ def get_ai_chat_run_snapshot(
         session: 查询使用的数据库会话。
         run_id: 目标任务 UUID。
         user_id: 服务端认证的用户 UUID。
+        include_history: 首次订阅时读取安全会话历史；普通轮询不重复加载。
 
     Returns:
         任务文本、状态与修订序号；不存在或不属于该用户时返回 None。
@@ -173,6 +175,13 @@ def get_ai_chat_run_snapshot(
     )
     if run is None:
         return None
+    history = []
+    if include_history and run.conversation_id is not None:
+        conversation = session.scalar(select(AiConversation).where(
+            AiConversation.id == run.conversation_id, AiConversation.user_id == user_id,
+        ))
+        if conversation is not None:
+            history = conversation_detail(session, conversation).messages
     return AiChatRunSnapshot(
         id=run.id,
         conversation_id=run.conversation_id,
@@ -186,6 +195,7 @@ def get_ai_chat_run_snapshot(
         if run.generation_metrics is not None
         else None,
         billing=billing.source_billing(session, run.id),
+        history=history,
     )
 
 

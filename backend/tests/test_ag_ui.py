@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from ag_ui.core import EventType
@@ -13,7 +13,7 @@ from fastapi import Request
 from genesis_api.agent.tool_history import AgentToolCall
 from genesis_api.ai.ag_ui import AgUiRunStream
 from genesis_api.ai.models import AiChatRunStatus
-from genesis_api.ai.schemas import AiChatRunSnapshot, AiGenerationMetrics
+from genesis_api.ai.schemas import AiChatRunSnapshot, AiConversationMessage, AiGenerationMetrics
 from genesis_api.api.routes import ai as ai_route
 
 
@@ -66,7 +66,10 @@ def test_projection_emits_only_safe_tool_events_once() -> None:
     )
     stream = AgUiRunStream(str(run_id))
     events = stream.project(snapshot)
-    assert [e.type for e in events[-2:]] == [EventType.TOOL_CALL_START, EventType.TOOL_CALL_END]
+    message = events[1].model_dump(by_alias=True)["messages"][0]
+    assert message["toolCalls"][0]["function"]["arguments"] == "{}"
+    assert message["toolCalls"][0]["metadata"]["genesis"]["status"] == "running"
+    assert "tool_calls" not in events[-1].model_dump()["snapshot"]["genesis"]
     assert not any(e.type == EventType.TOOL_CALL_ARGS for e in events)
     finished_call = call.model_copy(update={
         "status": "awaiting_confirmation", "result_summary": None,
@@ -76,6 +79,54 @@ def test_projection_emits_only_safe_tool_events_once() -> None:
     assert events[-1].type == EventType.TOOL_CALL_RESULT
     assert events[-1].model_dump()["content"] == "读取文件"
     assert stream.project(updated) == []
+
+    # 后续工具以增量出现，初始快照中的工具不重复发送 START。
+    second_call = call.model_copy(update={"id": uuid4()})
+    events = stream.project(updated.model_copy(update={"tool_calls": [finished_call, second_call]}))
+    assert [e.type for e in events] == [
+        EventType.TOOL_CALL_START, EventType.TOOL_CALL_ARGS, EventType.TOOL_CALL_END,
+    ]
+    assert events[1].model_dump()["delta"] == "{}"
+    assert events[0].model_dump()["metadata"]["genesis"]["label"] == "读取文件"
+
+
+def test_full_conversation_snapshot_and_reset_preserve_tool_messages() -> None:
+    """会话快照完整且只含安全展示内容；重算和重连保留工具结果。"""
+    previous, current = uuid4(), uuid4()
+    call = AgentToolCall(
+        id=uuid4(), name="read_file", label="读取文件", status="succeeded",
+        started_at="2026-10-27T00:00:00Z", result_summary="已读取文档摘要",
+    )
+    history = [
+        AiConversationMessage(
+            role="user", content="上一轮问题", run_id=previous, status="completed",
+        ),
+        AiConversationMessage(
+            role="assistant", content="上一轮回复", run_id=previous, status="completed",
+        ),
+        AiConversationMessage(role="user", content="继续", run_id=current, status="running"),
+        AiConversationMessage(
+            role="assistant", content="旧正文", run_id=current, status="running", tool_calls=[call],
+        ),
+    ]
+    snapshot = AiChatRunSnapshot(
+        id=current, status="running", content="最新正文", sequence=4,
+        tool_calls=[call], history=history,
+    )
+    stream = AgUiRunStream(str(current))
+    initial = stream.project(snapshot)[1].model_dump(by_alias=True)["messages"]
+    assert [m["role"] for m in initial] == ["user", "assistant", "user", "assistant", "tool"]
+    assert initial[-2]["content"] == "最新正文"
+    assert initial[-1]["content"] == "已读取文档摘要"
+    assert initial[-1]["toolCallId"] == initial[-2]["toolCalls"][0]["id"]
+    reset = snapshot.model_copy(update={"content": "重算", "sequence": 5, "history": []})
+    rebuilt = stream.project(reset)[1].model_dump(by_alias=True)["messages"]
+    assert rebuilt[:-2] == initial[:-2]
+    assert rebuilt[-1] == initial[-1]
+    assert rebuilt[-2]["toolCalls"] == initial[-2]["toolCalls"]
+    assert "history" not in snapshot.model_dump()
+    replay = AgUiRunStream(str(current)).project(snapshot)[1].model_dump(by_alias=True)
+    assert replay["messages"] == initial
 
 
 @pytest.mark.anyio
@@ -87,7 +138,15 @@ async def test_subscription_missing_disconnect_and_heartbeat(
     run_id, user_id = uuid4(), uuid4()
     snapshot = AiChatRunSnapshot(id=run_id, status="running", content="", sequence=0)
     snapshots = iter([None if missing else snapshot, None])
-    monkeypatch.setattr(ai_route, "_load_snapshot", lambda *_: next(snapshots))
+    history_requests = []
+
+    def load_snapshot(
+        _run_id: UUID, _user_id: UUID, include_history: bool,
+    ) -> AiChatRunSnapshot | None:
+        history_requests.append(include_history)
+        return next(snapshots)
+
+    monkeypatch.setattr(ai_route, "_load_snapshot", load_snapshot)
     moments = iter([0, 11])
     monkeypatch.setattr(ai_route, "monotonic", lambda: next(moments))
 
@@ -107,6 +166,7 @@ async def test_subscription_missing_disconnect_and_heartbeat(
         assert '"type":"RUN_ERROR"' not in body
     else:
         assert ": keep-alive\n\n" in body
+    assert history_requests == ([True] if missing or disconnected else [True, False])
 
 
 @pytest.mark.anyio

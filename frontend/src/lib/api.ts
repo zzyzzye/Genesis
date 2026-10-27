@@ -691,16 +691,18 @@ export async function streamAiChatRun(
   handlers: AiRunStreamHandlers,
   signal?: AbortSignal,
 ): Promise<'completed' | 'disconnected'> {
-  const response = await authFetch(`${apiBaseUrl}/ai/chat/runs/${encodeURIComponent(runId)}/stream`, {
-    headers: { ...authHeaders(token), Accept: 'text/event-stream' },
-    signal,
-  })
-  handleStudioUnauthorized(response.status, authHeaders(token))
-  if (!response.ok || !response.body) {
-    throw new AiChatRunTerminalError(`AI 续传失败：HTTP ${response.status}`)
-  }
-
-  return consumeAgUiStream(response, runId, handlers, signal)
+  return consumeAgUiStream({
+    url: `${apiBaseUrl}/ai/chat/runs/${encodeURIComponent(runId)}/stream`,
+    headers: Object.fromEntries(new Headers(authHeaders(token)).entries()),
+    fetch: async (url, init) => {
+      const response = await authFetch(url, init)
+      handleStudioUnauthorized(response.status, authHeaders(token))
+      if (!response.ok || !response.body) {
+        throw new AiChatRunTerminalError(`AI 续传失败：HTTP ${response.status}`)
+      }
+      return response
+    },
+  }, runId, handlers, signal)
 }
 
 export async function streamAiChat(
@@ -715,10 +717,6 @@ export async function streamAiChat(
       const delta = content.startsWith(renderedContent) ? content.slice(renderedContent.length) : content
       renderedContent = content
       if (delta) onToken(delta)
-    },
-    onToken: (content) => {
-      renderedContent += content
-      onToken(content)
     },
   })
   if (result === 'disconnected') throw new Error('AI 流式连接意外中断')

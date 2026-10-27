@@ -22,10 +22,10 @@ it('影音澄清卡片自定义回答失败后可重试，成功沿用对话并�
   sessionStorage.clear()
   vi.mocked(createAiChatRun).mockResolvedValueOnce({ id: 'question-run', status: 'pending' }).mockRejectedValueOnce(new Error('模拟网络失败')).mockResolvedValueOnce({ id: 'answer-run', status: 'pending' })
   vi.mocked(streamAiChatRun).mockImplementationOnce((_token, _id, callbacks) => {
-    callbacks.onToken(block, 1)
+    callbacks.onSnapshot(block, 1)
     return Promise.resolve('completed')
   }).mockImplementationOnce((_token, _id, callbacks) => {
-    callbacks.onToken('按纪录片方向继续。', 1)
+    callbacks.onSnapshot('按纪录片方向继续。', 1)
     return Promise.resolve('completed')
   })
   render(<MediaAssistant userId="media-user" attachmentsAllowed page="projects" selectedNode={null} />)

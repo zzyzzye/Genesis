@@ -26,7 +26,7 @@ afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); vi.cl
 
 it('影音发送复用持久化任务与账户会话，停止生成保留已收到的正文', async () => {
   vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
-    callbacks.onToken('先从雨夜空镜开始。', 1)
+    callbacks.onSnapshot('先从雨夜空镜开始。', 1)
     return new Promise(() => undefined)
   })
   render(<MediaAssistant {...props} />)

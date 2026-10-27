@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
@@ -96,6 +97,15 @@ async def test_tool_history_persists_updates_and_closes_unfinished_calls() -> No
         session.commit()
         history = conversation_detail(session, conversation)
         assert history.messages[-1].tool_calls == snapshot.tool_calls
+        assert not snapshot.history
+        subscription = get_ai_chat_run_snapshot(
+            session, run_id=created.id, user_id=user_id, include_history=True,
+        )
+        assert subscription is not None and subscription.history == history.messages
+        assert "history" not in subscription.model_dump()
+        assert get_ai_chat_run_snapshot(
+            session, run_id=created.id, user_id=uuid4(), include_history=True,
+        ) is None
 
 
 @pytest.mark.anyio
@@ -307,8 +317,11 @@ def test_provider_model_selection_and_request_persistence() -> None:
 
 
 @pytest.mark.anyio
-async def test_startup_recovers_interrupted_runs() -> None:
-    session_factory = build_session_factory()
+async def test_startup_recovers_interrupted_runs(tmp_path: Path) -> None:
+    # 恢复会并行读取标题与写入任务；独立连接避免 StaticPool 的读会话回滚其他事务。
+    engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'recovery.db'}")
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker[Session](bind=engine, expire_on_commit=False)
     user_id = uuid4()
     run_id = uuid4()
     with session_factory() as session:
@@ -353,6 +366,7 @@ async def test_startup_recovers_interrupted_runs() -> None:
         assert run.error is None
         assert run.sequence == 2
     await manager.shutdown()
+    engine.dispose()
 
 
 @pytest.mark.anyio
@@ -561,8 +575,11 @@ async def test_stream_response_replays_snapshot_before_live_delta(
     states = [e["snapshot"]["genesis"] for e in events if e["type"] == "STATE_SNAPSHOT"]
     assert len(states) == 2
     assert states[0]["proposals"][0]["proposal_id"] == str(proposal.proposal_id)
-    assert [e["type"] for e in events].count("TOOL_CALL_START") == 1
-    assert [e["type"] for e in events].count("TOOL_CALL_RESULT") == 1
+    assert [e["type"] for e in events].count("TOOL_CALL_START") == 0
+    assert [e["type"] for e in events].count("TOOL_CALL_RESULT") == 0
+    assert events[1]["messages"][0]["toolCalls"][0]["id"] == str(tool_call.id)
+    assert events[1]["messages"][1]["toolCallId"] == str(tool_call.id)
+    assert all("tool_calls" not in state for state in states)
     assert str(tool_call.id) in body
     assert states[-1]["proposals"][0]["proposal_token"] == "test-proposal"
 
