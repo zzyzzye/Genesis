@@ -11,7 +11,7 @@ from genesis_api.billing.schemas import ModelPricePreview, TokenPriceTier
 _NUMBER = r"(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
 _VARIABLE = r"(?:cc1h|cr|cc|p|c)"
 _TIER = r'tier\(\s*"(?P<name>[^"\\]{1,60})"\s*,\s*(?P<terms>[^()]+)\)'
-_BRANCH = re.compile(r"\s*len\s*<=\s*(\d+)\s*\?\s*(.+)\s*:\s*(.+)\s*")
+_BRANCH = re.compile(r"\s*len\s*(<=|<)\s*(\d+)\s*\?\s*(.+)\s*:\s*(.+)\s*")
 
 
 class UnsupportedPricing(ValueError):
@@ -67,12 +67,13 @@ def _expression_tiers(expression: object) -> list[tuple[str, str | None, dict[st
         raise UnsupportedPricing
     branch = _BRANCH.fullmatch(expression)
     if branch:
-        threshold = int(branch[1])
+        threshold = int(branch[2])
         if threshold < 1:
             raise UnsupportedPricing
+        lower, upper = ("≤", ">") if branch[1] == "<=" else ("<", "≥")
         return [
-            _linear_tier(branch[2], f"上下文 ≤ {threshold:,} Token"),
-            _linear_tier(branch[3], f"上下文 > {threshold:,} Token"),
+            _linear_tier(branch[3], f"上下文 {lower} {threshold:,} Token"),
+            _linear_tier(branch[4], f"上下文 {upper} {threshold:,} Token"),
         ]
     return [_linear_tier(expression, None)]
 

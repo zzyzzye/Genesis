@@ -70,6 +70,29 @@ def test_luna_tiers_apply_group_ratio_without_rounding_token_rates() -> None:
     assert result.tiers[1].condition == "上下文 > 272,000 Token"
 
 
+def test_grok_tiers_keep_strict_threshold_and_group_ratio() -> None:
+    """20 万边界属于长档，不能把严格小于显示成小于等于。"""
+    result = preview(
+        {
+            "billing_mode": "tiered_expr",
+            "billing_expr": (
+                'len < 200000 ? tier("base", p * 2 + c * 6 + cr * 0.5)'
+                ' : tier("long", p * 4 + c * 12 + cr * 1)'
+            ),
+        },
+        "0.02",
+    )
+    assert result.status == "available"
+    assert [(tier.input, tier.output, tier.cache_read) for tier in result.tiers] == [
+        ("0.04", "0.12", "0.01"),
+        ("0.08", "0.24", "0.02"),
+    ]
+    assert [tier.condition for tier in result.tiers] == [
+        "上下文 < 200,000 Token",
+        "上下文 ≥ 200,000 Token",
+    ]
+
+
 def test_cache_terms_do_not_overlap_and_small_prices_keep_precision() -> None:
     result = preview(
         {
