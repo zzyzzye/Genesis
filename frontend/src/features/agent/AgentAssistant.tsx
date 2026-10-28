@@ -194,10 +194,10 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
       <span><Timer aria-hidden="true" />输出 <span className="studio-assistant__duration">{firstToken ? formatDuration(end - firstToken) : '—'}</span></span>
       <span className="studio-assistant__timing-total"><Clock3 aria-hidden="true" />总计 <span className="studio-assistant__duration">{formatDuration(end - timing.startedAt)}</span></span>
     </>}
-    {showMetrics && <span className="studio-assistant__speed" title="平均输出速度 = 输出 token 数 ÷ 界面显示的输出时长（两位小数）。汇总整条回复所有有正文输出的模型调用，用量来自供应商并扣除明确报告的推理 token，可能包含工具参数；输出时长包含中途工具调用与等待。任一调用缺少真实用量时标记为估算；单片段或缺少耗时时速度不可用。">
+    {showMetrics && count != null && <span className="studio-assistant__speed" title="平均输出速度 = 输出 token 数 ÷ 界面显示的输出时长（两位小数）。汇总整条回复所有有正文输出的模型调用，用量来自供应商并扣除明确报告的推理 token，可能包含工具参数；输出时长包含中途工具调用与等待。任一调用缺少真实用量时标记为估算；单片段或缺少耗时时不展示速度。">
       <Gauge aria-hidden="true" />
-      {count !== null && count !== undefined ? `${count.toLocaleString('zh-CN')} tokens${suffix} · ` : ''}
-      {speed !== null && Number.isFinite(speed) ? `${speed.toFixed(1)} tokens/s${suffix}` : `tokens/s ${streaming ? '等待统计' : '不可用'}`}
+      {`${count.toLocaleString('zh-CN')} tokens${suffix}`}
+      {speed !== null && Number.isFinite(speed) ? ` · ${speed.toFixed(1)} tokens/s${suffix}` : ''}
     </span>}
   </div>
 })
