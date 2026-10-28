@@ -29,6 +29,20 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); vi.clearAllMocks() })
 
+it('历史回复包含付费账务信息时，对话仍不展示结算状态和账单入口', async () => {
+  sessionStorage.setItem('genesis-media-ai-conversation:creator', JSON.stringify({ isOpen: true, conversationId: saved.id }))
+  vi.mocked(getAiConversation).mockResolvedValue({
+    ...saved,
+    messages: [{ role: 'assistant', content: '已完成镜头规划。', run_id: 'paid-run', status: 'completed', error: null,
+      billing: { id: 'paid-operation', kind: 'agent', provider: 'openai', model: 'test', mode: 'paid', status: 'pending', reserved_amount: '0', charged_amount: '0', cost_amount: null, currency: 'CNY', note: '', expires_at: '' },
+    }],
+  })
+  render(<MediaAssistant {...props} />)
+  await screen.findByText('已完成镜头规划。')
+  expect(screen.queryByText('待结算')).not.toBeInTheDocument()
+  expect(screen.queryByText('查看账单')).not.toBeInTheDocument()
+})
+
 it('影音附件使用账户上传接口，失败可重试并在发送时提交附件标识', async () => {
   const item = { id: 'attachment', name: '分镜.txt', size: 5, mime_type: 'text/plain', kind: 'file' as const, parent_id: null, is_public: false, created_at: '', updated_at: '' }
   vi.mocked(uploadAttachment).mockRejectedValueOnce(new Error('网络中断')).mockResolvedValue(item)

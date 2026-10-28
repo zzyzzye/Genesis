@@ -65,7 +65,6 @@ import { questionAnswers, splitAgentQuestion } from './questionProtocol'
 import { modelDisplayName } from './modelDisplayName'
 import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from './useReasoningEffort'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
-import { BillingStatus } from '../billing/BillingControls'
 import { useBillingQuote } from '../billing/useBillingQuote'
 import type { BillingOperation } from '../billing/api'
 import type { AiChatRequest } from '../../lib/api'
@@ -928,7 +927,6 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
                 if (message.role === 'user' && previousQuestion && questionAnswers(previousQuestion, message.content)) return null
                 return (
                 <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={(message.role === 'assistant' ? splitAgentQuestion(message.content).request?.id : null) ?? `${conversationId ?? 'new'}-${message.role}-${index}`}>
-                  {message.role === 'assistant' && <BillingStatus initial={message.billing} token={getStoredAuthToken(authKey) ?? undefined} />}
                   {message.role === 'assistant' ? <><MarkdownMessage {...message} {...(media ? { content: message.content.replace(/```canvas-plan[\s\S]*?(?:```|$)/ig, '').trim() } : {})} targetPost={editor} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} onAnswer={(answer) => { void sendMessage(answer) }} questionDisabled={isBusy || conversationLoading} questionAnswer={messages.slice(index + 1).find((item) => item.role === 'user')?.content} />{media?.renderResponse(message.content, `${conversationId ?? 'new'}:${index}`, isBusy)}</> : <div className="blog-agent-user-content">{message.content && <p>{message.content}</p>}{!!message.attachments?.length && <BlogMessageAttachments items={message.attachments} authKey={authKey} />}</div>}
                 </div>
               )})}
