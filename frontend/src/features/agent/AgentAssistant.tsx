@@ -154,9 +154,9 @@ function displaySeconds(seconds: number) {
 
 function formatDuration(milliseconds: number) {
   const seconds = displaySeconds(milliseconds / 1000)
-  if (seconds < 60) return `${seconds.toFixed(2)} 秒`
+  if (seconds < 60) return `${seconds.toFixed(2)}s`
   const minutes = Math.floor(seconds / 60)
-  return `${minutes} 分 ${(seconds % 60).toFixed(2)} 秒`
+  return `${minutes}m${(seconds % 60).toFixed(2)}s`
 }
 
 const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming, showMetrics, operationOnly = false }: { timing?: AssistantTiming; metrics?: AiGenerationMetrics | null; streaming: boolean; showMetrics: boolean; operationOnly?: boolean }) {
@@ -174,7 +174,7 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
   const seconds = metrics?.output_seconds == null ? null : displaySeconds(metrics.output_seconds)
   // 用界面同精度的输出时长计算，避免用户手算时与隐藏精度的结果不一致。
   const speed = metrics?.tokens_per_second != null && count != null && seconds !== null && seconds > 0 ? count / seconds : null
-  const suffix = source === 'estimated' ? '（估算）' : ''
+  const usageTitle = source === 'estimated' ? 'Token 数与速度为估算值' : 'Token 数来自供应商用量；速度按输出时长计算'
   const waiting = streaming && !firstToken && metrics?.first_token_seconds == null
   if (operationOnly && !streaming) {
     const total = metrics ? metrics.total_seconds * 1000 : timing ? end - timing.startedAt : null
@@ -194,10 +194,10 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
       <span><Timer aria-hidden="true" />输出 <span className="studio-assistant__duration">{firstToken ? formatDuration(end - firstToken) : '—'}</span></span>
       <span className="studio-assistant__timing-total"><Clock3 aria-hidden="true" />总计 <span className="studio-assistant__duration">{formatDuration(end - timing.startedAt)}</span></span>
     </>}
-    {showMetrics && count != null && <span className="studio-assistant__speed" title="平均输出速度 = 输出 token 数 ÷ 界面显示的输出时长（两位小数）。汇总整条回复所有有正文输出的模型调用，用量来自供应商并扣除明确报告的推理 token，可能包含工具参数；输出时长包含中途工具调用与等待。任一调用缺少真实用量时标记为估算；单片段或缺少耗时时不展示速度。">
+    {showMetrics && count != null && <span className="studio-assistant__speed" title={usageTitle}>
       <Gauge aria-hidden="true" />
-      {`${count.toLocaleString('zh-CN')} tokens${suffix}`}
-      {speed !== null && Number.isFinite(speed) ? ` · ${speed.toFixed(1)} tokens/s${suffix}` : ''}
+      {`${count.toLocaleString('zh-CN')} tok`}
+      {speed !== null && Number.isFinite(speed) ? ` · ${Number(speed.toFixed(1))} tok/s` : ''}
     </span>}
   </div>
 })
