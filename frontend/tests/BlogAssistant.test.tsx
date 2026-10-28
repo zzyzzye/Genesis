@@ -44,7 +44,7 @@ describe('助手失败后的继续对话', () => {
     mount([{ role: 'assistant', content: '你好' }])
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '查看文章' } })
     fireEvent.click(screen.getByRole('button', { name: '发送消息' }))
-    expect(await screen.findByText('调用了 1 个工具')).toBeInTheDocument()
+    expect(await screen.findByText('处理记录（1）')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('全部完成')).toBeInTheDocument())
     const stored = JSON.parse(sessionStorage.getItem(sessionKey) ?? '{}') as { conversationId?: string; messages?: unknown }
     expect(stored.conversationId).toBe('conversation-1')
@@ -57,8 +57,8 @@ describe('助手失败后的继续对话', () => {
     })
     render(<BlogAssistant page={page} editor={null} />)
     await screen.findByText('服务器保存的结果')
-    expect(screen.getByText('调用了 1 个工具')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('调用了 1 个工具'))
+    expect(screen.getByText('处理记录（1）')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('处理记录（1）'))
     expect(screen.getAllByText('列出文章')).toHaveLength(1)
   })
 

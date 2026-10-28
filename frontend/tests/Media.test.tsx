@@ -593,6 +593,9 @@ describe('作品画布', () => {
     fireEvent.change(input, { target: { value: '帮我添加雨夜开场分镜' } })
     fireEvent.keyDown(input, { key: 'Enter' })
     const apply = await screen.findByRole('button', { name: '应用到画布' })
+    const response = apply.closest('.studio-assistant__response')!
+    expect(response).toContainElement(screen.getByText('我整理了两个镜头。'))
+    expect(response.lastElementChild).toHaveClass('studio-assistant__timing')
     expect(applyPlan).not.toHaveBeenCalled()
     fireEvent.click(apply)
     const applied = applyPlan.mock.calls[0]?.[0]

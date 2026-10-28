@@ -202,7 +202,7 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
   </div>
 })
 
-const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, timing, metrics, proposals, executedProposals, tool_calls, index, onConfirm, confirming, streaming, onProgress, onAnswer, questionDisabled, questionAnswer, targetPost }: AssistantMessage & { index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void; onAnswer: (answer: string) => void; questionDisabled: boolean; questionAnswer?: string; targetPost: AssistantEditorContext | null }) {
+const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, timing, metrics, proposals, executedProposals, tool_calls, index, onConfirm, confirming, streaming, onProgress, onAnswer, questionDisabled, questionAnswer, targetPost, response }: AssistantMessage & { index: number; onConfirm: (index: number, action: AiActionProposal) => Promise<void>; confirming: boolean; streaming: boolean; onProgress: () => void; onAnswer: (answer: string) => void; questionDisabled: boolean; questionAnswer?: string; targetPost: AssistantEditorContext | null; response?: ReactNode }) {
   const legacyAction = streaming ? null : parsePendingAction(content)
   const actions = proposals?.length ? proposals : legacyAction ? [legacyAction] : []
   const operationOnly = (actions.length > 0 || Boolean(tool_calls?.length)) && !timing?.firstTokenAt && metrics?.first_token_seconds == null
@@ -214,6 +214,8 @@ const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, 
     {!streaming && !error && status === 'completed' && !content.trim() && !actions.length && !tool_calls?.length && <p className="studio-assistant__message-status">本轮未返回正文，请重试或切换模型。</p>}
     {!streaming && !error && !content.trim() && actions.length > 0 && <p className="studio-assistant__stream-text">{actions.every(action => action.executed || executedProposals?.includes(action.proposal_id)) ? '操作已执行，结果如下。' : '操作提议已准备，请核对后确认。'}</p>}
     {question.request && <AgentQuestion key={question.request.id} request={question.request} disabled={questionDisabled} answered={questionAnswer !== undefined} answerContent={questionAnswer} onAnswer={onAnswer} />}
+    {response}
+    <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} operationOnly={operationOnly} />
     <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} operationOnly={operationOnly} />
     {actions.map((action) => <BlogActionProposal key={action.proposal_id} action={action} targetPost={targetPost} executed={Boolean(action.executed || executedProposals?.includes(action.proposal_id))} busy={confirming} disabled={streaming} onConfirm={() => { void onConfirm(index, action) }} />)}
   </div>
@@ -927,7 +929,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
                 if (message.role === 'user' && previousQuestion && questionAnswers(previousQuestion, message.content)) return null
                 return (
                 <div className={`studio-assistant__message studio-assistant__message--${message.role}`} key={(message.role === 'assistant' ? splitAgentQuestion(message.content).request?.id : null) ?? `${conversationId ?? 'new'}-${message.role}-${index}`}>
-                  {message.role === 'assistant' ? <><MarkdownMessage {...message} {...(media ? { content: message.content.replace(/```canvas-plan[\s\S]*?(?:```|$)/ig, '').trim() } : {})} targetPost={editor} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} onAnswer={(answer) => { void sendMessage(answer) }} questionDisabled={isBusy || conversationLoading} questionAnswer={messages.slice(index + 1).find((item) => item.role === 'user')?.content} />{media?.renderResponse(message.content, `${conversationId ?? 'new'}:${index}`, isBusy)}</> : <div className="blog-agent-user-content">{message.content && <p>{message.content}</p>}{!!message.attachments?.length && <BlogMessageAttachments items={message.attachments} authKey={authKey} />}</div>}
+                  {message.role === 'assistant' ? <MarkdownMessage {...message} {...(media ? { content: message.content.replace(/```canvas-plan[\s\S]*?(?:```|$)/ig, '').trim() } : {})} targetPost={editor} index={index} onConfirm={handleConfirmAction} confirming={confirmingAction === index} streaming={activeRun?.assistantMessageIndex === index || (isStarting && index === messages.length - 1)} onProgress={followOutput} onAnswer={(answer) => { void sendMessage(answer) }} questionDisabled={isBusy || conversationLoading} questionAnswer={messages.slice(index + 1).find((item) => item.role === 'user')?.content} response={media?.renderResponse(message.content, `${conversationId ?? 'new'}:${index}`, isBusy)} /> : <div className="blog-agent-user-content">{message.content && <p>{message.content}</p>}{!!message.attachments?.length && <BlogMessageAttachments items={message.attachments} authKey={authKey} />}</div>}
                 </div>
               )})}
             </div>

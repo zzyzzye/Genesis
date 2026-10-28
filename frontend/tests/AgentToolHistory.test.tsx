@@ -10,18 +10,17 @@ const call: AiToolCall = {
 }
 
 describe('工具调用历史', () => {
-  it('默认一行，展开两级详情后可收起，不隐藏后续正文', () => {
+  it('默认一行，展开仅显示业务动作与状态，不展示调试字段', () => {
     render(<><AgentToolHistory calls={[call]} /><p>助手正文</p></>)
-    const summary = screen.getByText('调用了 1 个工具').closest('summary')!
+    const summary = screen.getByText('处理记录（1）').closest('summary')!
     const history = summary.parentElement as HTMLDetailsElement
     expect(history.open).toBe(false)
     fireEvent.click(summary)
     expect(history.open).toBe(true)
-    const item = screen.getByText('读取文章').closest('summary')!
-    fireEvent.click(item)
-    expect((item.parentElement as HTMLDetailsElement).open).toBe(true)
-    expect(screen.getByText('post_id')).toBeVisible()
-    expect(screen.getByText('返回 1 项结果')).toBeVisible()
+    expect(screen.getByText('读取文章')).toBeVisible()
+    expect(screen.queryByText('post_id')).not.toBeInTheDocument()
+    expect(screen.queryByText('get_post')).not.toBeInTheDocument()
+    expect(screen.queryByText('返回 1 项结果')).not.toBeInTheDocument()
     expect(screen.getByText('助手正文')).toBeVisible()
     fireEvent.click(summary)
     expect(history.open).toBe(false)
@@ -54,6 +53,14 @@ describe('工具调用历史', () => {
   it('旧对话没有记录时不显示空入口', () => {
     const { container } = render(<AgentToolHistory calls={[]} />)
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('澄清卡片不重复显示成功的提问工具记录，失败仍可见', () => {
+    const question = { ...call, name: 'ask_user_question', label: '请求补充信息' }
+    const { container, rerender } = render(<AgentToolHistory calls={[question]} />)
+    expect(container).toBeEmptyDOMElement()
+    rerender(<AgentToolHistory calls={[{ ...question, status: 'failed' }]} />)
+    expect(screen.getByText('1 项失败')).toBeInTheDocument()
   })
 
   it('单个工具运行时显示执行中，不误报全部完成', () => {
