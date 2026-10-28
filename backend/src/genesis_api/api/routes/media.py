@@ -4,13 +4,15 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import delete, func, select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
+from genesis_api.api.routes.blog_attachments import private_file, upload_file
 from genesis_api.api.routes.media_image import router as image_router
 from genesis_api.api.routes.media_video import router as video_router
+from genesis_api.blog.attachments import AttachmentRead
 from genesis_api.core.uploads import copy_upload
 from genesis_api.media import service
 from genesis_api.media.image import result_cache
@@ -32,6 +34,27 @@ from genesis_api.media.schemas import (
 router = APIRouter(prefix="/media", tags=["影音系统"])
 router.include_router(video_router)
 router.include_router(image_router)
+
+
+@router.post("/agent/attachments/files", response_model=AttachmentRead, status_code=201)
+def upload_agent_attachment(
+    file: UploadFile,
+    session: SessionDependency,
+    user: CurrentUserDependency,
+    id: Annotated[UUID, Form()],
+    parent_id: Annotated[UUID | None, Form()] = None,
+    relative_path: Annotated[str | None, Form(max_length=8000)] = None,
+) -> AttachmentRead:
+    """为已登录用户上传私有助手附件，复用存储校验与幂等上传。"""
+    return upload_file(file, session, user, id, parent_id, relative_path)
+
+
+@router.get("/agent/attachments/{item_id}/file")
+def download_agent_attachment(
+    item_id: UUID, session: SessionDependency, user: CurrentUserDependency
+) -> FileResponse:
+    """仅下载当前登录用户拥有的附件，不公开文件。"""
+    return private_file(item_id, session, user)
 
 
 @router.post("/projects/{project_id}/copy-assets/{target_id}", status_code=204)

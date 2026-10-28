@@ -30,8 +30,11 @@ class BlogAgentCapability:
         request: AiChatRequest,
     ) -> tuple[list[dict[str, object]], list[tuple[str, bytes]]]:
         """仅读取已认证请求选择的私有附件，文档解析交给 LangChain Loader。"""
-        if request.actor_id is None or request.actor_role != "owner":
-            raise RuntimeError("读取附件需要博客所有者权限")
+        if request.actor_id is None or not (
+            (request.surface == "media" and request.actor_role in ("owner", "member"))
+            or (request.surface == "studio" and request.actor_role == "owner")
+        ):
+            raise RuntimeError("读取附件需要影音登录权限或博客所有者权限")
         with SessionLocal() as session:
             return attachment_input(session, request.actor_id, request)
 

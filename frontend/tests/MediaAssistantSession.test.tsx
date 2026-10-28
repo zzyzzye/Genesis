@@ -3,6 +3,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { MediaAssistant } from '../src/pages/media/MediaAssistant'
 import { cancelAiChatRun, createAiChatRun, createAiConversation, getAiConversation, listAiConversations, renameAiConversation, streamAiChatRun } from '../src/lib/api'
 import { accountAuthTokenKey, studioAuthTokenKey } from '../src/lib/auth'
+import { uploadAttachment } from '../src/lib/attachments'
+
+vi.mock('../src/lib/attachments', async original => ({
+  ...await original<typeof import('../src/lib/attachments')>(), uploadAttachment: vi.fn(),
+}))
 
 vi.mock('../src/lib/api', async original => ({
   ...await original<typeof import('../src/lib/api')>(),
@@ -23,6 +28,31 @@ beforeEach(() => {
   vi.mocked(getAiConversation).mockResolvedValue({ ...saved, messages: [{ role: 'assistant', content: '保存过的镜头规划', run_id: 'past-run', status: 'completed', error: null }] })
 })
 afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); vi.clearAllMocks() })
+
+it('影音附件使用账户上传接口，失败可重试并在发送时提交附件标识', async () => {
+  const item = { id: 'attachment', name: '分镜.txt', size: 5, mime_type: 'text/plain', kind: 'file' as const, parent_id: null, is_public: false, created_at: '', updated_at: '' }
+  vi.mocked(uploadAttachment).mockRejectedValueOnce(new Error('网络中断')).mockResolvedValue(item)
+  vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
+    callbacks.onSnapshot('已读取分镜。', 1)
+    return Promise.resolve('completed')
+  })
+  render(<MediaAssistant {...props} />)
+  fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
+  expect(screen.getByRole('button', { name: '添加附件' })).toBeEnabled()
+  fireEvent.change(screen.getByLabelText('选择 Agent 附件'), { target: { files: [new File(['story'], '分镜.txt')] } })
+  await screen.findByText('网络中断')
+  fireEvent.click(screen.getByRole('button', { name: '重试上传：分镜.txt' }))
+  await screen.findByText(/已上传/)
+  const firstCall = vi.mocked(uploadAttachment).mock.calls[0]!
+  expect(firstCall[0]).toBe('media-test-session')
+  expect(firstCall[7]).toBe('/media/agent/attachments')
+  expect(vi.mocked(uploadAttachment).mock.calls[1]![1]).toBe(firstCall[1])
+  fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
+  await screen.findByText('已读取分镜。')
+  expect(createAiChatRun).toHaveBeenCalledWith('media-test-session', expect.objectContaining({
+    surface: 'media', messages: [{ role: 'user', content: '', attachment_ids: [firstCall[1]] }],
+  }))
+})
 
 it('影音发送复用持久化任务与账户会话，停止生成保留已收到的正文', async () => {
   vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {

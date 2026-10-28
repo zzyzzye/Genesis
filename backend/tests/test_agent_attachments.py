@@ -221,7 +221,8 @@ def test_model_capabilities_and_video_transport_are_enforced(
 
 
 def test_media_attachments_reuse_private_loader(
-    session: Session, monkeypatch: pytest.MonkeyPatch,
+    session: Session,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """影音使用同一鉴权附件入口，不复制解析或公开文件。"""
     from genesis_api.agent.capabilities import agent_capabilities
@@ -238,8 +239,28 @@ def test_media_attachments_reuse_private_loader(
     assert inputs[0]["role"] == "user"
     assert files[0][1].decode() == "雨夜街道"
     prepared.actor_role = "member"
+    inputs, files = agent_capabilities.load_attachments("media", prepared)
+    assert files[0][1].decode() == "雨夜街道"
+    prepared.surface = "studio"
     with pytest.raises(RuntimeError, match="权限"):
         agent_capabilities.load_attachments("media", prepared)
+
+
+def test_media_member_uses_only_own_attachments(session: Session) -> None:
+    """普通成员可以发送本人的影音附件，但不能引用其他用户的私有文件。"""
+    user = User(handle="media-member", display_name="测试成员", role=UserRole.MEMBER)
+    session.add(user)
+    session.commit()
+    payload = request(user.id, [file(session, user.id, "分镜.txt", b"story")])
+    payload.surface = "media"
+    payload.actor_role = "member"
+    prepared = prepare_attachments(session, user.id, payload, Settings())
+    assert prepared.messages[0].attachments[0].name == "分镜.txt"
+    other = owner(session)
+    payload.messages[0].attachment_ids = [file(session, other.id, "私有.txt", b"private")]
+    with pytest.raises(HTTPException) as caught:
+        prepare_attachments(session, user.id, payload, Settings())
+    assert caught.value.status_code == 404
 
 
 def test_total_size_role_scope_and_changed_file_are_rejected(session: Session) -> None:
@@ -326,7 +347,8 @@ def test_docx_and_pdf_use_real_loaders(session: Session) -> None:
 
 @pytest.mark.parametrize("encrypted", [False, True])
 def test_docling_rejects_excessive_pages_and_encrypted_pdf(
-    session: Session, encrypted: bool,
+    session: Session,
+    encrypted: bool,
 ) -> None:
     """页数上限在转换前执行，加密文档不绕过读取限制。"""
     from docling.exceptions import ConversionError

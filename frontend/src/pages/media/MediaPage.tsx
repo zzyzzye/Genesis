@@ -53,5 +53,5 @@ export function MediaPage() {
       : page === 'assets'
         ? <ProjectAssetsPage projectId={projectId} />
         : <ProjectOverviewPage projectId={projectId} />
-  return <div className="media-workspace">{content}<MediaAssistant key={user.id} userId={user.id} attachmentsAllowed={user.role === 'owner'} page={page} projectId={projectId} selectedNode={page === 'canvas' ? agentNode : null} onApplyCanvasPlan={page === 'canvas' ? agentCanvasApply ?? undefined : undefined} /></div>
+  return <div className="media-workspace">{content}<MediaAssistant key={user.id} userId={user.id} attachmentsAllowed page={page} projectId={projectId} selectedNode={page === 'canvas' ? agentNode : null} onApplyCanvasPlan={page === 'canvas' ? agentCanvasApply ?? undefined : undefined} /></div>
 }

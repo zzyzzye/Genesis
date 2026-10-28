@@ -15,6 +15,7 @@ from sqlalchemy.pool import StaticPool
 
 from genesis_api.api.dependencies import get_current_user
 from genesis_api.api.routes import blog_attachments as routes
+from genesis_api.api.routes.media import router as media_router
 from genesis_api.blog import attachments as storage
 from genesis_api.database.base import Base
 from genesis_api.database.session import get_session
@@ -34,6 +35,7 @@ async def attachment_client(
     app = FastAPI()
     app.include_router(routes.admin_router, prefix="/api/v1")
     app.include_router(routes.public_router, prefix="/api/v1")
+    app.include_router(media_router, prefix="/api/v1")
     with Session(engine) as session:
         owner = User(handle="attachment-test", display_name="测试作者", role=UserRole.OWNER)
         session.add(owner)
@@ -59,6 +61,35 @@ ADMIN = "/admin/blog/attachments"
 PNG = b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII="
 )
+
+
+@pytest.mark.anyio
+async def test_media_member_upload_download_and_isolation(
+    attachment_client: tuple[AsyncClient, FastAPI, Session, User],
+) -> None:
+    """成员附件上传和重试可用，博客管理、跨账户读取与匿名访问仍被拒绝。"""
+    c, app, session, original = attachment_client
+    member = User(handle="media-member", display_name="测试成员", role=UserRole.MEMBER)
+    session.add(member)
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: member
+    data = {"id": str(uuid4()), "relative_path": "Agent 附件/分镜.txt"}
+    endpoint = "/media/agent/attachments"
+    for _ in range(2):
+        response = await c.post(
+            f"{endpoint}/files", data=data, files={"file": ("分镜.txt", b"story")}
+        )
+        assert response.status_code == 201
+        assert response.json()["is_public"] is False
+    url = f"{endpoint}/{data['id']}/file"
+    assert (await c.get(url)).content == b"story"
+    assert (await c.get(ADMIN)).status_code == 403
+    app.dependency_overrides[get_current_user] = lambda: original
+    assert (await c.get(url)).status_code == 404
+    app.dependency_overrides.pop(get_current_user)
+    assert (await c.get(url)).status_code == 401
+    response = await c.post(f"{endpoint}/files", data=data, files={"file": ("a.txt", b"a")})
+    assert response.status_code == 401
 
 
 @pytest.mark.anyio

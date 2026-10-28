@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { downloadAttachment } from '../../../lib/attachments'
-import { getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
+import { accountAuthTokenKey, getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
 import type { AiAttachment } from '../../../lib/api'
 import { StudioIcon } from '../../../studio/StudioIcon'
 import type { PendingAttachment } from './useBlogAttachments'
@@ -30,7 +30,7 @@ export function BlogMessageAttachments({ items, authKey = studioAuthTokenKey }: 
     if (!token) { setError('登录已失效，请重新登录。'); return }
     pending.current = true; setBusy(item.id); setError('')
     try {
-      await downloadAttachment(token, { ...item, kind: 'file', parent_id: null, is_public: false, created_at: '', updated_at: '' })
+      await downloadAttachment(token, { ...item, kind: 'file', parent_id: null, is_public: false, created_at: '', updated_at: '' }, ...(authKey === accountAuthTokenKey ? ['/media/agent/attachments'] : []))
     } catch { setError('附件已移除或下载失败，请稍后重试。') }
     finally { pending.current = false; setBusy(null) }
   }

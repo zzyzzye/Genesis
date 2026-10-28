@@ -101,8 +101,11 @@ def prepare_attachments(
                 )
     for message in request.messages:
         ids = list(dict.fromkeys(message.attachment_ids))
-        if ids and (request.surface not in ("studio", "media") or request.actor_role != "owner"):
-            raise HTTPException(403, "附件输入仅限所有者在博客或影音助手中使用")
+        if ids and not (
+            (request.surface == "media" and request.actor_role in ("owner", "member"))
+            or (request.surface == "studio" and request.actor_role == "owner")
+        ):
+            raise HTTPException(403, "附件输入需要登录影音账户或使用博客所有者身份")
         items = [_attachment(session, user_id, item_id) for item_id in ids]
         count += len(items)
         total += sum(item.size for item in items)

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { uploadAttachment } from '../../../lib/attachments'
-import { getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
+import { accountAuthTokenKey, getStoredAuthToken, studioAuthTokenKey } from '../../../lib/auth'
 import { conversationIsSelected, type AiAttachment, type AiConversationSelection } from '../../../lib/api'
 
 export const agentAttachmentAccept = '.txt,.md,.markdown,.csv,.json,.log,.yaml,.yml,.pdf,.docx,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm'
@@ -32,7 +32,7 @@ export function useBlogAttachments(conversationKey: string, authKey = studioAuth
     controllers.current.set(item.id, controller)
     update(key, items => items.map(value => value.id === item.id ? { ...value, status: 'uploading', progress: 0, error: undefined } : value))
     try {
-      const saved = await uploadAttachment(token, item.id, item.file, null, `Agent 附件/${item.id}/${item.name}`, percent => update(key, items => items.map(value => value.id === item.id ? { ...value, progress: percent } : value)), controller.signal)
+      const saved = await uploadAttachment(token, item.id, item.file, null, `Agent 附件/${item.id}/${item.name}`, percent => update(key, items => items.map(value => value.id === item.id ? { ...value, progress: percent } : value)), controller.signal, ...(authKey === accountAuthTokenKey ? ['/media/agent/attachments'] : []))
       update(key, items => items.map(value => value.id === item.id ? { ...value, name: saved.name, size: saved.size, status: 'ready', progress: 100 } : value))
     } catch (reason) {
       update(key, items => items.map(value => value.id === item.id ? { ...value, status: 'failed', error: controller.signal.aborted ? '已停止，可重试核对上传结果。' : reason instanceof Error ? reason.message : '上传失败，请重试。' } : value))

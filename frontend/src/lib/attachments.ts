@@ -46,8 +46,8 @@ export function attachmentMarkdown(item: Attachment): string {
   const url = item.image_mime_type ? new URL(`${base}/blog/attachments/${item.id}/image`, window.location.origin).href : attachmentPublicUrl(item)
   return `${item.image_mime_type ? '!' : ''}[${label}](${url})`
 }
-export async function downloadAttachment(token: string, item: Attachment): Promise<void> {
-  const response = await authFetch(`${base}${admin}/${item.id}/file`, { headers: headers(token) })
+export async function downloadAttachment(token: string, item: Attachment, endpoint = admin): Promise<void> {
+  const response = await authFetch(`${base}${endpoint}/${item.id}/file`, { headers: headers(token) })
   if (!response.ok) { await result(response, token); return }
   downloadBlob(await response.blob(), item.name)
 }
@@ -58,11 +58,11 @@ export async function fetchAttachmentPreview(token: string, item: Attachment, si
   return { blob: await response.blob(), truncated: response.headers.get('X-Preview-Truncated') === 'true' }
 }
 
-export async function uploadAttachment(token: string, id: string, file: File, parent: string | null, path: string, onProgress: (percent: number) => void, signal: AbortSignal): Promise<Attachment> {
+export async function uploadAttachment(token: string, id: string, file: File, parent: string | null, path: string, onProgress: (percent: number) => void, signal: AbortSignal, endpoint = admin): Promise<Attachment> {
   const form = new FormData()
   form.append('id', id); form.append('file', file); form.append('relative_path', path)
   if (parent) form.append('parent_id', parent)
-  const xhr = await authUpload(`${base}${admin}/files`, token, form, onProgress, signal)
+  const xhr = await authUpload(`${base}${endpoint}/files`, token, form, onProgress, signal)
   let data: unknown
   try { data = JSON.parse(xhr.responseText) } catch { throw new Error('上传回执无法解析，请重试核对结果。') }
   if (xhr.status >= 200 && xhr.status < 300) return data as Attachment
