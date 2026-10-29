@@ -590,6 +590,9 @@ export interface AiToolCall {
 }
 
 export interface AiGenerationMetrics {
+  input_tokens?: number | null
+  input_provider?: string | null
+  input_model?: string | null
   output_tokens: number | null
   token_source: 'actual' | 'estimated' | 'unavailable'
   output_seconds: number | null

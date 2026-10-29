@@ -180,8 +180,11 @@ class AiConversationDeleteResult(BaseModel):
 
 
 class AiGenerationMetrics(BaseModel):
-    """整条回复的首末正文耗时与有正文调用的用量，不包含自动标题调用。"""
+    """回复耗时、正文输出用量及最近一次模型调用的实际输入，不包含自动标题。"""
 
+    input_tokens: int | None = Field(default=None, ge=0)
+    input_provider: str | None = None
+    input_model: str | None = None
     output_tokens: int | None = None
     token_source: Literal["actual", "estimated", "unavailable"] = "unavailable"
     output_seconds: float | None = None

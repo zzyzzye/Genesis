@@ -508,6 +508,8 @@ class EmbeddedAgentRuntime:
             *inputs,
         ]
         if metrics is not None:
+            metrics.input_provider = provider
+            metrics.input_model = model
             config["callbacks"] = [metrics]
         if tool_history is not None:
             config["callbacks"] = [metrics, tool_history] if metrics else [tool_history]

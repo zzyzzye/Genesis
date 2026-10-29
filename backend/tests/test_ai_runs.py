@@ -51,6 +51,9 @@ class FakeChatService:
     def __init__(self, _: Settings) -> None:
         """保留生产工厂的配置入参，不创建模型客户端。"""
         self.metrics = GenerationMetrics()
+        self.metrics.input_tokens = 18000
+        self.metrics.input_provider = "openai"
+        self.metrics.input_model = "test-model"
 
     async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
         """分两次产出固定文本，中间让出事件循环以触发异步持久化。"""
@@ -265,6 +268,9 @@ async def test_background_run_persists_output_without_stream_subscriber() -> Non
     assert snapshot.metrics is not None
     assert snapshot.metrics.token_source == "estimated"
     assert snapshot.metrics.output_tokens == 4
+    assert snapshot.metrics.input_tokens == 18000
+    assert snapshot.metrics.input_provider == "openai"
+    assert snapshot.metrics.input_model == "test-model"
     await manager.shutdown()
 
 

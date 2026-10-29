@@ -21,25 +21,39 @@ class GenerationMetrics(BaseCallbackHandler):
         self.last: float | None = None
         self.calls: dict[str, tuple[float, float, int, int]] = {}
         self.usage: dict[str, int] = {}
+        self.input_tokens: int | None = None
+        self.input_provider: str | None = None
+        self.input_model: str | None = None
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
-        """从框架完成消息读取供应商用量，扣除明确标记的推理 token。"""
+        """输入取最近完成调用的供应商统计，输出测速扣除明确标记的推理 token。"""
+        self.input_tokens = None
         for generations in response.generations:
             for generation in generations:
                 message = getattr(generation, "message", None)
                 usage = getattr(message, "usage_metadata", None)
                 message_id = getattr(message, "id", None)
+                if isinstance(usage, dict):
+                    count = usage.get("input_tokens")
+                    if type(count) is int and count >= 0:
+                        self.input_tokens = count
                 if not isinstance(usage, dict) or not isinstance(message_id, str):
                     continue
                 output = usage.get("output_tokens")
                 details = usage.get("output_token_details") or {}
                 reasoning = details.get("reasoning", 0) if isinstance(details, dict) else 0
                 if (
-                    isinstance(output, int) and not isinstance(output, bool)
-                    and isinstance(reasoning, int) and not isinstance(reasoning, bool)
+                    isinstance(output, int)
+                    and not isinstance(output, bool)
+                    and isinstance(reasoning, int)
+                    and not isinstance(reasoning, bool)
                     and 0 <= reasoning <= output
                 ):
                     self.usage[message_id] = output - reasoning
+
+    def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
+        """最新调用失败时清除输入统计，避免沿用前一次工具轮次的数字。"""
+        self.input_tokens = None
 
     def observe(self, message: object, text: str) -> None:
         """以服务端单调时钟记录正文片段，避免浏览器重连或批次大小影响测速。"""
@@ -59,6 +73,9 @@ class GenerationMetrics(BaseCallbackHandler):
         """返回当前统计；单片段或耗时过短时速度不可用，不显示虚假的极大值。"""
         end = self.last if self.last is not None else monotonic()
         metrics = AiGenerationMetrics(
+            input_tokens=self.input_tokens,
+            input_provider=self.input_provider,
+            input_model=self.input_model,
             first_token_seconds=self.first - self.started if self.first is not None else None,
             total_seconds=max(0, end - self.started),
         )
@@ -74,9 +91,11 @@ class GenerationMetrics(BaseCallbackHandler):
                 source = "estimated"
             count += call_count
         seconds = max(0, self.last - self.first)
-        return metrics.model_copy(update={
-            "output_tokens": count,
-            "token_source": source,
-            "output_seconds": seconds,
-            "tokens_per_second": count / seconds if seconds >= 0.01 else None,
-        })
+        return metrics.model_copy(
+            update={
+                "output_tokens": count,
+                "token_source": source,
+                "output_seconds": seconds,
+                "tokens_per_second": count / seconds if seconds >= 0.01 else None,
+            }
+        )

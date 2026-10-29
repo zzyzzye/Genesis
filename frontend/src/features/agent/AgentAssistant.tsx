@@ -1,6 +1,6 @@
 import '../blog/agent/BlogAssistant.css'
 
-import { type FormEvent, type ReactNode, memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { type FormEvent, type ReactNode, memo, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -346,9 +346,10 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   const attachmentBlocked = !!attachmentModelError || (attachments.items.length > 0 && !attachments.ready)
   const reasoning = useReasoningEffort(provider, model, selectedModel)
   const contextWindow = selectedModel?.context_window ?? null
-  const pageCharacters = useMemo(() => JSON.stringify(media?.context ?? { page, editor }).length, [page, editor, media?.context])
-  const contextCharacters = pageCharacters + draft.length + messages.reduce((sum, message) => sum + message.content.length, 0)
-  const contextTokens = Math.ceil(contextCharacters / 4)
+  const latestMetrics = messages.filter(message => message.role === 'assistant').at(-1)?.metrics
+  const contextTokens = latestMetrics?.input_provider === provider && latestMetrics.input_model === model
+    && typeof latestMetrics.input_tokens === 'number' && Number.isSafeInteger(latestMetrics.input_tokens) && latestMetrics.input_tokens >= 0
+    ? latestMetrics.input_tokens : null
   const formatTokens = (value: number | null) => {
     if (value === null) return '—'
     if (value >= 1_000_000) {
@@ -357,10 +358,8 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
     if (value >= 1_000) return `${Math.round(value / 1_000)}K`
     return value.toLocaleString()
   }
-  const contextPercent = contextWindow && contextWindow > 0 ? Math.min(100, contextTokens / contextWindow * 100) : null
-  const contextDescription = contextPercent === null
-    ? `上下文容量未知 · 估算 ${formatTokens(contextTokens)} token`
-    : `上下文已用${contextPercent > 0 && contextPercent < 1 ? '不足 1' : `约 ${Math.round(contextPercent)}`}％ · 估算 ${formatTokens(contextTokens)} / ${formatTokens(contextWindow)} token`
+  const contextPercent = contextTokens !== null && contextWindow && contextWindow > 0 ? Math.min(100, contextTokens / contextWindow * 100) : null
+  const contextDescription = `${contextTokens === null ? '—' : contextTokens.toLocaleString('zh-CN')} / ${formatTokens(contextWindow)}`
   const suggestions = media?.suggestions ?? (editor ? ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '为当前文章生成更好的标题'] : defaultSuggestions)
 
   useEffect(() => {
@@ -1005,7 +1004,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
               <button ref={modelTriggerRef} aria-label="选择模型" title={model || '选择模型'} className="studio-assistant__tool-button" type="button" onClick={() => setModelMenuOpen((open) => !open)} aria-expanded={modelMenuOpen}>
                 {provider !== 'mimo' && <ProviderIcon provider={provider} />}<span className="studio-assistant__selected-model">{modelDisplayName(selectedModel?.name || model || '选择模型')}</span><span className="studio-assistant__selected-reasoning">{thinkingModeLabel(reasoning.thinkingMode) ?? reasoningEffortLabel(reasoning.effort)}</span><StudioIcon name="chevron" />
               </button>
-              <span className="studio-assistant__context-ring" tabIndex={0} role={contextPercent === null ? 'img' : 'progressbar'} aria-label={contextDescription} aria-valuemin={contextPercent === null ? undefined : 0} aria-valuemax={contextPercent === null ? undefined : 100} aria-valuenow={contextPercent ?? undefined}>
+              <span className="studio-assistant__context-ring" tabIndex={0} role={contextPercent === null ? 'img' : 'progressbar'} aria-label={`上下文用量${contextTokens === null ? '未知' : ''} ${contextDescription}`} aria-valuemin={contextPercent === null ? undefined : 0} aria-valuemax={contextPercent === null ? undefined : 100} aria-valuenow={contextPercent ?? undefined}>
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle className="studio-assistant__ring-track" cx="12" cy="12" r="9" />
                   {contextPercent !== null && <circle className="studio-assistant__ring-value" cx="12" cy="12" r="9" pathLength="100" strokeDasharray={`${contextPercent} 100`} transform="rotate(-90 12 12)" />}
