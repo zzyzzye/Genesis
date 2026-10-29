@@ -13,7 +13,6 @@
 .agent-picker .agent-picker__models button { display:flex; align-items:center; gap:8px; min-width:0; min-height:32px; padding:6px 8px; text-align:left; border-radius:5px; background:transparent; color:var(--reasoning-text); font-size:11px; }
 .agent-picker .agent-picker__models button:is(:hover,:focus-visible,[aria-pressed="true"]) { background:var(--reasoning-hover); }
 .agent-picker__name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.agent-picker__models small { color:var(--reasoning-muted); font-size:10px; font-variant-numeric:tabular-nums; }
 .agent-picker__check { display:grid; place-items:center; width:14px; flex:none; }
 .agent-picker__check svg { width:13px; height:13px; }
 .agent-picker__models p { margin:12px 8px; color:var(--reasoning-muted); font-size:12px; }

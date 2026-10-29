@@ -1025,6 +1025,8 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
                 }} onModelChange={(next) => {
                   selectedModels.current[provider] = next
                   setModel(next)
+                  setModelMenuOpen(false)
+                  modelTriggerRef.current?.focus()
                 }} onEffortChange={reasoning.setEffort} thinkingMode={reasoning.thinkingMode} onThinkingModeChange={reasoning.setThinkingMode} />
               </div>}
               {activeRun

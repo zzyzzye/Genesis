@@ -39,7 +39,7 @@ function setupModels() {
   }))
 }
 
-it('选择 MiMo 后菜单保持展开，开关按模型记忆并随请求发送', async () => {
+it('选择 MiMo 后收起菜单，重新打开后保留模型开关并随请求发送', async () => {
   vi.mocked(getProviderModels).mockImplementation((_token, provider) => Promise.resolve({
     provider,
     models: [
@@ -54,12 +54,16 @@ it('选择 MiMo 后菜单保持展开，开关按模型记忆并随请求发送'
   fireEvent.click(screen.getByRole('button', { name: '切换到 MiMo 模型' }))
   await screen.findByRole('combobox', { name: '思考模式' })
   fireEvent.click(screen.getByRole('button', { name: 'MiMo' }))
-  expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  expect(trigger).toHaveFocus()
+  fireEvent.click(trigger)
   expect(screen.queryByRole('combobox', { name: '思考强度' })).not.toBeInTheDocument()
   fireEvent.change(screen.getByRole('combobox', { name: '思考模式' }), { target: { value: 'disabled' } })
   fireEvent.click(screen.getByRole('button', { name: '未知模型' }))
+  fireEvent.click(trigger)
   expect(screen.queryByRole('combobox', { name: '思考模式' })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'MiMo' }))
+  fireEvent.click(trigger)
   expect(screen.getByRole('combobox', { name: '思考模式' })).toHaveValue('disabled')
   fireEvent.keyDown(document, { key: 'Escape' })
   fireEvent.change(screen.getByRole('textbox', { name: '向镜头搭档提问' }), { target: { value: '开始' } })
@@ -82,11 +86,14 @@ it('博客按模型记忆档位，未知模型用默认，请求携带当前强�
   fireEvent.change(slider, { target: { value: 'high' } })
   expect(slider).toHaveValue('high')
   fireEvent.click(screen.getByRole('button', { name: '未知模型' }))
-  expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  expect(trigger).toHaveFocus()
+  fireEvent.click(trigger)
   expect(screen.getByText('使用模型默认设置')).toBeInTheDocument()
   expect(screen.queryByRole('combobox', { name: '思考强度' })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '可调模型' }))
-  expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(trigger)
   expect(screen.getByRole('combobox', { name: '思考强度' })).toHaveValue('high')
   fireEvent.keyDown(document, { key: 'Escape' })
   fireEvent.change(screen.getByRole('textbox'), { target: { value: '测试' } })
