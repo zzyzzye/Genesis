@@ -11,6 +11,9 @@ from typing import Any
 
 import httpx
 
+CATALOG_TTL_SECONDS = 12 * 60 * 60
+STALE_TTL_SECONDS = CATALOG_TTL_SECONDS + 30 * 60
+
 
 class CatalogFormatError(ValueError):
     """目录结构无效，不将响应正文带入异常。"""
@@ -26,7 +29,7 @@ class CatalogEntry:
 
 
 class ModelCatalog:
-    """同渠道共享五分钟缓存及在途请求；失败最多保留半小时旧目录。"""
+    """同渠道共享十二小时缓存及在途请求；到期后失败可延用半小时。"""
 
     def __init__(self) -> None:
         self.entries: OrderedDict[str, CatalogEntry] = OrderedDict()
@@ -55,8 +58,8 @@ class ModelCatalog:
         entry = self.entries.get(identity)
         now = monotonic()
         if entry and not refresh and (
-            now - entry.loaded_at < 300
-            or (now - entry.loaded_at < 1800 and now < entry.retry_at)
+            now - entry.loaded_at < CATALOG_TTL_SECONDS
+            or (now - entry.loaded_at < STALE_TTL_SECONDS and now < entry.retry_at)
         ):
             self.entries.move_to_end(identity)
             return deepcopy(entry.payload)
@@ -97,7 +100,7 @@ class ModelCatalog:
             denied = response is not None and response.status_code in (401, 403)
             if denied:
                 self.entries.pop(identity, None)
-            elif entry and monotonic() - entry.loaded_at < 1800:
+            elif entry and monotonic() - entry.loaded_at < STALE_TTL_SECONDS:
                 entry.retry_at = monotonic() + 15
                 return entry.payload
             raise

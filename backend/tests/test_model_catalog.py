@@ -89,11 +89,14 @@ async def test_stale_cache_is_bounded_and_auth_failure_evicts(
             )
 
         assert (await get())["data"]
-        now, code = 301, 503
+        now = 12 * 60 * 60 - 1
+        assert (await get())["data"]
+        assert calls == 1
+        now, code = 12 * 60 * 60, 503
         assert (await get())["data"]
         assert (await get())["data"]
         assert calls == 2
-        now = 1801
+        now = 12 * 60 * 60 + 30 * 60
         with pytest.raises(httpx.HTTPStatusError):
             await get()
         code = 200
