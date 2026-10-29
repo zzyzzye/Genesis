@@ -11,6 +11,7 @@ from pydantic import SecretStr
 
 from genesis_api.core.config import Settings
 from genesis_api.llm.capabilities import model_capabilities_for
+from genesis_api.llm.catalog import CatalogFormatError, ModelCatalog, model_catalog
 from genesis_api.llm.models import AvailableModel, ProviderModels, ProviderName
 from genesis_api.llm.profiles import transport_provider_for
 
@@ -33,12 +34,14 @@ class ModelDiscoveryService:
         """
         self.settings = settings
         self._client = client
+        self._catalog = ModelCatalog() if client is not None else model_catalog
 
-    async def list_models(self, provider: ProviderName) -> ProviderModels:
+    async def list_models(self, provider: ProviderName, *, refresh: bool = False) -> ProviderModels:
         """获取可用模型，将配置的默认模型置顶并附带思考档位。
 
         Args:
             provider: 已校验的供应商标识，用于选择地址和认证头。
+            refresh: 主动刷新目录，仍与同渠道正在进行的请求合并。
 
         Returns:
             该供应商的模型列表；HTTP 或 JSON 解码失败时优先回退到默认模型。
@@ -51,19 +54,14 @@ class ModelDiscoveryService:
         if api_key is None or not api_key.get_secret_value().strip():
             raise ModelDiscoveryError(f"未配置 {provider} 的 API Key")
 
-        client = self._client
-        owns_client = client is None
-        if owns_client:
-            client = httpx.AsyncClient(timeout=15.0)
-        assert client is not None
-
         try:
-            response = await client.get(
+            payload = await self._catalog.get(
                 self._models_url(base_url),
-                headers=self._headers(provider, api_key.get_secret_value()),
+                self._headers(provider, api_key.get_secret_value()),
+                refresh=refresh, client=self._client,
             )
-            response.raise_for_status()
-            payload = response.json()
+        except CatalogFormatError as exc:
+            raise ModelDiscoveryError(str(exc)) from exc
         except (httpx.HTTPError, ValueError) as exc:
             fallback_model = self._provider_model(provider)
             if fallback_model and fallback_model.strip():
@@ -84,10 +82,6 @@ class ModelDiscoveryService:
                 )
             logger.exception("获取模型列表时调用上游服务失败：provider=%s", provider)
             raise ModelDiscoveryError(f"获取 {provider} 模型列表失败") from exc
-        finally:
-            if owns_client:
-                await client.aclose()
-
         if not isinstance(payload, dict):
             raise ModelDiscoveryError("模型列表响应格式无效")
         models = self._parse_models(payload, provider)

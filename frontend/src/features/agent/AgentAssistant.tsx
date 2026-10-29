@@ -313,6 +313,8 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   const { confirmQuote, quoteDialog } = useBillingQuote()
   const pendingRequest = useRef<AiChatRequest | null>(null)
   const modelsCache = useRef<Partial<Record<AiProvider, AvailableModel[]>>>({})
+  const forceModelsRefresh = useRef(false)
+  const modelsIdentity = useRef<string | null>(null)
   const selectedModels = useRef<Partial<Record<AiProvider, string>>>({ [initialModel.provider]: initialModel.model })
   const modelTriggerRef = useRef<HTMLButtonElement | null>(null)
   const modelMenuRef = useRef<HTMLDivElement | null>(null)
@@ -370,19 +372,26 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
     const token = getStoredAuthToken(authKey)
     if (!token || !isOpen) return
 
+    if (modelsIdentity.current !== token) {
+      modelsIdentity.current = token
+      modelsCache.current = {}
+      setModels([])
+    }
     let cancelled = false
     setModelsLoading(true)
     setModelsError('')
+    const refresh = forceModelsRefresh.current
+    forceModelsRefresh.current = false
     const load = async () => {
-      let availableModels = modelsCache.current[provider]
-      if (!availableModels) {
-        try {
-          availableModels = (await getProviderModels(token, provider)).models
-          modelsCache.current[provider] = availableModels
-        } catch (reason) {
-          availableModels = []
-          if (!cancelled) setModelsError(reason instanceof Error ? reason.message : '模型列表获取失败，请重新打开助手重试。')
-        }
+      let availableModels = modelsCache.current[provider] ?? []
+      let loaded = false
+      try {
+        availableModels = (await getProviderModels(token, provider, { includePricing: false, refresh })).models
+        if (cancelled) return
+        modelsCache.current[provider] = availableModels
+        loaded = true
+      } catch (reason) {
+        if (!cancelled) setModelsError(reason instanceof Error ? reason.message : '模型列表获取失败，请重新打开助手重试。')
       }
       if (cancelled) return
       setModelsLoading(false)
@@ -392,6 +401,16 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
         ? preferredModel : availableModels[0]?.id ?? ''
       selectedModels.current[provider] = nextModel
       setModel(nextModel)
+      if (!loaded) return
+      // 先展示可选模型，价格只更新附加信息，不重置用户刚选中的模型。
+      try {
+        const priced = (await getProviderModels(token, provider, { includePricing: true, reload: refresh })).models
+        if (cancelled) return
+        const prices = new Map(priced.map(item => [item.id, item.pricing]))
+        const enriched = availableModels.map(item => ({ ...item, pricing: prices.get(item.id) ?? item.pricing }))
+        modelsCache.current[provider] = enriched
+        setModels(enriched)
+      } catch { /* 价格失败不清空已加载目录，执行准入由服务端校验。 */ }
     }
     void load()
     return () => { cancelled = true }
@@ -996,7 +1015,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
               </span>
               {modelMenuOpen && <div ref={modelMenuRef} className="studio-assistant__model-menu">
                 <AgentModelPicker provider={provider} models={models} model={model} loading={modelsLoading} error={modelsError} disabled={isBusy} effort={reasoning.effort} onRefresh={() => {
-                  delete modelsCache.current[provider]
+                  forceModelsRefresh.current = true
                   setModelsRevision(value => value + 1)
                 }} onProviderChange={(next) => {
                   if (next === provider) return

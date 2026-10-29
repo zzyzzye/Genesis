@@ -59,6 +59,7 @@ async def fixture(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncGenera
     )
     Base.metadata.create_all(engine)
     settings = Settings(image_api_key=SecretStr("synthetic-image-test-key"))
+    image.model_catalog.entries.clear()
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
     with Session(engine, expire_on_commit=False) as session:

@@ -20,12 +20,12 @@ router = APIRouter()
 
 
 @router.get("/video-models")
-async def video_models(user: CurrentUserDependency) -> dict[str, object]:
+async def video_models(user: CurrentUserDependency, refresh: bool = False) -> dict[str, object]:
     """返回完整实时视频目录及已知参数，未配置时给出明确空态。"""
     settings = get_settings()
     if not settings.video_api_key:
         return {"configured": False, "references_ready": False, "models": []}
-    ids = await video.available_models(settings)
+    ids = await video.available_models(settings, refresh=refresh)
     return {
         "configured": True,
         "billing_required": user.role.value != "owner",

@@ -1,6 +1,7 @@
 import { authFetch, handleStudioUnauthorized, latestAuthToken, rememberSessionUser } from './auth'
 import { collectCommentDeviceHints } from './commentDeviceHints'
 import { downloadBlob } from './download'
+import { createModelCatalogCache } from './modelCatalogCache'
 import { AiChatRunTerminalError, consumeAgUiStream, type AiRunStreamHandlers } from './agUiStream'
 
 export { AiChatRunTerminalError } from './agUiStream'
@@ -502,8 +503,13 @@ export interface ProviderModels {
   models: AvailableModel[]
 }
 
-export function getProviderModels(token: string, provider: AiProvider): Promise<ProviderModels> {
-  return request<ProviderModels>(`/llm/providers/${provider}/models`, { headers: authHeaders(token) })
+const providerCatalog = createModelCatalogCache<ProviderModels>()
+export function getProviderModels(token: string, provider: AiProvider, options: { includePricing?: boolean; refresh?: boolean; reload?: boolean } = {}): Promise<ProviderModels> {
+  const includePricing = options.includePricing ?? true
+  const path = `/llm/providers/${provider}/models`
+  const query = new URLSearchParams({ include_pricing: String(includePricing) })
+  if (options.refresh) query.set('refresh', 'true')
+  return providerCatalog(token, `${path}:${includePricing}`, () => request<ProviderModels>(`${path}?${query}`, { headers: authHeaders(token) }), options.refresh || options.reload)
 }
 
 export interface AiChatMessage {

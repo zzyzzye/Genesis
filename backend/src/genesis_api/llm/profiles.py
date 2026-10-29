@@ -4,8 +4,11 @@ from functools import lru_cache
 from typing import cast
 from urllib.parse import urlparse
 
-from langchain.chat_models import init_chat_model
+from langchain_anthropic.chat_models import _get_default_model_profile as anthropic_profile
 from langchain_core.language_models.model_profile import ModelProfile
+from langchain_google_genai.chat_models import _get_default_model_profile as google_profile
+from langchain_openai.chat_models.base import _get_default_model_profile as openai_profile
+from langchain_xai.chat_models import _get_default_model_profile as xai_profile
 
 
 def capability_provider_for(provider: str) -> str:
@@ -44,9 +47,9 @@ def transport_provider_for(provider: str, base_url: str) -> str:
     return capability_provider_for(provider)
 
 
-@lru_cache(maxsize=256)
+@lru_cache(maxsize=2048)
 def model_profile_for(adapter: str, model: str) -> ModelProfile:
-    """仅构造客户端读取公开 profile，不请求上游或使用真实凭据。
+    """复用框架的本地 profile 查询，不为目录中每个模型构造 HTTP 客户端。
 
     Args:
         adapter: 模型原生供应商的 LangChain 适配器标识，不是网关传输适配器。
@@ -56,7 +59,9 @@ def model_profile_for(adapter: str, model: str) -> ModelProfile:
         框架提供的能力字典，缺少 profile 时为空；按适配器与模型缓存。
         返回字典供只读查询，调用方不得修改共享缓存内容。
     """
-    client = init_chat_model(
-        model=model, model_provider=adapter, api_key="profile-inspection-only",
-    )
-    return cast(ModelProfile, dict(client.profile or {}))
+    # 当前依赖的客户端本身也调用这些函数；升级时由一致性测试校验。
+    lookup = {
+        "openai": openai_profile, "anthropic": anthropic_profile,
+        "google_genai": google_profile, "xai": xai_profile,
+    }[adapter]
+    return cast(ModelProfile, dict(lookup(model)))

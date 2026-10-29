@@ -16,7 +16,7 @@ router = APIRouter()
 
 
 @router.get("/image-models")
-async def image_models(user: CurrentUserDependency) -> dict[str, object]:
+async def image_models(user: CurrentUserDependency, refresh: bool = False) -> dict[str, object]:
     """返回当前图片 Key 的完整目录，图片编辑不依赖公网素材地址。"""
     settings = get_settings()
     if not settings.image_api_key:
@@ -25,7 +25,7 @@ async def image_models(user: CurrentUserDependency) -> dict[str, object]:
         "configured": True,
         "billing_required": user.role.value != "owner",
         "references_ready": True,
-        "models": await image.available_models(settings),
+        "models": await image.available_models(settings, refresh=refresh),
     }
 
 

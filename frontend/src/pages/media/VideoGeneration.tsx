@@ -5,9 +5,12 @@ import { AssetPreview } from './AssetPreview'
 import { BillingStatus } from '../../features/billing/BillingControls'
 import { useBillingQuote } from '../../features/billing/useBillingQuote'
 import type { BillingOperation } from '../../features/billing/api'
+import { getStoredAuthToken } from '../../lib/auth'
+import { createModelCatalogCache } from '../../lib/modelCatalogCache'
 
 export type VideoModel = { id: string; parameters_known?: boolean; ratios: string[]; resolutions: string[]; durations: number[]; images: number; videos: number; audio: boolean; image_edit?: boolean }
 type ModelList = { configured: boolean; references_ready: boolean; models: VideoModel[]; billing_required?: boolean }
+const generationCatalog = createModelCatalogCache<ModelList>()
 type Task = { id: string; node_id: string; status: string; progress: number; error: string; asset_id: string | null; asset_ids?: string[]; billing?: BillingOperation | null }
 const running = (status: string) => ['submitting', 'queued', 'processing', 'downloading'].includes(status)
 const statusText: Record<string, string> = { submitting:'正在提交', queued:'排队中', processing:'生成中', downloading:'正在保存视频', download_failed:'视频保存失败', completed:'视频已生成', failed:'生成失败', unknown:'创建结果待核实', acknowledged:'已核实旧任务' }
@@ -41,6 +44,8 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onMode
   const [busy, setBusy] = useState(false)
   const [acknowledged, setAcknowledged] = useState(false)
   const [attempt, setAttempt] = useState(0)
+  const [catalogRevision, setCatalogRevision] = useState(0)
+  const forceCatalogRefresh = useRef(false)
   const requestId = useRef<string | null>(null)
   const quoteId = useRef<string | null>(null)
   const { confirmQuote, quoteDialog } = useBillingQuote()
@@ -59,12 +64,14 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onMode
   useEffect(() => { onModelChange(model ?? null) }, [model, onModelChange])
   useEffect(() => {
     let current = true
-    void api<ModelList>(modelsPath).then((data) => {
+    const refresh = forceCatalogRefresh.current
+    forceCatalogRefresh.current = false
+    void generationCatalog(getStoredAuthToken() ?? '', modelsPath, () => api<ModelList>(`${modelsPath}${refresh ? '?refresh=true' : ''}`), refresh).then((data) => {
       if (!data || !Array.isArray(data.models)) throw new Error(`${noun}模型目录格式无效，请重试`)
       if (current) { setCatalog(data); setCatalogError('') }
     }).catch((reason: Error) => { if (current) setCatalogError(reason.message) })
     return () => { current = false }
-  }, [attempt, modelsPath, noun])
+  }, [catalogRevision, modelsPath, noun])
   useEffect(() => {
     let current = true
     let timer: ReturnType<typeof setTimeout>
@@ -135,7 +142,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onMode
         {catalog?.models.map((item) => <option key={item.id}>{item.id}</option>)}
       </select>
       {controls}
-      <button type="button" aria-label={`刷新${noun}模型与任务`} title="刷新模型与任务" onClick={() => setAttempt((value) => value + 1)}><RefreshCw size={14} /></button>
+      <button type="button" aria-label={`刷新${noun}模型与任务`} title="刷新模型与任务" onClick={() => { forceCatalogRefresh.current = true; setCatalogRevision(value => value + 1); setAttempt(value => value + 1) }}><RefreshCw size={14} /></button>
       <button type="button" className="media-video-submit" aria-label={`生成${noun}`} title={`生成${noun}`} disabled={Boolean(blocked || referenceBlocked || !model || !node.text.trim())} onClick={() => void submit()}>{busy || task && running(task.status) ? <LoaderCircle size={15} className="is-spinning" /> : <ArrowUp size={16} />}</button>
     </div>
     {!isImage && model?.parameters_known === false && <p>使用模型默认画幅、清晰度和时长，暂仅支持文生视频。</p>}

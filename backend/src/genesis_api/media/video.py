@@ -4,7 +4,6 @@ import asyncio
 import logging
 import re
 from datetime import UTC, datetime, timedelta
-from time import monotonic
 from uuid import UUID, uuid4
 
 import httpx
@@ -19,6 +18,7 @@ from genesis_api.billing.transport import after_response, before_request, execut
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.core.uploads import media_suffix
 from genesis_api.database.session import SessionLocal
+from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service
 from genesis_api.media.models import MediaAsset, ProjectAsset, VideoGeneration
 from genesis_api.media.schemas import CanvasDocument
@@ -26,7 +26,6 @@ from genesis_api.media.video_catalog import CATALOG
 
 logger = logging.getLogger(__name__)
 ACTIVE = ("submitting", "queued", "processing", "downloading")
-_catalog_cache: tuple[float, str, list[str]] = (0, "", [])
 
 
 class VideoSubmit(BaseModel):
@@ -45,8 +44,8 @@ def headers(settings: Settings) -> dict[str, str]:
     return {"Authorization": f"Bearer {settings.video_api_key.get_secret_value()}"}
 
 
-async def available_models(settings: Settings) -> list[str]:
-    """读取真实模型目录，成功结果缓存 45 秒，不回退到虚构目录。
+async def available_models(settings: Settings, *, refresh: bool = False) -> list[str]:
+    """读取当前渠道共享目录，不回退到虚构目录。
 
     Args:
         settings: 服务端视频凭据与协议基础地址。
@@ -57,18 +56,11 @@ async def available_models(settings: Settings) -> list[str]:
     Raises:
         HTTPException: 未配置凭据返回 503，上游目录不可用返回 502。
     """
-    global _catalog_cache
     auth = headers(settings)
-    now, base, models = _catalog_cache
-    if monotonic() - now < 45 and base == settings.video_api_base_url:
-        return models
     try:
-        async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
-            response = await client.get(
-                f"{settings.video_api_base_url.rstrip('/')}/v1/models", headers=auth
-            )
-            response.raise_for_status()
-            payload = response.json()
+        payload = await model_catalog.get(
+            f"{settings.video_api_base_url.rstrip('/')}/v1/models", auth, refresh=refresh,
+        )
         models = list(
             dict.fromkeys(
                 item["id"]
@@ -78,7 +70,6 @@ async def available_models(settings: Settings) -> list[str]:
         )
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
         raise HTTPException(502, "视频模型目录暂不可用，请重试") from exc
-    _catalog_cache = (monotonic(), settings.video_api_base_url, models)
     return models
 
 

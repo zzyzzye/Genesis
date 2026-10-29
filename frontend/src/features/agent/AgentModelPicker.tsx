@@ -45,6 +45,7 @@ export function AgentModelPicker({ provider, models, model, loading = false, err
   }
   const selected = models.find((item) => item.id === model)
   const filtered = models.filter((item) => `${modelDisplayName(item.name || item.id)} ${item.name} ${item.id}`.toLowerCase().includes(query.trim().toLowerCase()))
+  const previewModel = filtered.find(item => item.id === preview?.model.id)
 
   return <div className="agent-picker" aria-label="模型与思考设置">
     <div className="agent-picker__providers" role="group" aria-label="选择供应商">
@@ -53,14 +54,14 @@ export function AgentModelPicker({ provider, models, model, loading = false, err
     <div className="agent-picker__search-row"><label className="agent-picker__search"><Search aria-hidden="true" /><input aria-label="搜索模型" placeholder="搜索模型…" value={query} onChange={(event) => { closePreview(); setQuery(event.target.value) }} onKeyDown={(event) => { if (event.key === 'Enter') event.preventDefault() }} /></label>{onRefresh && <button className="agent-picker__refresh" type="button" aria-label="刷新模型与价格" title="刷新模型与价格" disabled={disabled || loading} onClick={() => { closePreview(); onRefresh() }}><RefreshCw size={13} aria-hidden="true" /></button>}</div>
     <div className="agent-picker__models" aria-label={`${provider} 模型列表`} aria-busy={loading}>
       {error && <p role="alert">{error} 切换供应商或重新打开助手可重试。</p>}
-      {error ? null : loading ? <p role="status">正在加载模型…</p> : !models.length ? <p>当前服务商没有可用模型。</p> : !filtered.length ? <p>没有匹配的模型，试试其他名称。</p> : filtered.map((item) => <button type="button" key={item.id} aria-describedby={preview?.model.id === item.id ? previewId : undefined} aria-pressed={model === item.id} disabled={disabled} onPointerEnter={event => { if (event.pointerType !== 'touch') showPrice(item, event.currentTarget) }} onPointerLeave={scheduleClose} onFocus={event => showPrice(item, event.currentTarget)} onBlur={closePreview} onClick={() => onModelChange(item.id)}>
+      {!models.length && error ? null : !models.length && loading ? <p role="status">正在加载模型…</p> : !models.length ? <p>当前服务商没有可用模型。</p> : !filtered.length ? <p>没有匹配的模型，试试其他名称。</p> : filtered.map((item) => <button type="button" key={item.id} aria-describedby={preview?.model.id === item.id ? previewId : undefined} aria-pressed={model === item.id} disabled={disabled} onPointerEnter={event => { if (event.pointerType !== 'touch') showPrice(item, event.currentTarget) }} onPointerLeave={scheduleClose} onFocus={event => showPrice(item, event.currentTarget)} onBlur={closePreview} onClick={() => onModelChange(item.id)}>
         <span className="agent-picker__name">{modelDisplayName(item.name || item.id)}</span>
         {item.billing_mode && item.billing_mode !== 'platform' && <small>{({ free:'免费',paid:'按量付费',unavailable:'暂未开放计费' })[item.billing_mode]}</small>}
         {item.context_window != null && <small>{item.context_window >= 1_000_000 ? `${Number((item.context_window / 1_000_000).toFixed(2))}M` : `${Math.round(item.context_window / 1000)}K`}</small>}
         <span className="agent-picker__check" aria-hidden="true">{model === item.id && <Check />}</span>
       </button>)}
     </div>
-    {preview && !loading && !error && filtered.includes(preview.model) && <ModelPriceTooltip id={previewId} model={preview.model} trigger={preview.trigger} onDismiss={closePreview} onEnter={cancelClose} onLeave={scheduleClose} />}
+    {preview && previewModel && !loading && !error && <ModelPriceTooltip id={previewId} model={previewModel} trigger={preview.trigger} onDismiss={closePreview} onEnter={cancelClose} onLeave={scheduleClose} />}
     {Boolean(selected?.thinking_modes?.length) && <div className="agent-reasoning">
       <span className="agent-reasoning__title">思考模式</span>
       <select aria-label="思考模式" value={thinkingMode ?? ''} disabled={disabled || loading} onChange={(event) => onThinkingModeChange?.(event.target.value === 'enabled' ? 'enabled' : event.target.value === 'disabled' ? 'disabled' : undefined)}>

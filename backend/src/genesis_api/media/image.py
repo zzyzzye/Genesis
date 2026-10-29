@@ -24,6 +24,7 @@ from genesis_api.billing.transport import after_response, before_request, execut
 from genesis_api.core.config import Settings
 from genesis_api.core.uploads import media_filename
 from genesis_api.database.session import SessionLocal
+from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service
 from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset
 from genesis_api.media.schemas import CanvasDocument, CanvasNode
@@ -42,15 +43,15 @@ def headers(settings: Settings) -> dict[str, str]:
     return {"Authorization": f"Bearer {settings.image_api_key.get_secret_value()}"}
 
 
-async def available_models(settings: Settings) -> list[dict[str, object]]:
-    """完整读取当前 Key 的实时目录，不把文档名单用作可用模型白名单。"""
+async def available_models(settings: Settings, *, refresh: bool = False) -> list[dict[str, object]]:
+    """读取当前渠道共享目录，不把文档名单用作可用模型白名单。"""
     try:
-        async with httpx.AsyncClient(timeout=20, trust_env=False) as client:
-            response = await client.get(
-                settings.image_api_base_url.rstrip("/") + "/v1/models", headers=headers(settings)
-            )
-            response.raise_for_status()
-            rows = response.json()["data"]
+        payload = await model_catalog.get(
+            settings.image_api_base_url.rstrip("/") + "/v1/models",
+            headers(settings),
+            refresh=refresh,
+        )
+        rows = payload["data"]
         ids = dict.fromkeys(
             item["id"]
             for item in rows
