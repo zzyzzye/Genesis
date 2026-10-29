@@ -8,7 +8,7 @@ export function WalletBalance({ wallet, compact = false }: { wallet: Wallet | nu
   const amount = wallet ? amountLabel(wallet.available) : '—'
   return <dl className={`wallet-balance${compact ? ' wallet-balance--compact' : ''}`}>
     <div className="wallet-balance-available"><dt>可用余额</dt><dd className={amount.length > 12 ? 'wallet-amount-long' : undefined}>{amount}</dd></div>
-    <div className="wallet-balance-frozen"><dt>冻结金额</dt><dd>{wallet ? amountLabel(wallet.frozen) : '—'}</dd><small>任务结算后退回未用金额</small></div>
+
   </dl>
 }
 

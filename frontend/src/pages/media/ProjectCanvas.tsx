@@ -26,17 +26,18 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { AnimatePresence, motion, useIsPresent } from 'motion/react'
 import { canvasEditorTransition, useLiveReducedMotion } from '../../lib/motion'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, FolderOpen, GripVertical, Hand, ImagePlus, Map as MapIcon, MousePointer2, Music2, Play, Shapes, StickyNote, Type, Upload, X } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, FolderOpen, GripVertical, Hand, ImagePlus, LoaderCircle, Map as MapIcon, MousePointer2, Music2, Play, Shapes, StickyNote, Type, Upload, X } from 'lucide-react'
 import { api, defaultGenerationSettings, type Asset, type Document, type Edge, type Node, type Project, type VideoFrame, upload } from './api'
-import { incomingReferences } from './canvasReferences'
+import { imageReferences, incomingReferences } from './canvasReferences'
 import { AssetPreview } from './AssetPreview'
 import { AssetLibrary } from './AssetLibrary'
 import { CanvasReferenceEdge } from './CanvasReferenceEdge'
-import { ImageGeneration, VideoGeneration, type VideoModel } from './VideoGeneration'
+import { ImageGeneration, VideoGeneration, type GenerationTask, type VideoModel } from './VideoGeneration'
+import { useImageGenerationResults } from './useImageGenerationResults'
 import { ImageParameters } from './ImageParameters'
 import { imageSettingsSummary } from './imageSettings'
 import { ProjectDialog } from './MediaHome'
-import type { MediaAssistantNode, MediaCanvasPlan } from './MediaAssistant'
+import type { MediaAssistantNode, MediaCanvasActions, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
 import { audioAssetNodeSize, generationNodeSize, groupSelection, isGenerationNode, nodeTypeLabel, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
 
@@ -44,6 +45,7 @@ type CanvasNodeData = {
   projectId: string
   onSave: () => Promise<void>
   onGenerated: (id: string, asset: Asset) => void
+  onImageTask: (task: GenerationTask, createResults?: boolean) => void
   source: Node
   asset?: Asset
   assetsLoading: boolean
@@ -59,7 +61,6 @@ type CanvasNodeData = {
   onOpenNodeAssets: (id: string, kind: 'image' | 'audio' | 'video') => void
   onUploadPreview: (id: string, file: File) => Promise<void>
   onUploadNodeAsset: (id: string, kind: Asset['kind'], file: File) => Promise<void>
-  onAddConnected: (id: string, side: 'left' | 'right') => void
   onConvertToVideo: (id: string) => void
   onInteractionStart: () => void
   onInteractionEnd: () => void
@@ -134,7 +135,6 @@ function GenerationNodeView({ id, data, selected, dragging }: NodeProps<CanvasFl
   const node = data.source
   const isImage = node.type === 'image_generation'
   const isAudio = node.type === 'audio_generation'
-  const isVideo = node.type === 'video'
   const label = nodeTypeLabel(node.type)
   const Icon = isImage ? ImagePlus : isAudio ? Music2 : Play
   const preview = data.asset && (isImage ? data.asset.kind === 'image' : isAudio ? data.asset.kind === 'audio' : data.asset.kind !== 'audio') ? data.asset : null
@@ -144,11 +144,9 @@ function GenerationNodeView({ id, data, selected, dragging }: NodeProps<CanvasFl
     <CanvasResizeCorner id={id} data={data} minWidth={360} minHeight={240} label={`调整${label}大小`} />
     <div className="media-node-grip media-node-drag-handle media-video-grip" title="拖动移动节点"><Icon size={17} aria-hidden="true" /><input className="nodrag" aria-label={`${label}名称`} value={node.name ?? ''} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onPatch(id, { name: event.target.value }, false)} /><GripVertical className="media-node-drag-mark" size={16} aria-hidden="true" /></div>
     <div className="media-video-preview-shell media-node-drag-handle">
-      <button type="button" className="media-video-add-segment nodrag nopan is-previous" aria-label={isVideo ? '新增上一段视频' : '新增上游节点'} title="添加上游节点" onClick={() => data.onAddConnected(id, 'left')}>+</button>
       <div className="media-video-screen">
         {preview ? <div className="media-node-drag-surface nowheel nopan media-node-preview"><AssetPreview asset={preview} controls={selected || isAudio} /></div> : node.asset_id && data.assetsLoading ? <div role="status">正在加载预览素材…</div> : <div className="media-video-placeholder"><Icon size={64} aria-hidden="true" /><span>{node.text.trim() || (isImage ? '描述想要生成的图片，或添加参考素材' : isAudio ? '描述想要生成的声音，或添加参考音频' : '描述想要生成的视频，或添加参考素材')}</span></div>}
       </div>
-      <button type="button" className="media-video-add-segment nodrag nopan is-next" aria-label={isVideo ? '新增下一段视频' : '新增下游节点'} title="添加下游节点" onClick={() => data.onAddConnected(id, 'right')}>+</button>
     </div>
     <AnimatePresence>{data.editorOpen && <CanvasGenerationEditor key={id} id={id} data={data} dragging={dragging} />}</AnimatePresence>
   </article>
@@ -202,11 +200,11 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
   const [referencesOpen, setReferencesOpen] = useState(false)
   const [durationError, setDurationError] = useState('')
   const [videoModel, setVideoModel] = useState<VideoModel | null>(null)
-  const [imageModel, setImageModel] = useState<VideoModel | null>(null)
   const settings = node.generation ?? defaultGenerationSettings()
   const patchSettings = (patch: Partial<typeof settings>) => data.onPatch(id, { generation: { ...settings, ...patch } })
   const defaultsOnly = isVideo && videoModel?.parameters_known === false
-  const modeControl = <select aria-label="参考模式" value={settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}><option value="text">{isImage ? '文生图' : isAudio ? '文生音频' : '文生视频'}</option><option value="reference" disabled={defaultsOnly || isImage && imageModel?.image_edit === false}>{isImage ? '图生图' : isAudio ? '音频参考' : '素材参考'}</option>{isVideo && <option value="first_last" disabled={defaultsOnly}>首尾帧</option>}</select>
+  const imageRefs = imageReferences(data.references)
+  const modeControl = <select aria-label="参考模式" value={settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}><option value="text">{isAudio ? '文生音频' : '文生视频'}</option><option value="reference" disabled={defaultsOnly}>{isAudio ? '音频参考' : '素材参考'}</option>{isVideo && <option value="first_last" disabled={defaultsOnly}>首尾帧</option>}</select>
   const parameterControl = isImage ? <GenerationParameters image summary={imageSettingsSummary(settings)}><ImageParameters settings={settings} onChange={patchSettings} /></GenerationParameters> : <GenerationParameters disabled={defaultsOnly} summary={defaultsOnly ? '模型默认参数' : [!isAudio && settings.ratio, !isAudio && settings.resolution, `${node.duration_seconds ?? 5}s`, !isVideo && `${settings.count}个`].filter(Boolean).join(' · ')}>
     <label>{isAudio ? '音频时长' : '镜头时长'}<span><input key={node.duration_seconds} type="number" aria-label={isAudio ? '音频时长' : '镜头时长'} aria-invalid={Boolean(durationError)} aria-describedby={durationError ? `duration-error-${id}` : undefined} min={1} max={600} step={1} defaultValue={node.duration_seconds ?? 5} onFocus={data.onInteractionStart} onBlur={(event) => {
       const seconds = Number(event.target.value)
@@ -242,7 +240,7 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
         const name = asset?.name || source.name || source.text.slice(0, 40) || '空节点'
         return <div key={source.id} className="media-reference-item" role="group" aria-label={`参考 ${index + 1}：${name}`}>
           <div className="media-reference-thumbnail" title={name}>
-            {asset && asset.kind !== 'audio' ? <AssetPreview key={asset.id} asset={asset} thumbnail /> : asset?.kind === 'audio' || source.type === 'audio' || source.type === 'audio_generation' ? <Music2 size={20} strokeWidth={1.6} aria-label="音频参考" /> : !source.asset_id && source.text ? <Type size={20} strokeWidth={1.6} aria-label="文字参考" /> : source.type === 'video' || source.type === 'video_asset' ? <Film size={20} strokeWidth={1.6} aria-hidden="true" /> : <ImagePlus size={20} strokeWidth={1.6} aria-hidden="true" />}
+            {asset && asset.kind !== 'audio' ? <AssetPreview key={asset.id} asset={asset} thumbnail /> : asset?.kind === 'audio' || source.type === 'audio' || source.type === 'audio_generation' ? <Music2 size={20} strokeWidth={1.6} aria-label="音频参考" /> : source.type === 'image' || source.type === 'image_generation' ? <ImagePlus size={20} strokeWidth={1.6} aria-label="待就绪图片参考" /> : !source.asset_id && source.text ? <Type size={20} strokeWidth={1.6} aria-label="文字参考" /> : source.type === 'video' || source.type === 'video_asset' ? <Film size={20} strokeWidth={1.6} aria-hidden="true" /> : <ImagePlus size={20} strokeWidth={1.6} aria-hidden="true" />}
             <span className="media-reference-index" aria-hidden="true">{index + 1}</span>
           </div>
         </div>
@@ -251,14 +249,14 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
         <label className="media-node-reference-picker"><span>添加参考</span><select aria-label="添加参考节点" value="" onChange={(event) => { if (event.target.value) data.onReferenceChange(id, event.target.value, true) }}><option value="">选择画布中的节点…</option>{data.referenceCandidates.map((source) => <option key={source.id} value={source.id}>{source.name || source.text.slice(0, 30) || '未命名节点'}</option>)}</select></label>
         {data.references.length ? <div className="media-reference-details" aria-label="参考管理">{data.references.map(({ node: source, asset }, index) => <div key={source.id}>
           <span title={asset?.name || source.name || source.text}>{index + 1} · {asset?.name || source.name || source.text.slice(0, 40) || '空节点'}</span>
-          <small>{source.asset_id && !asset ? (data.assetsLoading ? '加载中' : '素材不可用') : !asset && !source.text ? '请先补充内容' : '已连接'}</small>
+          <small>{source.asset_id && !asset ? (data.assetsLoading ? '加载中' : '素材不可用') : !asset && (source.type === 'image' || source.type === 'image_generation') ? '图片未就绪' : !asset && !source.text ? '请先补充内容' : '已连接'}</small>
           {source.text && <button type="button" onClick={() => appendPromptToken(source.text)}>引用文字</button>}
           <button type="button" aria-label={`断开参考：${asset?.name || source.name || '节点'}`} onClick={() => data.onReferenceChange(id, source.id, false)}>断开</button>
         </div>)}</div> : <p>选择上游节点，或从它的连接点拖线到当前节点。</p>}
       </div>}
       <input ref={fileInput} className="media-video-file-input" type="file" accept={isImage ? 'image/jpeg,image/png,image/webp,image/gif,image/avif' : isAudio ? 'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/webm,audio/aac' : 'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska'} aria-label={`导入${nodeTypeLabel(node.type)}${isImage ? '参考' : '预览'}素材`} onChange={(event) => { const file = event.target.files?.[0]; if (file) void (isVideo ? data.onUploadPreview(id, file) : data.onUploadNodeAsset(id, isAudio ? 'audio' : 'image', file)); event.target.value = '' }} />
       <textarea className="resize-none" aria-label={isImage ? '图片提示词' : isAudio ? '音频提示词' : '镜头描述'} value={node.text} placeholder={isImage ? '描述想要生成的图片内容，可引用画布素材' : isAudio ? '描述声音、音乐风格或环境氛围，可引用画布素材' : '描述画面、人物动作与声音，可引用连入节点的文字'} maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
-      {isVideo ? <VideoGeneration projectId={data.projectId} node={node} controls={<>{modeControl}{parameterControl}</>} referenceCount={data.references.filter((item) => item.asset).length} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} onModelChange={setVideoModel} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={<>{modeControl}{parameterControl}</>} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} onModelChange={setImageModel} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
+      {isVideo ? <VideoGeneration projectId={data.projectId} node={node} controls={<>{modeControl}{parameterControl}</>} referenceCount={data.references.filter((item) => item.asset).length} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} onModelChange={setVideoModel} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={parameterControl} referenceCount={imageRefs.length} referencesPending={imageRefs.some(({ asset }) => !asset)} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onImageTask} onResult={(asset) => data.onGenerated(id, asset)} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
     </section>
 }
 
@@ -271,6 +269,9 @@ function MediaAssetNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
   const fileInput = useRef<HTMLInputElement>(null)
   const label = nodeTypeLabel(node.type)
   const Icon = isImage ? ImagePlus : kind === 'video' ? Film : Music2
+  const result = isImage ? node.image_result : null
+  const generating = Boolean(result && ['requesting', 'submitting', 'queued', 'processing', 'downloading', 'completed'].includes(result.status))
+  const resultLabel = result && ['requesting', 'submitting'].includes(result.status) ? '正在提交图片…' : result?.status === 'downloading' ? '正在保存图片…' : result?.status === 'completed' ? '正在加载图片…' : generating ? '正在生成图片…' : result?.status === 'download_failed' ? '图片保存失败' : result?.status === 'failed' ? '图片生成失败' : '图片任务待核实'
   return <article className={`media-node media-node--media media-node--material ${kind === 'audio' ? 'is-audio-material' : ''} ${selected ? 'is-selected' : ''}`} aria-label={node.name || label}>
     <CanvasResizeCorner id={id} data={data} minWidth={kind === 'audio' ? 300 : 160} minHeight={80} label={`调整${label}大小`} />
     <Handle type="target" position={Position.Left} aria-label="输入连接点" />
@@ -281,8 +282,11 @@ function MediaAssetNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
         // 初次放入的图片按原图比例定高，不覆盖用户手动调整的尺寸。
         if (width > 0 && height > 0 && node.width === 360 && node.height === 280) data.onPatch(id, { height: Math.max(80, Math.min(4000, node.width * height / width)) }, false)
       }} /></div>
-      : <div className="media-node-drag-surface nowheel nopan media-node-media-empty"><Icon size={24} aria-hidden="true" /><div className="nodrag"><button type="button" onClick={() => fileInput.current?.click()}>导入{kindLabel}</button><button type="button" onClick={() => data.onOpenNodeAssets(id, kind)}>选择作品素材</button></div></div>}
-    {asset && <div className="media-node-media-actions nodrag nowheel nopan"><button type="button" aria-label="导入替换" title="导入替换" onClick={() => fileInput.current?.click()}><Upload size={15} aria-hidden="true" /></button><button type="button" aria-label="选择作品素材" title="选择作品素材" onClick={() => data.onOpenNodeAssets(id, kind)}><FolderOpen size={15} aria-hidden="true" /></button><button type="button" aria-label="清空节点素材" title="清空节点素材" onClick={() => data.onPatch(id, { asset_id: null })}><X size={15} aria-hidden="true" /></button></div>}
+      : result ? <div className="media-node-drag-surface nowheel nopan media-node-media-empty media-image-result" role="status" aria-busy={generating}>
+        {generating ? <LoaderCircle size={28} className="is-spinning" aria-hidden="true" /> : <ImagePlus size={28} aria-hidden="true" />}
+        <strong>{resultLabel}</strong>{result.error && <span>{result.error}</span>}
+      </div> : <div className="media-node-drag-surface nowheel nopan media-node-media-empty"><Icon size={24} aria-hidden="true" /><div className="nodrag"><button type="button" onClick={() => fileInput.current?.click()}>导入{kindLabel}</button><button type="button" onClick={() => data.onOpenNodeAssets(id, kind)}>选择作品素材</button></div></div>}
+    {asset && <div className="media-node-media-actions nodrag nowheel nopan"><button type="button" aria-label="导入替换" title="导入替换" onClick={() => fileInput.current?.click()}><Upload size={15} aria-hidden="true" /></button><button type="button" aria-label="选择作品素材" title="选择作品素材" onClick={() => data.onOpenNodeAssets(id, kind)}><FolderOpen size={15} aria-hidden="true" /></button><button type="button" aria-label="清空节点素材" title="清空节点素材" onClick={() => data.onPatch(id, { asset_id: null, image_result:null })}><X size={15} aria-hidden="true" /></button></div>}
     <Handle type="source" position={Position.Right} aria-label="输出连接点" />
   </article>
 }
@@ -331,12 +335,31 @@ function documentNode(flowNode: CanvasFlowNode): Node {
   }
 }
 
-export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCanvasApplyChange }: { projectId: string; userId: string; onAgentNodeChange?: (node: MediaAssistantNode | null) => void; onAgentCanvasApplyChange?: (apply: ((plan: MediaCanvasPlan) => void) | null) => void }) {
+export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCanvasApplyChange, onAgentActionsChange }: { projectId: string; userId: string; onAgentNodeChange?: (node: MediaAssistantNode | null) => void; onAgentCanvasApplyChange?: (apply: ((plan: MediaCanvasPlan) => void) | null) => void; onAgentActionsChange?: (actions: MediaCanvasActions | null) => void }) {
   const navigate = useNavigate()
   const location = useLocation()
   const canvas = useCanvas(projectId, userId)
   const [project, setProject] = useState<Project | null>(null)
   const [assets, setAssets] = useState<Record<string, Asset>>({})
+  const [error, setError] = useState('')
+  const onImageTask = useImageGenerationResults(projectId, canvas, setAssets)
+  const { save: saveCanvas, current: canvasDocument } = canvas
+  useEffect(() => {
+    if (!canvas.ready) { onAgentActionsChange?.(null); return }
+    onAgentActionsChange?.({save:saveCanvas,attachImageTask:async resource => {
+      if (resource.scope_id !== projectId || !canvasDocument.current.nodes.some(node=>node.id === resource.parent_id && node.type === 'image_generation')) return
+      try {
+        const task = await api<GenerationTask>(`/projects/${projectId}/image-generations/${resource.id}`)
+        if (task.node_id !== resource.parent_id) throw new Error('生成任务与画布节点不匹配')
+        onImageTask(task)
+        setError(current=>current.startsWith('图片任务已提交，但结果同步失败') ? '' : current)
+      } catch {
+        setError('图片任务已提交，但结果同步失败，正在重新读取任务；不会重复生成。')
+        throw new Error('图片任务同步失败')
+      }
+    }})
+    return () => onAgentActionsChange?.(null)
+  }, [canvas.ready, canvasDocument, onAgentActionsChange, onImageTask, projectId, saveCanvas])
   const [assetsLoading, setAssetsLoading] = useState(true)
   const [renameOpen, setRenameOpen] = useState(false)
   const [assetTarget, setAssetTarget] = useState<{ id: string; kind: Asset['kind']; allowImageForVideo: boolean } | null>(null)
@@ -355,7 +378,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const [previewRetry, setPreviewRetry] = useState<{ id: string; file: File; kind?: Asset['kind'] } | null>(null)
   const uploadActive = useRef(false)
   const [tool, setTool] = useState<'select' | 'pan'>('select')
-  const [error, setError] = useState('')
   const [reloadOpen, setReloadOpen] = useState(false)
   const reloadDialog = useRef<HTMLDialogElement>(null)
   const [flow, setFlow] = useState<ReactFlowInstance<CanvasFlowNode> | null>(null)
@@ -464,7 +486,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const assignNodeAsset = useCallback((id: string, asset: Asset) => {
     const current = canvas.current.current
     const target = current.nodes.find((node) => node.id === id)
-    if (target?.type !== 'image_generation' || asset.kind !== 'image') { patchNode(id, { asset_id:asset.id }); return }
+    if (target?.type !== 'image_generation' || asset.kind !== 'image') { patchNode(id, { asset_id:asset.id, image_result:null }); return }
     const alreadyConnected = current.edges.some((edge) => edge.target === id && current.nodes.some((source) => source.id === edge.source && source.asset_id === asset.id))
     const sourceId = crypto.randomUUID()
     const references = current.edges.filter((edge) => edge.target === id).length
@@ -507,8 +529,11 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       name: selectedNode.name ?? '',
       text: selectedNode.text,
       assetId: selectedNode.asset_id,
+      durationSeconds: selectedNode.duration_seconds,
+      model: selectedNode.generation?.model,
+      mode: selectedNode.type === 'image_generation' ? imageReferences(incomingReferences(canvas.document, selectedNode.id, assets)).length ? 'reference' : 'text' : selectedNode.generation?.mode,
     } : null)
-  }, [canvas.document.nodes, onAgentNodeChange, selected])
+  }, [assets, canvas.document, onAgentNodeChange, selected])
 
   useEffect(() => () => onAgentNodeChange?.(null), [onAgentNodeChange])
 
@@ -533,18 +558,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       y: (rect.height + paddingTop - paddingBottom - (bottom - top) * zoom) / 2 - top * zoom,
     }
   }, [])
-
-  const addConnected = useCallback((id: string, side: 'left' | 'right') => {
-    const current = canvas.document
-    const source = current.nodes.find((node) => node.id === id && isGenerationNode(node))
-    if (!source) return
-    const flowX = source.x + (side === 'right' ? source.width + 120 : -generationNodeSize.width - 120)
-    const flowY = source.y
-    setPaletteAnchor({ x: current.viewport.x + (side === 'right' ? source.x + source.width : source.x) * current.viewport.zoom, y: current.viewport.y + (source.y + source.height / 2) * current.viewport.zoom, flowX, flowY, connection: { id, side } })
-    setNodeMenu(true)
-    setContextMenu(null)
-    setMenu(false)
-  }, [canvas.document])
 
   const convertToVideo = useCallback((id: string) => {
     const current = canvas.current.current
@@ -578,6 +591,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     data: {
       projectId,
       onSave: canvas.save,
+      onImageTask,
       onGenerated: (id, asset) => { setAssets((previous) => ({ ...previous, [asset.id]: asset })); patchNode(id, { asset_id: asset.id }) },
       source: node,
       asset: assets[node.asset_id ?? ''],
@@ -594,14 +608,13 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       onOpenNodeAssets: openNodeAssets,
       onUploadPreview: uploadPreview,
       onUploadNodeAsset: uploadNodeAsset,
-      onAddConnected: addConnected,
       onConvertToVideo: convertToVideo,
       onInteractionStart: beginInteraction,
       onInteractionEnd: endInteraction,
       editorOpen: selected.length === 1 && selected[0] === node.id && !nodeMenu && !contextMenu,
       onCloseEditor: () => setSelected([]),
     },
-  })), [addConnected, assets, assetsLoading, beginInteraction, canvas.document, canvas.save, changeReference, contextMenu, convertToVideo, draggingNode, endInteraction, nodeMenu, openAssets, openNodeAssets, patchNode, previewAssets, projectId, selected, updateText, uploadNodeAsset, uploadPreview])
+  })), [assets, assetsLoading, beginInteraction, canvas.document, canvas.save, changeReference, contextMenu, convertToVideo, draggingNode, endInteraction, nodeMenu, onImageTask, openAssets, openNodeAssets, patchNode, previewAssets, projectId, selected, updateText, uploadNodeAsset, uploadPreview])
 
   const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
     ...edge,
@@ -713,6 +726,13 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       const element = event.target instanceof HTMLElement ? event.target : null
+      // 助手内的键盘操作与文字选区由浏览器处理，不能被画布节点快捷键接管。
+      if (element?.closest('.studio-assistant,[contenteditable="true"],[role="textbox"]')) return
+      const selection = window.getSelection()
+      if (selection && !selection.isCollapsed && (
+        selection.anchorNode?.parentElement?.closest('.studio-assistant') ||
+        selection.focusNode?.parentElement?.closest('.studio-assistant')
+      )) return
       if (element?.closest('dialog[open]')) return
       if (event.key === 'Escape') { setMenu(false); setNodeMenu(false); setContextMenu(null); setSelected([]); setSelectedEdges([]) }
       if (element?.closest('input,textarea,select,button,a,video,audio,[role="dialog"]')) return
@@ -807,6 +827,15 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
 
   function applyAgentPlan(plan: MediaCanvasPlan) {
     const current = canvas.current.current
+    for (const operation of plan.operations) {
+      if (operation.action !== 'update_node' || !operation.generation) continue
+      const target = current.nodes.find(node => node.id === operation.node_id)
+      if (!target || target.type !== 'image_generation') throw new Error('目标生图节点已不存在，未修改任何节点。')
+      const settings = { ...defaultGenerationSettings(), ...target.generation }
+      for (const [key, value] of Object.entries(operation.expected_generation ?? {})) {
+        if ((settings[key as keyof typeof settings] ?? '') !== value) throw new Error('节点参数已有新修改，请让助手重新读取画布，未覆盖当前编辑。')
+      }
+    }
     const nodes = [...current.nodes]
     const edges = [...current.edges]
     const affectedIds: string[] = []
@@ -824,13 +853,19 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         if (index < 0) continue
         const target = nodes[index]
         if (!target) continue
-        nodes[index] = { ...target, ...(operation.name !== undefined ? { name: operation.name } : {}), ...(operation.text !== undefined ? { text: operation.text } : {}), ...(operation.duration_seconds !== undefined ? { duration_seconds: operation.duration_seconds } : {}) }
+        nodes[index] = { ...target, ...(operation.name !== undefined ? { name: operation.name } : {}), ...(operation.text !== undefined ? { text: operation.text } : {}), ...(operation.duration_seconds !== undefined ? { duration_seconds: operation.duration_seconds } : {}), ...(operation.generation ? { generation: { ...defaultGenerationSettings(), ...target.generation, ...operation.generation } } : {}) }
         affectedIds.push(operation.node_id)
         continue
       }
       if (operation.action === 'add_note') {
         const node: Node = { id: crypto.randomUUID(), type: 'note', asset_id: null, name: '', duration_seconds: 5, text: operation.text, ...place(280, 220, previousVideo), width: 280, height: 220 }
         nodes.push(node); affectedIds.push(node.id)
+        continue
+      }
+      if (operation.action === 'add_image_generation') {
+        const node: Node = { id: crypto.randomUUID(), type: 'image_generation', asset_id: null, name: operation.name, duration_seconds: 5, text: operation.text, generation: { ...defaultGenerationSettings(), ratio: '1:1', sound: false }, ...place(generationNodeSize.width, generationNodeSize.height, previousVideo), ...generationNodeSize }
+        nodes.push(node); affectedIds.push(node.id)
+        previousVideo = node
         continue
       }
       if (operation.action === 'add_image' || operation.action === 'add_audio') {
@@ -840,8 +875,9 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         nodes.push(node); affectedIds.push(node.id)
         continue
       }
-      const requestedSource = operation.connect_from_id ? nodes.find((node) => node.id === operation.connect_from_id && node.type === 'video') : previousVideo
-      const node: Node = { id: crypto.randomUUID(), type: 'video', asset_id: null, name: operation.name, duration_seconds: operation.duration_seconds, text: operation.text, ...place(generationNodeSize.width, generationNodeSize.height, requestedSource), ...generationNodeSize }
+      // 顺序只影响排布；只有明确指定引用时才连线，不把分镜顺序当成素材依赖。
+      const requestedSource = operation.connect_from_id ? nodes.find((node) => node.id === operation.connect_from_id) : undefined
+      const node: Node = { id: crypto.randomUUID(), type: 'video', asset_id: null, name: operation.name, duration_seconds: operation.duration_seconds, ...(operation.model ? { generation: operation.generation ?? { ...defaultGenerationSettings(), model: operation.model } } : {}), text: operation.text, ...place(generationNodeSize.width, generationNodeSize.height, requestedSource ?? previousVideo), ...generationNodeSize }
       nodes.push(node); affectedIds.push(node.id)
       if (requestedSource) edges.push({ id: crypto.randomUUID(), source: requestedSource.id, target: node.id })
       previousVideo = node

@@ -6,7 +6,7 @@ import { getStoredAuthToken, storeAuthToken } from '../../lib/auth'
 import { MediaHome } from './MediaHome'
 import { ProjectCanvas } from './ProjectCanvas'
 import { AccountAssetsPage, ProjectAssetsPage, ProjectOverviewPage } from './ProjectWorkspace'
-import { MediaAssistant, type MediaAssistantNode, type MediaCanvasPlan } from './MediaAssistant'
+import { MediaAssistant, type MediaAssistantNode, type MediaCanvasActions, type MediaCanvasPlan } from './MediaAssistant'
 
 export function MediaPage() {
   const [user, setUser] = useState<CurrentUser | null>(null)
@@ -14,6 +14,7 @@ export function MediaPage() {
   const [authError, setAuthError] = useState('')
   const [agentNode, setAgentNode] = useState<MediaAssistantNode | null>(null)
   const [agentCanvasApply, setAgentCanvasApply] = useState<((plan: MediaCanvasPlan) => void) | null>(null)
+  const [canvasActions, setCanvasActions] = useState<MediaCanvasActions | null>(null)
   const handleAgentCanvasApplyChange = useCallback((apply: ((plan: MediaCanvasPlan) => void) | null) => setAgentCanvasApply(() => apply), [])
   const { projectId } = useParams()
   const location = useLocation()
@@ -49,9 +50,9 @@ export function MediaPage() {
   const content = !projectId
     ? (page === 'assets' ? <AccountAssetsPage /> : <MediaHome />)
     : page === 'canvas'
-      ? <ProjectCanvas key={`${user.id}:${projectId}`} projectId={projectId} userId={user.id} onAgentNodeChange={setAgentNode} onAgentCanvasApplyChange={handleAgentCanvasApplyChange} />
+      ? <ProjectCanvas key={`${user.id}:${projectId}`} projectId={projectId} userId={user.id} onAgentNodeChange={setAgentNode} onAgentCanvasApplyChange={handleAgentCanvasApplyChange} onAgentActionsChange={setCanvasActions} />
       : page === 'assets'
         ? <ProjectAssetsPage projectId={projectId} />
         : <ProjectOverviewPage projectId={projectId} />
-  return <div className="media-workspace">{content}<MediaAssistant key={user.id} userId={user.id} attachmentsAllowed page={page} projectId={projectId} selectedNode={page === 'canvas' ? agentNode : null} onApplyCanvasPlan={page === 'canvas' ? agentCanvasApply ?? undefined : undefined} /></div>
+  return <div className="media-workspace">{content}<MediaAssistant key={user.id} userId={user.id} attachmentsAllowed page={page} projectId={projectId} selectedNode={page === 'canvas' ? agentNode : null} onApplyCanvasPlan={page === 'canvas' ? agentCanvasApply ?? undefined : undefined} canvasActions={page === 'canvas' ? canvasActions : null} /></div>
 }

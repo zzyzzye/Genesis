@@ -28,6 +28,7 @@ from genesis_api.core.config import Settings
 from genesis_api.database.base import Base
 from genesis_api.database.session import get_session
 from genesis_api.identity.models import User, UserRole
+from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service, video
 from genesis_api.media.models import MediaAsset, VideoGeneration
 from genesis_api.media.video_catalog import CATALOG
@@ -130,7 +131,7 @@ async def fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncGener
             monkeypatch.setattr(service, "STORAGE_ROOT", tmp_path)
             monkeypatch.setattr(media_video, "get_settings", lambda: settings)
             monkeypatch.setattr(video, "get_settings", lambda: settings)
-            video.model_catalog.entries.clear()
+            model_catalog.entries.clear()
             monkeypatch.setattr(video, "SessionLocal", sessionmaker(engine, expire_on_commit=False))
             monkeypatch.setattr(httpx, "AsyncClient", upstream_client)
             project = await client.post("projects", json={"name": "视频测试"})

@@ -21,6 +21,7 @@ from genesis_api.billing.pricing_rules import (
     UnsupportedPricing,
     decimal_value,
     token_price_preview,
+    verified_quota_per_cny,
 )
 from genesis_api.billing.schemas import ModelPricePreview, TokenPriceTier
 from genesis_api.billing.service import connection, is_yyapi
@@ -171,9 +172,7 @@ class YyapiPricingService:
             or parsed.port not in (None, 443)
         ):
             raise PricingLookupError("价格服务地址配置无效，请站长核对。")
-        identity = hashlib.sha256(
-            f"{base}\0{token}\0{settings.yyapi_user_id}".encode()
-        ).hexdigest()
+        identity = hashlib.sha256(f"{base}\0{token}\0{settings.yyapi_user_id}".encode()).hexdigest()
         async with self._lock:
             cached = self._cache.get(identity)
             if cached and time.monotonic() - cached[0] < 60:
@@ -254,14 +253,7 @@ class YyapiPricingService:
             currency_rate=rate,
             updated_at=datetime.now(UTC).isoformat(),
             # 仅开放已经用实际账单核验过的 YYAPI 人民币额度口径。
-            quota_per_cny=(
-                500000
-                if currency == "CNY"
-                and rate == 1
-                and data.get("quota_per_unit") == 500000
-                and data.get("price") == 1
-                else None
-            ),
+            quota_per_cny=verified_quota_per_cny(status),
         )
 
     async def _tokens(

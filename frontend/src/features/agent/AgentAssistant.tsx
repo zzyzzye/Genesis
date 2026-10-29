@@ -7,7 +7,6 @@ import remarkGfm from 'remark-gfm'
 import { Clock3, Gauge, Timer, Zap } from 'lucide-react'
 
 import { StudioIcon } from '../../studio/StudioIcon'
-import { TypewriterText } from '../../studio/TypewriterText'
 import { motionTiming } from '../../lib/motion'
 import { useChatAutoScroll } from './useChatAutoScroll'
 
@@ -65,7 +64,6 @@ import { questionAnswers, splitAgentQuestion } from './questionProtocol'
 import { modelDisplayName } from './modelDisplayName'
 import { reasoningEffortLabel, thinkingModeLabel, useReasoningEffort } from './useReasoningEffort'
 import { getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
-import { useBillingQuote } from '../billing/useBillingQuote'
 import type { BillingOperation } from '../billing/api'
 import type { AiChatRequest } from '../../lib/api'
 
@@ -207,17 +205,19 @@ const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, 
   const actions = proposals?.length ? proposals : legacyAction ? [legacyAction] : []
   const operationOnly = (actions.length > 0 || Boolean(tool_calls?.length)) && !timing?.firstTokenAt && metrics?.first_token_seconds == null
   const question = splitAgentQuestion(content)
+  useEffect(() => {
+    if (streaming && question.text) onProgress()
+  }, [question.text, streaming, onProgress])
   return <div className="studio-assistant__response">
     <AgentToolHistory calls={tool_calls ?? []} proposals={actions} executedProposals={executedProposals} streaming={streaming} />
-    {question.text && <div className="studio-assistant__markdown">{streaming ? <TypewriterText content={question.text} onProgress={onProgress} /> : <Markdown remarkPlugins={[remarkGfm]}>{question.text}</Markdown>}</div>}
+    {question.text && <div className="studio-assistant__markdown" aria-busy={streaming}><Markdown remarkPlugins={[remarkGfm]}>{question.text}</Markdown>{streaming && <span className="studio-assistant__typing-cursor" aria-hidden="true" />}</div>}
     {!streaming && error && <p className="studio-assistant__message-status">{error.includes('停止') && !content.trim() ? '已停止，未收到模型正文。' : error}</p>}
     {!streaming && !error && status === 'completed' && !content.trim() && !actions.length && !tool_calls?.length && <p className="studio-assistant__message-status">本轮未返回正文，请重试或切换模型。</p>}
     {!streaming && !error && !content.trim() && actions.length > 0 && <p className="studio-assistant__stream-text">{actions.every(action => action.executed || executedProposals?.includes(action.proposal_id)) ? '操作已执行，结果如下。' : '操作提议已准备，请核对后确认。'}</p>}
     {question.request && <AgentQuestion key={question.request.id} request={question.request} disabled={questionDisabled} answered={questionAnswer !== undefined} answerContent={questionAnswer} onAnswer={onAnswer} />}
+    {actions.map((action) => <BlogActionProposal key={action.proposal_id} action={action} targetPost={targetPost} executed={Boolean(action.executed || executedProposals?.includes(action.proposal_id))} busy={confirming} disabled={streaming} onConfirm={() => { void onConfirm(index, action) }} />)}
     {response}
     <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} operationOnly={operationOnly} />
-    <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} operationOnly={operationOnly} />
-    {actions.map((action) => <BlogActionProposal key={action.proposal_id} action={action} targetPost={targetPost} executed={Boolean(action.executed || executedProposals?.includes(action.proposal_id))} busy={confirming} disabled={streaming} onConfirm={() => { void onConfirm(index, action) }} />)}
   </div>
 })
 
@@ -243,6 +243,8 @@ export type MediaAssistantVariant = {
   className: string
   contextLabel: ReactNode
   renderResponse: (content: string, key: string, disabled: boolean) => ReactNode
+  beforeSubmit?: () => Promise<void>
+  onToolCalls?: (calls: AiToolCall[]) => void
 }
 
 export function AgentAssistant({ page, editor, userId, onExecuted, media }: { page: AssistantPageContext; editor: AssistantEditorContext | null; userId?: string; onExecuted?: () => void; media?: MediaAssistantVariant }) {
@@ -310,7 +312,6 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   const [modelsLoading, setModelsLoading] = useState(true)
   const [modelsError, setModelsError] = useState('')
   const [modelsRevision, setModelsRevision] = useState(0)
-  const { confirmQuote, quoteDialog } = useBillingQuote()
   const pendingRequest = useRef<AiChatRequest | null>(null)
   const modelsCache = useRef<Partial<Record<AiProvider, AvailableModel[]>>>({})
   const forceModelsRefresh = useRef(false)
@@ -616,8 +617,9 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   }, [modelMenuOpen, isOpen])
 
   const notifyAutomaticExecution = useEffectEvent(() => onExecuted?.())
+  const notifyToolCalls = useEffectEvent((calls: AiToolCall[]) => media?.onToolCalls?.(calls))
   useEffect(() => {
-    if (!activeRun || !isOpen) return
+    if (!activeRun || !isOpen && !isMedia) return
     const run = activeRun
     const token = getStoredAuthToken(authKey)
     if (!token) return
@@ -654,6 +656,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
           const result = await streamAiChatRun(token!, run.id, {
             onToolCalls: (tool_calls) => {
               if (cancelled || selection !== selectionVersion.current) return
+              notifyToolCalls(tool_calls)
               setMessages(current => current.map((message, index) => index === run.assistantMessageIndex
                 ? { ...message, tool_calls } : message))
             },
@@ -720,7 +723,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
       if (activeReceivedRef.current?.index === run.assistantMessageIndex) activeReceivedRef.current = null
       if (pendingFrame !== null) cancelAnimationFrame(pendingFrame)
     }
-  }, [activeRun, isOpen, authKey])
+  }, [activeRun, isOpen, authKey, isMedia])
 
   function startNewConversation() {
     if (isStarting || conversationLoading || renameBusy || historyDeletingRef.current) return
@@ -768,18 +771,10 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
       return
     }
     const retainedMessages = messages.filter((message) => message.content.trim().length > 0 || message.attachments?.length || message.proposals?.length || message.status)
-    let quoteId: string | undefined
     const previousRequest = pendingRequest.current
     if (previousRequest && (previousRequest.messages[0]?.content !== content || previousRequest.provider !== provider || previousRequest.model !== (model || undefined))) {
       setError('上次提交结果尚未确认，请先重新打开助手核对会话，再发起不同请求。')
       return
-    }
-    if (!previousRequest && selectedModel?.billing_mode) {
-      try {
-        const quote = await confirmQuote({ kind:'agent',provider,model }, token)
-        if (!quote) return
-        quoteId = quote.id
-      } catch (reason) { setError((reason as Error).message); return }
     }
     const assistantMessageIndex = retainedMessages.length + 1
     scrollToLatest()
@@ -789,6 +784,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
     setStreamStatus('正在创建生成任务…')
     setIsStarting(true)
     try {
+      await media?.beforeSubmit?.()
       let id = conversationId
       if (!id) {
         const created = await createAiConversation(token, surface)
@@ -800,7 +796,6 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
       }
       const body: AiChatRequest = previousRequest ?? {
         request_id: crypto.randomUUID(),
-        ...(quoteId ? { quote_id:quoteId } : {}),
         surface,
         conversation_id: id,
         messages: [{ role: 'user', content, ...(selectedAttachments.length ? { attachment_ids: selectedAttachments.map(item => item.id) } : {}) }],
@@ -891,7 +886,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   }, [onExecuted, authKey])
 
   return (
-    <>{quoteDialog}<AnimatePresence initial={false}>
+    <><AnimatePresence initial={false}>
     {isOpen ? <motion.div key="assistant" ref={rootRef} className={`studio-assistant${media ? ` media-assistant ${media.className}` : ''} is-open${expanded ? ' is-expanded' : ''}`}
       initial={{ opacity: 0, x: reducedMotion ? 0 : media ? 24 : '100%', y: reducedMotion || !media ? 0 : 16, '--assistant-motion-width': `${panelWidth}px` }} animate={{ opacity: 1, x: 0, y: 0, '--assistant-motion-width': expanded ? '960px' : `${panelWidth}px` }} exit={{ opacity: 0, x: reducedMotion ? 0 : media ? 24 : '100%', y: reducedMotion || !media ? 0 : 16 }}
       transition={resizing ? { ...transition, duration: 0 } : transition}>

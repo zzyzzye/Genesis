@@ -1,18 +1,25 @@
 import './CanvasAssistant.css'
 import { Check, Clapperboard, WandSparkles, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import type { AiToolCall } from '../../lib/api'
 import { AgentAssistant } from '../../features/agent/AgentAssistant'
 import { accountAuthTokenKey } from '../../lib/auth'
+import { api, defaultGenerationSettings, type GenerationSettings } from './api'
+import type { VideoModel } from './VideoGeneration'
+import { imageRatios, imageResolutions, imageSizePatch } from './imageSettings'
 
 type MediaAssistantPage = 'projects' | 'project' | 'canvas' | 'assets'
-export type MediaAssistantNode = { id: string; type: string; name: string; text: string; assetId: string | null }
+export type MediaGenerationResource = NonNullable<AiToolCall['resource']>
+export type MediaCanvasActions = { save: () => Promise<void>; attachImageTask: (resource: MediaGenerationResource) => Promise<void> }
+export type MediaAssistantNode = { id: string; type: string; name: string; text: string; assetId: string | null; durationSeconds?: number; model?: string; mode?: string }
 type MediaCanvasOperation =
-  | { action: 'add_video'; name: string; text: string; duration_seconds: number; connect_from_id?: string }
+  | { action: 'add_image_generation'; name: string; text: string }
+  | { action: 'add_video'; name: string; text: string; duration_seconds: number; model?: string; generation?: GenerationSettings; connect_from_id?: string }
   | { action: 'add_image'; name: string; text: string }
   | { action: 'add_audio'; name: string; text: string }
   | { action: 'add_note'; text: string }
-  | { action: 'update_node'; node_id: string; name?: string; text?: string; duration_seconds?: number }
-export type MediaCanvasPlan = { title: string; operations: MediaCanvasOperation[] }
+  | { action: 'update_node'; node_id: string; name?: string; text?: string; duration_seconds?: number; generation?: Partial<GenerationSettings>; expected_generation?: Record<string, string> }
+export type MediaCanvasPlan = { title: string; operations: MediaCanvasOperation[]; project_id?: string; version?: number }
 
 const promptsByPage: Record<MediaAssistantPage, string[]> = {
   projects: ['把一句想法拆成短片方案', '给我一个可拍的 6 镜头结构'],
@@ -28,7 +35,7 @@ function canvasPlanFromMessage(content: string): MediaCanvasPlan | null {
   const match = content.match(/```canvas-plan\s*\n?([\s\S]*?)```/i)
   if (!match) return null
   try {
-    const candidate = JSON.parse(match[1] ?? '') as { title?: unknown; operations?: unknown }
+    const candidate = JSON.parse(match[1] ?? '') as { title?: unknown; operations?: unknown; project_id?: unknown; version?: unknown }
     if (!Array.isArray(candidate.operations) || candidate.operations.length === 0 || candidate.operations.length > 8) return null
     const operations: MediaCanvasOperation[] = []
     for (const item of candidate.operations) {
@@ -36,50 +43,151 @@ function canvasPlanFromMessage(content: string): MediaCanvasPlan | null {
       const operation = item as Record<string, unknown>
       const action = operation.action
       if (action === 'add_video' && typeof operation.name === 'string' && typeof operation.text === 'string') {
-        operations.push({ action, name: operation.name.slice(0, 120), text: operation.text.slice(0, 2000), duration_seconds: Math.max(1, Math.min(60, Math.round(Number(operation.duration_seconds)) || 5)), ...(typeof operation.connect_from_id === 'string' ? { connect_from_id: operation.connect_from_id } : {}) })
-      } else if ((action === 'add_image' || action === 'add_audio') && typeof operation.name === 'string' && typeof operation.text === 'string') {
+        if (typeof operation.duration_seconds !== 'number' || !Number.isInteger(operation.duration_seconds) || operation.duration_seconds < 1 || operation.duration_seconds > 60) return null
+        if (operation.model !== undefined && (typeof operation.model !== 'string' || !operation.model.trim())) return null
+        operations.push({ action, name: operation.name.slice(0, 120), text: operation.text.slice(0, 2000), duration_seconds: operation.duration_seconds, ...(typeof operation.model === 'string' ? { model: operation.model } : {}), ...(typeof operation.connect_from_id === 'string' ? { connect_from_id: operation.connect_from_id } : {}) })
+      } else if ((action === 'add_image_generation' || action === 'add_image' || action === 'add_audio') && typeof operation.name === 'string' && typeof operation.text === 'string') {
         operations.push({ action, name: operation.name.slice(0, 120), text: operation.text.slice(0, 2000) })
       } else if (action === 'add_note' && typeof operation.text === 'string') {
         operations.push({ action, text: operation.text.slice(0, 2000) })
       } else if (action === 'update_node' && typeof operation.node_id === 'string') {
-        const patch = { action, node_id: operation.node_id, ...(typeof operation.name === 'string' ? { name: operation.name.slice(0, 120) } : {}), ...(typeof operation.text === 'string' ? { text: operation.text.slice(0, 2000) } : {}), ...(typeof operation.duration_seconds === 'number' && Number.isFinite(operation.duration_seconds) ? { duration_seconds: Math.max(1, Math.min(60, Math.round(operation.duration_seconds))) } : {}) } as MediaCanvasOperation
-        if (!('name' in patch) && !('text' in patch) && !('duration_seconds' in patch)) return null
+        if (operation.duration_seconds !== undefined && (typeof operation.duration_seconds !== 'number' || !Number.isInteger(operation.duration_seconds) || operation.duration_seconds < 1 || operation.duration_seconds > 60)) return null
+        const patch = { action, node_id: operation.node_id, ...(typeof operation.name === 'string' ? { name: operation.name.slice(0, 120) } : {}), ...(typeof operation.text === 'string' ? { text: operation.text.slice(0, 2000) } : {}), ...(typeof operation.duration_seconds === 'number' && Number.isFinite(operation.duration_seconds) ? { duration_seconds: Math.max(1, Math.min(60, Math.round(operation.duration_seconds))) } : {}) } as Extract<MediaCanvasOperation, { action: 'update_node' }>
+        if (operation.generation !== undefined) {
+          const generation = operation.generation as Record<string, unknown>
+          if (!generation || typeof generation.model !== 'string' || !generation.model.trim() || !imageRatios.includes(generation.image_ratio as typeof imageRatios[number]) || !imageResolutions.includes(generation.image_resolution as typeof imageResolutions[number])) return null
+          patch.generation = { model: generation.model, ...imageSizePatch(generation.image_ratio as typeof imageRatios[number], generation.image_resolution as typeof imageResolutions[number]) }
+          const expected = operation.expected_generation
+          if (!expected || typeof expected !== 'object' || Array.isArray(expected) || Object.values(expected).some(value => typeof value !== 'string')) return null
+          patch.expected_generation = expected as Record<string, string>
+        }
+        if (!('name' in patch) && !('text' in patch) && !('duration_seconds' in patch) && !patch.generation) return null
         operations.push(patch)
       } else return null
     }
-    return { title: typeof candidate.title === 'string' ? candidate.title.slice(0, 80) : '镜头搭档方案', operations }
+    return { title: typeof candidate.title === 'string' ? candidate.title.slice(0, 80) : '镜头搭档方案', operations, ...(typeof candidate.project_id === 'string' ? { project_id: candidate.project_id } : {}), ...(typeof candidate.version === 'number' && Number.isInteger(candidate.version) ? { version: candidate.version } : {}) }
   } catch { return null }
 }
 function planSummary(plan: MediaCanvasPlan) {
+  const imageGenerations = plan.operations.filter((item) => item.action === 'add_image_generation').length
   const videos = plan.operations.filter((item) => item.action === 'add_video').length
   const images = plan.operations.filter((item) => item.action === 'add_image').length
   const audios = plan.operations.filter((item) => item.action === 'add_audio').length
   const notes = plan.operations.filter((item) => item.action === 'add_note').length
   const updates = plan.operations.filter((item) => item.action === 'update_node').length
-  return [videos && `新增 ${videos} 个镜头`, images && `新增 ${images} 张图片`, audios && `新增 ${audios} 段音频`, notes && `新增 ${notes} 条便签`, updates && `更新 ${updates} 个节点`].filter(Boolean).join(' · ')
+  const settings = [...new Set(plan.operations.flatMap(item => item.action === 'update_node' && item.generation ? [`${item.generation.model} · ${item.generation.image_ratio} · ${item.generation.image_resolution}`] : []))]
+  const seconds = plan.operations.reduce((total, item) => total + (item.action === 'add_video' ? item.duration_seconds : 0), 0)
+  return [imageGenerations && `新增 ${imageGenerations} 个生图节点`, videos && `新增 ${videos} 个生视频节点`, videos && `生成素材共 ${seconds} 秒`, images && `新增 ${images} 个待选图片节点`, audios && `新增 ${audios} 个待导入音频节点`, notes && `新增 ${notes} 条便签`, updates && `更新 ${updates} 个节点`, ...settings].filter(Boolean).join(' · ')
 }
 
-export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, selectedNode, onApplyCanvasPlan }: {
+export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, selectedNode, onApplyCanvasPlan, canvasActions }: {
   userId: string
   attachmentsAllowed: boolean
   page: MediaAssistantPage
   projectId?: string
   selectedNode: MediaAssistantNode | null
   onApplyCanvasPlan?: (plan: MediaCanvasPlan) => void
+  canvasActions?: MediaCanvasActions | null
 }) {
+  const [generationResources, setGenerationResources] = useState<Record<string, MediaGenerationResource>>({})
+  const attachedGenerations = useRef(new Set<string>())
+  useEffect(() => {
+    if (!canvasActions || !projectId) return
+    let active = true
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const attach = async () => {
+      let retry = false
+      for (const resource of Object.values(generationResources)) {
+        if (!active || resource.scope_id !== projectId || attachedGenerations.current.has(resource.id)) continue
+        try {
+          await canvasActions.attachImageTask(resource)
+          if (active) attachedGenerations.current.add(resource.id)
+        } catch { retry = true }
+      }
+      if (active && retry) timer = setTimeout(() => { void attach() }, 3000)
+    }
+    void attach()
+    return () => { active = false; clearTimeout(timer) }
+  }, [canvasActions, generationResources, projectId])
   const [appliedPlans, setAppliedPlans] = useState<Set<string>>(() => new Set())
+  const applying = useRef(false)
+  const [pendingPlan, setPendingPlan] = useState<string | null>(null)
+  const [planError, setPlanError] = useState<{ key: string; message: string } | null>(null)
   const [dismissedNodeId, setDismissedNodeId] = useState<string | null>(null)
   const discussionNode = selectedNode?.id === dismissedNodeId ? null : selectedNode
+  async function applyPlan(plan: MediaCanvasPlan, key: string) {
+    if (applying.current || !onApplyCanvasPlan) return
+    applying.current = true
+    setPendingPlan(key)
+    setPlanError(null)
+    try {
+      let operations = plan.operations
+      const imageUpdates = operations.filter(item => item.action === 'update_node' && item.generation)
+      if (imageUpdates.length) {
+        if (!projectId || plan.project_id !== projectId || plan.version === undefined) throw new Error('参数方案缺少当前作品或版本，请让助手重新读取画布。')
+        const snapshot = await api<{ version: number }>(`/projects/${projectId}/canvas`)
+        if (snapshot.version !== plan.version) throw new Error('画布已更新，请让助手重新读取画布后设置参数。')
+        const catalog = await api<{ models: { id: string }[] }>('/image-models')
+        for (const operation of imageUpdates) {
+          if (operation.action === 'update_node' && !catalog.models.some(model => model.id === operation.generation?.model)) throw new Error('图片模型当前不可用，请重新查询模型目录。')
+        }
+      }
+      const videos = plan.operations.filter(item => item.action === 'add_video')
+      const updates = plan.operations.filter(item => item.action === 'update_node' && item.duration_seconds !== undefined)
+      if (videos.length || updates.length) {
+        const catalog = await api<{ models: VideoModel[] }>('/video-models')
+        for (const operation of videos) {
+          const model = catalog.models.find(item => item.id === operation.model)
+          if (!model || model.parameters_known === false || !model.durations.includes(operation.duration_seconds)) {
+            throw new Error(`「${operation.name}」缺少可验证的模型或不支持所填时长，请让助手查询模型后重新规划。`)
+          }
+        }
+        for (const operation of updates) {
+          if (operation.action !== 'update_node') continue
+          const target = discussionNode?.id === operation.node_id ? discussionNode : null
+          const model = catalog.models.find(item => item.id === target?.model)
+          if (!target || target.type !== 'video' || !model || model.parameters_known === false || !model.durations.includes(operation.duration_seconds!)) {
+            throw new Error('无法核实目标节点的模型与时长，请选中对应生视频节点后重新规划。')
+          }
+        }
+        operations = operations.map(operation => {
+          if (operation.action !== 'add_video') return operation
+          const model = catalog.models.find(item => item.id === operation.model)!
+          const defaults = defaultGenerationSettings()
+          return { ...operation, generation: {
+            ...defaults, model: model.id,
+            ratio: (model.ratios?.includes(defaults.ratio) ? defaults.ratio : model.ratios?.[0] ?? defaults.ratio) as GenerationSettings['ratio'],
+            resolution: (model.resolutions?.includes(defaults.resolution.toLowerCase()) ? defaults.resolution : (model.resolutions?.[0] ?? defaults.resolution).toUpperCase()) as GenerationSettings['resolution'],
+          } }
+        })
+      }
+      onApplyCanvasPlan({ ...plan, operations })
+      setAppliedPlans(current => new Set(current).add(key))
+    } catch (reason) {
+      setPlanError({ key, message: reason instanceof Error ? reason.message : '方案校验失败，请重试。' })
+    } finally {
+      applying.current = false
+      setPendingPlan(null)
+    }
+  }
   return <AgentAssistant userId={userId} page={{ route: window.location.pathname, section: 'media', pageType: 'section' }} editor={null} media={{
     name: '镜头搭档',
     subtitle: '构思 · 分镜 · 编排',
     authKey: accountAuthTokenKey,
     attachmentsAllowed,
     className: page === 'canvas' ? 'media-assistant--canvas' : '',
+    beforeSubmit: page === 'canvas' ? async () => {
+      if (!canvasActions) throw new Error('画布尚未就绪，请稍后再试。')
+      await canvasActions.save()
+    } : undefined,
+    onToolCalls: calls => {
+      const resources = calls.flatMap(call => call.status === 'succeeded' && call.name === 'submit_image_generation' && call.resource?.module === 'media' && call.resource.kind === 'image_generation' && call.resource.parent_id ? [call.resource] : [])
+      if (resources.length) setGenerationResources(current => resources.every(resource => current[resource.id]) ? current : {...current,...Object.fromEntries(resources.map(resource=>[resource.id,resource]))})
+    },
     contextLabel: discussionNode ? <><span>正在讨论 · {nodeLabel(discussionNode)}</span><button className="media-assistant__dismiss-node" type="button" aria-label="移除当前讨论节点" onClick={() => setDismissedNodeId(discussionNode.id)}><X aria-hidden="true" /></button></> : `当前页面：${pageLabels[page]}`,
     context: {
       module: 'media', route: window.location.pathname, page_type: page,
-      selected_node: discussionNode ? { id: discussionNode.id, type: discussionNode.type, name: discussionNode.name, text: discussionNode.text, asset_id: discussionNode.assetId } : undefined,
+      selected_node: discussionNode ? { id: discussionNode.id, type: discussionNode.type, name: discussionNode.name, text: discussionNode.text, asset_id: discussionNode.assetId, duration_seconds: discussionNode.durationSeconds, model: discussionNode.model, mode: discussionNode.mode } : undefined,
       page: { project_id: projectId ?? null, area: pageLabels[page] },
     },
     suggestions: promptsByPage[page],
@@ -88,7 +196,7 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
       const plan = canvasPlanFromMessage(content)
       if (!plan || page !== 'canvas' || !onApplyCanvasPlan) return null
       const applied = appliedPlans.has(key)
-      return <div className="media-assistant__plan"><strong><WandSparkles aria-hidden="true" />{plan.title}</strong><p>{planSummary(plan)}</p><button type="button" disabled={applied || disabled} onClick={() => { onApplyCanvasPlan(plan); setAppliedPlans(current => new Set(current).add(key)) }}>{applied ? <><Check aria-hidden="true" />已应用</> : '应用到画布'}</button></div>
+      return <div className="media-assistant__plan"><strong><WandSparkles aria-hidden="true" />{plan.title}</strong><p>{planSummary(plan)}</p><p>仅添加或更新节点草案，不启动生成；连线用于参考，不会自动剪辑成片。</p>{planError?.key === key && <p role="alert">{planError.message}</p>}<button type="button" disabled={applied || disabled || pendingPlan !== null} onClick={() => { void applyPlan(plan, key) }}>{applied ? <><Check aria-hidden="true" />草案已应用</> : pendingPlan === key ? '校验中…' : '应用到画布'}</button></div>
     },
   }} />
 }

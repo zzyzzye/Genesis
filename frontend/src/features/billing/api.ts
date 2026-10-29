@@ -37,6 +37,6 @@ export function billingLabel(value: BillingOperation): string {
   if (value.mode === 'free') return 'MiMo 免费'
   if (value.mode === 'platform') return value.status === 'settled' ? '费用由站点承担' : '站点成本待核对'
   if (value.status === 'settled') return `已结算 ${amountLabel(value.charged_amount)}`
-  if (value.status === 'review') return `需核对 · 冻结 ${amountLabel(value.reserved_amount)}`
-  return `待结算 · 冻结 ${amountLabel(value.reserved_amount)}`
+  if (value.status === 'review') return '需核对'
+  return '待结算'
 }

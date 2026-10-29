@@ -473,7 +473,10 @@ class EmbeddedAgentRuntime:
             request.thinking_mode,
             **({"output_cap": output_cap} if output_cap else {}),
         )
-        config = RunnableConfig(configurable={"thread_id": thread_id})
+        config = RunnableConfig(configurable={
+            "thread_id": thread_id,
+            "genesis_run_id": str(request.billing_source_id or thread_id),
+        })
         resuming = bool(
             request.resume_from_checkpoint
             and self._checkpointer is not None
@@ -492,7 +495,11 @@ class EmbeddedAgentRuntime:
         messages: list[BaseMessage | dict[str, object]] = [
             SystemMessage(
                 content=(
-                    "执行策略：自动执行用户已请求的写操作，依据真实回执报告结果，不要求点击确认。\n"
+                    "执行策略：画布草案由用户应用；用户明确要求提交图片生成时，调用生图工具直接执行，"
+                    "不额外要求点击确认。仅讨论或配置参数时不生成。\n"
+                    if module == "media"
+                    else "执行策略：自动执行用户已请求的写操作，"
+                    "依据真实回执报告结果，不要求点击确认。\n"
                     if request.execution_mode == "automatic"
                     else "执行策略：审阅模式，写操作生成提议后等待用户确认。\n"
                 )

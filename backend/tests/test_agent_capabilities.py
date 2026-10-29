@@ -13,7 +13,14 @@ def test_media_package_preserves_prompt_and_public_entry() -> None:
     assert capability.prompt == MediaAgentPrompt.system_message()
     assert capability.name == MediaAgentCapability.name
     assert "canvas-plan" in capability.prompt
-    assert capability.tools == []
+    assert [tool.name for tool in capability.tools] == [
+        "get_video_generation_models",
+        "get_media_canvas",
+        "get_image_generation_models",
+        "configure_image_nodes",
+        "submit_image_generation",
+        "get_image_generation_task",
+    ]
 
 
 def test_toolbox_shell_is_registered_without_business_tools() -> None:

@@ -15,7 +15,7 @@ it('读取中不冒充零余额，精确显示八位金额并保留钱包入口'
   await waitFor(() => expect(resolve).toBeDefined())
   await act(async () => { resolve(wallet()); await Promise.resolve() })
   expect(await screen.findByText('¥12.00000001')).toBeVisible()
-  expect(screen.getByText('¥0.008')).toBeVisible()
+  expect(screen.queryByText('冻结金额')).not.toBeInTheDocument()
   expect(screen.getByRole('link',{ name:'查看钱包与账单' })).toHaveAttribute('href','/account/wallet')
 })
 

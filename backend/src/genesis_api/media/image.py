@@ -24,16 +24,18 @@ from genesis_api.billing.transport import after_response, before_request, execut
 from genesis_api.core.config import Settings
 from genesis_api.core.uploads import media_filename
 from genesis_api.database.session import SessionLocal
+from genesis_api.identity.models import User
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service
 from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset
-from genesis_api.media.schemas import CanvasDocument, CanvasNode
+from genesis_api.media.schemas import CanvasDocument, CanvasNode, GenerationSubmit
 
 logger = logging.getLogger(__name__)
 ACTIVE = ("submitting", "processing", "downloading")
 EDIT_MODELS = {"[原生] gpt-image-2", "[原生] gpt-image-2-pro", "[官key] gpt-image-2", "gpt-image-2"}
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 MAX_RESPONSE_BYTES = 180 * 1024 * 1024
+_agent_tasks: set[asyncio.Task[None]] = set()
 
 
 def headers(settings: Settings) -> dict[str, str]:
@@ -75,7 +77,119 @@ def task_data(task: ImageGeneration) -> dict[str, object]:
         "error": task.error,
         "asset_ids": task.asset_ids,
         "asset_id": task.asset_ids[0] if task.asset_ids else None,
+        "generation": task.snapshot.get("generation"),
     }
+
+
+async def admit_task(
+    session: Session,
+    user: User,
+    project_id: UUID,
+    data: GenerationSubmit,
+    settings: Settings,
+    *,
+    expected_version: int | None = None,
+    reuse_active: bool = False,
+) -> tuple[ImageGeneration, bool]:
+    """复用画布归属、参数、幂等与计费校验，保存图片任务但不调用上游。
+
+    Args:
+        session: 独立请求或工具会话，成功创建后提交事务。
+        user: 服务端认证的用户，不接受模型传入的身份。
+        project_id: 当前用户拥有的作品。
+        data: 同一生成意图必须复用的请求标识及节点。
+        settings: 已配置的图片与计费服务。
+        expected_version: Agent 读取的画布版本；过期时拒绝新建任务。
+        reuse_active: Agent 重复要求生成时返回已有活动任务，不重新消费。
+
+    Returns:
+        真实任务与是否本次新建；只有新建任务需要安排后台执行。
+
+    Raises:
+        HTTPException: 归属、版本、参考、模型或余额校验失败。
+    """
+    headers(settings)
+    project = service.project_for(session, user.id, project_id)
+    existing = session.get(ImageGeneration, data.request_id)
+    if existing is not None:
+        if (existing.owner_id, existing.project_id, existing.node_id) != (
+            user.id,
+            project_id,
+            data.node_id,
+        ):
+            raise HTTPException(409, "请求标识已被使用")
+        return existing, False
+    active = session.scalar(
+        select(ImageGeneration).where(
+            ImageGeneration.project_id == project_id,
+            ImageGeneration.node_id == data.node_id,
+            ImageGeneration.status.in_((*ACTIVE, "unknown")),
+        )
+    )
+    if active is not None:
+        if reuse_active:
+            return active, False
+        if active.status == "unknown" and data.acknowledge_unknown:
+            active.status = "acknowledged"
+        else:
+            raise HTTPException(409, "该节点已有图片任务，请先查看任务状态")
+    if expected_version is not None and project.version != expected_version:
+        raise HTTPException(409, "画布已更新，请重新读取画布并核对节点后提交生成")
+    task = ImageGeneration(
+        id=data.request_id,
+        owner_id=user.id,
+        project_id=project_id,
+        node_id=data.node_id,
+        snapshot={},
+    )
+    node = prepare(task, CanvasDocument.model_validate(project.canvas), session)
+    models = await available_models(settings)
+    if not any(model["id"] == node.generation.model for model in models):
+        raise HTTPException(422, "该图片模型当前不可用，请刷新模型目录")
+    billing.admit(
+        session,
+        user,
+        source_id=task.id,
+        kind="image",
+        provider="image",
+        model=node.generation.model,
+        quote_id=data.quote_id,
+        settings=settings,
+        parameters=billing.media_parameters(node),
+    )
+    session.add(task)
+    session.commit()
+    return task, True
+
+
+def start_agent_task(task_id: UUID, settings: Settings) -> None:
+    """让已入库任务独立于聊天继续执行，复用按钮提交的同一后台函数。"""
+    task = asyncio.create_task(submit_saved_task(task_id, settings), name=f"media-image-{task_id}")
+    _agent_tasks.add(task)
+
+    def finished(result: asyncio.Task[None]) -> None:
+        _agent_tasks.discard(result)
+        if not result.cancelled() and result.exception() is not None:
+            logger.error("图片后台任务执行异常，请查询持久任务状态：task_id=%s", task_id)
+
+    task.add_done_callback(finished)
+
+
+async def shutdown_agent_tasks() -> None:
+    """应用退出时取消并等待图片请求，沿用既有的未知状态保护。"""
+    tasks = list(_agent_tasks)
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
+def reference_nodes(document: CanvasDocument, node_id: UUID) -> list[CanvasNode]:
+    """按连线顺序读取直接参考，排除自连、分组、重复和失效连线。"""
+    sources = {node.id: node for node in document.nodes}
+    ids = dict.fromkeys(
+        edge.source for edge in document.edges if edge.target == node_id and edge.source != node_id
+    )
+    return [sources[key] for key in ids if key in sources and sources[key].type != "group"]
 
 
 def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -> CanvasNode:
@@ -97,30 +211,34 @@ def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -
     )
     if node is None or not node.text.strip() or not node.generation.model:
         raise HTTPException(422, "请先保存生图节点，并填写提示词和选择模型")
-    if node.generation.mode == "first_last":
-        raise HTTPException(422, "生图不支持首尾帧模式")
     ids: list[str] = []
-    if node.generation.mode == "reference":
-        if node.generation.model not in EDIT_MODELS:
-            raise HTTPException(422, "该模型尚无图片编辑说明，请选择支持图生图的模型")
-        sources = {n.id: n for n in document.nodes}
-        for edge in document.edges:
-            source = sources.get(edge.source)
-            if edge.target != node.id or source is None or source.asset_id is None:
-                continue
-            if str(source.asset_id) in ids:
-                continue
-            asset = service.asset_for(session, task.owner_id, source.asset_id)
-            if (
-                asset.kind != "image"
-                or session.get(ProjectAsset, (task.project_id, asset.id)) is None
-            ):
-                raise HTTPException(422, "图生图只接受当前作品中的图片参考")
-            if not (service.STORAGE_ROOT / str(asset.id)).is_file():
-                raise HTTPException(422, "参考图片文件不可用，请重新导入")
-            ids.append(str(asset.id))
-        if not ids or len(ids) > 16:
-            raise HTTPException(422, "请连接 1–16 张参考图片，实际支持数量由模型决定")
+    for source in reference_nodes(document, node.id):
+        if source.asset_id is None:
+            if source.type in ("image", "image_generation"):
+                raise HTTPException(422, "参考图片尚未就绪，请先生成或导入图片，或断开该参考")
+            continue
+        if str(source.asset_id) in ids:
+            continue
+        asset = service.asset_for(session, task.owner_id, source.asset_id)
+        if asset.kind != "image":
+            continue
+        if session.get(ProjectAsset, (task.project_id, asset.id)) is None:
+            raise HTTPException(422, "图生图只接受当前作品中的图片参考")
+        if not (service.STORAGE_ROOT / str(asset.id)).is_file():
+            raise HTTPException(422, "参考图片文件不可用，请重新导入")
+        ids.append(str(asset.id))
+    if len(ids) > 16:
+        raise HTTPException(422, "最多连接 16 张参考图片，实际支持数量由模型决定")
+    if ids and node.generation.model not in EDIT_MODELS:
+        raise HTTPException(422, "该模型尚无图片编辑说明，请选择支持图生图的模型或移除图片参考")
+    # 生图模式由当前参考决定，旧草稿中的手动 mode 不再控制上游接口。
+    node = node.model_copy(
+        update={
+            "generation": node.generation.model_copy(
+                update={"mode": "reference" if ids else "text"}
+            )
+        }
+    )
     task.reference_ids = ids
     task.snapshot = node.model_dump(mode="json")
     return node

@@ -10,3 +10,8 @@ export function incomingReferences(document: Document, nodeId: string, assets: R
     return node && node.type !== 'group' ? [{ node, asset: node.asset_id ? assets[node.asset_id] : undefined }] : []
   })
 }
+
+// 空图片节点也保留为待就绪参考，防止尚未生成时悄悄改成文生图。
+export function imageReferences(references: ReturnType<typeof incomingReferences>) {
+  return references.filter(({ node, asset }) => asset ? asset.kind === 'image' : Boolean(node.asset_id) || node.type === 'image' || node.type === 'image_generation')
+}

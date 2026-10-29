@@ -147,7 +147,7 @@
 .studio-assistant__timing > span:not(.studio-assistant__wait-hint) { display: inline-flex; align-items: center; gap: 4px; }
 .studio-assistant .studio-assistant__timing svg { width: 12px; height: 12px; flex: none; opacity: .8; }
 .studio-assistant__timing > span:not(.studio-assistant__speed) { white-space: nowrap; }
-.studio-assistant__duration { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+.studio-assistant__duration { font-variant-numeric: tabular-nums; }
 .studio-assistant__wait-hint { flex-basis: 100%; white-space: normal !important; line-height: 1.7; }
 .studio-assistant__timing--summary { flex-wrap: wrap; gap: 4px; min-width: 0; max-width: 100%; outline: 0; }
 .studio-assistant__timing--summary > span { flex: none; gap: 1px; white-space: nowrap; }

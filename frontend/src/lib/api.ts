@@ -587,6 +587,7 @@ export interface AiToolCall {
   result_summary: string | null
   parameter_names: string[]
   proposal_id: string | null
+  resource?: { module: string; kind: string; id: string; scope_id: string; parent_id: string | null } | null
 }
 
 export interface AiGenerationMetrics {

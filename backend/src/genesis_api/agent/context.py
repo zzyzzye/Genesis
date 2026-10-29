@@ -73,3 +73,21 @@ def require_owner(*, module: str | None = None) -> UUID:
     if module is not None and invocation.module != module:
         raise RuntimeError(f"当前 Agent 不在 {module} 模块")
     return invocation.actor_id
+
+
+def require_actor(*, module: str) -> UUID:
+    """取得已认证的业务用户身份，允许成员访问自己的数据。
+
+    Args:
+        module: 工具所属模块，不能跨模块调用。
+
+    Returns:
+        运行时绑定的用户 ID，不接受模型参数授予身份。
+
+    Raises:
+        RuntimeError: 未绑定身份或当前模块不匹配。
+    """
+    invocation = _invocation.get()
+    if invocation is None or invocation.module != module:
+        raise RuntimeError("当前工具缺少有效的业务用户身份")
+    return invocation.actor_id

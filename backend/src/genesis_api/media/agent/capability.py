@@ -20,13 +20,12 @@ class MediaAgentCapability:
 
     @staticmethod
     def build_tools(settings: Settings) -> list[BaseTool]:
-        """取得影音业务工具，目前不提供服务端写工具。
+        """取得影音规划工具和明确授权的图片任务工具。
 
         Args:
-            settings: 公共能力装配传入的配置，当前工具入口尚未使用。
+            settings: 供模型目录、生图与计费复用现有服务配置。
 
         Returns:
-            当前为空列表；画布方案由前端在用户确认后应用。
+            画布读取、目录、参数方案及复用现有生图服务的提交与查询工具。
         """
-        # 画布方案由提示词约定、前端确认应用，目前不注册服务端业务写工具。
         return build_media_tools(settings)

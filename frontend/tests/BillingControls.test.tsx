@@ -1,32 +1,9 @@
-import { fireEvent, render, screen, waitFor, cleanup } from '@testing-library/react'
+import { fireEvent, render, screen, cleanup } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-import { useBillingQuote } from '../src/features/billing/useBillingQuote'
 import { WalletPage } from '../src/features/billing/WalletPage'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); sessionStorage.clear() })
-const quote = { id:'quote',mode:'paid',model:'test-model',reserved_amount:'0.00800000' }
-function QuoteExample({ done }: { done: (value: unknown) => void }) {
-  const { confirmQuote, quoteDialog } = useBillingQuote()
-  return <><button onClick={() => { void confirmQuote({ kind:'agent',model:'test-model' }).then(done) }}>生成</button>{quoteDialog}</>
-}
-it('付费报价必须确认，取消不提交生成', async () => {
-  vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify(quote),{ status:201 }))
-  const done = vi.fn()
-  render(<QuoteExample done={done} />)
-  fireEvent.click(screen.getByText('生成'))
-  expect(await screen.findByRole('dialog')).toHaveTextContent('¥0.008')
-  expect(done).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByText('取消'))
-  await waitFor(() => expect(done).toHaveBeenCalledWith(null))
-})
-it('确认后回传服务端报价标识', async () => {
-  vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify(quote),{ status:201 }))
-  const done = vi.fn(); render(<QuoteExample done={done} />)
-  fireEvent.click(screen.getByText('生成'))
-  fireEvent.click(await screen.findByText('冻结预算并生成'))
-  await waitFor(() => expect(done).toHaveBeenCalledWith(quote))
-})
 it('零余额钱包展示真实空态，充值说明留在账务流程内', async () => {
   localStorage.setItem('genesis-account-token','synthetic-test-token')
   vi.spyOn(globalThis,'fetch').mockImplementation(async input => {
@@ -38,7 +15,7 @@ it('零余额钱包展示真实空态，充值说明留在账务流程内', asyn
   })
   render(<MemoryRouter><WalletPage /></MemoryRouter>)
   expect(await screen.findByText('暂无生成账单。')).toBeVisible()
-  expect(screen.getAllByText('¥0.00')).toHaveLength(2)
+  expect(screen.getAllByText('¥0.00')).toHaveLength(1)
   expect(screen.queryByRole('link', { name:/SVG/ })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name:'查看充值说明' }))
   expect(await screen.findByRole('dialog')).toHaveTextContent('站长人工充值')

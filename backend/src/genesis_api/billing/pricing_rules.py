@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from decimal import Decimal, InvalidOperation
-from typing import Literal
+from typing import Any, Literal
 
 from genesis_api.billing.schemas import ModelPricePreview, TokenPriceTier
 
@@ -35,6 +35,26 @@ def decimal_text(value: Decimal) -> str:
     """API 不经过浮点数，零值也保留明确的字符串。"""
     text = format(value, "f")
     return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def verified_quota_per_cny(status: object) -> int | None:
+    """核对已用实账验证的 YYAPI 每元额度，不依赖逐模型最高费用审核。"""
+    if not isinstance(status, dict) or status.get("success") is not True:
+        return None
+    data: Any = status.get("data")
+    if not isinstance(data, dict):
+        return None
+    try:
+        if (
+            data.get("quota_display_type") == "CNY"
+            and decimal_value(data.get("usd_exchange_rate")) == 1
+            and decimal_value(data.get("quota_per_unit")) == 500000
+            and decimal_value(data.get("price")) == 1
+        ):
+            return 500000
+    except UnsupportedPricing:
+        pass
+    return None
 
 
 def _linear_tier(

@@ -21,6 +21,52 @@ from genesis_api.core.config import Settings
 
 
 @pytest.mark.anyio
+async def test_native_tool_artifact_only_exposes_validated_resource_reference() -> None:
+    """资源关联走原生 artifact，正文与额外私有字段不进入公开历史。"""
+    resource = {
+        "module": "media",
+        "kind": "image_generation",
+        "id": str(uuid4()),
+        "scope_id": str(uuid4()),
+        "parent_id": str(uuid4()),
+    }
+
+    @tool(response_format="content_and_artifact")
+    async def submit_image() -> tuple[str, dict[str, object]]:
+        """提交合成任务。"""
+        return "private-result-marker", {"resource": resource, "private": "private-artifact-marker"}
+
+    history = ToolCallHistory()
+    graph = StateGraph(MessagesState)
+    graph.add_node("tools", ToolNode([submit_image]))
+    graph.add_edge(START, "tools")
+    graph.add_edge("tools", END)
+    await graph.compile().ainvoke(
+        {
+            "messages": [
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "id": "image-call",
+                            "name": "submit_image",
+                            "args": {},
+                        }
+                    ],
+                )
+            ]
+        },
+        config={"callbacks": [history]},
+    )
+    call = next(iter(history.protocol_calls.values()))
+    assert call.resource is not None
+    assert call.resource.model_dump(mode="json") == resource
+    public = call.model_dump_json()
+    assert "private-result-marker" not in public
+    assert "private-artifact-marker" not in public
+
+
+@pytest.mark.anyio
 async def test_native_parallel_tools_emit_safe_history(monkeypatch: pytest.MonkeyPatch) -> None:
     """真实 ToolNode 回调能区分并行调用，参数和结果中的标记不会进入历史。"""
     changes: list[AgentToolCall] = []
@@ -158,9 +204,14 @@ async def test_validation_history_displays_safe_field_reason() -> None:
     history = ToolCallHistory(save)
     call_id = uuid4()
     await history.on_tool_start({"name": "ask_user_question"}, "private-marker", run_id=call_id)
-    await history.on_tool_end(ToolMessage(
-        content=tool_validation_error(caught.value), status="error", tool_call_id="invalid",
-    ), run_id=call_id)
+    await history.on_tool_end(
+        ToolMessage(
+            content=tool_validation_error(caught.value),
+            status="error",
+            tool_call_id="invalid",
+        ),
+        run_id=call_id,
+    )
     assert changes[-1].status == "failed"
     assert changes[-1].result_summary == "参数校验失败：questions：必须是数组"
     assert "private-marker" not in "".join(call.model_dump_json() for call in changes)

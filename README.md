@@ -253,4 +253,4 @@ docker compose --env-file .env.development -f compose.yml exec -T backend uv run
 
 ### 钱包与免费 SVG
 
-登录用户可使用影音助手与生成工具。MiMo 和 `/toolbox/svg` 免费；YYAPI 付费模型按已审核的预算先冻结，再按上游实账结算，未用部分退回。钱包位于 `/account/wallet`，站长在 `/account/billing` 人工入账和审核价格，新用户不赠送付费额度。上线先执行账务迁移，未核验价格和账单的模型不能向普通用户开放付费调用。详见 [账务规则与发布步骤](docs/billing.md)。
+登录用户可使用影音助手与生成工具。MiMo 和 `/toolbox/svg` 免费；YYAPI 付费模型直接创建任务，不预先冻结余额，按上游实账结算；结算余额不足时保留待处理账单。钱包位于 `/account/wallet`，站长在 `/account/billing` 人工入账和审核价格，新用户不赠送付费额度。上线先执行账务迁移 `20261028_30`，以追加流水方式退回历史冻结；不再要求逐模型最高费用审核；额度换算从渠道状态核验，口径未知的账单保留待核对。详见 [账务规则与发布步骤](docs/billing.md)。

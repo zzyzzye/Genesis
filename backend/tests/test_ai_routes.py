@@ -137,7 +137,9 @@ def test_media_surface_proposes_confirmed_canvas_plans() -> None:
 
     assert request.surface == "media"
     assert capability.name == "genesis-media-agent"
-    assert capability.tools == []
+    tools = {entry.name for entry in capability.tools}
+    assert {"get_media_canvas", "submit_image_generation", "get_image_generation_task"} <= tools
+    assert not {"create_draft", "publish_post", "delete_post"} & tools
     assert "canvas-plan" in capability.prompt
     assert "应用到画布" in capability.prompt
 

@@ -18,6 +18,10 @@ DeepAgents / LangGraph 负责模型、工具和 checkpoint。后端直接使用�
 
 写操作提议仍须通过业务契约校验，确认接口仍验证签名和当前权限。澄清问题使用 `CUSTOM(genesis.question)` 传递经过契约校验的业务内容，界面继续复用原有澄清组件。这些业务适配不生成模型文本和工具生命周期。
 
+工具创建的资源可通过 LangChain 原生 `content_and_artifact` 返回最小资源关联。`ToolCallHistory` 仅接受 `AgentResourceReference` 校验后的模块、种类与 UUID，将其放进既有工具 metadata 并持久化；原始 artifact 和业务结果继续留在服务端。前端沿用官方工具状态接收资源关联，再用业务 API 读取实际任务。
+
+影音 Agent 的 `submit_image_generation` 与画布按钮共用 `media.image.admit_task` 的归属、版本、参考、模型和计费校验。请求标识由可信运行 ID、用户、作品和节点确定，同轮重放只恢复已有任务；新的对话轮次遇到活动或未知任务也复用。已入库任务复用 `submit_saved_task` 后台执行，生命周期由应用等待和清理。前端发送前保存画布，收到可信回执后接入既有图片结果节点流程；收起助手继续接收回执，不额外发起图片请求或预算确认。
+
 SVG 使用 LangChain 原生无工具 Agent 图，也经由同一个官方适配器，继续沿用服务端固定的 MiMo 模型和 4096 token 限制。
 
 ## 后台执行、持久化与订阅

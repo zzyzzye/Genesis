@@ -17,6 +17,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from genesis_api.billing.models import BillingOperation, UpstreamCharge
+from genesis_api.billing.pricing_rules import verified_quota_per_cny
 from genesis_api.billing.service import (
     MONEY_QUANTUM,
     ZERO,
@@ -111,12 +112,15 @@ def apply_rows(session: Session, channel: str, rows: list[dict[str, Any]]) -> No
         lock_wallet(session, operation.user_id)
         session.refresh(operation, with_for_update=True)
         session.refresh(charge, with_for_update=True)
+        if not operation.policy.get("quota_per_cny"):
+            operation.note = "上游费用换算口径尚未核实，等待核对"
+            continue
         try:
             quota, amount, details = billing_details(
                 row, int(str(operation.policy["quota_per_cny"]))
             )
         except (ValueError, KeyError, TypeError, OverflowError):
-            operation.note = "上游计费字段无效，保留冻结等待人工核对"
+            operation.note = "上游计费字段无效，等待人工核对"
             continue
         if row.get("type") == 6:
             refund_id = f"{row.get('request_id')}:{row.get('created_at')}:{quota}"
@@ -129,7 +133,13 @@ def apply_rows(session: Session, channel: str, rows: list[dict[str, Any]]) -> No
                 old_charged = operation.charged
                 operation.cost = max(ZERO, operation.cost - refund)
                 operation.charged = (
-                    min(operation.cost, operation.reserved) if operation.mode == "paid" else ZERO
+                    (
+                        operation.cost
+                        if operation.policy.get("postpaid")
+                        else min(operation.cost, operation.reserved)
+                    )
+                    if operation.mode == "paid"
+                    else ZERO
                 )
                 if old_charged > operation.charged:
                     post_entry(
@@ -144,7 +154,7 @@ def apply_rows(session: Session, channel: str, rows: list[dict[str, Any]]) -> No
         elif row.get("type") in {2, 5} and charge.status != "settled":
             # 错误日志只有明确的零额度才可证明未收费；缺失账单仍不视为零。
             if row.get("type") == 5 and quota != 0:
-                operation.note = "上游错误账单包含非零额度，保留冻结等待核对"
+                operation.note = "上游错误账单包含非零额度，等待核对"
                 continue
             charge.quota, charge.amount, charge.details = quota, amount, details
             charge.status = "settled"
@@ -161,7 +171,7 @@ async def reconcile_once(
     factory: Callable[[], Session] = SessionLocal,
     client: httpx.AsyncClient | None = None,
 ) -> None:
-    """每个到期渠道只拉取一次近期账单；查不到则退避并保留冻结。"""
+    """每个到期渠道只拉取一次近期账单，查不到则退避并保留待结算状态。"""
     now = datetime.now(UTC)
     with factory() as session:
         operations = list(
@@ -188,16 +198,20 @@ async def reconcile_once(
             for o in operations
             if o.next_check_at is None or aware(o.next_check_at) <= now
         ]
+        missing_units = {o.id for o in operations if not o.policy.get("quota_per_cny")}
     groups: dict[str, tuple[str, str]] = {}
-    for _, kind, provider in due:
+    group_ids: dict[str, set[UUID]] = {}
+    for operation_id, kind, provider in due:
         try:
             base, key = connection(settings, kind, provider)
             if is_yyapi(base):
                 parsed = urlsplit(base)
-                groups[channel_id(settings, kind, provider)] = (
+                channel = channel_id(settings, kind, provider)
+                groups[channel] = (
                     f"{parsed.scheme}://{parsed.netloc}",
                     key,
                 )
+                group_ids.setdefault(channel, set()).add(operation_id)
         except Exception:
             continue
     owned = client is None
@@ -212,7 +226,27 @@ async def reconcile_once(
                 data = response.json()
                 if data.get("success") is not True or not isinstance(data.get("data"), list):
                     continue
+                unit = None
+                if group_ids[channel] & missing_units:
+                    try:
+                        status = await client.get(base + "/api/status")
+                        status.raise_for_status()
+                        unit = verified_quota_per_cny(status.json())
+                    except (httpx.HTTPError, ValueError, TypeError):
+                        # 换算不可用只影响结算，不将未知费用视为零或阻止新模型生成。
+                        pass
                 with factory() as session:
+                    if unit is not None:
+                        for operation_id in sorted(group_ids[channel], key=str):
+                            operation = session.get(BillingOperation, operation_id)
+                            if operation is None:
+                                continue
+                            lock_wallet(session, operation.user_id)
+                            session.refresh(operation, with_for_update=True)
+                            if operation.policy.get(
+                                "channel"
+                            ) == channel and not operation.policy.get("quota_per_cny"):
+                                operation.policy = {**operation.policy, "quota_per_cny": unit}
                     # 消费先于退款，接口记录顺序不影响首次结算。
                     rows = [r for r in data["data"] if isinstance(r, dict)]
                     apply_rows(session, channel, sorted(rows, key=lambda r: r.get("type") == 6))
@@ -224,6 +258,9 @@ async def reconcile_once(
                 operation = session.get(BillingOperation, operation_id)
                 if operation is None:
                     continue
+                lock_wallet(session, operation.user_id)
+                session.refresh(operation, with_for_update=True)
+                settle(session, operation)
                 operation.retry_count += 1
                 delay = (
                     3600
@@ -237,7 +274,7 @@ async def reconcile_once(
                     and operation.retry_count >= 8
                 ):
                     operation.status = "review"
-                    operation.note = "账单暂未匹配或请求结果未知，冻结保留，等待核对"
+                    operation.note = "账单暂未匹配或请求结果未知，等待核对"
             session.commit()
     finally:
         if owned:

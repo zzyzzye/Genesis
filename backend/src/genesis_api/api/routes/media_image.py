@@ -6,11 +6,10 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from sqlalchemy import select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
-from genesis_api.billing import service as billing
 from genesis_api.core.config import get_settings
 from genesis_api.media import image, service
 from genesis_api.media.models import ImageGeneration
-from genesis_api.media.schemas import CanvasDocument, GenerationSubmit
+from genesis_api.media.schemas import GenerationSubmit
 
 router = APIRouter()
 
@@ -48,6 +47,18 @@ def image_tasks(
     return [image.task_data(row) for row in rows]
 
 
+@router.get("/projects/{project_id}/image-generations/{task_id}")
+def image_task(
+    project_id: UUID, task_id: UUID, user: CurrentUserDependency, session: SessionDependency
+) -> dict[str, object]:
+    """按持久任务标识恢复图片结果，避免受节点最近任务数量限制。"""
+    service.project_for(session, user.id, project_id)
+    task = session.get(ImageGeneration, task_id)
+    if task is None or task.owner_id != user.id or task.project_id != project_id:
+        raise HTTPException(404, "图片任务不存在")
+    return image.task_data(task)
+
+
 @router.post("/projects/{project_id}/image-generations", status_code=202)
 async def create_image_task(
     project_id: UUID,
@@ -72,54 +83,9 @@ async def create_image_task(
         HTTPException: 归属不符 404，已有活动任务 409，参数无效 422，未配置 503。
     """
     settings = get_settings()
-    image.headers(settings)
-    project = service.project_for(session, user.id, project_id)
-    existing = session.get(ImageGeneration, data.request_id)
-    if existing is not None:
-        if (existing.owner_id, existing.project_id, existing.node_id) != (
-            user.id,
-            project_id,
-            data.node_id,
-        ):
-            raise HTTPException(409, "请求标识已被使用")
-        return image.task_data(existing)
-    active = session.scalar(
-        select(ImageGeneration).where(
-            ImageGeneration.project_id == project_id,
-            ImageGeneration.node_id == data.node_id,
-            ImageGeneration.status.in_((*image.ACTIVE, "unknown")),
-        )
-    )
-    if active is not None:
-        if active.status == "unknown" and data.acknowledge_unknown:
-            active.status = "acknowledged"
-        else:
-            raise HTTPException(409, "该节点已有图片任务，请先查看任务状态")
-    task = ImageGeneration(
-        id=data.request_id,
-        owner_id=user.id,
-        project_id=project_id,
-        node_id=data.node_id,
-        snapshot={},
-    )
-    node = image.prepare(task, CanvasDocument.model_validate(project.canvas), session)
-    models = await image.available_models(settings)
-    if not any(model["id"] == node.generation.model for model in models):
-        raise HTTPException(422, "该图片模型当前不可用，请刷新模型目录")
-    billing.admit(
-        session,
-        user,
-        source_id=task.id,
-        kind="image",
-        provider="image",
-        model=node.generation.model,
-        quote_id=data.quote_id,
-        settings=settings,
-        parameters=billing.media_parameters(node),
-    )
-    session.add(task)
-    session.commit()
-    background_tasks.add_task(image.submit_saved_task, task.id, settings)
+    task, created = await image.admit_task(session, user, project_id, data, settings)
+    if created:
+        background_tasks.add_task(image.submit_saved_task, task.id, settings)
     return image.task_data(task)
 
 

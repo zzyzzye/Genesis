@@ -1,4 +1,4 @@
-"""通过 LangChain 原生回调记录工具调用的安全展示摘要，不保存参数值或原始结果。"""
+"""原生回调只记录安全摘要和校验后的资源标识，不保存原始参数或结果。"""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.messages import ToolMessage
 from pydantic import BaseModel, Field
 
+from genesis_api.agent.contracts import AgentResourceReference
 from genesis_api.agent.tool_inputs import tool_input_error_summary
 
 
@@ -32,6 +33,7 @@ class AgentToolCall(BaseModel):
     result_summary: str | None = None
     proposal_id: UUID | None = None
     parameter_names: list[str] = Field(default_factory=list)
+    resource: AgentResourceReference | None = None
 
 
 _FRAMEWORK_LABELS = {
@@ -131,6 +133,10 @@ class ToolCallHistory(AsyncCallbackHandler):
         if failed:
             summary = tool_input_error_summary(data) or summary
         proposal_id = None
+        resource = None
+        if not failed and isinstance(output, ToolMessage) and isinstance(output.artifact, dict):
+            with suppress(ValueError, TypeError):
+                resource = AgentResourceReference.model_validate(output.artifact.get("resource"))
         if not failed and isinstance(data, dict) and data.get("type") == "pending_action":
             with suppress(ValueError):
                 proposal_id = UUID(str(data.get("proposal_id")))
@@ -142,7 +148,10 @@ class ToolCallHistory(AsyncCallbackHandler):
             summary = f"返回 {len(data)} 项结果"
         elif not failed and isinstance(content, str):
             summary = f"已返回结果（{len(content):,} 字符）"
-        await self._finish(run_id, status=status, result_summary=summary, proposal_id=proposal_id)
+        await self._finish(
+            run_id, status=status, result_summary=summary, proposal_id=proposal_id,
+            resource=resource,
+        )
 
     async def on_tool_error(self, error: BaseException, *, run_id: UUID, **kwargs: Any) -> None:
         """保留失败或中断状态，异常原文仅由原有执行链路处理。"""

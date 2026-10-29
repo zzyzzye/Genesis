@@ -27,8 +27,8 @@ from genesis_api.database.session import engine
 from genesis_api.identity.models import User, UserRole
 
 
-def test_postgres_concurrent_reservations_cannot_overspend() -> None:
-    """两笔分别足额但合计超余额的订单只能有一笔成功冻结。"""
+def test_postgres_concurrent_tasks_do_not_reserve_balance() -> None:
+    """并发创建任务只建立费用归属，不改变余额或创建冻结流水。"""
     if engine.dialect.name != "postgresql":
         pytest.skip("此事务竞争测试要求现有 PostgreSQL 服务")
     schema = "billing_test_" + uuid4().hex
@@ -112,13 +112,13 @@ def test_postgres_concurrent_reservations_cannot_overspend() -> None:
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             results = list(executor.map(reserve, range(2)))
-        assert sorted(results) == [202, 402]
+        assert sorted(results) == [202, 202]
         with factory() as session:
-            assert wallet_data(session, user_id)["available"] == "0.00200000"
-            assert wallet_data(session, user_id)["frozen"] == "0.00800000"
+            assert wallet_data(session, user_id)["available"] == "0.01000000"
+            assert wallet_data(session, user_id)["frozen"] == "0.00000000"
             assert (
                 len(list(session.scalars(select(WalletEntry).where(WalletEntry.kind == "reserve"))))
-                == 1
+                == 0
             )
     finally:
         # schema 名只来源于本测试生成的 UUID；不会匹配或删除真实业务对象。

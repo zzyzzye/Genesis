@@ -1,4 +1,4 @@
-"""钱包事务和预算准入；所有写入由调用方统一提交。"""
+"""钱包事务和按实账结算；所有写入由调用方统一提交。"""
 
 from __future__ import annotations
 
@@ -181,7 +181,7 @@ def create_quote(
     parameters: object = None,
     funded_by_platform: bool = False,
 ) -> BillingOperation:
-    """核验可用渠道和审核价格，只创建报价，不提前冻结资金。"""
+    """创建费用归属快照，不预留或冻结余额。"""
     if funded_by_platform:
         mode = "platform"
     elif kind == "agent" and provider == "mimo":
@@ -195,8 +195,8 @@ def create_quote(
             raise
         base = ""
     policy = policy_for(session, kind, provider, model, settings)
-    if mode == "paid" and (not is_yyapi(base) or policy is None):
-        raise HTTPException(503, "该模型尚未完成计费上限审核，暂不可付费使用")
+    if mode == "paid" and not is_yyapi(base):
+        raise HTTPException(503, "该渠道暂不支持上游实际费用结算")
     snapshot: dict[str, object] = {}
     if policy is not None:
         snapshot = {
@@ -208,6 +208,7 @@ def create_quote(
         }
     if base:
         snapshot["channel"] = channel_id(settings, kind, provider)
+    snapshot["postpaid"] = True
     operation = BillingOperation(
         user_id=user.id,
         kind=kind,
@@ -216,11 +217,7 @@ def create_quote(
         mode=mode,
         fingerprint=fingerprint(kind, provider, model, parameters),
         policy=snapshot,
-        reserved=(
-            policy.max_request_amount * (CALL_LIMIT if kind == "agent" else 1)
-            if policy and mode == "paid"
-            else ZERO
-        ),
+        reserved=ZERO,
     )
     session.add(operation)
     session.flush()
@@ -264,7 +261,7 @@ def admit(
     settings: Settings,
     parameters: object = None,
 ) -> BillingOperation:
-    """在任务创建的同一事务中消费报价并冻结资金，重复任务返回原订单。"""
+    """建立任务费用归属并检查余额，不冻结资金，重复任务返回原订单。"""
     wallet = lock_wallet(session, user.id)
     existing = session.scalar(
         select(BillingOperation).where(BillingOperation.source_id == source_id)
@@ -287,8 +284,6 @@ def admit(
         if active is not None:
             raise HTTPException(409, "已有 MiMo 免费任务正在运行，请等待结束或停止该任务")
     if quote_id is None:
-        if user.role is not UserRole.OWNER and not (kind == "agent" and provider == "mimo"):
-            raise HTTPException(402, "请先确认本次生成的冻结金额")
         operation = create_quote(
             session,
             user,
@@ -316,19 +311,12 @@ def admit(
             settings, kind, provider
         ):
             raise HTTPException(409, "调用身份或渠道配置已更新，请重新报价")
-        policy = session.get(PricePolicy, UUID(str(operation.policy["id"])))
-        if policy is None or not policy.active:
-            raise HTTPException(409, "模型价格策略已更新，请重新报价")
-        post_entry(
-            session,
-            wallet,
-            key=f"reserve:{operation.id}",
-            kind="reserve",
-            available=-operation.reserved,
-            frozen=operation.reserved,
-            reason="生成预算冻结",
-            operation_id=operation.id,
-        )
+        if not operation.policy.get("postpaid"):
+            policy = session.get(PricePolicy, UUID(str(operation.policy["id"])))
+            if policy is None or not policy.active:
+                raise HTTPException(409, "模型价格策略已更新，请重新报价")
+        if wallet.available <= ZERO:
+            raise HTTPException(402, "可用余额不足，请联系站长充值")
     elif operation.mode == "platform" and user.role is not UserRole.OWNER:
         raise HTTPException(409, "调用权限已更新，请重新报价")
     operation.source_id = source_id
@@ -357,7 +345,7 @@ def finish_operation(session: Session, source_id: UUID | None) -> None:
 
 
 def settle(session: Session, operation: BillingOperation) -> None:
-    """按实账汇总扣费并退还未用冻结；超额不转嫁用户。"""
+    """按上游实账扣费，余额不足时保留应付账单，兼容历史冻结订单。"""
     if operation.status == "settled" or not operation.finished:
         return
     charges = list(
@@ -373,7 +361,12 @@ def settle(session: Session, operation: BillingOperation) -> None:
     operation.cost = cost
     if operation.mode == "paid":
         wallet = lock_wallet(session, operation.user_id)
-        charged = min(cost, operation.reserved)
+        postpaid = bool(operation.policy.get("postpaid"))
+        charged = cost if postpaid else min(cost, operation.reserved)
+        if postpaid and wallet.available < charged:
+            operation.status = "review"
+            operation.note = "实际费用已核实，余额不足，请充值后结算"
+            return
         post_entry(
             session,
             wallet,
@@ -381,11 +374,11 @@ def settle(session: Session, operation: BillingOperation) -> None:
             kind="settle",
             available=operation.reserved - charged,
             frozen=-operation.reserved,
-            reason="按上游实账结算，退回未用冻结",
+            reason="按上游实际费用结算" if postpaid else "历史订单结算，退回未用冻结",
             operation_id=operation.id,
         )
         operation.charged = charged
-        if cost > operation.reserved:
+        if not postpaid and cost > operation.reserved:
             operation.note = "上游费用超出冻结金额，差额由站点承担，已暂停该模型付费入口"
             for policy in session.scalars(
                 select(PricePolicy).where(
@@ -395,6 +388,8 @@ def settle(session: Session, operation: BillingOperation) -> None:
                 )
             ):
                 policy.active = False
+        if postpaid:
+            operation.note = ""
     operation.status = "settled"
 
 

@@ -26,6 +26,7 @@ from genesis_api.billing.models import BillingOperation, PricePolicy, UpstreamCh
 from genesis_api.billing.reconciliation import apply_rows, billing_details, reconcile_once
 from genesis_api.billing.schemas import CreditRequest
 from genesis_api.billing.service import (
+    ZERO,
     admit,
     channel_id,
     create_quote,
@@ -116,10 +117,20 @@ def quote_and_admit(state: Any) -> BillingOperation:
 def test_personal_bills_exclude_platform_costs(state: Any) -> None:
     """个人账单及明细不混入自动标题等站点成本，管理员仍可读取。"""
     session, user, owner, _, _, _ = state
-    rows = [BillingOperation(
-        user_id=user.id, source_id=uuid4(), kind="agent", provider="openai", model="test",
-        mode=mode, status="settled", fingerprint=mode, policy={},
-    ) for mode in ("paid", "free", "platform")]
+    rows = [
+        BillingOperation(
+            user_id=user.id,
+            source_id=uuid4(),
+            kind="agent",
+            provider="openai",
+            model="test",
+            mode=mode,
+            status="settled",
+            fingerprint=mode,
+            policy={},
+        )
+        for mode in ("paid", "free", "platform")
+    ]
     session.add_all(rows)
     session.commit()
     result = routes.my_operations(user, session, page=1)
@@ -211,7 +222,7 @@ def test_gateway_error_only_releases_hold_with_explicit_zero_bill(state: Any, qu
         assert balance["frozen"] == "0.00000000"
     else:
         assert operation.status == "pending"
-        assert balance["frozen"] == "0.00800000"
+        assert balance["frozen"] == "0.00000000"
 
 
 def test_chat_policy_apply_is_idempotent_and_does_not_credit_wallets(
@@ -270,8 +281,8 @@ def test_reserve_and_idempotent_actual_settlement(state: Any) -> None:
     assert operation.source_id is not None
     assert wallet_data(session, user.id) == {
         "currency": "CNY",
-        "available": "0.99200000",
-        "frozen": "0.00800000",
+        "available": "1.00000000",
+        "frozen": "0.00000000",
     }
     assert (
         admit(
@@ -307,7 +318,7 @@ def test_reserve_and_idempotent_actual_settlement(state: Any) -> None:
     )
 
 
-def test_actual_overage_capped_and_policy_paused(state: Any) -> None:
+def test_insufficient_actual_settlement_waits_for_credit(state: Any) -> None:
     session, user, _, _, _, policy = state
     operation = quote_and_admit(state)
     session.add(
@@ -319,11 +330,90 @@ def test_actual_overage_capped_and_policy_paused(state: Any) -> None:
     apply_rows(session, "test", [sample(quota=1000000)])
     session.commit()
     assert operation.cost > operation.charged == operation.reserved
-    assert not policy.active and "站点承担" in operation.note
+    assert operation.status == "review" and "余额不足" in operation.note
+    assert policy.active
     assert wallet_data(session, user.id)["frozen"] == "0.00000000"
+    assert wallet_data(session, user.id)["available"] == "1.00000000"
+    post_entry(
+        session,
+        lock_wallet(session, user.id),
+        key="top-up",
+        kind="credit",
+        available=Decimal("2"),
+        reason="补足余额",
+    )
+    apply_rows(session, "test", [sample(quota=1000000)])
+    session.commit()
+    assert operation.status == "settled"
+    assert operation.charged == operation.cost == Decimal("2")
+    assert wallet_data(session, user.id)["available"] == "1.00000000"
 
 
-def test_refund_is_idempotent_and_never_exceeds_original(state: Any) -> None:
+def test_paid_task_needs_no_quote_and_no_hold(state: Any) -> None:
+    """低于旧预算但余额为正仍可生成，任务创建不改变余额或新增冻结流水。"""
+    session, user, _, settings, _, _ = state
+    post_entry(
+        session,
+        lock_wallet(session, user.id),
+        key="small-balance",
+        kind="correction",
+        available=Decimal("-0.999"),
+        reason="设置小额测试余额",
+    )
+    operation = admit(
+        session,
+        user,
+        source_id=uuid4(),
+        kind="agent",
+        provider="openai",
+        model="gpt-5.6-luna",
+        quote_id=None,
+        settings=settings,
+    )
+    session.commit()
+    assert operation.reserved == ZERO
+    assert wallet_data(session, user.id)["available"] == "0.00100000"
+    assert (
+        session.scalar(
+            select(func.count()).select_from(WalletEntry).where(WalletEntry.kind == "reserve")
+        )
+        == 0
+    )
+
+
+@pytest.mark.anyio
+async def test_credit_settles_verified_cost_without_refetching_old_bill(state: Any) -> None:
+    """充值后复用已核验费用，即使上游近期目录不再返回旧账单也可结算。"""
+    session, user, _, settings, factory, _ = state
+    operation = quote_and_admit(state)
+    operation.finished, operation.status, operation.call_count = True, "review", 1
+    session.add(
+        UpstreamCharge(
+            operation_id=operation.id, channel="test", status="settled", amount=Decimal("2")
+        )
+    )
+    post_entry(
+        session,
+        lock_wallet(session, user.id),
+        key="repay",
+        kind="credit",
+        available=Decimal("2"),
+        reason="充值以结算待处理账单",
+    )
+    session.commit()
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"success": True, "data": []})
+        )
+    ) as client:
+        await reconcile_once(settings, factory, client)
+    session.expire_all()
+    assert operation.status == "settled" and operation.charged == Decimal("2")
+    assert wallet_data(session, user.id)["available"] == "1.00000000"
+
+
+@pytest.mark.parametrize("quota", [126, 10000])
+def test_refund_is_idempotent_and_never_exceeds_original(state: Any, quota: int) -> None:
     session, user, _, _, _, _ = state
     operation = quote_and_admit(state)
     session.add(
@@ -332,26 +422,23 @@ def test_refund_is_idempotent_and_never_exceeds_original(state: Any) -> None:
     operation.call_count = 1
     session.flush()
     finish_operation(session, operation.source_id)
-    apply_rows(session, "test", [sample()])
+    apply_rows(session, "test", [sample(quota=quota)])
     session.commit()
-    refund = sample(kind=6)
+    assert operation.charged == Decimal(quota) / 500000
+    refund = sample(quota=quota, kind=6)
     apply_rows(session, "test", [refund, refund])
     session.commit()
     assert operation.charged == 0 and wallet_data(session, user.id)["available"] == "1.00000000"
 
 
-@pytest.mark.parametrize(
-    "case", ["missing", "expired", "changed", "used", "foreign", "paused", "channel"]
-)
+@pytest.mark.parametrize("case", ["expired", "changed", "used", "foreign", "channel"])
 def test_quote_cannot_be_reused_or_changed(state: Any, case: str) -> None:
-    session, user, owner, settings, _, policy = state
+    session, user, owner, settings, _, _ = state
     quote = create_quote(
         session, user, kind="agent", provider="openai", model="gpt-5.6-luna", settings=settings
     )
     session.flush()
     quote_id: UUID | None = quote.id
-    if case == "missing":
-        quote_id = None
     if case == "expired":
         quote.created_at = datetime.now(UTC) - timedelta(minutes=6)
     if case == "changed":
@@ -360,8 +447,6 @@ def test_quote_cannot_be_reused_or_changed(state: Any, case: str) -> None:
         quote.status = "running"
     if case == "foreign":
         quote.user_id = owner.id
-    if case == "paused":
-        policy.active = False
     if case == "channel":
         settings.text_openai_api_key = SecretStr("rotated-synthetic")
     session.flush()
@@ -570,7 +655,7 @@ async def test_reconciliation_delayed_bill_and_restart_preserve_hold(state: Any)
     ) as client:
         await reconcile_once(settings, factory, client)
         session.expire_all()
-        assert wallet_data(session, user.id)["frozen"] == "0.00800000"
+        assert wallet_data(session, user.id)["frozen"] == "0.00000000"
         operation = session.get(BillingOperation, operation.id)
         operation.next_check_at = None
         session.commit()
@@ -728,7 +813,7 @@ async def test_native_agent_http_stream_to_actual_bill_settlement(
     session.commit()
     charge = session.scalar(select(UpstreamCharge))
     assert charge is not None and charge.request_id == "gateway-request"
-    assert wallet_data(session, user.id)["frozen"] == "0.00800000"
+    assert wallet_data(session, user.id)["frozen"] == "0.00000000"
     async with httpx.AsyncClient(
         transport=httpx.MockTransport(
             lambda _: httpx.Response(200, json={"success": True, "data": [sample()]})
@@ -779,7 +864,7 @@ async def test_routes_permissions_credit_policy_and_quote(
                     "/billing/quotes", json={"kind": "agent", "model": "gpt-5.6-luna"}
                 )
             ).json()
-            assert quote["reserved_amount"] == "0.00800000"
+            assert quote["reserved_amount"] == "0.00000000"
             app.dependency_overrides[get_current_user] = lambda: owner
             credit = {
                 "request_id": str(uuid4()),
@@ -908,7 +993,7 @@ def test_restart_does_not_replay_unknown_paid_request(state: Any) -> None:
     assert AiChatRunManager(factory)._recover_interrupted_runs_sync() == []
     session.expire_all()
     assert run.status == AiChatRunStatus.FAILED
-    assert wallet_data(session, user.id)["frozen"] == "0.00800000"
+    assert wallet_data(session, user.id)["frozen"] == "0.00000000"
 
 
 def test_posted_entries_reject_update_and_delete(state: Any) -> None:
@@ -924,16 +1009,101 @@ def test_posted_entries_reject_update_and_delete(state: Any) -> None:
     session.rollback()
 
 
-def test_new_channel_requires_new_price_review_even_for_same_model(state: Any) -> None:
+def test_new_channel_does_not_reuse_previous_settlement_unit(state: Any) -> None:
     session, user, owner, settings, _, _ = state
     changed = settings.model_copy(
         update={"text_openai_api_key": SecretStr("another-synthetic-key")}
     )
-    with pytest.raises(HTTPException, match="503"):
-        create_quote(
-            session, user, kind="agent", provider="openai", model="gpt-5.6-luna", settings=changed
-        )
+    paid = create_quote(
+        session, user, kind="agent", provider="openai", model="gpt-5.6-luna", settings=changed
+    )
+    assert paid.mode == "paid" and "quota_per_cny" not in paid.policy
+    assert paid.policy["channel"] != channel_id(settings, "agent", "openai")
     platform = create_quote(
         session, owner, kind="agent", provider="openai", model="gpt-5.6-luna", settings=changed
     )
     assert platform.mode == "platform" and "quota_per_cny" not in platform.policy
+
+
+@pytest.mark.parametrize(
+    "kind,provider", [("agent", "openai"), ("image", "image"), ("video", "video")]
+)
+def test_paid_model_without_maximum_price_review_can_start(
+    state: Any, kind: str, provider: str
+) -> None:
+    """实时目录中的新模型不需要逐型号上限审核，不预冻结或伪造结算费率。"""
+    session, user, _, settings, _, _ = state
+    settings.image_api_key = settings.video_api_key = SecretStr("synthetic-media")
+    settings.image_api_base_url = settings.video_api_base_url = "https://www.yyapi.cloud/v1"
+    operation = admit(
+        session,
+        user,
+        source_id=uuid4(),
+        kind=kind,
+        provider=provider,
+        model="unreviewed-model",
+        quote_id=None,
+        settings=settings,
+    )
+    session.commit()
+    assert operation.status == "running" and operation.mode == "paid"
+    assert operation.reserved == 0 and "id" not in operation.policy
+    assert "quota_per_cny" not in operation.policy
+    assert wallet_data(session, user.id)["available"] == "1.00000000"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("price,settled", [(1, True), (2, False)])
+async def test_new_model_settlement_verifies_channel_unit_without_price_policy(
+    state: Any,
+    price: int,
+    settled: bool,
+) -> None:
+    """从公开状态核验额度换算；未知口径保留待核对，不猜金额也不记零费用。"""
+    session, user, _, settings, factory, _ = state
+    operation = admit(
+        session,
+        user,
+        source_id=uuid4(),
+        kind="agent",
+        provider="openai",
+        model="unreviewed-model",
+        quote_id=None,
+        settings=settings,
+    )
+    session.add(
+        UpstreamCharge(
+            operation_id=operation.id,
+            channel=channel_id(settings, "agent", "openai"),
+            request_id="gateway-request",
+        )
+    )
+    operation.call_count = 1
+    session.flush()
+    finish_operation(session, operation.source_id)
+    session.commit()
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/status":
+            assert "Authorization" not in request.headers
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "data": {
+                        "quota_display_type": "CNY",
+                        "usd_exchange_rate": 1,
+                        "quota_per_unit": 500000,
+                        "price": price,
+                    },
+                },
+            )
+        return httpx.Response(200, json={"success": True, "data": [sample()]})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        await reconcile_once(settings, factory, client)
+    session.expire_all()
+    assert (operation.status == "settled") is settled
+    assert operation.charged == (Decimal("0.000252") if settled else ZERO)
+    if not settled:
+        assert "换算口径" in operation.note

@@ -6,17 +6,20 @@ import json
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
 from fastapi import FastAPI
-from pydantic import SecretStr
+from langchain_core.runnables import RunnableConfig
+from pydantic import BaseModel, SecretStr
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from genesis_api.agent.context import agent_invocation_context
 from genesis_api.api.dependencies import get_current_user
 from genesis_api.api.routes import media_image
 from genesis_api.api.routes.media import router
@@ -24,7 +27,9 @@ from genesis_api.core.config import Settings
 from genesis_api.database.base import Base
 from genesis_api.database.session import get_session
 from genesis_api.identity.models import User, UserRole
+from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import image, service
+from genesis_api.media.agent import tools as media_tools
 from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset
 
 PNG = base64.b64decode(
@@ -59,7 +64,7 @@ async def fixture(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncGenera
     )
     Base.metadata.create_all(engine)
     settings = Settings(image_api_key=SecretStr("synthetic-image-test-key"))
-    image.model_catalog.entries.clear()
+    model_catalog.entries.clear()
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
     with Session(engine, expire_on_commit=False) as session:
@@ -93,7 +98,9 @@ async def fixture(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncGenera
 
             monkeypatch.setattr(service, "STORAGE_ROOT", tmp_path)
             monkeypatch.setattr(media_image, "get_settings", lambda: settings)
-            monkeypatch.setattr(image, "SessionLocal", sessionmaker(engine, expire_on_commit=False))
+            sessions = sessionmaker(engine, expire_on_commit=False)
+            monkeypatch.setattr(image, "SessionLocal", sessions)
+            monkeypatch.setattr(media_tools, "SessionLocal", sessions)
             monkeypatch.setattr(httpx, "AsyncClient", upstream_client)
             state.project_id = (await client.post("projects", json={"name": "图片验收"})).json()[
                 "id"
@@ -145,6 +152,207 @@ async def latest(state: ImageFixture) -> dict[str, Any]:
         f"projects/{state.project_id}/image-generations?node_id={state.node_id}"
     )
     return dict(response.json()[0])
+
+
+@pytest.mark.anyio
+async def test_agent_submits_once_and_native_artifact_links_real_task(
+    fixture: ImageFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """真实工具与按钮共用计费/参考校验；重放只读取同一任务。"""
+    from langchain_core.messages import ToolMessage
+
+    state = fixture
+    tool = next(
+        t
+        for t in media_tools.build_media_tools(state.settings)
+        if t.name == "submit_image_generation"
+    )
+    user = state.session.scalar(select(User))
+    assert user is not None
+    version = (await state.client.get(f"projects/{state.project_id}/canvas")).json()["version"]
+    args = {"project_id": state.project_id, "node_id": state.node_id, "expected_version": version}
+    config: RunnableConfig = {"configurable": {"genesis_run_id": str(uuid4())}}
+    with agent_invocation_context(user.id, "owner", "media"):
+        message = await tool.ainvoke(
+            {"type": "tool_call", "name": tool.name, "id": "first", "args": args},
+            config=config,
+        )
+        assert isinstance(message, ToolMessage)
+        result = json.loads(str(message.content))
+        assert result["node_id"] == state.node_id
+        assert result["reused"] is False
+        assert message.artifact["resource"] == {
+            "module": "media",
+            "kind": "image_generation",
+            "id": result["id"],
+            "scope_id": state.project_id,
+            "parent_id": state.node_id,
+        }
+        await asyncio.gather(*image._agent_tasks)
+        replay = await tool.ainvoke(
+            {"type": "tool_call", "name": tool.name, "id": "repeated", "args": args},
+            config=config,
+        )
+    repeated = json.loads(str(replay.content))
+    assert repeated["id"] == result["id"]
+    assert repeated["status"] == "completed"
+    assert repeated["reused"] is True
+    assert repeated["generation"]["model"] == "gpt-image-2"
+    assert sum(req.method == "POST" for req in state.requests) == 1
+    assert len(state.session.scalars(select(ImageGeneration)).all()) == 1
+    schema = tool.tool_call_schema
+    assert isinstance(schema, type) and issubclass(schema, BaseModel)
+    assert "config" not in schema.model_json_schema()["properties"]
+
+
+@pytest.mark.anyio
+async def test_agent_rejects_stale_canvas_and_unready_reference(
+    fixture: ImageFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """工具不能用过期版本、未就绪参考或别人的身份绕过按钮校验。"""
+    state = fixture
+    tool = next(
+        t
+        for t in media_tools.build_media_tools(state.settings)
+        if t.name == "submit_image_generation"
+    )
+    user = state.session.scalar(select(User))
+    assert user is not None
+    version = (await state.client.get(f"projects/{state.project_id}/canvas")).json()["version"]
+    args = {
+        "project_id": state.project_id,
+        "node_id": state.node_id,
+        "expected_version": version - 1,
+    }
+    config: RunnableConfig = {"configurable": {"genesis_run_id": str(uuid4())}}
+    with agent_invocation_context(user.id, "owner", "media"):
+        assert "画布已更新" in await tool.ainvoke(args, config=config)
+        snapshot = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+        source = str(uuid4())
+        snapshot["document"]["nodes"].append(
+            {
+                **snapshot["document"]["nodes"][0],
+                "id": source,
+                "type": "image",
+                "asset_id": None,
+            }
+        )
+        snapshot["document"]["edges"].append(
+            {"id": str(uuid4()), "source": source, "target": state.node_id}
+        )
+        saved = (
+            await state.client.put(f"projects/{state.project_id}/canvas", json=snapshot)
+        ).json()
+        assert "参考图片尚未就绪" in await tool.ainvoke(
+            {**args, "expected_version": saved["version"]}, config=config
+        )
+        assert "执行上下文" in await tool.ainvoke(args)
+    with agent_invocation_context(uuid4(), "owner", "media"):
+        assert "账户不存在" in await tool.ainvoke(args, config=config)
+    assert not any(req.method == "POST" for req in state.requests)
+    assert not state.session.scalars(select(ImageGeneration)).all()
+
+
+@pytest.mark.anyio
+async def test_agent_reuses_active_and_unknown_tasks_in_new_turns(
+    fixture: ImageFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """另一轮生成请求也不能绕过正在执行或待核实的任务再次消费。"""
+    state = fixture
+    queued: list[UUID] = []
+    monkeypatch.setattr(image, "start_agent_task", lambda task_id, _: queued.append(task_id))
+    tool = next(
+        t
+        for t in media_tools.build_media_tools(state.settings)
+        if t.name == "submit_image_generation"
+    )
+    actor_id = state.session.scalar(select(User.id))
+    assert actor_id is not None
+    snapshot = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    args = {
+        "project_id": state.project_id,
+        "node_id": state.node_id,
+        "expected_version": snapshot["version"],
+    }
+    with agent_invocation_context(actor_id, "owner", "media"):
+        first = await tool.ainvoke(args, config={"configurable": {"genesis_run_id": str(uuid4())}})
+        second = await tool.ainvoke(args, config={"configurable": {"genesis_run_id": str(uuid4())}})
+        assert first["id"] == second["id"]
+        assert second["reused"] is True
+        task = state.session.get(ImageGeneration, UUID(str(first["id"])))
+        assert task is not None
+        task.status = "unknown"
+        state.session.commit()
+        unknown = await tool.ainvoke(
+            args,
+            config={"configurable": {"genesis_run_id": str(uuid4())}},
+        )
+        assert unknown["id"] == first["id"]
+        assert unknown["status"] == "unknown"
+        assert unknown["reused"] is True
+    assert len(queued) == 1
+    assert not any(req.method == "POST" for req in state.requests)
+
+
+@pytest.mark.anyio
+async def test_canvas_result_restores_exact_task_without_generating(fixture: ImageFixture) -> None:
+    """结果关联随画布往返，按标识查询旧任务不会再次调用上游。"""
+    state = fixture
+    response = await submit(state)
+    assert response.status_code == 202
+    task = await latest(state)
+    before = len(state.requests)
+    current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    source = current["document"]["nodes"][0]
+    result_id = str(uuid4())
+    metadata = {"task_id": task["id"], "index": 0, "status": "processing", "error": ""}
+    current["document"]["nodes"].append(
+        {**source, "id": result_id, "type": "image", "asset_id": None, "image_result": metadata}
+    )
+    current["document"]["edges"].append(
+        {"id": str(uuid4()), "source": source["id"], "target": result_id}
+    )
+    saved = await state.client.put(f"projects/{state.project_id}/canvas", json=current)
+    assert saved.status_code == 200
+    restored = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    assert restored["document"]["nodes"][-1]["image_result"] == metadata
+    exact = await state.client.get(f"projects/{state.project_id}/image-generations/{task['id']}")
+    assert exact.status_code == 200
+    assert exact.json()["status"] == "completed"
+    assert exact.json()["asset_ids"] == task["asset_ids"]
+    assert len(state.requests) == before
+    assert (
+        await state.client.get(f"projects/{state.project_id}/image-generations/{uuid4()}")
+    ).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_member_can_generate_without_model_maximum_price_review(
+    fixture: ImageFixture,
+) -> None:
+    """普通用户有余额即可提交实时目录中的生图模型，无须预先审核最高费用。"""
+    from genesis_api.billing import service as billing
+
+    state = fixture
+    user = state.session.scalar(select(User))
+    assert user is not None
+    user.role = UserRole.MEMBER
+    billing.post_entry(
+        state.session,
+        billing.lock_wallet(state.session, user.id),
+        key="synthetic-image-credit",
+        kind="credit",
+        available=Decimal("1"),
+        reason="合成测试充值",
+    )
+    state.session.commit()
+    result = await submit(state)
+    assert result.status_code == 202
+    assert len([request for request in state.requests if request.method == "POST"]) == 1
+    assert billing.wallet_data(state.session, user.id)["frozen"] == "0.00000000"
 
 
 @pytest.mark.anyio
@@ -209,8 +417,9 @@ async def test_multi_image_and_explicit_size(fixture: ImageFixture) -> None:
     ("name", "expected"),
     [("reference.png", "reference.png"), ("人物参考", "人物参考.png"), ("wrong.jpg", "wrong.png")],
 )
+@pytest.mark.parametrize("mode", ["text", "reference"])
 async def test_image_edit_uses_local_multipart_without_public_base(
-    fixture: ImageFixture, name: str, expected: str
+    fixture: ImageFixture, name: str, expected: str, mode: str
 ) -> None:
     state = fixture
     asset = (
@@ -223,7 +432,7 @@ async def test_image_edit_uses_local_multipart_without_public_base(
         state,
         generation={
             "model": "gpt-image-2",
-            "mode": "reference",
+            "mode": mode,
             "image_quality": "high",
             "image_background": "opaque",
         },
@@ -266,9 +475,6 @@ async def test_image_edit_uses_local_multipart_without_public_base(
     [
         {"text": ""},
         {"generation": {"model": "missing-model"}},
-        {"generation": {"model": "gpt-image-2", "mode": "reference"}},
-        {"generation": {"model": "new-image-model", "mode": "reference"}},
-        {"generation": {"model": "gpt-image-2", "mode": "first_last"}},
     ],
 )
 async def test_invalid_input_never_generates(
@@ -276,6 +482,57 @@ async def test_invalid_input_never_generates(
 ) -> None:
     await save_node(fixture, **patch)
     assert (await submit(fixture)).status_code == 422
+    assert not any(req.method == "POST" for req in fixture.requests)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("mode", ["reference", "first_last"])
+async def test_without_image_reference_ignores_legacy_mode(
+    fixture: ImageFixture, mode: str
+) -> None:
+    await save_node(fixture, generation={"model": "gpt-image-2", "mode": mode})
+    assert (await submit(fixture)).status_code == 202
+    post = next(req for req in fixture.requests if req.method == "POST")
+    assert post.url.path == "/v1/images/generations"
+    assert post.headers["content-type"].startswith("application/json")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("ready", [False, True])
+async def test_image_reference_cannot_be_silently_ignored(
+    fixture: ImageFixture, ready: bool
+) -> None:
+    current = (await fixture.client.get(f"projects/{fixture.project_id}/canvas")).json()
+    source_id = str(uuid4())
+    source: dict[str, object] = {
+        "id": source_id,
+        "type": "image",
+        "x": -400,
+        "y": 0,
+        "width": 360,
+        "height": 280,
+    }
+    if ready:
+        asset = (
+            await fixture.client.post(
+                f"projects/{fixture.project_id}/assets",
+                files={"file": ("参考.png", PNG, "image/png")},
+            )
+        ).json()
+        source["asset_id"] = asset["id"]
+        current["document"]["nodes"][0]["generation"]["model"] = "new-image-model"
+    current["document"]["nodes"].append(source)
+    current["document"]["edges"] = [
+        {"id": str(uuid4()), "source": source_id, "target": fixture.node_id}
+    ]
+    assert (
+        await fixture.client.put(f"projects/{fixture.project_id}/canvas", json=current)
+    ).status_code == 200
+    response = await submit(fixture)
+    assert response.status_code == 422
+    assert (
+        "图生图" in response.json()["detail"] if ready else "尚未就绪" in response.json()["detail"]
+    )
     assert not any(req.method == "POST" for req in fixture.requests)
 
 
@@ -427,6 +684,9 @@ async def test_cross_account_and_active_delete(fixture: ImageFixture) -> None:
     state.session.add(other)
     state.session.commit()
     state.app.dependency_overrides[get_current_user] = lambda: other
+    assert (
+        await state.client.get(f"projects/{state.project_id}/image-generations/{task.id}")
+    ).status_code == 404
     assert (
         await state.client.get(
             f"projects/{state.project_id}/image-generations?node_id={state.node_id}"

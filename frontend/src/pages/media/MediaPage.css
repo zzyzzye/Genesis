@@ -172,10 +172,6 @@
 .media-video-file-input { display:none; }
 .media-canvas .react-flow__node-video .react-flow__handle { z-index:5; }
 .media-canvas .media-video-card>.react-flow__handle { top:calc(50% + 21px); }
-.media-editor .media-video-add-segment { position:absolute; z-index:3; top:50%; transform:translateY(-50%); width:28px; height:28px; min-height:28px; padding:0; border:0; border-radius:50%; background:#252525; color:#aaa; font-size:20px; line-height:1; }
-.media-video-add-segment.is-previous { left:8px; }
-.media-video-add-segment.is-next { right:8px; }
-.media-editor .media-video-add-segment:hover:not(:disabled) { background:#353535; color:#eee; }
 .media-video-composer { display:flex; flex-direction:column; flex:0 0 202px; min-height:0; margin-top:10px; padding:14px 16px 12px; border:0; border-radius:16px; background:#252525; }
 .media-video-composer-top,.media-video-composer-footer { display:flex; align-items:center; gap:7px; min-width:0; color:#adadad; font-size:var(--media-node-font-size); }
 .media-video-composer-top label,.media-video-composer-footer label { display:flex; align-items:center; gap:7px; min-width:0; }

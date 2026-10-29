@@ -6,7 +6,19 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class AgentResourceReference(BaseModel):
+    """工具创建资源的最小关联；仅允许标识，不携带原始业务载荷。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    module: str = Field(min_length=1, max_length=32)
+    kind: str = Field(min_length=1, max_length=64)
+    id: UUID
+    scope_id: UUID
+    parent_id: UUID | None = None
 
 
 class AgentActionProposal(BaseModel):
