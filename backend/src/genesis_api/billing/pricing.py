@@ -171,9 +171,8 @@ class YyapiPricingService:
             or parsed.port not in (None, 443)
         ):
             raise PricingLookupError("价格服务地址配置无效，请站长核对。")
-        proxy = settings.yyapi_proxy_url.get_secret_value() if settings.yyapi_proxy_url else None
         identity = hashlib.sha256(
-            f"{base}\0{token}\0{settings.yyapi_user_id}\0{proxy}".encode()
+            f"{base}\0{token}\0{settings.yyapi_user_id}".encode()
         ).hexdigest()
         async with self._lock:
             cached = self._cache.get(identity)
@@ -188,7 +187,6 @@ class YyapiPricingService:
                 async with httpx.AsyncClient(
                     timeout=10,
                     trust_env=False,
-                    proxy=proxy,
                     follow_redirects=False,
                 ) as client:
                     result = await self._load(client, base, headers)

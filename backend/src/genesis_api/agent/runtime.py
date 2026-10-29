@@ -32,6 +32,7 @@ from genesis_api.agent.capabilities import agent_capabilities
 from genesis_api.agent.context import agent_invocation_context
 from genesis_api.agent.contracts import AgentActionProposal
 from genesis_api.agent.files import AttachmentFilesMiddleware, agent_files_context
+from genesis_api.agent.google_transport import DirectGoogleTransport
 from genesis_api.agent.input_fallback import InputFallbackMiddleware, unsupported_responses
 from genesis_api.agent.metrics import GenerationMetrics
 from genesis_api.agent.mimo import ChatMiMo
@@ -66,7 +67,7 @@ class YyapiAsyncTransport(httpx.AsyncBaseTransport):
 
     def __init__(self) -> None:
         """创建网关请求传输器，连接释放由 aclose 负责。"""
-        self._transport = httpx.AsyncHTTPTransport()
+        self._transport = httpx.AsyncHTTPTransport(trust_env=False)
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         """清理 SDK 诊断头后委托底层传输器发送请求。
@@ -315,6 +316,8 @@ class EmbeddedAgentRuntime:
             kwargs["max_retries"] = 0
             if "http_async_client" not in kwargs:
                 kwargs["http_async_client"] = self._http_client()
+        if adapter_provider == "google_genai":
+            kwargs["client_args"] = {"trust_env": False, "transport": DirectGoogleTransport()}
         chat_model = init_chat_model(**kwargs)
         if isinstance(chat_model, ChatAnthropic):
             # ChatAnthropic 尚无 HTTP 客户端注入参数；仅替换 SDK 客户端以复用计费钩子，
