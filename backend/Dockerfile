@@ -4,12 +4,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
+    UV_HTTP_TIMEOUT=300 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
 RUN pip install --no-cache-dir \
+    --timeout 300 --retries 10 \
     --index-url https://pypi.tuna.tsinghua.edu.cn/simple \
     uv==0.9.22
 
