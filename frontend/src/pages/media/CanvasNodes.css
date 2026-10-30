@@ -38,6 +38,8 @@
 .media-editor .media-canvas-toolbar { bottom:20px; padding:6px; border:0; border-radius:14px; background:#262626; box-shadow:0 8px 28px #0003; }
 .media-editor .media-canvas-toolbar button { display:flex; align-items:center; justify-content:center; min-width:38px; min-height:38px; padding:7px 10px; }
 .media-editor .media-canvas-toolbar button[aria-pressed=true] { background:#3a3a3a; color:#fff; }
+.media-editor .media-canvas-toolbar .media-canvas-layout { gap:5px; }
+@media(max-width:700px) { .media-canvas-layout span { display:none; } }
 .media-editor .media-canvas-toolbar .media-add-node-button { background:#dedede; color:#222; }
 .media-editor .media-canvas-toolbar .media-add-node-button:hover { background:#f0f0f0; }
 .media-canvas-view-tools { position:absolute; z-index:12; bottom:22px; left:18px; display:flex; align-items:center; gap:2px; border-radius:9px; background:#262626; padding:3px; }

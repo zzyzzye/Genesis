@@ -432,6 +432,32 @@ describe('作品画布', () => {
     expect(screen.getByRole('textbox', { name: '音频节点名称' })).toHaveValue('雨夜环境音')
     expect(screen.getByRole('textbox', { name: '便签内容' })).toHaveValue('环境音：雨声与远处车流')
   })
+  it('一键排版保存从左到右的布局，一次撤销与重做恢复整张画布', async () => {
+    const document: Document = { ...emptyDocument(), nodes: [{ ...note, id: 'reference', type: 'image', x: 900 }, { ...note, id: 'video', type: 'video', x: -400 }, { ...note, id: 'output', type: 'video_asset', x: -900 }], edges: [{ id: 'ref', source: 'reference', target: 'video' }, { id: 'result', source: 'video', target: 'output' }] }
+    const request = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试', version: 0 }))
+    let actions: import('../src/pages/media/MediaAssistant').MediaCanvasActions | null = null
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" onAgentActionsChange={value => { actions = value }} /></MemoryRouter>)
+    const button = await screen.findByRole('button', { name: '一键排版' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    const arranged = actions!.getDocument()
+    expect(arranged.nodes[0]!.x).toBeLessThan(arranged.nodes[1]!.x)
+    expect(arranged.nodes[1]!.x).toBeLessThan(arranged.nodes[2]!.x)
+    expect(arranged.edges).toEqual(document.edges)
+    await waitFor(() => expect(request.mock.calls.some(([path, method, body]) => path.endsWith('/canvas') && method === 'PUT' && JSON.stringify((body as { document: Document }).document.nodes) === JSON.stringify(arranged.nodes))).toBe(true))
+    // 重复点击不追加空的撤销步骤。
+    fireEvent.click(button)
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    expect(actions!.getDocument().nodes.map(item => [item.x, item.y])).toEqual(document.nodes.map(item => [item.x, item.y]))
+    fireEvent.click(screen.getByRole('button', { name: '重做' }))
+    expect(actions!.getDocument().nodes).toEqual(arranged.nodes)
+  })
+  it('空画布禁用排版入口', async () => {
+    vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试', version: 0 }))
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    await screen.findByRole('button', { name: '＋ 添加生图节点' })
+    expect(screen.getByRole('button', { name: '一键排版' })).toBeDisabled()
+  })
   it('更新空白视频节点的型号、提示词和时长，保留其他参数并可撤销', async () => {
     const generation = { ...media.defaultGenerationSettings(), ratio: '9:16' as const, resolution: '480P' as const, sound: false }
     const document = { ...emptyDocument(), nodes: [{ ...note, id: 'video', type: 'video' as const, duration_seconds: 5, generation }] }

@@ -26,7 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type
 import { AnimatePresence, motion, useIsPresent } from 'motion/react'
 import { canvasEditorTransition, useLiveReducedMotion } from '../../lib/motion'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, FolderOpen, GripVertical, Hand, ImagePlus, LoaderCircle, Map as MapIcon, MousePointer2, Music2, Play, Shapes, StickyNote, Type, Upload, X } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, FolderOpen, GripVertical, Hand, ImagePlus, LoaderCircle, Map as MapIcon, MousePointer2, Music2, Play, Shapes, StickyNote, Type, Upload, Workflow, X } from 'lucide-react'
 import { api, defaultGenerationSettings, type Asset, type Document, type Edge, type Node, type Project, type VideoFrame, upload } from './api'
 import { connectReference, displayPrompt, imageMentionPattern, imageMentionToken, imageReferenceNumbers, imageReferences, incomingReferences, syncReferenceModes } from './canvasReferences'
 import { AssetPreview } from './AssetPreview'
@@ -40,6 +40,7 @@ import { imageSettingsSummary } from './imageSettings'
 import { ProjectDialog } from './MediaHome'
 import type { MediaAssistantNode, MediaCanvasActions, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
+import { arrangeCanvas } from './canvasLayout'
 import { audioAssetNodeSize, generationNodeSize, groupSelection, isGenerationNode, nodeTypeLabel, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
 
 type CanvasNodeData = {
@@ -996,6 +997,21 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     if (viewport) canvas.apply({ ...current, viewport }, false)
   }
 
+  function arrange() {
+    try {
+      const current = canvas.current.current
+      const element = canvasElement.current?.querySelector<HTMLElement>('.media-node-editor:not([aria-hidden="true"])')
+      const editor = element?.dataset.nodeId ? { id: element.dataset.nodeId, height: element.offsetHeight } : undefined
+      const next = arrangeCanvas(current, editor)
+      const viewport = fittedViewport(next, editor) ?? current.viewport
+      if (next === current && viewport.x === current.viewport.x && viewport.y === current.viewport.y && viewport.zoom === current.viewport.zoom) return
+      canvas.apply({ ...next, viewport }, next !== current)
+      setError('')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '画布排版失败，请重试。')
+    }
+  }
+
   useEffect(() => {
     let width = window.innerWidth
     let timer: number | undefined
@@ -1147,7 +1163,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       <button onClick={() => { removeSelected(); setContextMenu(null) }}>移除节点<span>Delete</span></button>
     </div>}
     {(selected.filter((id) => canvas.document.nodes.some((node) => node.id === id && node.type !== 'group')).length >= 2 || selected.some((id) => canvas.document.nodes.some((node) => node.id === id && node.type === 'group'))) && <div className="media-canvas-selection-actions"><span>已选 {selected.length} 个节点</span><button onClick={groupSelected} disabled={selected.filter((id) => canvas.document.nodes.some((node) => node.id === id && node.type !== 'group')).length < 2}>编组</button><button onClick={ungroupSelected} disabled={!selected.some((id) => canvas.document.nodes.some((node) => node.id === id && node.type === 'group'))}>取消编组</button></div>}
-    <div className="media-canvas-toolbar" role="toolbar" aria-label="创作工具"><button ref={nodeMenuTrigger} className="media-add-node-button" aria-controls="media-node-palette" aria-expanded={nodeMenu} disabled={!canvas.ready} onClick={() => { setPaletteAnchor(null); setNodeMenu(!nodeMenu); setContextMenu(null); setMenu(false) }}>＋ 添加节点</button><button disabled={!canvas.ready} onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>素材库</button><button aria-label="选择" title="选择 V" aria-pressed={tool === 'select'} onClick={() => setTool('select')}><MousePointer2 size={17} /></button><button aria-label="平移" title="平移 H，按住空格临时平移" aria-pressed={tool === 'pan'} onClick={() => setTool('pan')}><Hand size={17} /></button><button aria-label="复制节点" title="复制节点 ⌘/Ctrl+C" disabled={!selected.length} onClick={copySelection}><Copy size={16} /></button><button aria-label="粘贴节点" title="粘贴节点 ⌘/Ctrl+V" disabled={clipboardProjectId !== projectId} onClick={pasteSelection}><ClipboardPaste size={16} /></button><button aria-label="撤销" onClick={canvas.undo}>↶</button><button aria-label="重做" onClick={canvas.redo}>↷</button><button disabled={!selected.length && !selectedEdges.length} onClick={removeSelected}>移除</button></div>
+    <div className="media-canvas-toolbar" role="toolbar" aria-label="创作工具"><button ref={nodeMenuTrigger} className="media-add-node-button" aria-controls="media-node-palette" aria-expanded={nodeMenu} disabled={!canvas.ready} onClick={() => { setPaletteAnchor(null); setNodeMenu(!nodeMenu); setContextMenu(null); setMenu(false) }}>＋ 添加节点</button><button disabled={!canvas.ready} onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>素材库</button><button aria-label="选择" title="选择 V" aria-pressed={tool === 'select'} onClick={() => setTool('select')}><MousePointer2 size={17} /></button><button aria-label="平移" title="平移 H，按住空格临时平移" aria-pressed={tool === 'pan'} onClick={() => setTool('pan')}><Hand size={17} /></button><button className="media-canvas-layout" type="button" aria-label="一键排版" title="一键排版：参考在左，成品在右" disabled={!canvas.ready || !canvas.document.nodes.length} onClick={arrange}><Workflow size={17} /><span>排版</span></button><button aria-label="复制节点" title="复制节点 ⌘/Ctrl+C" disabled={!selected.length} onClick={copySelection}><Copy size={16} /></button><button aria-label="粘贴节点" title="粘贴节点 ⌘/Ctrl+V" disabled={clipboardProjectId !== projectId} onClick={pasteSelection}><ClipboardPaste size={16} /></button><button aria-label="撤销" onClick={canvas.undo}>↶</button><button aria-label="重做" onClick={canvas.redo}>↷</button><button disabled={!selected.length && !selectedEdges.length} onClick={removeSelected}>移除</button></div>
     <div className="media-canvas-view-tools" role="toolbar" aria-label="画布视图"><button aria-label="切换小地图" aria-pressed={showMiniMap} title="小地图" onClick={() => setShowMiniMap(!showMiniMap)}><MapIcon size={16} /></button><button aria-label="缩小画布" title="缩小 10%" onClick={() => zoom(-.1)}>−</button><output aria-label="当前缩放比例">{Math.round(viewport.zoom * 100)}%</output><button aria-label="放大画布" title="放大 10%" onClick={() => zoom(.1)}>＋</button><button disabled={!selected.length} onClick={() => fit(true)}>聚焦所选</button><button onClick={() => fit()}>适应全部</button></div>
   </main>
 }
