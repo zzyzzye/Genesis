@@ -17,7 +17,10 @@ const mode = params.get('mode') ?? 'full'
 const media = params.get('surface') === 'media'
 const token = 'ag-ui-synthetic-review'
 const userId = '11111111-1111-4111-8111-111111111111'
-localStorage.setItem(media ? accountAuthTokenKey : studioAuthTokenKey, token)
+// 同源验收页不得覆盖创作者已经登录的会话；所有 API 仍只返回合成数据。
+const authKey = media ? accountAuthTokenKey : studioAuthTokenKey
+const ownsAuth = localStorage.getItem(authKey) === null
+if (ownsAuth) localStorage.setItem(authKey, token)
 const sessionKey = media ? `genesis-media-ai-conversation:${userId}` : 'genesis-blog-ai-conversation'
 sessionStorage.removeItem(sessionKey)
 let runNumber = 0
@@ -26,7 +29,7 @@ let stopped = false
 let confirmed = false
 let reviewCanvas: Document = emptyDocument()
 const generationReview = mode === 'canvas-generate'
-const videoUpdateReview = mode === 'canvas-video-update'
+const videoUpdateReview = mode === 'canvas-video-update' || mode === 'canvas-video-unavailable'
 const canvasReview = mode === 'canvas-images' || mode === 'canvas-image-reference' || generationReview || videoUpdateReview
 let generationStatus = 'processing'
 addEventListener('genesis-review-image-status',event=>{generationStatus=(event as CustomEvent<string>).detail})
@@ -37,7 +40,7 @@ if (mode === 'canvas-image-reference') reviewCanvas = {...emptyDocument(),nodes:
   {id:'synthetic-pending',type:'image_generation',name:'待生成参考',asset_id:null,text:'基准人物图',x:850,y:500,width:640,height:402},
 ]}
 const imageOperations = ['开摊环境', '备料特写', '炭火烤制', '递餐瞬间', '忙碌间隙'].map(name => ({ action: 'add_image_generation', name, text: `中国城市夜市，一位四十岁左右的烧烤摊主，深色围裙、浅色短袖，暖色灯泡与炭火照明。${name}，纪实抓拍，自然质感，不看镜头、不摆拍。` }))
-if (videoUpdateReview) reviewCanvas = { ...emptyDocument(), nodes: [{ id: 'synthetic-video', type: 'video', name: '生视频节点 1', asset_id: null, text: '夜市烧烤', duration_seconds: 5, generation: { ...defaultGenerationSettings(), model: 'synthetic-fixed-15s' }, x: 80, y: 120, width: 640, height: 402 }] }
+if (videoUpdateReview) reviewCanvas = { ...emptyDocument(), nodes: [{ id: 'synthetic-video', type: 'video', name: '生视频节点 1', asset_id: null, text: '', duration_seconds: 5, generation: defaultGenerationSettings(), x: 80, y: 120, width: 640, height: 402 }] }
 if(generationReview) reviewCanvas={...emptyDocument(),nodes:imageOperations.slice(0,2).map((item,index)=>({id:`synthetic-generator-${index+1}`,type:'image_generation',name:`0${index+1} ${item.name}`,asset_id:null,text:item.text,x:80,y:120+index*480,width:480,height:302,generation:{...defaultGenerationSettings(),model:'image2.5-flare',image_ratio:'16:9',image_resolution:'1K'}}))}
 const nativeFetch = window.fetch.bind(window)
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -75,7 +78,7 @@ window.fetch = async (input, init) => {
     {id:'unknown-image-model'},
   ] })
   if (path.includes('/image-generations')) return json([])
-  if (path.endsWith('/video-models')) return json({ configured: true, references_ready: true, models: [
+  if (path.endsWith('/video-models')) return json({ configured: true, references_ready: true, models: mode === 'canvas-video-unavailable' ? [] : [
     { id: 'synthetic-fixed-15s', description: '提供 3–10 秒、720p 横竖屏输出；支持首帧、风格图、元素图和 1 个源视频，所有参考素材合计最多 4 项。', pricing: { status:'available',currency:'CNY',unit:'request',amount:'0.55',tiers:[],note:'价格仅供参考，实际费用以上游账单为准。' } },
     { id: 'per-second-model', description: '按实际生成秒数计费。请求参数支持情况由供应商校验。', pricing: { status:'available',currency:'CNY',unit:'second',amount:'0.33',tiers:[],note:'价格仅供参考，实际费用以上游账单为准。' } },
     { id: 'unknown-model' },
@@ -120,7 +123,7 @@ window.fetch = async (input, init) => {
       timer = setTimeout(() => {
         if (reconnect) { controller.close(); return }
         if (stopped || mode === 'error') { emit({ type: 'RUN_ERROR', message: stopped ? '生成已由用户停止。' : '合成测试：生成失败，可以继续对话。' }); controller.close(); return }
-        const content = videoUpdateReview ? '已准备 15 秒视频方案。点击应用后更新现有节点。\n```canvas-plan\n' + JSON.stringify({ title: '夜市烧烤 · 15秒视频生成方案', operations: [{ action: 'update_node', node_id: 'synthetic-video', text: '0–5秒生串上架，5–10秒油光滋响，10–15秒成品出炉。', duration_seconds: 15 }] }) + '\n```'
+        const content = videoUpdateReview ? '已准备 15 秒视频方案。点击应用后更新现有节点。\n```canvas-plan\n' + JSON.stringify({ title: '夜市烧烤 · 15秒视频生成方案', operations: [{ action: 'update_node', node_id: 'synthetic-video', model: 'synthetic-fixed-15s', text: '0–5秒生串上架，5–10秒油光滋响，10–15秒成品出炉。', duration_seconds: 15 }] }) + '\n```'
           : generationReview ? '已提交「01 开摊环境」的图片生成，沿用 Image 2.5 Flare、16:9、1K。画布会显示加载状态与生成结果。'
           : mode === 'canvas-images' && runNumber > 1 ? '已准备五个节点的 Image 2.5 Flare、16:9、1K 参数修改方案，不启动生成。\n```canvas-plan\n' + JSON.stringify({ title: '统一设置五个生图节点', project_id: 'synthetic-project', version: 0, operations: reviewCanvas.nodes.filter(node => node.type === 'image_generation').map(node => ({ action: 'update_node', node_id: node.id, generation: { model: 'image2.5-flare', image_ratio: '16:9', image_resolution: '1K' }, expected_generation: { model: node.generation?.model ?? '', mode: node.generation?.mode ?? 'text', image_ratio: node.generation?.image_ratio ?? '', image_resolution: node.generation?.image_resolution ?? '', image_size: node.generation?.image_size ?? '' } })) }) + '\n```'
           : mode === 'canvas-images' ? '已整理五个生图节点，提示词已分别填好，应用后可选择模型生成。\n```canvas-plan\n' + JSON.stringify({ title: '夜市烧烤 · 五张分镜图', operations: imageOperations }) + '\n```'
@@ -151,7 +154,7 @@ window.fetch = async (input, init) => {
   return json({ items: [], total: 0 })
 }
 addEventListener('pagehide', () => {
-  if (localStorage.getItem(media ? accountAuthTokenKey : studioAuthTokenKey) === token) localStorage.removeItem(media ? accountAuthTokenKey : studioAuthTokenKey)
+  if (ownsAuth && localStorage.getItem(authKey) === token) localStorage.removeItem(authKey)
   sessionStorage.removeItem(sessionKey)
 }, { once: true })
 export function Review() {

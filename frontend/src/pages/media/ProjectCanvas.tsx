@@ -831,6 +831,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       const target = current.nodes.find(node => node.id === operation.node_id)
       if (!target) throw new Error('目标节点已不存在，未修改任何节点。')
       if (operation.duration_seconds !== undefined && target.type !== 'video') throw new Error('目标不是生视频节点，未修改任何节点。')
+      if (operation.model !== undefined && target.type !== 'video') throw new Error('目标不是生视频节点，未修改任何节点。')
       if (!operation.generation) continue
       if (target.type !== 'image_generation') throw new Error('目标不是生图节点，未修改任何节点。')
       const settings = { ...defaultGenerationSettings(), ...target.generation }
@@ -855,7 +856,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         if (index < 0) continue
         const target = nodes[index]
         if (!target) continue
-        nodes[index] = { ...target, ...(operation.name !== undefined ? { name: operation.name } : {}), ...(operation.text !== undefined ? { text: operation.text } : {}), ...(operation.duration_seconds !== undefined ? { duration_seconds: operation.duration_seconds } : {}), ...(operation.generation ? { generation: { ...defaultGenerationSettings(), ...target.generation, ...operation.generation } } : {}) }
+        nodes[index] = { ...target, ...(operation.name !== undefined ? { name: operation.name } : {}), ...(operation.text !== undefined ? { text: operation.text } : {}), ...(operation.duration_seconds !== undefined ? { duration_seconds: operation.duration_seconds } : {}), ...(operation.generation || operation.model !== undefined ? { generation: { ...defaultGenerationSettings(), ...target.generation, ...operation.generation, ...(operation.model !== undefined ? { model: operation.model } : {}) } } : {}) }
         affectedIds.push(operation.node_id)
         continue
       }

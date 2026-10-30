@@ -18,7 +18,7 @@ type MediaCanvasOperation =
   | { action: 'add_image'; name: string; text: string }
   | { action: 'add_audio'; name: string; text: string }
   | { action: 'add_note'; text: string }
-  | { action: 'update_node'; node_id: string; name?: string; text?: string; duration_seconds?: number; generation?: Partial<GenerationSettings>; expected_generation?: Record<string, string> }
+  | { action: 'update_node'; node_id: string; name?: string; text?: string; duration_seconds?: number; model?: string; generation?: Partial<GenerationSettings>; expected_generation?: Record<string, string> }
 export type MediaCanvasPlan = { title: string; operations: MediaCanvasOperation[]; project_id?: string; version?: number }
 
 const promptsByPage: Record<MediaAssistantPage, string[]> = {
@@ -52,6 +52,7 @@ function canvasPlanFromMessage(content: string): MediaCanvasPlan | null {
         operations.push({ action, text: operation.text.slice(0, 2000) })
       } else if (action === 'update_node' && typeof operation.node_id === 'string') {
         if (operation.duration_seconds !== undefined && (typeof operation.duration_seconds !== 'number' || !Number.isInteger(operation.duration_seconds) || operation.duration_seconds < 1 || operation.duration_seconds > 60)) return null
+        if (operation.model !== undefined && (typeof operation.model !== 'string' || !operation.model.trim())) return null
         const patch = { action, node_id: operation.node_id, ...(typeof operation.name === 'string' ? { name: operation.name.slice(0, 120) } : {}), ...(typeof operation.text === 'string' ? { text: operation.text.slice(0, 2000) } : {}), ...(typeof operation.duration_seconds === 'number' && Number.isFinite(operation.duration_seconds) ? { duration_seconds: Math.max(1, Math.min(60, Math.round(operation.duration_seconds))) } : {}) } as Extract<MediaCanvasOperation, { action: 'update_node' }>
         if (operation.generation !== undefined) {
           const generation = operation.generation as Record<string, unknown>
@@ -61,7 +62,8 @@ function canvasPlanFromMessage(content: string): MediaCanvasPlan | null {
           if (!expected || typeof expected !== 'object' || Array.isArray(expected) || Object.values(expected).some(value => typeof value !== 'string')) return null
           patch.expected_generation = expected as Record<string, string>
         }
-        if (!('name' in patch) && !('text' in patch) && !('duration_seconds' in patch) && !patch.generation) return null
+        if (typeof operation.model === 'string') patch.model = operation.model
+        if (!('name' in patch) && !('text' in patch) && !('duration_seconds' in patch) && !patch.generation && !patch.model) return null
         operations.push(patch)
       } else return null
     }
@@ -75,7 +77,7 @@ function planSummary(plan: MediaCanvasPlan) {
   const audios = plan.operations.filter((item) => item.action === 'add_audio').length
   const notes = plan.operations.filter((item) => item.action === 'add_note').length
   const updates = plan.operations.filter((item) => item.action === 'update_node').length
-  const settings = [...new Set(plan.operations.flatMap(item => item.action === 'update_node' && item.generation ? [`${item.generation.model} · ${item.generation.image_ratio} · ${item.generation.image_resolution}`] : []))]
+  const settings = [...new Set(plan.operations.flatMap(item => item.action === 'update_node' ? item.generation ? [`${item.generation.model} · ${item.generation.image_ratio} · ${item.generation.image_resolution}`] : item.model ? [item.model] : [] : []))]
   const seconds = plan.operations.reduce((total, item) => total + (item.action === 'add_video' ? item.duration_seconds : 0), 0)
   return [imageGenerations && `新增 ${imageGenerations} 个生图节点`, videos && `新增 ${videos} 个生视频节点`, videos && `生成素材共 ${seconds} 秒`, images && `新增 ${images} 个待选图片节点`, audios && `新增 ${audios} 个待导入音频节点`, notes && `新增 ${notes} 条便签`, updates && `更新 ${updates} 个节点`, ...settings].filter(Boolean).join(' · ')
 }
@@ -133,7 +135,7 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
         }
       }
       const videos = plan.operations.filter(item => item.action === 'add_video')
-      const updates = plan.operations.filter(item => item.action === 'update_node' && item.duration_seconds !== undefined)
+      const updates = plan.operations.filter(item => item.action === 'update_node' && (item.duration_seconds !== undefined || item.model !== undefined))
       if (videos.length || updates.length) {
         const catalog = await api<{ models: VideoModel[] }>('/video-models')
         for (const operation of videos) {
@@ -147,10 +149,11 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
         for (const operation of updates) {
           if (operation.action !== 'update_node') continue
           const target = document?.nodes.find(node => node.id === operation.node_id)
-          const model = catalog.models.find(item => item.id === target?.generation?.model)
-          if (!target || target.type !== 'video' || !model) {
-            throw new Error('目标生视频节点不存在或模型当前不可用，请让助手重新读取画布和模型目录后规划。')
-          }
+          if (!target || target.type !== 'video') throw new Error('目标生视频节点已不存在，请让助手重新读取画布后规划。')
+          // 校验本次应用后的模型，允许给尚未选模型的空白视频节点配置型号。
+          const modelId = operation.model ?? target.generation?.model
+          if (!modelId) throw new Error('方案未指定视频模型，请让助手查询模型目录并补充型号。')
+          if (!catalog.models.some(item => item.id === modelId)) throw new Error(`视频模型「${modelId}」当前不可用，请让助手重新查询模型目录。`)
         }
         operations = operations.map(operation => {
           if (operation.action !== 'add_video') return operation
@@ -195,7 +198,7 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
       const plan = canvasPlanFromMessage(content)
       if (!plan || page !== 'canvas' || !onApplyCanvasPlan) return null
       const applied = appliedPlans.has(key)
-      return <div className="media-assistant__plan"><strong><WandSparkles aria-hidden="true" />{plan.title}</strong><p>{planSummary(plan)}</p><p>仅添加或更新节点草案，不启动生成；连线用于参考，不会自动剪辑成片。</p>{planError?.key === key && <p role="alert">{planError.message}</p>}<button type="button" disabled={applied || disabled || pendingPlan !== null} onClick={() => { void applyPlan(plan, key) }}>{applied ? <><Check aria-hidden="true" />草案已应用</> : pendingPlan === key ? '校验中…' : '应用到画布'}</button></div>
+      return <div className="media-assistant__plan"><strong><WandSparkles aria-hidden="true" />{plan.title}</strong><p>{planSummary(plan)}</p><p>仅添加或更新节点草案，不启动生成；连线用于参考，不会自动剪辑成片。</p>{planError?.key === key && <p role="alert">{planError.message}</p>}{applied ? <span className="media-assistant__plan-applied" role="status" aria-label="画布草案应用状态"><Check aria-hidden="true" />草案已应用</span> : <button type="button" disabled={disabled || pendingPlan !== null} onClick={() => { void applyPlan(plan, key) }}>{pendingPlan === key ? '校验中…' : '应用到画布'}</button>}</div>
     },
   }} />
 }

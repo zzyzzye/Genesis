@@ -432,6 +432,24 @@ describe('作品画布', () => {
     expect(screen.getByRole('textbox', { name: '音频节点名称' })).toHaveValue('雨夜环境音')
     expect(screen.getByRole('textbox', { name: '便签内容' })).toHaveValue('环境音：雨声与远处车流')
   })
+  it('更新空白视频节点的型号、提示词和时长，保留其他参数并可撤销', async () => {
+    const generation = { ...media.defaultGenerationSettings(), ratio: '9:16' as const, resolution: '480P' as const, sound: false }
+    const document = { ...emptyDocument(), nodes: [{ ...note, id: 'video', type: 'video' as const, duration_seconds: 5, generation }] }
+    const request = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试', version: 0 }))
+    let applyPlan: ((plan: MediaCanvasPlan) => void) | null = null
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" onAgentCanvasApplyChange={apply => { applyPlan = apply }} /></MemoryRouter>)
+    await waitFor(() => expect(applyPlan).not.toBeNull())
+    act(() => applyPlan?.({ title: '填写视频', operations: [{ action: 'update_node', node_id: 'video', model: 'new-video-model', text: '0–15秒完整镜头', duration_seconds: 15 }] }))
+    await waitFor(() => expect(request.mock.calls.some(([path, method]) => path.endsWith('/canvas') && method === 'PUT')).toBe(true))
+    const saved = request.mock.calls.filter(([path, method]) => path.endsWith('/canvas') && method === 'PUT').at(-1)?.[2] as { document: Document }
+    expect(saved.document.nodes[0]).toMatchObject({ text: '0–15秒完整镜头', duration_seconds: 15, generation: { ...generation, model: 'new-video-model' } })
+    expect(request.mock.calls.some(([path, method]) => path.includes('/video-generations') && method === 'POST')).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    await waitFor(() => {
+      const restored = request.mock.calls.filter(([path, method]) => path.endsWith('/canvas') && method === 'PUT').at(-1)?.[2] as { document: Document }
+      expect(restored.document.nodes[0]).toMatchObject({ text: note.text, duration_seconds: 5, generation })
+    })
+  })
   it('方案中任一更新目标失效时，整批拒绝且不新增节点', async () => {
     vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试', version: 0 }))
     let applyPlan: ((plan: MediaCanvasPlan) => void) | null = null
@@ -775,12 +793,38 @@ describe('作品画布', () => {
     if (state === '当前模型不支持') document = { ...document, nodes: document.nodes.map(node => ({ ...node, generation: { ...media.defaultGenerationSettings(), model: 'other-model' } })) }
     await act(() => { finishCatalog({ models: [{ id: 'fixed-15s', durations: [15], parameters_known: true }] }); return Promise.resolve() })
     if (state === '目标删除' || state === '当前模型不支持') {
-      expect(await screen.findByRole('alert')).toHaveTextContent('目标生视频节点不存在或模型当前不可用')
+      expect(await screen.findByRole('alert')).toHaveTextContent(state === '目标删除' ? '目标生视频节点已不存在' : '当前不可用')
       expect(apply).not.toHaveBeenCalled()
       expect(screen.getByRole('button', { name: '应用到画布' })).toBeEnabled()
     } else {
       await waitFor(() => expect(apply).toHaveBeenCalledWith(expect.objectContaining({ operations: [expect.objectContaining({ node_id: 'target', duration_seconds: 15 })] })))
-      expect(screen.getByRole('button', { name: '草案已应用' })).toBeDisabled()
+      expect(screen.getByRole('status', { name: '画布草案应用状态' })).toHaveTextContent('草案已应用')
+      expect(screen.queryByRole('button', { name: '应用到画布' })).not.toBeInTheDocument()
+    }
+  })
+  it.each(['空白节点', '替换旧型号', '只修改型号', '型号不可用'])('视频更新保留并校验方案型号：%s', async state => {
+    vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })
+    vi.spyOn(media, 'api').mockResolvedValue({ models: state === '型号不可用' ? [] : [{ id: 'new-video-model' }] })
+    const document: Document = { ...emptyDocument(), nodes: [{ ...note, id: 'target', type: 'video', generation: { ...media.defaultGenerationSettings(), model: state === '替换旧型号' ? 'old-unavailable-model' : '' } }] }
+    const operation = { action: 'update_node', node_id: 'target', model: 'new-video-model', ...(state === '只修改型号' ? {} : { text: '0–15秒完整镜头', duration_seconds: 15 }) }
+    const apply = vi.fn()
+    vi.spyOn(ai, 'streamAiChatRun').mockImplementation((_token, _id, callbacks) => {
+      callbacks.onSnapshot('```canvas-plan\n' + JSON.stringify({ title: '填写视频节点', operations: [operation] }) + '\n```', 1)
+      return Promise.resolve('completed')
+    })
+    render(<MediaAssistant canvasActions={{ ...canvasActions, getDocument: () => document }} userId="blank-video-user" attachmentsAllowed page="canvas" projectId="project" selectedNode={null} onApplyCanvasPlan={apply} />)
+    fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '向镜头搭档提问' }), { target: { value: '选好型号填写视频' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
+    fireEvent.click(await screen.findByRole('button', { name: '应用到画布' }))
+    if (state === '型号不可用') {
+      expect(await screen.findByRole('alert')).toHaveTextContent('new-video-model')
+      expect(apply).not.toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: '应用到画布' })).toBeEnabled()
+    } else {
+      await waitFor(() => expect(apply).toHaveBeenCalledWith(expect.objectContaining({ operations: [operation] })))
+      expect(screen.getByRole('status', { name: '画布草案应用状态' })).toHaveTextContent('草案已应用')
+      expect(screen.queryByRole('button', { name: '应用到画布' })).not.toBeInTheDocument()
     }
   })
   it('助手方案需由用户点击后才应用到画布', async () => {
@@ -811,6 +855,6 @@ describe('作品画布', () => {
     expect(applied).toMatchObject({ title: '雨夜开场' })
     expect(applied?.operations[0]).toMatchObject({ generation: { model: 'video-test', ratio: '16:9', resolution: '720P' } })
     expect(applied?.operations.map((operation) => operation.action)).toEqual(['add_video', 'add_note'])
-    expect(screen.getByRole('button', { name: '草案已应用' })).toBeDisabled()
+    expect(screen.getByRole('status', { name: '画布草案应用状态' })).toHaveTextContent('草案已应用')
   })
 })

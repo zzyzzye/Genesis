@@ -94,6 +94,7 @@
 .media-assistant__plan svg { width:15px; height:15px; }
 .media-assistant__plan p { grid-column:1; margin:0; color:var(--assistant-muted); font-size:11px; }
 .media-assistant__plan button { justify-self:start; display:flex; justify-content:center; align-items:center; gap:4px; margin-top:4px; min-height:32px; padding:7px 12px; border-radius:6px; background:var(--assistant-hover); font-size:11px; }
+.media-assistant__plan-applied { display:flex; align-items:center; gap:4px; min-height:32px; margin-top:4px; color:var(--assistant-accent); font-size:11px; }
 .media-assistant--canvas.studio-assistant { bottom:86px; }
 .media-assistant--canvas.studio-assistant.is-open { bottom:86px; height:min(740px,calc(100dvh - 106px)); }
 @media(min-width:1440px) {

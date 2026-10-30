@@ -113,7 +113,9 @@ JSON 格式：
 }
 ```
 add_video 必须同时提供 name、text、duration_seconds、model；后两项来自模型查询结果。
-update_node 修改时长前也必须核实该节点当前模型支持；不知道当前模型时只修改文字。
+update_node 修改视频时长或型号前也必须查询视频目录；使用 model 字段设置真实型号，
+与 text、duration_seconds 一起应用。当前视频节点未选模型时，必须提供 model，
+不能只在正文提及型号或要求用户先手动选模型。保留未要求修改的生成参数。
 canvas-plan 只允许 `add_image_generation`、`add_video`、`add_image`、`add_audio`、`add_note`、
 `update_node` 六种操作；每次最多 8 个操作。canvas-plan 只修改草案，提交生图使用独立工具；
 图片素材和音频素材节点只能创建待选素材的空节点，不能假装已经上传或选中了文件。
