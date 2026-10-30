@@ -287,7 +287,7 @@ describe('助手失败后的继续对话', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^已保存的博客规划/ }))
     expect(await screen.findByText('历史回答')).toBeInTheDocument()
     expect(screen.getByText('3.00s').parentElement).toHaveTextContent('输出 3.00s')
-    expect(screen.getByText('120 tok · 40 tok/s')).toBeInTheDocument()
+    expect(screen.getByText('120').closest('.studio-assistant__speed')).toHaveTextContent('120 tok · 40.0 tok/s')
     expect(screen.queryByText(/实测/)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '重命名' }))
     fireEvent.change(screen.getByRole('textbox', { name: '对话标题' }), { target: { value: '我的写作计划' } })

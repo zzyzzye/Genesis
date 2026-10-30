@@ -13,7 +13,7 @@ import { accountAuthTokenKey } from '../src/lib/auth'
 import { imageReferences, incomingReferences } from '../src/pages/media/canvasReferences'
 
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
-const canvasActions = { save: () => Promise.resolve(), attachImageTask: () => Promise.resolve() }
+const canvasActions = { save: () => Promise.resolve(), getDocument: emptyDocument, attachImageTask: () => Promise.resolve() }
 
 // 视频任务协议在独立测试覆盖；这些用例聚焦画布与素材操作。
 vi.mock('../src/pages/media/VideoGeneration', () => ({ VideoGeneration: ({ controls }: { controls: import('react').ReactNode }) => controls, ImageGeneration: ({ controls }: { controls: import('react').ReactNode }) => controls }))
@@ -432,6 +432,14 @@ describe('作品画布', () => {
     expect(screen.getByRole('textbox', { name: '音频节点名称' })).toHaveValue('雨夜环境音')
     expect(screen.getByRole('textbox', { name: '便签内容' })).toHaveValue('环境音：雨声与远处车流')
   })
+  it('方案中任一更新目标失效时，整批拒绝且不新增节点', async () => {
+    vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试', version: 0 }))
+    let applyPlan: ((plan: MediaCanvasPlan) => void) | null = null
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" onAgentCanvasApplyChange={apply => { applyPlan = apply }} /></MemoryRouter>)
+    await waitFor(() => expect(applyPlan).not.toBeNull())
+    expect(() => applyPlan?.({ title: '过期方案', operations: [{ action: 'add_note', text: '不能部分应用' }, { action: 'update_node', node_id: 'missing', text: '过期修改' }] })).toThrow('目标节点已不存在')
+    expect(screen.queryByRole('textbox', { name: '便签内容' })).not.toBeInTheDocument()
+  })
   it('批量图片参数保留提示词和布局，过期方案不会覆盖新编辑', async () => {
     const nodes = Array.from({ length: 5 }, (_, index) => ({ ...note, id: crypto.randomUUID(), type: 'image_generation' as const, text: `原提示词${index}`, generation: { ...media.defaultGenerationSettings(), sound: false } }))
     const document: Document = { ...emptyDocument(), nodes }
@@ -746,6 +754,35 @@ describe('作品画布', () => {
     expect(applyPlan).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: '应用到画布' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: '草案已应用' })).not.toBeInTheDocument()
+  })
+  it.each(['未选择', '选择其他节点', '目标删除', '当前模型不支持'])('修改视频时长按当前画布校验：%s', async state => {
+    vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })
+    let finishCatalog!: (value: { models: { id: string; durations: number[]; parameters_known: boolean }[] }) => void
+    vi.spyOn(media, 'api').mockImplementation(() => new Promise(resolve => { finishCatalog = resolve }))
+    let document: Document = { ...emptyDocument(), nodes: [{ ...note, id: 'target', type: 'video', duration_seconds: 5, generation: { ...media.defaultGenerationSettings(), model: 'fixed-15s' } }] }
+    const apply = vi.fn()
+    vi.spyOn(ai, 'streamAiChatRun').mockImplementation((_token, _id, callbacks) => {
+      callbacks.onSnapshot('```canvas-plan\n' + JSON.stringify({ title: '视频时长', operations: [{ action: 'update_node', node_id: 'target', text: '0–15 秒完整镜头', duration_seconds: 15 }] }) + '\n```', 1)
+      return Promise.resolve('completed')
+    })
+    render(<MediaAssistant canvasActions={{ ...canvasActions, getDocument: () => document }} userId="video-update-user" attachmentsAllowed page="canvas" projectId="project" selectedNode={state === '选择其他节点' ? { id: 'other', type: 'note', name: '其他节点', text: '', assetId: null } : null} onApplyCanvasPlan={apply} />)
+    fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '向镜头搭档提问' }), { target: { value: '改成15秒' } })
+    fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
+    fireEvent.click(await screen.findByRole('button', { name: '应用到画布' }))
+    expect(screen.getByRole('button', { name: '校验中…' })).toBeDisabled()
+    // 模型目录返回期间的删除或编辑必须使用最新画布判断。
+    if (state === '目标删除') document = emptyDocument()
+    if (state === '当前模型不支持') document = { ...document, nodes: document.nodes.map(node => ({ ...node, generation: { ...media.defaultGenerationSettings(), model: 'other-model' } })) }
+    await act(() => { finishCatalog({ models: [{ id: 'fixed-15s', durations: [15], parameters_known: true }] }); return Promise.resolve() })
+    if (state === '目标删除' || state === '当前模型不支持') {
+      expect(await screen.findByRole('alert')).toHaveTextContent('目标生视频节点不存在、模型不可用或不支持所填时长')
+      expect(apply).not.toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: '应用到画布' })).toBeEnabled()
+    } else {
+      await waitFor(() => expect(apply).toHaveBeenCalledWith(expect.objectContaining({ operations: [expect.objectContaining({ node_id: 'target', duration_seconds: 15 })] })))
+      expect(screen.getByRole('button', { name: '草案已应用' })).toBeDisabled()
+    }
   })
   it('助手方案需由用户点击后才应用到画布', async () => {
     vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })

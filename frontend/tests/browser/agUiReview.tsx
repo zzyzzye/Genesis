@@ -26,7 +26,8 @@ let stopped = false
 let confirmed = false
 let reviewCanvas: Document = emptyDocument()
 const generationReview = mode === 'canvas-generate'
-const canvasReview = mode === 'canvas-images' || mode === 'canvas-image-reference' || generationReview
+const videoUpdateReview = mode === 'canvas-video-update'
+const canvasReview = mode === 'canvas-images' || mode === 'canvas-image-reference' || generationReview || videoUpdateReview
 let generationStatus = 'processing'
 addEventListener('genesis-review-image-status',event=>{generationStatus=(event as CustomEvent<string>).detail})
 const referenceAsset = {id:'synthetic-image',name:'摊主参考.png',kind:'image',mime_type:'image/png',size:68,in_library:false}
@@ -36,6 +37,7 @@ if (mode === 'canvas-image-reference') reviewCanvas = {...emptyDocument(),nodes:
   {id:'synthetic-pending',type:'image_generation',name:'待生成参考',asset_id:null,text:'基准人物图',x:850,y:500,width:640,height:402},
 ]}
 const imageOperations = ['开摊环境', '备料特写', '炭火烤制', '递餐瞬间', '忙碌间隙'].map(name => ({ action: 'add_image_generation', name, text: `中国城市夜市，一位四十岁左右的烧烤摊主，深色围裙、浅色短袖，暖色灯泡与炭火照明。${name}，纪实抓拍，自然质感，不看镜头、不摆拍。` }))
+if (videoUpdateReview) reviewCanvas = { ...emptyDocument(), nodes: [{ id: 'synthetic-video', type: 'video', name: '生视频节点 1', asset_id: null, text: '夜市烧烤', duration_seconds: 5, generation: { ...defaultGenerationSettings(), model: 'synthetic-fixed-15s' }, x: 80, y: 120, width: 640, height: 402 }] }
 if(generationReview) reviewCanvas={...emptyDocument(),nodes:imageOperations.slice(0,2).map((item,index)=>({id:`synthetic-generator-${index+1}`,type:'image_generation',name:`0${index+1} ${item.name}`,asset_id:null,text:item.text,x:80,y:120+index*480,width:480,height:302,generation:{...defaultGenerationSettings(),model:'image2.5-flare',image_ratio:'16:9',image_resolution:'1K'}}))}
 const nativeFetch = window.fetch.bind(window)
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
@@ -63,14 +65,15 @@ window.fetch = async (input, init) => {
     if (method === 'PUT' && typeof init?.body === 'string') reviewCanvas = (JSON.parse(init.body) as { document: Document }).document
     return json({ version: 0, document: reviewCanvas })
   }
-  if (canvasReview && path.endsWith('/media/projects/synthetic-project')) return json({ id: 'synthetic-project', name: '烧烤摊主 · 生图验收', version: 0 })
+  if (canvasReview && path.endsWith('/media/projects/synthetic-project')) return json({ id: 'synthetic-project', name: videoUpdateReview ? '烧烤摊主 · 视频方案验收' : '烧烤摊主 · 生图验收', version: 0 })
   if(generationReview && path.endsWith('/image-generations/synthetic-image-task')) return json({id:'synthetic-image-task',node_id:'synthetic-generator-1',status:generationStatus,progress:0,error:generationStatus==='failed'?'合成错误：图片模型暂不可用':'',asset_id:generationStatus==='completed'?referenceAsset.id:null,asset_ids:generationStatus==='completed'?[referenceAsset.id]:[],generation:reviewCanvas.nodes[0]?.generation})
   if(generationReview && path.endsWith(`/assets/${referenceAsset.id}`)) return json(referenceAsset)
   if (mode === 'canvas-image-reference' && path.endsWith('/media/projects/synthetic-project/assets')) return json({items:[referenceAsset],total:1})
   if ((mode === 'canvas-image-reference' || generationReview) && path.endsWith(`/assets/${referenceAsset.id}/file`)) return new Response(Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jbcQAAAAASUVORK5CYII='),c=>c.charCodeAt(0)),{headers:{'Content-Type':'image/png'}})
   if (path.endsWith('/image-models')) return json({ configured: true, references_ready:true, models: mode === 'canvas-image-reference' ? [{id:'gpt-image-2',image_edit:true},{id:'text-only-model',image_edit:false}] : [{ id: 'image2.5-flare', image_edit:true, ratios: ['1:1'], resolutions: [], durations: [], images: 0, videos: 0, audio: false }] })
   if (path.includes('/image-generations')) return json([])
-  if (path.endsWith('/video-models')) return json({ models: [{ id: 'synthetic-fixed-15s', parameters_known: true, durations: [15] }] })
+  if (path.endsWith('/video-models')) return json({ configured: true, references_ready: true, models: [{ id: 'synthetic-fixed-15s', parameters_known: true, durations: [15], ratios: ['16:9', '9:16'], resolutions: ['720p'], images: 0, videos: 0, audio: false }] })
+  if (path.endsWith('/video-generations')) return json([])
   if (path.includes('/llm/providers/')) return json({ models: [{ id: 'mimo-v2.6-flash', name: 'MiMo V2.6 Flash', context_window: 1000000, billing_mode: mode.startsWith('paid') ? 'paid' : 'free' }] })
   if (path.endsWith('/billing/quotes')) return mode === 'paid-error'
     ? json({ detail: '合成报价失败，请稍后重试。' }, 503)
@@ -110,7 +113,8 @@ window.fetch = async (input, init) => {
       timer = setTimeout(() => {
         if (reconnect) { controller.close(); return }
         if (stopped || mode === 'error') { emit({ type: 'RUN_ERROR', message: stopped ? '生成已由用户停止。' : '合成测试：生成失败，可以继续对话。' }); controller.close(); return }
-        const content = generationReview ? '已提交「01 开摊环境」的图片生成，沿用 Image 2.5 Flare、16:9、1K。画布会显示加载状态与生成结果。'
+        const content = videoUpdateReview ? '已准备 15 秒视频方案。点击应用后更新现有节点。\n```canvas-plan\n' + JSON.stringify({ title: '夜市烧烤 · 15秒视频生成方案', operations: [{ action: 'update_node', node_id: 'synthetic-video', text: '0–5秒生串上架，5–10秒油光滋响，10–15秒成品出炉。', duration_seconds: 15 }] }) + '\n```'
+          : generationReview ? '已提交「01 开摊环境」的图片生成，沿用 Image 2.5 Flare、16:9、1K。画布会显示加载状态与生成结果。'
           : mode === 'canvas-images' && runNumber > 1 ? '已准备五个节点的 Image 2.5 Flare、16:9、1K 参数修改方案，不启动生成。\n```canvas-plan\n' + JSON.stringify({ title: '统一设置五个生图节点', project_id: 'synthetic-project', version: 0, operations: reviewCanvas.nodes.filter(node => node.type === 'image_generation').map(node => ({ action: 'update_node', node_id: node.id, generation: { model: 'image2.5-flare', image_ratio: '16:9', image_resolution: '1K' }, expected_generation: { model: node.generation?.model ?? '', mode: node.generation?.mode ?? 'text', image_ratio: node.generation?.image_ratio ?? '', image_resolution: node.generation?.image_resolution ?? '', image_size: node.generation?.image_size ?? '' } })) }) + '\n```'
           : mode === 'canvas-images' ? '已整理五个生图节点，提示词已分别填好，应用后可选择模型生成。\n```canvas-plan\n' + JSON.stringify({ title: '夜市烧烤 · 五张分镜图', operations: imageOperations }) + '\n```'
           : mode.startsWith('canvas-') ? '已规划一个视频节点，镜头节奏写入同一条生成提示词。\n```canvas-plan\n' + JSON.stringify({ title: '城市烧烤街 · 草案', operations: [{ action: 'add_video', name: '城市烧烤街', text: '0–4秒炭火，4–8秒翻烤，8–12秒食客，12–15秒街景。', duration_seconds: mode === 'canvas-invalid' ? 4 : 15, model: 'synthetic-fixed-15s' }] }) + '\n```'
@@ -150,7 +154,7 @@ export function Review() {
   const handleApplyChange = useCallback((apply: ((plan: MediaCanvasPlan) => void) | null) => setApplyCanvas(() => apply), [])
   if (media && canvasReview) return <MemoryRouter><div className="media-workspace"><ProjectCanvas projectId="synthetic-project" userId={userId} onAgentCanvasApplyChange={handleApplyChange} onAgentActionsChange={setCanvasActions} /><MediaAssistant userId={userId} attachmentsAllowed page="canvas" projectId="synthetic-project" selectedNode={null} onApplyCanvasPlan={applyCanvas ?? undefined} canvasActions={canvasActions} /></div></MemoryRouter>
   return <MemoryRouter><main style={{ padding: 24 }}><h1>AG-UI 助手验收</h1><p>所有模型、计费与写入均为合成数据。</p>{applied && <p role="status">已收到节点草案，未提交生成任务。</p>}{media
-    ? <MediaAssistant userId={userId} attachmentsAllowed page={mode.startsWith('canvas-') ? 'canvas' : 'projects'} selectedNode={null} onApplyCanvasPlan={mode.startsWith('canvas-') ? () => setApplied(true) : undefined} canvasActions={{save:()=>Promise.resolve(),attachImageTask:()=>Promise.resolve()}} />
+    ? <MediaAssistant userId={userId} attachmentsAllowed page={mode.startsWith('canvas-') ? 'canvas' : 'projects'} selectedNode={null} onApplyCanvasPlan={mode.startsWith('canvas-') ? () => setApplied(true) : undefined} canvasActions={{save:()=>Promise.resolve(),getDocument:emptyDocument,attachImageTask:()=>Promise.resolve()}} />
     : <BlogAssistant page={{ route: '/blog/studio/posts', section: 'posts', pageType: 'posts_list' }} editor={null} />}</main></MemoryRouter>
 }
 createRoot(document.getElementById('root')!).render(<Review />)

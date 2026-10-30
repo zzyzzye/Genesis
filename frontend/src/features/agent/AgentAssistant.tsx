@@ -194,8 +194,8 @@ const ResponseTiming = memo(function ResponseTiming({ timing, metrics, streaming
     </>}
     {showMetrics && count != null && <span className="studio-assistant__speed" title={usageTitle}>
       <Gauge aria-hidden="true" />
-      {`${count.toLocaleString('zh-CN')} tok`}
-      {speed !== null && Number.isFinite(speed) ? ` · ${Number(speed.toFixed(1))} tok/s` : ''}
+      <span><span className="studio-assistant__token-count">{count.toLocaleString('zh-CN')}</span> tok</span>
+      {speed !== null && Number.isFinite(speed) && <span> · <span className="studio-assistant__token-rate">{speed.toFixed(1)}</span> tok/s</span>}
     </span>}
   </div>
 })

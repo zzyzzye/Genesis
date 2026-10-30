@@ -346,7 +346,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const { save: saveCanvas, current: canvasDocument } = canvas
   useEffect(() => {
     if (!canvas.ready) { onAgentActionsChange?.(null); return }
-    onAgentActionsChange?.({save:saveCanvas,attachImageTask:async resource => {
+    onAgentActionsChange?.({save:saveCanvas,getDocument:() => canvasDocument.current,attachImageTask:async resource => {
       if (resource.scope_id !== projectId || !canvasDocument.current.nodes.some(node=>node.id === resource.parent_id && node.type === 'image_generation')) return
       try {
         const task = await api<GenerationTask>(`/projects/${projectId}/image-generations/${resource.id}`)
@@ -828,9 +828,12 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   function applyAgentPlan(plan: MediaCanvasPlan) {
     const current = canvas.current.current
     for (const operation of plan.operations) {
-      if (operation.action !== 'update_node' || !operation.generation) continue
+      if (operation.action !== 'update_node') continue
       const target = current.nodes.find(node => node.id === operation.node_id)
-      if (!target || target.type !== 'image_generation') throw new Error('目标生图节点已不存在，未修改任何节点。')
+      if (!target) throw new Error('目标节点已不存在，未修改任何节点。')
+      if (operation.duration_seconds !== undefined && target.type !== 'video') throw new Error('目标不是生视频节点，未修改任何节点。')
+      if (!operation.generation) continue
+      if (target.type !== 'image_generation') throw new Error('目标不是生图节点，未修改任何节点。')
       const settings = { ...defaultGenerationSettings(), ...target.generation }
       for (const [key, value] of Object.entries(operation.expected_generation ?? {})) {
         if ((settings[key as keyof typeof settings] ?? '') !== value) throw new Error('节点参数已有新修改，请让助手重新读取画布，未覆盖当前编辑。')

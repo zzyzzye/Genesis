@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from 'react'
 import type { AiToolCall } from '../../lib/api'
 import { AgentAssistant } from '../../features/agent/AgentAssistant'
 import { accountAuthTokenKey } from '../../lib/auth'
-import { api, defaultGenerationSettings, type GenerationSettings } from './api'
+import { api, defaultGenerationSettings, type Document, type GenerationSettings } from './api'
 import type { VideoModel } from './VideoGeneration'
 import { imageRatios, imageResolutions, imageSizePatch } from './imageSettings'
 
 type MediaAssistantPage = 'projects' | 'project' | 'canvas' | 'assets'
 export type MediaGenerationResource = NonNullable<AiToolCall['resource']>
-export type MediaCanvasActions = { save: () => Promise<void>; attachImageTask: (resource: MediaGenerationResource) => Promise<void> }
+export type MediaCanvasActions = { save: () => Promise<void>; getDocument: () => Document; attachImageTask: (resource: MediaGenerationResource) => Promise<void> }
 export type MediaAssistantNode = { id: string; type: string; name: string; text: string; assetId: string | null; durationSeconds?: number; model?: string; mode?: string }
 type MediaCanvasOperation =
   | { action: 'add_image_generation'; name: string; text: string }
@@ -142,12 +142,14 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
             throw new Error(`「${operation.name}」缺少可验证的模型或不支持所填时长，请让助手查询模型后重新规划。`)
           }
         }
+        // 校验实际画布中的目标，选择状态仅用于讨论上下文。
+        const document = canvasActions?.getDocument()
         for (const operation of updates) {
           if (operation.action !== 'update_node') continue
-          const target = discussionNode?.id === operation.node_id ? discussionNode : null
-          const model = catalog.models.find(item => item.id === target?.model)
+          const target = document?.nodes.find(node => node.id === operation.node_id)
+          const model = catalog.models.find(item => item.id === target?.generation?.model)
           if (!target || target.type !== 'video' || !model || model.parameters_known === false || !model.durations.includes(operation.duration_seconds!)) {
-            throw new Error('无法核实目标节点的模型与时长，请选中对应生视频节点后重新规划。')
+            throw new Error('目标生视频节点不存在、模型不可用或不支持所填时长，请让助手重新读取画布和模型目录后规划。')
           }
         }
         operations = operations.map(operation => {

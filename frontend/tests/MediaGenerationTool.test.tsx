@@ -59,7 +59,7 @@ it('用户发送前保存画布，工具回执只为第一张建立结果连线�
 it('画布保存失败时保留输入，不启动 Agent 或生图请求',async()=>{
   mockChat()
   const save=vi.fn().mockRejectedValue(new Error('画布保存冲突，请先处理'))
-  render(<MediaAssistant userId="user" attachmentsAllowed page="canvas" projectId="project" selectedNode={null} canvasActions={{save,attachImageTask:()=>Promise.resolve()}}/>)
+  render(<MediaAssistant userId="user" attachmentsAllowed page="canvas" projectId="project" selectedNode={null} canvasActions={{save,getDocument:emptyDocument,attachImageTask:()=>Promise.resolve()}}/>)
   fireEvent.click(screen.getByRole('button',{name:'镜头搭档'}))
   fireEvent.change(screen.getByRole('textbox',{name:'向镜头搭档提问'}),{target:{value:'生成第一张'}})
   fireEvent.click(screen.getByRole('button',{name:'发送给镜头搭档'}))
