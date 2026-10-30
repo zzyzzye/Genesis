@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
-from contextlib import AbstractAsyncContextManager
+from collections.abc import AsyncGenerator
+from contextlib import AbstractAsyncContextManager, aclosing
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, TypeVar, cast
@@ -406,7 +406,7 @@ class EmbeddedAgentRuntime:
         thread_id: str,
         metrics: GenerationMetrics | None = None,
         tool_history: ToolCallHistory | None = None,
-    ) -> AsyncIterator[BaseEvent | AgentActionProposal]:
+    ) -> AsyncGenerator[BaseEvent | AgentActionProposal, None]:
         """使用官方 AG-UI 适配器执行图，产出安全事件及待确认工具提议。
 
         恢复任务且存在 checkpoint 时从保存状态继续，不重复提交输入消息。
@@ -551,11 +551,13 @@ class EmbeddedAgentRuntime:
             ),
             agent_files_context(files),
         ):
-            async for event in adapter.run(protocol_input):
-                for public in public_events.filter(event):
-                    if isinstance(public, TextMessageContentEvent) and metrics is not None:
-                        metrics.observe(SimpleNamespace(id=public.message_id), public.delta)
-                    yield public
+            # 消费端提前退出时，先关闭官方事件流，再解除本次调用的身份和附件绑定。
+            async with aclosing(adapter.run(protocol_input)) as events:
+                async for event in events:
+                    for public in public_events.filter(event):
+                        if isinstance(public, TextMessageContentEvent) and metrics is not None:
+                            metrics.observe(SimpleNamespace(id=public.message_id), public.delta)
+                        yield public
 
     async def generate_structured(
         self,

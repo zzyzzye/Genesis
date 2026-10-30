@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
+from contextlib import aclosing
 
 from ag_ui.core import BaseEvent
 
@@ -41,7 +42,7 @@ class AgentService:
 
     async def stream(
         self, request: AiChatRequest, *, thread_id: str
-    ) -> AsyncIterator[BaseEvent | AgentActionProposal]:
+    ) -> AsyncGenerator[BaseEvent | AgentActionProposal, None]:
         """转发官方适配器的公开事件与结构化操作提议。
 
         Args:
@@ -50,6 +51,7 @@ class AgentService:
 
         Yields:
             安全过滤后的官方事件或可信工具提议，不在此重新拼接或缓存。
+            调用方提前退出时须关闭生成器，使上下文在原任务中释放。
 
         Raises:
             RuntimeError: 运行时未初始化，或缺少身份、模型配置，
@@ -60,14 +62,17 @@ class AgentService:
         if request.billing_source_id is None:
             raise RuntimeError("生成任务缺少计费归属")
         with execution_context(request.billing_source_id, self.settings):
-            async for event in self.runtime.stream(
-                request,
-                self.settings,
-                thread_id=thread_id,
-                metrics=self.metrics,
-                tool_history=self.tool_history,
-            ):
-                yield event
+            async with aclosing(
+                self.runtime.stream(
+                    request,
+                    self.settings,
+                    thread_id=thread_id,
+                    metrics=self.metrics,
+                    tool_history=self.tool_history,
+                )
+            ) as events:
+                async for event in events:
+                    yield event
 
     async def generate_title(self, request: AiChatRequest) -> str:
         """复用运行时的模型适配生成会话名，不调用业务工具。"""

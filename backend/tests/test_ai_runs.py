@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import cast
 from uuid import uuid4
@@ -13,6 +13,7 @@ import pytest
 from ag_ui.core import (
     BaseEvent,
     EventType,
+    RunErrorEvent,
     RunFinishedEvent,
     RunStartedEvent,
     TextMessageContentEvent,
@@ -24,8 +25,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from genesis_api.agent.context import agent_invocation_context, require_actor
 from genesis_api.agent.contracts import AgentActionProposal
+from genesis_api.agent.files import _files, agent_files_context
 from genesis_api.agent.metrics import GenerationMetrics
+from genesis_api.agent.runtime import EmbeddedAgentRuntime
 from genesis_api.agent.tool_history import AgentToolCall, ToolCallHistory
 from genesis_api.ai.ag_ui import legacy_snapshot
 from genesis_api.ai.conversations import conversation_detail
@@ -39,7 +43,9 @@ from genesis_api.ai.runs import (
     get_ai_chat_run_snapshot,
 )
 from genesis_api.ai.schemas import AiChatRequest, AiChatRunSnapshot, AiMessage
+from genesis_api.ai.service import AgentService
 from genesis_api.api.routes import ai as ai_route
+from genesis_api.billing.transport import _execution, execution_context
 from genesis_api.core.config import Settings
 from genesis_api.database.base import Base
 from genesis_api.identity.models import User, UserRole
@@ -55,7 +61,7 @@ class FakeChatService:
         self.metrics.input_provider = "openai"
         self.metrics.input_model = "test-model"
 
-    async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
+    async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncGenerator[BaseEvent, None]:
         """分两次产出固定文本，中间让出事件循环以触发异步持久化。"""
         self.metrics.observe(None, "断点")
         yield TextMessageContentEvent(
@@ -84,7 +90,7 @@ async def test_tool_history_persists_updates_and_closes_unfinished_calls() -> No
     class ToolService:
         tool_history = ToolCallHistory()
 
-        async def stream(self, *_: object, **__: object) -> AsyncIterator[BaseEvent]:
+        async def stream(self, *_: object, **__: object) -> AsyncGenerator[BaseEvent, None]:
             call_id = uuid4()
             await self.tool_history.on_tool_start({"name": "lookup"}, "", run_id=call_id)
             with factory() as session:
@@ -184,6 +190,108 @@ def build_session_factory() -> sessionmaker[Session]:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("outcome", ["complete", "run_error", "persist_error", "cancel"])
+async def test_stream_closes_in_own_context_before_next_run(
+    monkeypatch: pytest.MonkeyPatch, outcome: str,
+) -> None:
+    """正常、错误及消费期间取消都逐层关闭流，并恢复身份、附件和计费上下文。"""
+    runtime = EmbeddedAgentRuntime()
+    monkeypatch.setattr(runtime, "_graph", lambda *_: object())
+    settings = Settings(text_openai_model="synthetic")
+    closed: list[object] = []
+    active_actor = uuid4()
+    active_source = uuid4()
+    active_outcome = outcome
+
+    class Adapter:
+        def __init__(self, **_: object) -> None:
+            pass
+
+        async def run(self, _: object) -> AsyncGenerator[BaseEvent, None]:
+            try:
+                assert require_actor(module="blog") == active_actor
+                assert _files.get() == []
+                execution = _execution.get()
+                assert execution is not None and execution.source_id == active_source
+                yield TextMessageContentEvent(
+                    type=EventType.TEXT_MESSAGE_CONTENT, message_id="answer", delta="片段",
+                )
+                if active_outcome == "run_error":
+                    yield RunErrorEvent(type=EventType.RUN_ERROR, message="合成模型错误")
+                else:
+                    yield RunFinishedEvent(
+                        type=EventType.RUN_FINISHED, thread_id="thread", run_id="run",
+                    )
+            finally:
+                assert require_actor(module="blog") == active_actor
+                assert _files.get() == []
+                closed.append(asyncio.current_task())
+
+    monkeypatch.setattr("genesis_api.agent.runtime.AuthorizedLangGraphAgent", Adapter)
+    manager = AiChatRunManager(
+        build_session_factory(), lambda _: AgentService(settings, runtime), flush_size=1,
+    )
+    manager._semaphore = asyncio.Semaphore(1)
+    interrupted = False
+    states: list[object] = []
+
+    async def persist(_: object, **values: object) -> None:
+        nonlocal interrupted
+        states.append(values.get("status"))
+        if values.get("append_content") and not interrupted:
+            interrupted = True
+            if active_outcome == "persist_error":
+                raise RuntimeError("合成保存错误")
+            if active_outcome == "cancel":
+                task = asyncio.current_task()
+                assert task is not None
+                task.cancel()
+                await asyncio.sleep(0)
+
+    monkeypatch.setattr(manager, "_persist", persist)
+
+    async def execute(request: AiChatRequest, expected_closed: int) -> None:
+        outer_actor = uuid4()
+        with (
+            agent_invocation_context(outer_actor, "owner", "media"),
+            agent_files_context([("outer.txt", b"synthetic")]),
+            execution_context(uuid4(), settings),
+        ):
+            outer_execution = _execution.get()
+            try:
+                assert request.billing_source_id is not None
+                await manager._generate(request.billing_source_id, request, settings)
+            finally:
+                assert len(closed) == expected_closed
+                assert closed[-1] == asyncio.current_task()
+                assert require_actor(module="media") == outer_actor
+                assert _files.get() == [("outer.txt", b"synthetic")]
+                assert _execution.get() is outer_execution
+
+    # 每个任务绑定不同用户；第一次提前退出后，第二次仍必须干净地开始和结束。
+    for index in range(2):
+        active_actor, active_source = uuid4(), uuid4()
+        active_outcome = outcome if index == 0 else "complete"
+        interrupted = False
+        request = AiChatRequest(
+            surface="studio", messages=[AiMessage(role="user", content="合成输入")],
+            actor_id=active_actor, actor_role="owner", billing_source_id=active_source,
+        )
+
+        task = asyncio.create_task(execute(request, index + 1))
+        if active_outcome == "cancel":
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        else:
+            await task
+            assert states[-1] == (
+                AiChatRunStatus.COMPLETED
+                if active_outcome == "complete" else AiChatRunStatus.FAILED
+            )
+        assert len(closed) == index + 1
+
+
+@pytest.mark.anyio
 async def test_proposals_persist_separately_and_deduplicate() -> None:
     """无正文的工具提议也能保存并去重，令牌不进入正文。"""
     factory = build_session_factory()
@@ -201,7 +309,9 @@ async def test_proposals_persist_separately_and_deduplicate() -> None:
     )
 
     class ProposalService:
-        async def stream(self, *_: object, **__: object) -> AsyncIterator[AgentActionProposal]:
+        async def stream(
+            self, *_: object, **__: object,
+        ) -> AsyncGenerator[AgentActionProposal, None]:
             yield proposal
             yield proposal
 
@@ -433,7 +543,9 @@ async def test_run_manager_persists_runtime_and_provider_errors() -> None:
         def __init__(self, _: Settings) -> None:
             pass
 
-        async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
+        async def stream(
+            self, _: AiChatRequest, *, thread_id: str,
+        ) -> AsyncGenerator[BaseEvent, None]:
             if False:
                 yield RunStartedEvent(
                     type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test",
@@ -447,7 +559,9 @@ async def test_run_manager_persists_runtime_and_provider_errors() -> None:
         def __init__(self, _: Settings) -> None:
             pass
 
-        async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
+        async def stream(
+            self, _: AiChatRequest, *, thread_id: str,
+        ) -> AsyncGenerator[BaseEvent, None]:
             if False:
                 yield RunStartedEvent(
                     type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test",
@@ -499,7 +613,9 @@ async def test_shutdown_leaves_cancelled_run_recoverable() -> None:
         def __init__(self, _: Settings) -> None:
             pass
 
-        async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
+        async def stream(
+            self, _: AiChatRequest, *, thread_id: str,
+        ) -> AsyncGenerator[BaseEvent, None]:
             await asyncio.sleep(10)
             yield RunStartedEvent(type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test")
 
@@ -531,7 +647,9 @@ async def test_user_cancel_marks_run_failed_instead_of_recoverable() -> None:
         def __init__(self, _: Settings) -> None:
             pass
 
-        async def stream(self, _: AiChatRequest, *, thread_id: str) -> AsyncIterator[BaseEvent]:
+        async def stream(
+            self, _: AiChatRequest, *, thread_id: str,
+        ) -> AsyncGenerator[BaseEvent, None]:
             await asyncio.sleep(10)
             yield RunStartedEvent(type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test")
 
