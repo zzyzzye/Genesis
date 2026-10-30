@@ -16,7 +16,7 @@ from genesis_api.billing.pricing import (
     mask_key,
     match_group,
 )
-from genesis_api.billing.pricing_rules import decimal_text, token_price_preview
+from genesis_api.billing.pricing_rules import decimal_text, media_price_preview, token_price_preview
 from genesis_api.billing.schemas import ModelPricePreview
 from genesis_api.core.config import Settings
 
@@ -68,6 +68,66 @@ def test_luna_tiers_apply_group_ratio_without_rounding_token_rates() -> None:
     ]
     assert result.tiers[0].condition == "上下文 ≤ 272,000 Token"
     assert result.tiers[1].condition == "上下文 > 272,000 Token"
+
+
+@pytest.mark.parametrize(
+    "row,unit,amount",
+    [
+        ({"quota_type": 1, "model_price": "0.5"}, "request", "0.55"),
+        ({"quota_type": 1, "billing_mode": "per_second", "model_price": "0.3"}, "second", "0.33"),
+        (
+            {
+                "quota_type": 1,
+                "billing_mode": "tiered_expr",
+                "billing_expr": 'tier("image", fixed(0.1)) * image_count',
+            },
+            "image",
+            "0.11",
+        ),
+        ({"quota_type": 1, "model_price": "0"}, "request", "0"),
+    ],
+)
+def test_media_prices_preserve_dynamic_units(
+    row: dict[str, object],
+    unit: str,
+    amount: str,
+) -> None:
+    result = media_price_preview(
+        row,
+        group="video",
+        group_ratio=Decimal("1.1"),
+        currency="CNY",
+        currency_rate=Decimal(1),
+        updated_at="2026-10-30T00:00:00Z",
+    )
+    assert result.status == "available"
+    assert result.unit == unit and result.amount == amount
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {
+            "quota_type": 1,
+            "billing_mode": "tiered_expr",
+            "model_price": 8,
+            "billing_expr": 'size == "720p" ? seconds * 0.3 : seconds * 0.8',
+        },
+        {"quota_type": 1, "billing_mode": "unknown", "model_price": 8},
+        {"quota_type": 1, "model_price": -1},
+        {"quota_type": 1, "model_price": 1, "billing_plugin_variants": [{}]},
+    ],
+)
+def test_ambiguous_media_prices_remain_unknown(row: dict[str, object]) -> None:
+    result = media_price_preview(
+        row,
+        group="video",
+        group_ratio=Decimal(1),
+        currency="CNY",
+        currency_rate=Decimal(1),
+        updated_at="2026-10-30T00:00:00Z",
+    )
+    assert result.status == "unavailable" and result.amount is None
 
 
 def test_grok_tiers_keep_strict_threshold_and_group_ratio() -> None:

@@ -138,8 +138,8 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
         const catalog = await api<{ models: VideoModel[] }>('/video-models')
         for (const operation of videos) {
           const model = catalog.models.find(item => item.id === operation.model)
-          if (!model || model.parameters_known === false || !model.durations.includes(operation.duration_seconds)) {
-            throw new Error(`「${operation.name}」缺少可验证的模型或不支持所填时长，请让助手查询模型后重新规划。`)
+          if (!model) {
+            throw new Error(`「${operation.name}」的模型当前不可用，请让助手查询模型后重新规划。`)
           }
         }
         // 校验实际画布中的目标，选择状态仅用于讨论上下文。
@@ -148,18 +148,15 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
           if (operation.action !== 'update_node') continue
           const target = document?.nodes.find(node => node.id === operation.node_id)
           const model = catalog.models.find(item => item.id === target?.generation?.model)
-          if (!target || target.type !== 'video' || !model || model.parameters_known === false || !model.durations.includes(operation.duration_seconds!)) {
-            throw new Error('目标生视频节点不存在、模型不可用或不支持所填时长，请让助手重新读取画布和模型目录后规划。')
+          if (!target || target.type !== 'video' || !model) {
+            throw new Error('目标生视频节点不存在或模型当前不可用，请让助手重新读取画布和模型目录后规划。')
           }
         }
         operations = operations.map(operation => {
           if (operation.action !== 'add_video') return operation
-          const model = catalog.models.find(item => item.id === operation.model)!
           const defaults = defaultGenerationSettings()
           return { ...operation, generation: {
-            ...defaults, model: model.id,
-            ratio: (model.ratios?.includes(defaults.ratio) ? defaults.ratio : model.ratios?.[0] ?? defaults.ratio) as GenerationSettings['ratio'],
-            resolution: (model.resolutions?.includes(defaults.resolution.toLowerCase()) ? defaults.resolution : (model.resolutions?.[0] ?? defaults.resolution).toUpperCase()) as GenerationSettings['resolution'],
+            ...defaults, model: operation.model!,
           } }
         })
       }

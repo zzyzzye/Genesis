@@ -13,7 +13,7 @@ from genesis_api.media.agent.prompt import MediaAgentPrompt
 from genesis_api.media.agent.tools import build_media_tools
 
 
-def test_model_query_preserves_fixed_duration_and_unknown_parameters(
+def test_model_query_has_no_hardcoded_parameter_ranges(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     catalog = AsyncMock(return_value=["v1-seedance-2.0-933-720p-15s", "new-video-model"])
@@ -22,8 +22,9 @@ def test_model_query_preserves_fixed_duration_and_unknown_parameters(
 
     result = asyncio.run(tool.ainvoke({}))
 
-    assert result["models"][0]["durations"] == [15]
-    assert result["models"][1] == {"id": "new-video-model", "parameters_known": False}
+    assert "durations" not in result["models"][0]
+    assert result["models"][1]["id"] == "new-video-model"
+    assert result["models"][1]["pricing"]["status"] == "unavailable"
     assert result["editing_available"] is False
     filtered = asyncio.run(tool.ainvoke({"model_id": "new-video-model"}))
     assert filtered["models"] == [result["models"][1]]
@@ -71,16 +72,12 @@ async def test_model_tools_forward_only_matching_upstream_descriptions(
     video_result = await tools["get_video_generation_models"].ainvoke({})
     image_result = await tools["get_image_generation_models"].ainvoke({"query": "flare"})
     assert video_result["models"][0]["description"] == description
-    assert "本地文档快照" in video_result["parameters_source"]
-    assert image_result["models"] == [
-        {
-            "id": "image-flare",
-            "image_edit": True,
-            "description": "支持图片编辑，输出尺寸以请求为准。",
-        }
-    ]
+    assert "parameters_source" not in video_result
+    assert len(image_result["models"]) == 1
+    assert image_result["models"][0]["description"] == "支持图片编辑，输出尺寸以请求为准。"
+    assert "image_edit" not in image_result["models"][0]
     assert descriptions.call_args_list[0].args == (settings, ["gemini-omni-flash"])
-    assert descriptions.call_args_list[1].args == (settings, ["image-flare"])
+    assert descriptions.call_args_list[1].args == (settings, ["image-flare", "other"])
 
 
 @pytest.mark.anyio

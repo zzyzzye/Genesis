@@ -4,19 +4,20 @@ import { VideoGeneration, type VideoModel } from '../src/pages/media/VideoGenera
 import { defaultGenerationSettings, type Node } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
 
-const model: VideoModel = { id:'seedance-2.5-720p', ratios:['16:9','9:16'], resolutions:['720p'], durations:[4,5,6,7,8], images:9, videos:3, audio:true }
+const model: VideoModel = { id:'seedance-2.5-720p', description:'参考数量与时长由上游校验。' }
 const node: Node = { id:'video-node', type:'video', asset_id:null, text:'雨夜街道，缓慢推近', x:0,y:0,width:640,height:402, duration_seconds:5, generation:{ ...defaultGenerationSettings(),model:model.id } }
 const props = () => ({ projectId:'project',node,onPatch:vi.fn(),onSave:vi.fn().mockResolvedValue(undefined),onResult:vi.fn(),onModelChange:vi.fn() })
 afterEach(() => vi.restoreAllMocks())
 
 describe('视频节点生成', () => {
-  it('实时目录中的新模型使用默认参数，不写入猜测的参数范围', async () => {
-    const fresh = { id:'wan3.0-video-720p',parameters_known:false,ratios:[],resolutions:[],durations:[],images:0,videos:0,audio:false }
+  it('实时目录中的新模型保留用户参数，不写入猜测的参数范围', async () => {
+    const fresh = { id:'new-video-model' }
     vi.spyOn(media,'api').mockImplementation((path) => Promise.resolve(path==='/video-models'?{configured:true,references_ready:false,models:[fresh]}:[]))
     const state=props()
     render(<VideoGeneration {...state} />)
-    await screen.findByRole('option',{name:fresh.id})
-    fireEvent.change(screen.getByRole('combobox',{name:'视频生成模型'}),{target:{value:fresh.id}})
+    await waitFor(() => expect(screen.getByRole('button',{name:'视频生成模型'})).toBeEnabled())
+    fireEvent.click(screen.getByRole('button',{name:'视频生成模型'}))
+    fireEvent.click(await screen.findByRole('option',{name:fresh.id}))
     expect(state.onPatch).toHaveBeenCalledWith({generation:{...node.generation,model:fresh.id,count:1,mode:'text'}})
   })
   it('未配置和目录失败都明确提示，可原处刷新', async () => {
@@ -29,14 +30,14 @@ describe('视频节点生成', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('模型目录暂不可用')
   })
 
-  it('选择模型时保留兼容参数，修正不支持的清晰度和时长', async () => {
+  it('选择模型只修改型号，保留已设置清晰度与时长', async () => {
     vi.spyOn(media,'api').mockImplementation((path) => Promise.resolve(path === '/video-models' ? {configured:true,references_ready:true,models:[model]} : []))
     const state = {...props(),node:{...node,duration_seconds:60,generation:{...defaultGenerationSettings(),resolution:'1080P' as const}}}
     render(<VideoGeneration {...state} />)
-    await screen.findByRole('option',{name:model.id})
-    fireEvent.change(screen.getByRole('combobox',{name:'视频生成模型'}),{target:{value:model.id}})
-    expect(state.onPatch).toHaveBeenCalledWith(expect.objectContaining({duration_seconds:4}))
-    expect(state.onPatch.mock.calls[0]?.[0] as Partial<Node>).toMatchObject({generation:{model:model.id,resolution:'720P',count:1}})
+    await waitFor(() => expect(screen.getByRole('button',{name:'视频生成模型'})).toBeEnabled())
+    fireEvent.click(screen.getByRole('button',{name:'视频生成模型'}))
+    fireEvent.click(await screen.findByRole('option',{name:model.id}))
+    expect(state.onPatch).toHaveBeenCalledWith({generation:{...state.node.generation,model:model.id,count:1}})
   })
 
   it('先保存草稿再提交，连续点击只创建一个任务', async () => {

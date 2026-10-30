@@ -23,7 +23,8 @@ class ModelPricePreview(BaseModel):
 
     status: Literal["available", "unavailable", "free"]
     currency: Literal["CNY", "USD"] = "CNY"
-    unit: Literal["1M tokens"] = "1M tokens"
+    unit: Literal["1M tokens", "request", "second", "image"] = "1M tokens"
+    amount: str | None = None
     group: str | None = None
     group_ratio: str | None = None
     tiers: list[TokenPriceTier] = Field(default_factory=list)

@@ -22,7 +22,6 @@ from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service
 from genesis_api.media.models import MediaAsset, ProjectAsset, VideoGeneration
 from genesis_api.media.schemas import CanvasDocument
-from genesis_api.media.video_catalog import CATALOG
 
 logger = logging.getLogger(__name__)
 ACTIVE = ("submitting", "queued", "processing", "downloading")
@@ -59,7 +58,9 @@ async def available_models(settings: Settings, *, refresh: bool = False) -> list
     auth = headers(settings)
     try:
         payload = await model_catalog.get(
-            f"{settings.video_api_base_url.rstrip('/')}/v1/models", auth, refresh=refresh,
+            f"{settings.video_api_base_url.rstrip('/')}/v1/models",
+            auth,
+            refresh=refresh,
         )
         models = list(
             dict.fromkeys(
@@ -125,25 +126,12 @@ def build_payload(
     node = next((n for n in document.nodes if n.id == task.node_id and n.type == "video"), None)
     if node is None:
         raise HTTPException(422, "请先保存生视频节点")
-    spec = CATALOG.get(node.generation.model)
     if not node.generation.model:
         raise HTTPException(422, "请选择当前可用的视频模型")
     if not node.text.strip():
         raise HTTPException(422, "请填写镜头描述")
     if node.generation.count != 1:
         raise HTTPException(422, "视频接口每次创建一个任务，请将生成数量设为 1")
-    if spec is None:
-        # 目录不提供参数能力时只发送协议必填项，不猜测可选参数与参考能力。
-        if node.generation.mode != "text":
-            raise HTTPException(422, "该模型尚无参考参数说明，请使用文生视频")
-        task.reference_ids = []
-        return {"model": node.generation.model, "prompt": node.text.strip()}
-    if (
-        node.duration_seconds not in spec.durations
-        or node.generation.ratio not in spec.ratios
-        or node.generation.resolution.lower() not in spec.resolutions
-    ):
-        raise HTTPException(422, "所选时长、比例或清晰度不受当前模型支持")
     sources = {n.id: n for n in document.nodes}
     references: dict[str, list[str]] = {"image": [], "video": [], "audio": []}
     ids: list[str] = []
@@ -171,23 +159,13 @@ def build_payload(
             )
         if not ids:
             raise HTTPException(422, "请先连接参考素材节点")
-    if (
-        len(references["image"]) > spec.images
-        or len(references["video"]) > spec.videos
-        or len(references["audio"]) > spec.max_audio
-    ):
-        raise HTTPException(422, "参考素材类型或数量超出当前模型支持范围")
     if node.generation.mode == "first_last" and (
-        spec.id != "minimax-h3-首尾帧" or len(references["image"]) != 2
+        len(references["image"]) != 2 or references["video"] or references["audio"]
     ):
-        raise HTTPException(422, "首尾帧模式请选择对应模型，并按顺序连接两张图片")
-    if ("v2v-reference" in spec.id or "动作迁移" in spec.id) and not references["video"]:
-        raise HTTPException(422, "当前模型需要参考视频")
-    if "对口型" in spec.id and (not references["audio"] or not references["image"]):
-        raise HTTPException(422, "对口型模型需要图片和音频参考")
+        raise HTTPException(422, "首尾帧模式需按顺序连接两张图片，不混用其他参考")
     task.reference_ids = ids
     payload: dict[str, object] = {
-        "model": spec.id,
+        "model": node.generation.model,
         "prompt": node.text.strip(),
         "duration": node.duration_seconds,
         "aspect_ratio": node.generation.ratio,
@@ -196,8 +174,8 @@ def build_payload(
     if references["image"]:
         payload["image_urls"] = references["image"]
     if references["video"]:
-        payload["reference_video" if spec.videos == 1 else "reference_videos"] = (
-            references["video"][0] if spec.videos == 1 else references["video"]
+        payload["reference_video" if len(references["video"]) == 1 else "reference_videos"] = (
+            references["video"][0] if len(references["video"]) == 1 else references["video"]
         )
     if references["audio"]:
         payload["audio_urls"] = references["audio"]

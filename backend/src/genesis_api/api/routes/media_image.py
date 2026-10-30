@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
 from genesis_api.core.config import get_settings
-from genesis_api.media import image, service
+from genesis_api.media import catalog, image, service
 from genesis_api.media.models import ImageGeneration
 from genesis_api.media.schemas import GenerationSubmit
 
@@ -24,7 +24,7 @@ async def image_models(user: CurrentUserDependency, refresh: bool = False) -> di
         "configured": True,
         "billing_required": user.role.value != "owner",
         "references_ready": True,
-        "models": await image.available_models(settings, refresh=refresh),
+        "models": await catalog.generation_models(settings, "image", refresh=refresh),
     }
 
 

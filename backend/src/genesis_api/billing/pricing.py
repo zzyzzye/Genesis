@@ -20,6 +20,7 @@ from fastapi import HTTPException
 from genesis_api.billing.pricing_rules import (
     UnsupportedPricing,
     decimal_value,
+    media_price_preview,
     token_price_preview,
     verified_quota_per_cny,
 )
@@ -96,12 +97,19 @@ class YyapiPricingService:
             raise PricingLookupError("价格服务尚未配置，暂无法预览。")
         return await self._catalog(settings, secret.get_secret_value())
 
-    async def descriptions(self, settings: Settings, models: list[str]) -> dict[str, str]:
+    async def descriptions(
+        self,
+        settings: Settings,
+        models: list[str],
+        *,
+        refresh: bool = False,
+    ) -> dict[str, str]:
         """读取指定模型的上游简介，复用目录缓存，不读取令牌列表或价格口径。
 
         Args:
             settings: 复用控制台认证与地址，不向返回值传播配置。
             models: 实时可调用目录中的精确模型 ID，不从简介目录扩展可用模型。
+            refresh: 主动刷新时绕过简介缓存。
 
         Returns:
             模型 ID 到非空简介的映射；缺少配置、简介或查询失败时省略对应项。
@@ -115,6 +123,7 @@ class YyapiPricingService:
                 f"{base}/api/pricing",
                 headers,
                 client=self.client,
+                refresh=refresh,
             )
             if payload.get("success") is not True:
                 return {}
@@ -141,14 +150,20 @@ class YyapiPricingService:
             return {}
 
     async def for_models(
-        self, settings: Settings, provider: str, models: list[str]
+        self,
+        settings: Settings,
+        provider: str,
+        models: list[str],
+        *,
+        kind: str = "agent",
     ) -> dict[str, ModelPricePreview]:
         """生成当前渠道每个模型的分组价格，失败时保留模型并明确未知。
 
         Args:
             settings: 只在发送请求时解包认证，禁止记录完整配置。
-            provider: 当前文本模型供应商。
+            provider: 当前文本供应商或媒体渠道标识。
             models: 本轮已发现的模型 ID，不从价格表扩展可调用目录。
+            kind: agent、image 或 video，按对应渠道的调用凭据匹配分组。
 
         Returns:
             仅含价格与固定错误说明的模型映射，不包含 Key 或控制台令牌。
@@ -163,7 +178,7 @@ class YyapiPricingService:
             )
             return dict.fromkeys(models, free)
         try:
-            base, key = connection(settings, "agent", provider)
+            base, key = connection(settings, kind, provider)
             if not is_yyapi(base):
                 raise PricingLookupError("此渠道暂未接入价格预览。")
             catalog = await self.catalog(settings)
@@ -184,7 +199,10 @@ class YyapiPricingService:
                         note="当前分组没有该模型的有效价格。",
                     )
                 else:
-                    previews[model] = token_price_preview(
+                    preview = (
+                        media_price_preview if kind in {"image", "video"} else token_price_preview
+                    )
+                    previews[model] = preview(
                         row,
                         group=group,
                         group_ratio=ratio,

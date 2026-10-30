@@ -4,7 +4,7 @@ import { ImageGeneration, type VideoModel } from '../src/pages/media/VideoGenera
 import { defaultGenerationSettings, type Node } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
 
-const model: VideoModel = { id:'gpt-image-2',ratios:[],resolutions:[],durations:[],images:0,videos:0,audio:false,image_edit:true }
+const model: VideoModel = { id:'gpt-image-2',description:'支持图片编辑。' }
 const node: Node = { id:'image-node',type:'image_generation',asset_id:null,text:'雨夜街道',x:0,y:0,width:640,height:402,generation:{...defaultGenerationSettings(),model:model.id,mode:'reference'} }
 const props = () => ({projectId:'project',node,referenceCount:1,onPatch:vi.fn(),onSave:vi.fn().mockResolvedValue(undefined),onResult:vi.fn(),onModelChange:vi.fn()})
 const catalog = {configured:true,references_ready:true,models:[model]}
@@ -51,7 +51,7 @@ describe('生图节点',()=>{
     expect(screen.getByRole('button',{name:'生成图片'})).toBeDisabled()
     api.mockImplementation(path=>Promise.resolve(path.startsWith('/image-models')?{...catalog,models:[]}:[]))
     fireEvent.click(screen.getByRole('button',{name:'刷新图片模型与任务'}))
-    await screen.findByText('暂无已支持的可用图片模型，可刷新重试。')
+    await screen.findByText('暂无可用图片模型，可刷新重试。')
     api.mockImplementation(path=>path.startsWith('/image-models')?Promise.reject(new Error('图片模型目录暂不可用')):Promise.resolve([]))
     fireEvent.click(screen.getByRole('button',{name:'刷新图片模型与任务'}))
     expect(await screen.findByRole('alert')).toHaveTextContent('图片模型目录暂不可用')
@@ -73,17 +73,17 @@ describe('生图节点',()=>{
     await act(async()=>{resolve({id:'task',status:'processing',asset_id:null,error:'',progress:0});await Promise.resolve()})
   })
 
-  it('不支持图生图的模型保留参考并阻止生成，移除参考后自动恢复文生图',async()=>{
-    vi.spyOn(media,'api').mockImplementation(path=>Promise.resolve(path==='/image-models'?{...catalog,models:[{...model,id:'new-model',image_edit:false}]}:[]))
+  it('新模型不按名称拒绝图生图，保留参考并由上游校验',async()=>{
+    vi.spyOn(media,'api').mockImplementation(path=>Promise.resolve(path==='/image-models'?{...catalog,models:[{id:'new-model'}]}:[]))
     const state=props()
     const view=render(<ImageGeneration {...state} />)
-    await screen.findByRole('option',{name:'new-model'})
-    fireEvent.change(screen.getByRole('combobox',{name:'图片生成模型'}),{target:{value:'new-model'}})
+    await waitFor(() => expect(screen.getByRole('button',{name:'图片生成模型'})).toBeEnabled())
+    fireEvent.click(screen.getByRole('button',{name:'图片生成模型'}))
+    fireEvent.click(await screen.findByRole('option',{name:'new-model'}))
     expect(state.onPatch).toHaveBeenCalledWith({generation:{...node.generation,model:'new-model'}})
     view.rerender(<ImageGeneration {...state} node={{...node,generation:{...node.generation!,model:'new-model'}}} />)
     expect(screen.getByLabelText('图片生成模式')).toHaveTextContent('图生图')
-    expect(screen.getByRole('button',{name:'生成图片'})).toBeDisabled()
-    expect(screen.getByText(/选择支持图生图的模型，或移除图片参考/)).toBeInTheDocument()
+    expect(screen.getByRole('button',{name:'生成图片'})).toBeEnabled()
     view.rerender(<ImageGeneration {...state} node={{...node,generation:{...node.generation!,model:'new-model'}}} referenceCount={0} />)
     expect(screen.getByLabelText('图片生成模式')).toHaveTextContent('文生图')
     expect(screen.getByRole('button',{name:'生成图片'})).toBeEnabled()
@@ -93,7 +93,7 @@ describe('生图节点',()=>{
     const api=vi.spyOn(media,'api').mockImplementation(path=>Promise.resolve(path==='/image-models'?catalog:[]))
     const state=props()
     const view=render(<ImageGeneration {...state} node={{...node,generation:{...node.generation!,mode:'text'}}} referencesPending />)
-    await screen.findByRole('option',{name:model.id})
+    await waitFor(() => expect(screen.getByRole('button',{name:'图片生成模型'})).toBeEnabled())
     expect(screen.getByLabelText('图片生成模式')).toHaveTextContent('图生图')
     expect(screen.getByRole('button',{name:'生成图片'})).toBeDisabled()
     expect(screen.getByText(/参考图片尚未就绪/)).toBeInTheDocument()

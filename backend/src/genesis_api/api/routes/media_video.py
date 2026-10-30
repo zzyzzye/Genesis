@@ -11,40 +11,24 @@ from genesis_api.api.dependencies import CurrentUserDependency, SessionDependenc
 from genesis_api.billing import service as billing
 from genesis_api.core.config import get_settings
 from genesis_api.core.uploads import media_filename, media_suffix
-from genesis_api.media import service, video
+from genesis_api.media import catalog, service, video
 from genesis_api.media.models import VideoGeneration
 from genesis_api.media.schemas import CanvasDocument
-from genesis_api.media.video_catalog import CATALOG
 
 router = APIRouter()
 
 
 @router.get("/video-models")
 async def video_models(user: CurrentUserDependency, refresh: bool = False) -> dict[str, object]:
-    """返回完整实时视频目录及已知参数，未配置时给出明确空态。"""
+    """返回上游视频目录、简介与单价，未配置时给出明确空态。"""
     settings = get_settings()
     if not settings.video_api_key:
         return {"configured": False, "references_ready": False, "models": []}
-    ids = await video.available_models(settings, refresh=refresh)
     return {
         "configured": True,
         "billing_required": user.role.value != "owner",
         "references_ready": settings.video_public_base_url.startswith("https://"),
-        "models": [
-            {**CATALOG[item].data(), "parameters_known": True}
-            if item in CATALOG
-            else {
-                "id": item,
-                "parameters_known": False,
-                "ratios": [],
-                "durations": [],
-                "resolutions": [],
-                "images": 0,
-                "videos": 0,
-                "audio": False,
-            }
-            for item in ids
-        ],
+        "models": await catalog.generation_models(settings, "video", refresh=refresh),
     }
 
 

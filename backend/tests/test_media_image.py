@@ -361,7 +361,8 @@ async def test_models_configuration_and_generation(fixture: ImageFixture) -> Non
     models = (await state.client.get("image-models")).json()
     assert models["references_ready"] is True
     assert [item["id"] for item in models["models"]] == ["gpt-image-2", "new-image-model"]
-    assert models["models"][1]["image_edit"] is False
+    assert "image_edit" not in models["models"][1]
+    assert models["models"][1]["pricing"]["status"] == "unavailable"
     request_id = uuid4()
     assert (await submit(state, request_id)).status_code == 202
     task = await latest(state)
@@ -529,11 +530,13 @@ async def test_image_reference_cannot_be_silently_ignored(
         await fixture.client.put(f"projects/{fixture.project_id}/canvas", json=current)
     ).status_code == 200
     response = await submit(fixture)
-    assert response.status_code == 422
-    assert (
-        "图生图" in response.json()["detail"] if ready else "尚未就绪" in response.json()["detail"]
-    )
-    assert not any(req.method == "POST" for req in fixture.requests)
+    if ready:
+        assert response.status_code == 202
+        assert any(request.url.path.endswith("/images/edits") for request in fixture.requests)
+    else:
+        assert response.status_code == 422
+        assert "尚未就绪" in response.json()["detail"]
+        assert not any(req.method == "POST" for req in fixture.requests)
 
 
 @pytest.mark.anyio

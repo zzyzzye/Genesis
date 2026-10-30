@@ -32,7 +32,7 @@ import { imageReferences, incomingReferences } from './canvasReferences'
 import { AssetPreview } from './AssetPreview'
 import { AssetLibrary } from './AssetLibrary'
 import { CanvasReferenceEdge } from './CanvasReferenceEdge'
-import { ImageGeneration, VideoGeneration, type GenerationTask, type VideoModel } from './VideoGeneration'
+import { ImageGeneration, VideoGeneration, type GenerationTask } from './VideoGeneration'
 import { useImageGenerationResults } from './useImageGenerationResults'
 import { ImageParameters } from './ImageParameters'
 import { imageSettingsSummary } from './imageSettings'
@@ -199,17 +199,15 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
   const [cameraOpen, setCameraOpen] = useState(false)
   const [referencesOpen, setReferencesOpen] = useState(false)
   const [durationError, setDurationError] = useState('')
-  const [videoModel, setVideoModel] = useState<VideoModel | null>(null)
   const settings = node.generation ?? defaultGenerationSettings()
   const patchSettings = (patch: Partial<typeof settings>) => data.onPatch(id, { generation: { ...settings, ...patch } })
-  const defaultsOnly = isVideo && videoModel?.parameters_known === false
   const imageRefs = imageReferences(data.references)
-  const modeControl = <select aria-label="参考模式" value={settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}><option value="text">{isAudio ? '文生音频' : '文生视频'}</option><option value="reference" disabled={defaultsOnly}>{isAudio ? '音频参考' : '素材参考'}</option>{isVideo && <option value="first_last" disabled={defaultsOnly}>首尾帧</option>}</select>
-  const parameterControl = isImage ? <GenerationParameters image summary={imageSettingsSummary(settings)}><ImageParameters settings={settings} onChange={patchSettings} /></GenerationParameters> : <GenerationParameters disabled={defaultsOnly} summary={defaultsOnly ? '模型默认参数' : [!isAudio && settings.ratio, !isAudio && settings.resolution, `${node.duration_seconds ?? 5}s`, !isVideo && `${settings.count}个`].filter(Boolean).join(' · ')}>
+  const modeControl = <select aria-label="参考模式" value={settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}><option value="text">{isAudio ? '文生音频' : '文生视频'}</option><option value="reference">{isAudio ? '音频参考' : '素材参考'}</option>{isVideo && <option value="first_last">首尾帧</option>}</select>
+  const parameterControl = isImage ? <GenerationParameters image summary={imageSettingsSummary(settings)}><ImageParameters settings={settings} onChange={patchSettings} /></GenerationParameters> : <GenerationParameters summary={[!isAudio && settings.ratio, !isAudio && settings.resolution, `${node.duration_seconds ?? 5}s`, !isVideo && `${settings.count}个`].filter(Boolean).join(' · ')}>
     <label>{isAudio ? '音频时长' : '镜头时长'}<span><input key={node.duration_seconds} type="number" aria-label={isAudio ? '音频时长' : '镜头时长'} aria-invalid={Boolean(durationError)} aria-describedby={durationError ? `duration-error-${id}` : undefined} min={1} max={600} step={1} defaultValue={node.duration_seconds ?? 5} onFocus={data.onInteractionStart} onBlur={(event) => {
       const seconds = Number(event.target.value)
-      if (!Number.isInteger(seconds) || seconds < 1 || seconds > 600 || isVideo && videoModel && !videoModel.durations.includes(seconds)) {
-        setDurationError(isVideo && videoModel ? `当前模型支持 ${videoModel.durations[0]}–${videoModel.durations.at(-1)} 的整数秒，已保留原时长。` : '请输入 1–600 的整数秒，已保留原时长。')
+      if (!Number.isInteger(seconds) || seconds < 1 || seconds > 600) {
+        setDurationError('请输入 1–600 的整数秒，已保留原时长。')
         event.target.value = String(node.duration_seconds ?? 5)
       } else {
         setDurationError('')
@@ -217,8 +215,9 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
       }
       data.onInteractionEnd()
     }} /> 秒</span></label>
-    {isVideo && <label>画面比例<select aria-label="画面比例" value={settings.ratio} onChange={(event) => patchSettings({ ratio: event.target.value as typeof settings.ratio })}>{(videoModel ? videoModel.ratios : ['16:9', '9:16', '1:1', '4:3', '3:4']).map((ratio) => <option key={ratio}>{ratio}</option>)}</select></label>}
-    {isVideo && <label>清晰度<select aria-label="生成清晰度" value={settings.resolution} onChange={(event) => patchSettings({ resolution: event.target.value as typeof settings.resolution })}>{(videoModel ? videoModel.resolutions.map((value) => value.toUpperCase()) : ['480P', '720P', '1080P']).map((quality) => <option key={quality}>{quality}</option>)}</select></label>}
+    {isVideo && <label>画面比例<select aria-label="画面比例" value={settings.ratio} onChange={(event) => patchSettings({ ratio: event.target.value as typeof settings.ratio })}>{['16:9', '9:16', '1:1', '4:3', '3:4', '21:9', '2:3', '3:2'].map((ratio) => <option key={ratio}>{ratio}</option>)}</select></label>}
+    {isVideo && <label>清晰度<select aria-label="生成清晰度" value={settings.resolution} onChange={(event) => patchSettings({ resolution: event.target.value as typeof settings.resolution })}>{['480P', '720P', '1080P', '768P', '2160P', '2K'].map((quality) => <option key={quality}>{quality}</option>)}</select></label>}
+    {isVideo && <p>以上为请求参数预设，实际支持范围请查看模型简介，提交时由上游校验。</p>}
     {!isVideo && <label>数量<select aria-label="生成数量" value={settings.count} onChange={(event) => patchSettings({ count: Number(event.target.value) as typeof settings.count })}>{[1, 2, 4].map((count) => <option key={count} value={count}>{count} {isImage ? '张' : '个'}</option>)}</select></label>}
     <label className="media-video-asset-picker"><span>预览素材</span><select aria-label={`${nodeTypeLabel(node.type)}预览素材`} value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
     {durationError && <p className="media-node-field-error" id={`duration-error-${id}`} aria-live="polite">{durationError}</p>}
@@ -256,7 +255,7 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
       </div>}
       <input ref={fileInput} className="media-video-file-input" type="file" accept={isImage ? 'image/jpeg,image/png,image/webp,image/gif,image/avif' : isAudio ? 'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/webm,audio/aac' : 'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska'} aria-label={`导入${nodeTypeLabel(node.type)}${isImage ? '参考' : '预览'}素材`} onChange={(event) => { const file = event.target.files?.[0]; if (file) void (isVideo ? data.onUploadPreview(id, file) : data.onUploadNodeAsset(id, isAudio ? 'audio' : 'image', file)); event.target.value = '' }} />
       <textarea className="resize-none" aria-label={isImage ? '图片提示词' : isAudio ? '音频提示词' : '镜头描述'} value={node.text} placeholder={isImage ? '描述想要生成的图片内容，可引用画布素材' : isAudio ? '描述声音、音乐风格或环境氛围，可引用画布素材' : '描述画面、人物动作与声音，可引用连入节点的文字'} maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
-      {isVideo ? <VideoGeneration projectId={data.projectId} node={node} controls={<>{modeControl}{parameterControl}</>} referenceCount={data.references.filter((item) => item.asset).length} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} onModelChange={setVideoModel} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={parameterControl} referenceCount={imageRefs.length} referencesPending={imageRefs.some(({ asset }) => !asset)} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onImageTask} onResult={(asset) => data.onGenerated(id, asset)} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
+      {isVideo ? <VideoGeneration projectId={data.projectId} node={node} controls={<>{modeControl}{parameterControl}</>} referenceCount={data.references.filter((item) => item.asset).length} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={parameterControl} referenceCount={imageRefs.length} referencesPending={imageRefs.some(({ asset }) => !asset)} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onImageTask} onResult={(asset) => data.onGenerated(id, asset)} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
     </section>
 }
 

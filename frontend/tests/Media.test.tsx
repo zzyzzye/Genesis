@@ -735,7 +735,6 @@ describe('作品画布', () => {
     expect(screen.queryByRole('button', { name: '停止生成' })).not.toBeInTheDocument()
   })
   it.each([
-    { label: '固定15秒模型不接受4秒节点', models: [{ id: 'fixed-15s', durations: [15], parameters_known: true }] },
     { label: '不可用模型不能应用', models: [] },
   ])('$label，失败保留方案且不修改画布', async ({ models }) => {
     vi.spyOn(ai, 'getProviderModels').mockResolvedValue({ provider: 'openai', models: [] })
@@ -750,7 +749,7 @@ describe('作品画布', () => {
     fireEvent.change(screen.getByRole('textbox', { name: '向镜头搭档提问' }), { target: { value: '创建视频' } })
     fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
     fireEvent.click(await screen.findByRole('button', { name: '应用到画布' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('缺少可验证的模型或不支持所填时长')
+    expect(await screen.findByRole('alert')).toHaveTextContent('的模型当前不可用')
     expect(applyPlan).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: '应用到画布' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: '草案已应用' })).not.toBeInTheDocument()
@@ -776,7 +775,7 @@ describe('作品画布', () => {
     if (state === '当前模型不支持') document = { ...document, nodes: document.nodes.map(node => ({ ...node, generation: { ...media.defaultGenerationSettings(), model: 'other-model' } })) }
     await act(() => { finishCatalog({ models: [{ id: 'fixed-15s', durations: [15], parameters_known: true }] }); return Promise.resolve() })
     if (state === '目标删除' || state === '当前模型不支持') {
-      expect(await screen.findByRole('alert')).toHaveTextContent('目标生视频节点不存在、模型不可用或不支持所填时长')
+      expect(await screen.findByRole('alert')).toHaveTextContent('目标生视频节点不存在或模型当前不可用')
       expect(apply).not.toHaveBeenCalled()
       expect(screen.getByRole('button', { name: '应用到画布' })).toBeEnabled()
     } else {
@@ -810,7 +809,7 @@ describe('作品画布', () => {
     await waitFor(() => expect(applyPlan).toHaveBeenCalledTimes(1))
     const applied = applyPlan.mock.calls[0]?.[0]
     expect(applied).toMatchObject({ title: '雨夜开场' })
-    expect(applied?.operations[0]).toMatchObject({ generation: { model: 'video-test', ratio: '9:16', resolution: '1080P' } })
+    expect(applied?.operations[0]).toMatchObject({ generation: { model: 'video-test', ratio: '16:9', resolution: '720P' } })
     expect(applied?.operations.map((operation) => operation.action)).toEqual(['add_video', 'add_note'])
     expect(screen.getByRole('button', { name: '草案已应用' })).toBeDisabled()
   })

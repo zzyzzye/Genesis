@@ -1,4 +1,4 @@
-"""把受支持的上游文本定价规则转成单价预览，不执行上游表达式。"""
+"""把受支持的上游文本与媒体定价规则转成单价预览，不执行上游表达式。"""
 
 from __future__ import annotations
 
@@ -176,3 +176,78 @@ def token_price_preview(
                 "note": "该模型的计价规则暂不能可靠预览，请在上游核对价格。",
             }
         )
+
+
+def media_price_preview(
+    row: dict[str, object],
+    *,
+    group: str,
+    group_ratio: Decimal,
+    currency: Literal["CNY", "USD"],
+    currency_rate: Decimal,
+    updated_at: str,
+) -> ModelPricePreview:
+    """按上游明确声明的按次、按秒或固定单张规则计算媒体单价。
+
+    不执行计费表达式，不从模型名称或计费示例推断单位；复杂规则保留未知。
+
+    Args:
+        row: 上游模型记录，包含明确的计费模式、基础价格或固定单价表达式。
+        group: 当前调用凭据匹配的分组，仅用于内部核价。
+        group_ratio: 当前分组的有效价格倍率。
+        currency: 上游明确声明的显示币种。
+        currency_rate: 基础货币转换到显示币种的系数。
+        updated_at: 上游价格目录的同步时间。
+
+    Returns:
+        包含精确十进制金额与单位的价格预览；规则不完整时返回未知。
+    """
+    if row.get("quota_type") == 0:
+        return token_price_preview(
+            row,
+            group=group,
+            group_ratio=group_ratio,
+            currency=currency,
+            currency_rate=currency_rate,
+            updated_at=updated_at,
+        )
+    preview = ModelPricePreview(
+        status="unavailable",
+        group=group,
+        group_ratio=decimal_text(group_ratio),
+        currency=currency,
+        unit="request",
+        updated_at=updated_at,
+        note="暂未取得可核实的生成单价，实际费用以上游账单为准。",
+    )
+    try:
+        if row.get("billing_plugin_variants") or type(row.get("quota_type")) is not int:
+            raise UnsupportedPricing
+        mode = row.get("billing_mode")
+        unit: Literal["request", "second", "image"]
+        if mode == "per_second":
+            unit, amount = "second", decimal_value(row.get("model_price"))
+        elif mode in (None, "", "per_request") and row.get("quota_type") == 1:
+            unit, amount = "request", decimal_value(row.get("model_price"))
+        elif mode == "tiered_expr" and isinstance(row.get("billing_expr"), str):
+            match = re.fullmatch(
+                rf'\s*tier\(\s*"[^"\\]{{1,60}}"\s*,\s*fixed\(\s*({_NUMBER})\s*\)\s*\)'
+                r"\s*\*\s*(image_count|seconds)\s*",
+                str(row["billing_expr"]),
+            )
+            if match is None:
+                raise UnsupportedPricing
+            unit = "image" if match[2] == "image_count" else "second"
+            amount = decimal_value(match[1])
+        else:
+            raise UnsupportedPricing
+        return preview.model_copy(
+            update={
+                "status": "available",
+                "unit": unit,
+                "amount": decimal_text(amount * group_ratio * currency_rate),
+                "note": "单价已包含当前分组倍率，实际费用以上游账单为准。",
+            }
+        )
+    except UnsupportedPricing:
+        return preview

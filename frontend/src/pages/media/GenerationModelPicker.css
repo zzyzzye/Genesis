@@ -1,0 +1,13 @@
+.media-generation-model-picker { min-width:0; --reasoning-text:#ddd; --reasoning-muted:#aaa; --assistant-paper:#252525; }
+.media-generation-model-picker>button { display:flex; align-items:center; gap:6px; max-width:220px; min-width:0; background:transparent; color:inherit; border:0; outline:0; box-shadow:none; }
+.media-generation-model-picker>button>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.media-generation-model-menu { position:fixed; inset:auto; margin:0; width:min(340px,calc(100vw - 24px)); max-height:min(390px,calc(100dvh - 24px)); padding:10px; overflow:auto; background:#252525; color:#ddd; border:0; outline:0; box-shadow:none; border-radius:10px; font:12px/1.6 Inter,"PingFang SC",sans-serif; }
+.media-generation-model-menu>input { width:100%; min-height:32px; padding:6px 8px; background:transparent; color:inherit; border:0; outline:0; box-shadow:none; }
+.media-generation-model-menu>input:focus { background:transparent; border:0; outline:0; box-shadow:none; }
+.media-generation-model-menu [role=listbox] { display:grid; gap:2px; }
+.media-generation-model-menu button { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:34px; padding:7px 8px; border:0; outline:0; box-shadow:none; border-radius:5px; background:transparent; color:inherit; cursor:pointer; text-align:left; font:inherit; }
+.media-editor .media-video-generation-actions .media-generation-model-menu button { justify-content:space-between; padding:7px 8px; min-height:34px; font:inherit; }
+.media-generation-model-menu button>span { min-width:0; overflow-wrap:anywhere; }
+.media-generation-model-menu button:is(:hover,:focus-visible,[aria-selected=true]) { background:#393939; border:0; outline:0; box-shadow:none; }
+.media-generation-model-menu>p { margin:8px; color:#aaa; }
+.media-generation-model-menu .media-generation-model-info { color:#aaa; font-size:11px; }

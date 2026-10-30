@@ -191,7 +191,8 @@
 .media-video-generation { display:grid; gap:7px; margin-top:2px; font-size:var(--media-node-font-size); }
 .media-video-generation-actions { display:flex; align-items:center; flex-wrap:wrap; gap:4px; min-width:0; }
 .media-editor .media-video-generation-actions select { flex:0 1 auto; min-width:0; max-width:180px; padding:5px 4px; background:transparent; text-overflow:ellipsis; }
-.media-editor .media-video-generation-actions select:is([aria-label="视频生成模型"],[aria-label="图片生成模型"]) { flex:1 1 120px; margin-right:auto; }
+.media-editor .media-video-generation-actions .media-generation-model-picker { flex:1 1 120px; margin-right:auto; }
+.media-editor .media-video-generation-actions .media-generation-model-picker>button { justify-content:flex-start; max-width:100%; font:inherit; }
 .media-editor .media-video-generation-actions button { display:flex; align-items:center; justify-content:center; gap:5px; padding:5px 6px; min-height:30px; flex:none; background:transparent; }
 .media-editor .media-video-generation-actions .media-video-spec { padding:5px 4px; background:transparent; }
 .media-editor .media-video-generation-actions .media-video-submit { width:30px; height:30px; padding:0; border-radius:9px; }

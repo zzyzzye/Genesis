@@ -5,8 +5,10 @@ import { BillingStatus } from '../../features/billing/BillingControls'
 import type { BillingOperation } from '../../features/billing/api'
 import { getStoredAuthToken } from '../../lib/auth'
 import { createModelCatalogCache } from '../../lib/modelCatalogCache'
+import type { ModelPricePreview } from '../../lib/api'
+import { GenerationModelPicker } from './GenerationModelPicker'
 
-export type VideoModel = { id: string; parameters_known?: boolean; ratios: string[]; resolutions: string[]; durations: number[]; images: number; videos: number; audio: boolean; image_edit?: boolean }
+export type VideoModel = { id: string; description?: string; pricing?: ModelPricePreview | null }
 type ModelList = { configured: boolean; references_ready: boolean; models: VideoModel[]; billing_required?: boolean }
 const generationCatalog = createModelCatalogCache<ModelList>()
 export type GenerationTask = { id: string; node_id: string; status: string; progress: number; error: string; asset_id: string | null; asset_ids?: string[]; generation?: GenerationSettings | null; billing?: BillingOperation | null }
@@ -89,16 +91,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
       onPatch({ generation: { ...settings, model:id } })
       return
     }
-    if (selected.parameters_known === false) {
-      onPatch({ generation: { ...settings, model:id, count:1, mode:'text' } })
-      return
-    }
-    onPatch({ duration_seconds: selected.durations.includes(node.duration_seconds ?? 5) ? node.duration_seconds : selected.durations[0], generation: {
-      ...settings, model:id, count:1,
-      ratio: (selected.ratios.includes(settings.ratio) ? settings.ratio : selected.ratios[0]) as GenerationSettings['ratio'],
-      resolution: (selected.resolutions.includes(settings.resolution.toLowerCase()) ? settings.resolution : (selected.resolutions[0] ?? settings.resolution).toUpperCase()) as GenerationSettings['resolution'],
-      mode: selected.images + selected.videos === 0 && !selected.audio ? 'text' : settings.mode,
-    } })
+    onPatch({ generation: { ...settings, model:id, count:1 } })
   }
   const submit = useCallback(async () => {
     if (active.current) return
@@ -123,24 +116,19 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
     } finally { active.current = false; setBusy(false) }
   }, [onSave, tasksPath, node.id, acknowledged, isImage, onTask])
   const blocked = busy || Boolean(task && running(task.status)) || task?.status === 'unknown' && !acknowledged
-  const referenceBlocked = isImage ? referencesPending || referenceCount > 16 || referenceCount > 0 && model?.image_edit !== true : (node.generation?.mode ?? 'text') !== 'text' && catalog && !catalog.references_ready
+  const referenceBlocked = isImage ? referencesPending : (node.generation?.mode ?? 'text') !== 'text' && catalog && !catalog.references_ready
   return <div className="media-video-generation">
     <div className="media-video-generation-actions">
-      <select aria-label={`${noun}生成模型`} title={model ? model.parameters_known === false ? `${model.id} · 使用模型默认参数` : model.id : `选择${noun}模型`} value={model?.id ?? ''} disabled={busy || !catalog?.models.length} onChange={(event) => chooseModel(event.target.value)}>
-        <option value="">{catalog ? catalog.configured ? `选择${noun}模型` : `尚未配置${noun}服务` : `加载${noun}模型…`}</option>
-        {catalog?.models.map((item) => <option key={item.id}>{item.id}</option>)}
-      </select>
+      <GenerationModelPicker models={catalog?.models ?? []} value={model?.id ?? ''} label={`${noun}生成模型`} placeholder={catalog ? catalog.configured ? `选择${noun}模型` : `尚未配置${noun}服务` : `加载${noun}模型…`} disabled={busy || !catalog?.models.length} onChange={chooseModel} />
       {isImage && <span className="media-video-spec" aria-label="图片生成模式" title="根据连入的图片参考自动确定">{referenceCount ? '图生图' : '文生图'}</span>}
       {controls}
       <button type="button" aria-label={`刷新${noun}模型与任务`} title="刷新模型与任务" onClick={() => { forceCatalogRefresh.current = true; setCatalogRevision(value => value + 1); setAttempt(value => value + 1) }}><RefreshCw size={14} /></button>
       <button type="button" className="media-video-submit" aria-label={`生成${noun}`} title={`生成${noun}`} disabled={Boolean(blocked || referenceBlocked || !model || !node.text.trim())} onClick={() => void submit()}>{busy || task && running(task.status) ? <LoaderCircle size={15} className="is-spinning" /> : <ArrowUp size={16} />}</button>
     </div>
-    {!isImage && model?.parameters_known === false && <p>使用模型默认画幅、清晰度和时长，暂仅支持文生视频。</p>}
     {catalog && !catalog.configured && <p>{noun}服务尚未配置，请先在服务端配置{noun} API Key。</p>}
-    {catalog?.configured && !catalog.models.length && <p>暂无已支持的可用{noun}模型，可刷新重试。</p>}
+    {catalog?.configured && !catalog.models.length && <p>暂无可用{noun}模型，可刷新重试。</p>}
     {isImage && referencesPending && <p role="status">参考图片尚未就绪，请先生成或导入图片，或断开该参考。</p>}
-    {isImage && referenceCount > 16 && <p role="status">最多连接 16 张参考图片，实际支持数量由模型决定。</p>}
-    {referenceBlocked && catalog?.configured && model && (!isImage || !referencesPending && referenceCount <= 16) && <p>{isImage ? '当前模型尚无图生图支持说明，请选择支持图生图的模型，或移除图片参考。' : '参考素材暂不可用：需先部署公网地址并启用素材访问。'}</p>}
+    {!isImage && referenceBlocked && catalog?.configured && model && <p>参考素材暂不可用：需先部署公网地址并启用素材访问。</p>}
     {!isImage && referenceCount > 0 && (node.generation?.mode ?? 'text') === 'text' && <p>切换到「素材参考」后才会发送连入的参考素材。</p>}
     {task && !(isImage && task.status === 'completed') && <div className="media-video-task" role="status"><span>{(isImage ? imageStatusText[task.status] : statusText[task.status]) ?? task.status}{!isImage && running(task.status) ? ` ${task.progress}%` : ''}</span>{!isImage && task.status === 'completed' && task.asset_id && node.asset_id !== task.asset_id && <button type="button" disabled={busy} onClick={() => {
       setBusy(true)

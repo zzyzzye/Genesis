@@ -70,9 +70,16 @@ window.fetch = async (input, init) => {
   if(generationReview && path.endsWith(`/assets/${referenceAsset.id}`)) return json(referenceAsset)
   if (mode === 'canvas-image-reference' && path.endsWith('/media/projects/synthetic-project/assets')) return json({items:[referenceAsset],total:1})
   if ((mode === 'canvas-image-reference' || generationReview) && path.endsWith(`/assets/${referenceAsset.id}/file`)) return new Response(Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jbcQAAAAASUVORK5CYII='),c=>c.charCodeAt(0)),{headers:{'Content-Type':'image/png'}})
-  if (path.endsWith('/image-models')) return json({ configured: true, references_ready:true, models: mode === 'canvas-image-reference' ? [{id:'gpt-image-2',image_edit:true},{id:'text-only-model',image_edit:false}] : [{ id: 'image2.5-flare', image_edit:true, ratios: ['1:1'], resolutions: [], durations: [], images: 0, videos: 0, audio: false }] })
+  if (path.endsWith('/image-models')) return json({ configured: true, references_ready:true, models: [
+    {id:mode === 'canvas-image-reference' ? 'gpt-image-2' : 'image2.5-flare',description:'支持图片生成与编辑，尺寸和参考数量由供应商校验。',pricing:{status:'available',currency:'CNY',unit:'image',amount:'0.11',tiers:[],note:'价格仅供参考，实际费用以上游账单为准。'}},
+    {id:'unknown-image-model'},
+  ] })
   if (path.includes('/image-generations')) return json([])
-  if (path.endsWith('/video-models')) return json({ configured: true, references_ready: true, models: [{ id: 'synthetic-fixed-15s', parameters_known: true, durations: [15], ratios: ['16:9', '9:16'], resolutions: ['720p'], images: 0, videos: 0, audio: false }] })
+  if (path.endsWith('/video-models')) return json({ configured: true, references_ready: true, models: [
+    { id: 'synthetic-fixed-15s', description: '提供 3–10 秒、720p 横竖屏输出；支持首帧、风格图、元素图和 1 个源视频，所有参考素材合计最多 4 项。', pricing: { status:'available',currency:'CNY',unit:'request',amount:'0.55',tiers:[],note:'价格仅供参考，实际费用以上游账单为准。' } },
+    { id: 'per-second-model', description: '按实际生成秒数计费。请求参数支持情况由供应商校验。', pricing: { status:'available',currency:'CNY',unit:'second',amount:'0.33',tiers:[],note:'价格仅供参考，实际费用以上游账单为准。' } },
+    { id: 'unknown-model' },
+  ] })
   if (path.endsWith('/video-generations')) return json([])
   if (path.includes('/llm/providers/')) return json({ models: [{ id: 'mimo-v2.6-flash', name: 'MiMo V2.6 Flash', context_window: 1000000, billing_mode: mode.startsWith('paid') ? 'paid' : 'free' }] })
   if (path.endsWith('/billing/quotes')) return mode === 'paid-error'

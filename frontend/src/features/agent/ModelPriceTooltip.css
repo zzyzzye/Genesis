@@ -1,6 +1,9 @@
 .model-price-tooltip { position:fixed; inset:auto; margin:0; width:min(330px,calc(100vw - 16px)); max-height:calc(100dvh - 32px); overflow:auto; padding:16px; border:0; outline:0; box-shadow:0 6px 24px #0002; border-radius:10px; visibility:hidden; z-index:60; background:var(--assistant-paper,#252525); color:var(--reasoning-text,#ddd); font:12px/1.65 Inter,"PingFang SC",sans-serif; }
 .model-price-tooltip>strong { display:block; font-size:13px; font-weight:550; overflow-wrap:anywhere; }
 .model-price-tooltip p { margin:0; }
+.model-price-tooltip .model-price-tooltip__description { margin-top:8px; white-space:pre-wrap; overflow-wrap:anywhere; }
+.model-price-tooltip .model-price-tooltip__amount { margin-top:4px; font-size:22px; font-weight:550; font-variant-numeric:tabular-nums; }
+.model-price-tooltip__amount>span { font-size:12px; font-weight:400; color:var(--reasoning-muted,#999); }
 .model-price-tooltip .model-price-tooltip__unit { margin-top:12px; font-size:10px; color:var(--reasoning-muted,#999); }
 .model-price-tooltip table { width:100%; margin-top:5px; border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:11px; }
 .model-price-tooltip caption { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }

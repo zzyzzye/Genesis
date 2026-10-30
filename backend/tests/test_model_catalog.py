@@ -146,7 +146,7 @@ async def test_text_image_video_share_the_same_upstream_catalog(
         image.available_models(settings), video.available_models(settings),
     )
     assert any(model.id == "shared-model" for model in text_models.models)
-    assert images == [{"id": "shared-model", "image_edit": False}]
+    assert images == [{"id": "shared-model"}]
     assert videos == ["shared-model"]
     assert requests == ["/v1/models"]
 

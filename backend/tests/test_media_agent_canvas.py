@@ -164,7 +164,7 @@ def test_configuration_checks_actual_references_instead_of_legacy_mode(
             session.commit()
         canvas = asyncio.run(entries["get_media_canvas"].ainvoke({"project_id": str(project_id)}))
         assert canvas["image_reference_node_ids"] == [str(ids[1])]
-        assert "尚无图生图支持说明" in asyncio.run(entries["configure_image_nodes"].ainvoke(args))
+        assert isinstance(asyncio.run(entries["configure_image_nodes"].ainvoke(args)), dict)
 
 
 def test_missing_node_and_model_are_rejected(canvas_tools: CanvasTools) -> None:

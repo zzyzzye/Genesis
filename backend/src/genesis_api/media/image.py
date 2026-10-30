@@ -32,7 +32,6 @@ from genesis_api.media.schemas import CanvasDocument, CanvasNode, GenerationSubm
 
 logger = logging.getLogger(__name__)
 ACTIVE = ("submitting", "processing", "downloading")
-EDIT_MODELS = {"[原生] gpt-image-2", "[原生] gpt-image-2-pro", "[官key] gpt-image-2", "gpt-image-2"}
 MAX_IMAGE_BYTES = 32 * 1024 * 1024
 MAX_RESPONSE_BYTES = 180 * 1024 * 1024
 _agent_tasks: set[asyncio.Task[None]] = set()
@@ -59,7 +58,7 @@ async def available_models(settings: Settings, *, refresh: bool = False) -> list
             for item in rows
             if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"]
         )
-        return [{"id": name, "image_edit": name in EDIT_MODELS} for name in ids]
+        return [{"id": name} for name in ids]
     except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
         raise HTTPException(502, "图片模型目录暂不可用，请重试") from exc
 
@@ -227,10 +226,6 @@ def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -
         if not (service.STORAGE_ROOT / str(asset.id)).is_file():
             raise HTTPException(422, "参考图片文件不可用，请重新导入")
         ids.append(str(asset.id))
-    if len(ids) > 16:
-        raise HTTPException(422, "最多连接 16 张参考图片，实际支持数量由模型决定")
-    if ids and node.generation.model not in EDIT_MODELS:
-        raise HTTPException(422, "该模型尚无图片编辑说明，请选择支持图生图的模型或移除图片参考")
     # 生图模式由当前参考决定，旧草稿中的手动 mode 不再控制上游接口。
     node = node.model_copy(
         update={

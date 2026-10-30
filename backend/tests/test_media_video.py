@@ -31,7 +31,6 @@ from genesis_api.identity.models import User, UserRole
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service, video
 from genesis_api.media.models import MediaAsset, VideoGeneration
-from genesis_api.media.video_catalog import CATALOG
 
 
 @dataclass
@@ -193,15 +192,14 @@ async def test_live_catalog_and_missing_configuration(fixture: VideoFixture) -> 
     state = fixture
     response = (await state.client.get("video-models")).json()
     assert response["configured"] is True
-    assert len(CATALOG) == 45
     assert [item["id"] for item in response["models"]] == [
         "grok-imagine-video",
         "seedance-2.0-720p",
         "minimax-h3-首尾帧",
         "unverified-model",
     ]
-    assert response["models"][-1]["parameters_known"] is False
-    assert response["models"][-1]["durations"] == []
+    assert "durations" not in response["models"][-1]
+    assert response["models"][-1]["pricing"]["status"] == "unavailable"
     await state.client.get("video-models")
     assert len(state.requests) == 1
     state.settings.video_api_key = None
@@ -210,8 +208,10 @@ async def test_live_catalog_and_missing_configuration(fixture: VideoFixture) -> 
 
 
 @pytest.mark.anyio
-async def test_new_model_uses_provider_defaults(fixture: VideoFixture) -> None:
-    """新目录模型可提交文生视频，但不猜测可选参数和参考能力。"""
+async def test_new_model_keeps_user_parameters_without_local_capability_table(
+    fixture: VideoFixture,
+) -> None:
+    """真实目录中的新模型沿用用户参数，支持情况交由上游校验。"""
     state = fixture
     await save_node(state, generation={"model": "unverified-model", "mode": "text"})
     assert (await submit(state)).status_code == 202
@@ -219,6 +219,9 @@ async def test_new_model_uses_provider_defaults(fixture: VideoFixture) -> None:
     assert json.loads(payload.content) == {
         "model": "unverified-model",
         "prompt": "雨夜街道，路灯倒映在积水中。",
+        "duration": 5,
+        "aspect_ratio": "16:9",
+        "resolution": "720p",
     }
 
 
@@ -254,11 +257,8 @@ async def test_submit_is_idempotent_and_recovers_after_reload(fixture: VideoFixt
     "patch",
     [
         {"text": ""},
-        {"duration_seconds": 60},
         {"generation": {"model": "not-in-live-catalog"}},
         {"generation": {"model": "unverified-model", "mode": "reference"}},
-        {"generation": {"model": "grok-imagine-video", "resolution": "2K"}},
-        {"generation": {"model": "grok-imagine-video", "ratio": "1:1"}},
         {"generation": {"model": "grok-imagine-video", "count": 2}},
         {"generation": {"model": "grok-imagine-video", "mode": "reference"}},
     ],

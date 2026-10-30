@@ -474,7 +474,8 @@ export interface TokenPriceTier {
 export interface ModelPricePreview {
   status: 'available' | 'unavailable' | 'free'
   currency: 'CNY' | 'USD'
-  unit: '1M tokens'
+  unit: '1M tokens' | 'request' | 'second' | 'image'
+  amount?: string | null
   group: string | null
   group_ratio: string | null
   tiers: TokenPriceTier[]

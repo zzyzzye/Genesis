@@ -10,15 +10,12 @@ from pydantic import ValidationError
 
 from genesis_api.agent.context import require_actor
 from genesis_api.agent.tool_inputs import ToolArray, tool_validation_error
-from genesis_api.billing.pricing import yyapi_pricing_service
-from genesis_api.billing.service import is_yyapi
 from genesis_api.core.config import Settings
 from genesis_api.database.session import SessionLocal
 from genesis_api.identity.models import User
-from genesis_api.media import image, service, video
+from genesis_api.media import catalog, image, service
 from genesis_api.media.models import ImageGeneration
 from genesis_api.media.schemas import CanvasDocument, GenerationSettings, GenerationSubmit
-from genesis_api.media.video_catalog import CATALOG
 
 
 def build_media_tools(settings: Settings) -> list[BaseTool]:
@@ -33,7 +30,7 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
 
     @tool
     async def get_video_generation_models(model_id: str | None = None) -> dict[str, object]:
-        """查询可用视频模型、上游简介与本地参数快照，规划前必须调用。
+        """查询可用视频模型、供应商简介与生成单价，规划前必须调用。
 
         Args:
             model_id: 指定模型 ID 时仅查询该模型；省略时返回全部可用模型。
@@ -45,34 +42,15 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
             ToolException: 视频服务未配置或实时目录暂时不可用。
         """
         try:
-            ids = await video.available_models(settings)
+            models = await catalog.generation_models(settings, "video")
         except HTTPException as exc:
             raise ToolException(str(exc.detail)) from None
-        ids = [item for item in ids if model_id is None or item == model_id]
-        descriptions = (
-            await yyapi_pricing_service.descriptions(settings, ids)
-            if is_yyapi(settings.video_api_base_url)
-            else {}
-        )
         return {
-            "models": [
-                {
-                    **(
-                        {**CATALOG[item].data(), "parameters_known": True}
-                        if item in CATALOG
-                        else {"id": item, "parameters_known": False}
-                    ),
-                    **({"description": descriptions[item]} if item in descriptions else {}),
-                }
-                for item in ids
-            ],
+            "models": [item for item in models if model_id is None or item["id"] == model_id],
             "description_source": "供应商模型广场，复用目录缓存；缺少 description 表示暂无简介",
-            "parameters_source": (
-                "durations、ratios、resolutions、images、videos 等来自本地文档快照，"
-                "并非实时能力接口"
-            ),
+            "pricing_notice": "pricing 为当前分组单价；unit 区分每次、每秒或每张，以上游账单为准",
             "references_ready": settings.video_public_base_url.startswith("https://"),
-            "duration_semantics": "durations 是每个节点单次生成的秒数，不是成片剪辑时长。",
+            "duration_semantics": "节点时长为单次生成的秒数，不是成片剪辑时长；支持范围见简介",
             "editing_available": False,
         }
 
@@ -133,7 +111,7 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
             真实模型、图生图说明与上游 description 简介；未说明的尺寸不能猜测。
         """
         try:
-            rows = await image.available_models(settings)
+            rows = await catalog.generation_models(settings, "image")
         except HTTPException as exc:
             raise ToolException(str(exc.detail)) from None
         needle = "".join(c for c in query.casefold() if c.isalnum())
@@ -142,24 +120,10 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
             for row in rows
             if needle in "".join(c for c in str(row["id"]).casefold() if c.isalnum())
         ]
-        descriptions = (
-            await yyapi_pricing_service.descriptions(settings, [str(row["id"]) for row in rows])
-            if is_yyapi(settings.image_api_base_url)
-            else {}
-        )
         return {
-            "models": [
-                {
-                    **row,
-                    **(
-                        {"description": descriptions[str(row["id"])]}
-                        if str(row["id"]) in descriptions
-                        else {}
-                    ),
-                }
-                for row in rows
-            ],
+            "models": rows,
             "description_source": "供应商模型广场，复用目录缓存；缺少 description 表示暂无简介",
+            "pricing_notice": "pricing 为当前分组单价；unit 区分每次、每秒或每张，以上游账单为准",
             "size_support": (
                 "尺寸限制以 description 明确说明为依据；"
                 "未声明时沿用节点尺寸设置协议，不保证生成成功"
@@ -189,7 +153,7 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
         Raises:
             ToolException: 模型不可用、节点越权或缺失、类型错误、参数无效。
         """
-        version, document, image_targets = await asyncio.to_thread(read_canvas, project_id)
+        version, document, _image_targets = await asyncio.to_thread(read_canvas, project_id)
         try:
             GenerationSettings.model_validate(
                 {
@@ -222,8 +186,6 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
             raise ToolException("请指定1–8个生图节点；更多节点请分批设置")
         if any(node.type != "image_generation" for node in targets):
             raise ToolException("目标中包含非生图节点，未修改任何节点")
-        if any(node.id in image_targets for node in targets) and not model["image_edit"]:
-            raise ToolException("所选模型尚无图生图支持说明，请选择支持图生图的模型或移除图片参考")
         return {
             "title": f"统一设置 {len(targets)} 个生图节点",
             "project_id": str(project_id),

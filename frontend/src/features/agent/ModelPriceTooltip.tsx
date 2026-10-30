@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import type { AvailableModel, TokenPriceTier } from '../../lib/api'
+import type { ModelPricePreview, TokenPriceTier } from '../../lib/api'
 import { modelDisplayName } from './modelDisplayName'
 import './ModelPriceTooltip.css'
 
@@ -14,8 +14,8 @@ const tierNames: Record<string, string> = { short: '短上下文', long: '长上
 /** 价格只作只读提示；使用浏览器顶层，避免被模型列表和助手裁切。 */
 export function ModelPriceTooltip({ id, model, trigger, onDismiss, onEnter, onLeave }: {
   id: string
-  model: AvailableModel
-  trigger: HTMLButtonElement
+  model: { id: string; name?: string | null; description?: string; pricing?: ModelPricePreview | null }
+  trigger: HTMLElement
   onDismiss: () => void
   onEnter: () => void
   onLeave: () => void
@@ -30,7 +30,7 @@ export function ModelPriceTooltip({ id, model, trigger, onDismiss, onEnter, onLe
       surface.style.setProperty(token, theme.getPropertyValue(token))
     }
     if (native) surface.showPopover()
-    const anchor = trigger.getBoundingClientRect()
+    const anchor = (trigger.closest('[data-model-menu]') ?? trigger).getBoundingClientRect()
     const bounds = surface.getBoundingClientRect()
     const width = document.documentElement.clientWidth || window.innerWidth
     const height = window.innerHeight
@@ -67,14 +67,18 @@ export function ModelPriceTooltip({ id, model, trigger, onDismiss, onEnter, onLe
   const available = pricing?.status === 'available' || pricing?.status === 'free'
   const symbol = pricing?.currency === 'USD' ? '$' : '¥'
   return createPortal(<div ref={panel} id={id} className="model-price-tooltip" popover={native ? 'manual' : undefined} role="tooltip" onPointerEnter={onEnter} onPointerLeave={onLeave}>
-    <strong>{modelDisplayName(model.name || model.id)}</strong>
-    {available && pricing.tiers.length ? <>
+    <strong>{model.name ? modelDisplayName(model.name) : model.id}</strong>
+    {model.description !== undefined && <p className="model-price-tooltip__description">{model.description || '暂无模型简介'}</p>}
+    {available && pricing.unit !== '1M tokens' && pricing.amount != null ? <>
+      <p className="model-price-tooltip__unit">任务计费</p>
+      <p className="model-price-tooltip__amount">{symbol}{pricing.amount} <span>/ {({ request: '请求', second: '秒', image: '张' } as const)[pricing.unit]}</span></p>
+    </> : available && pricing.tiers.length ? <>
       <p className="model-price-tooltip__unit">{pricing.currency === 'USD' ? '美元' : '人民币'} / 100 万 Token</p>
       <table><caption>模型输入输出价格</caption><thead><tr><th>项目</th>{pricing.tiers.map((tier, index) => <th key={index}>{tierNames[tier.name] ?? tier.name}</th>)}</tr></thead>
         <tbody>{rows.filter(row => pricing.tiers.some(tier => tier[row.field] != null)).map(row => <tr key={row.field}><th scope="row">{row.label}</th>{pricing.tiers.map((tier, index) => <td key={index}>{tier[row.field] != null ? `${symbol}${tier[row.field]}` : '未提供'}</td>)}</tr>)}</tbody>
       </table>
       {pricing.tiers.some(tier => tier.condition) && <div className="model-price-tooltip__conditions">{pricing.tiers.map((tier, index) => tier.condition && <p key={index}>{tierNames[tier.name] ?? tier.name}：{tier.condition}</p>)}</div>}
-    </> : <p className="model-price-tooltip__unknown">{pricing?.note || '暂未取得该模型的分组价格，请稍后刷新模型列表。'}</p>}
+    </> : <p className="model-price-tooltip__unknown">{pricing?.note || '暂未取得该模型的价格，请稍后刷新模型列表。'}</p>}
     {available && <p className="model-price-tooltip__note">{pricing.note}</p>}
   </div>, document.body)
 }
