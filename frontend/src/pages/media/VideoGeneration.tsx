@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowUp, Check, LoaderCircle, RefreshCw } from 'lucide-react'
+import { ArrowUp, LoaderCircle, RefreshCw } from 'lucide-react'
 import { api, MediaError, defaultGenerationSettings, type Asset, type GenerationSettings, type Node } from './api'
-import { AssetPreview } from './AssetPreview'
 import { BillingStatus } from '../../features/billing/BillingControls'
 import type { BillingOperation } from '../../features/billing/api'
 import { getStoredAuthToken } from '../../lib/auth'
@@ -14,7 +13,7 @@ export type GenerationTask = { id: string; node_id: string; status: string; prog
 type Task = GenerationTask
 const running = (status: string) => ['submitting', 'queued', 'processing', 'downloading'].includes(status)
 const statusText: Record<string, string> = { submitting:'正在提交', queued:'排队中', processing:'生成中', downloading:'正在保存视频', download_failed:'视频保存失败', completed:'视频已生成', failed:'生成失败', unknown:'创建结果待核实', acknowledged:'已核实旧任务' }
-const imageStatusText: Record<string, string> = { submitting:'正在提交',processing:'生成中',downloading:'正在保存图片',download_failed:'图片保存失败',completed:'图片已生成',failed:'生成失败',unknown:'创建结果待核实',acknowledged:'已核实旧任务' }
+const imageStatusText: Record<string, string> = { submitting:'正在提交',processing:'生成中',downloading:'正在保存图片',download_failed:'图片保存失败',failed:'生成失败',unknown:'创建结果待核实',acknowledged:'已核实旧任务' }
 
 type GenerationProps = {
   projectId: string
@@ -50,17 +49,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
   const forceCatalogRefresh = useRef(false)
   const requestId = useRef<string | null>(null)
   const active = useRef(false)
-  const [results, setResults] = useState<Asset[]>([])
   const model = catalog?.models.find((item) => item.id === node.generation?.model)
-  const resultKey = isImage && task?.status === 'completed' ? (task.asset_ids ?? (task.asset_id ? [task.asset_id] : [])).join(',') : ''
-  useEffect(() => {
-    let current = true
-    if (!resultKey) return
-    void Promise.all(resultKey.split(',').map((id) => api<Asset>(`/assets/${id}`))).then((assets) => {
-      if (current) setResults(assets)
-    }).catch(() => { if (current) setError('生成图片读取失败，请刷新重试') })
-    return () => { current = false }
-  }, [resultKey, attempt])
   useEffect(() => { onModelChange?.(model ?? null) }, [model, onModelChange])
   useEffect(() => {
     let current = true
@@ -153,11 +142,10 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
     {isImage && referenceCount > 16 && <p role="status">最多连接 16 张参考图片，实际支持数量由模型决定。</p>}
     {referenceBlocked && catalog?.configured && model && (!isImage || !referencesPending && referenceCount <= 16) && <p>{isImage ? '当前模型尚无图生图支持说明，请选择支持图生图的模型，或移除图片参考。' : '参考素材暂不可用：需先部署公网地址并启用素材访问。'}</p>}
     {!isImage && referenceCount > 0 && (node.generation?.mode ?? 'text') === 'text' && <p>切换到「素材参考」后才会发送连入的参考素材。</p>}
-    {task && <div className="media-video-task" role="status"><span>{(isImage ? imageStatusText[task.status] : statusText[task.status]) ?? task.status}{!isImage && running(task.status) ? ` ${task.progress}%` : ''}</span>{!isImage && task.status === 'completed' && task.asset_id && node.asset_id !== task.asset_id && <button type="button" disabled={busy} onClick={() => {
+    {task && !(isImage && task.status === 'completed') && <div className="media-video-task" role="status"><span>{(isImage ? imageStatusText[task.status] : statusText[task.status]) ?? task.status}{!isImage && running(task.status) ? ` ${task.progress}%` : ''}</span>{!isImage && task.status === 'completed' && task.asset_id && node.asset_id !== task.asset_id && <button type="button" disabled={busy} onClick={() => {
       setBusy(true)
       void api<Asset>(`/assets/${task.asset_id}`).then(onResult).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false))
     }}>使用生成结果</button>}</div>}
-    {isImage && task?.status === 'completed' && <div className="media-generated-results" aria-label="生成图片结果">{results.filter((asset) => resultKey.split(',').includes(asset.id)).map((asset, index) => <div className="media-generated-result" key={asset.id}><AssetPreview asset={asset} thumbnail /><button type="button" className="media-generated-use" aria-label={`使用第 ${index + 1} 张生成图片`} title={`使用第 ${index + 1} 张生成图片`} aria-pressed={node.asset_id === asset.id} onClick={() => onResult(asset)}>{node.asset_id === asset.id && <Check size={12} aria-hidden="true" />}</button></div>)}</div>}
     {task?.error && <p role="status">{task.error}</p>}
     <BillingStatus initial={task?.billing} />
     {task?.status === 'download_failed' && <button type="button" disabled={busy} onClick={() => {

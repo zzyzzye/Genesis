@@ -217,14 +217,6 @@
 .media-editor .media-generation-popover :is(input,select) { width:auto; min-height:28px; max-width:175px; padding:3px 6px; border:0; border-radius:6px; background:#383838; color:var(--media-ink); font:inherit; }
 .media-editor .media-generation-popover input { width:52px; }
 .media-editor .media-generation-popover input[aria-label="图片输出尺寸"] { width:126px; }
-.media-generated-results { display:flex; flex-wrap:wrap; gap:6px; }
-.media-generated-result { position:relative; width:48px; height:48px; overflow:hidden; border-radius:8px; }
-.media-editor .media-node-editor .media-generated-use { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:flex-end; width:100%; height:100%; padding:3px; min-height:0; border-radius:8px; background:transparent; }
-.media-editor .media-node-editor .media-generated-use:is(:hover,:focus-visible) { background:#ffffff10; }
-.media-generated-use>svg { background:#303030; border-radius:50%; }
-.media-editor .media-node-editor .media-generated-results .media-thumbnail-retry { position:relative; z-index:1; }
-.media-generated-results .media-preview { width:100%; height:100%; margin:0; }
-.media-generated-results .media-preview img { width:100%; height:100%; object-fit:cover; }
 .media-editor .media-generation-popover .media-video-asset-picker { max-width:none; }
 .media-editor .media-generation-popover p { margin:0; line-height:1.5; }
 .media-video-generation p { margin:0; color:#aaa; line-height:1.6; overflow-wrap:anywhere; }

@@ -105,16 +105,17 @@ describe('生图节点',()=>{
     expect(api.mock.calls.some(call=>call[1]==='POST')).toBe(false)
   })
 
-  it('恢复多图结果，缩略图切换预览，不覆盖提示词或重新生成',async()=>{
-    const assets=['a','b'].map(id=>({id,name:`${id}.png`,kind:'image' as const,mime_type:'image/png',size:12,in_library:false}))
-    vi.spyOn(URL,'createObjectURL').mockReturnValue('blob:test-image')
-    vi.spyOn(URL,'revokeObjectURL').mockImplementation(()=>{})
-    vi.spyOn(media,'fileBlob').mockResolvedValue(new Blob(['image']))
-    const api=vi.spyOn(media,'api').mockImplementation(path=>Promise.resolve(path==='/image-models'?catalog:path.startsWith('/assets/')?assets.find(asset=>path===`/assets/${asset.id}`):[{id:'done',status:'completed',asset_id:'a',asset_ids:['a','b'],error:'',progress:0}]))
+  it('恢复多图任务交给画布显示结果，编辑面板不重复读取或展示缩略图',async()=>{
+    const task={id:'done',status:'completed',asset_id:'a',asset_ids:['a','b'],error:'',progress:0}
+    const api=vi.spyOn(media,'api').mockImplementation(path=>Promise.resolve(path==='/image-models'?catalog:[task]))
     const state=props()
-    render(<ImageGeneration {...state} />)
-    fireEvent.click(await screen.findByRole('button',{name:'使用第 2 张生成图片'}))
-    expect(state.onResult).toHaveBeenCalledWith(assets[1])
+    const onTask=vi.fn()
+    render(<ImageGeneration {...state} onTask={onTask} />)
+    await waitFor(()=>expect(onTask).toHaveBeenCalledWith(task,false))
+    expect(screen.queryByLabelText('生成图片结果')).not.toBeInTheDocument()
+    expect(screen.queryByText('图片已生成')).not.toBeInTheDocument()
+    expect(api.mock.calls.some(([path])=>path.startsWith('/assets/'))).toBe(false)
+    expect(state.onResult).not.toHaveBeenCalled()
     expect(api.mock.calls.some(call=>call[1]==='POST')).toBe(false)
     expect(state.onPatch).not.toHaveBeenCalled()
   })
