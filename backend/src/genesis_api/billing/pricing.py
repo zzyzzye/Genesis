@@ -26,6 +26,7 @@ from genesis_api.billing.pricing_rules import (
 from genesis_api.billing.schemas import ModelPricePreview, TokenPriceTier
 from genesis_api.billing.service import connection, is_yyapi
 from genesis_api.core.config import Settings
+from genesis_api.llm.catalog import ModelCatalog
 
 
 class PricingLookupError(ValueError):
@@ -86,6 +87,7 @@ class YyapiPricingService:
         self.client = client
         self._cache: dict[str, tuple[float, PricingCatalog]] = {}
         self._lock = asyncio.Lock()
+        self._descriptions = ModelCatalog()
 
     async def catalog(self, settings: Settings) -> PricingCatalog:
         """读取用于管理员审核的完整目录，缺少凭据时不发送请求。"""
@@ -93,6 +95,50 @@ class YyapiPricingService:
         if secret is None or not secret.get_secret_value().strip():
             raise PricingLookupError("价格服务尚未配置，暂无法预览。")
         return await self._catalog(settings, secret.get_secret_value())
+
+    async def descriptions(self, settings: Settings, models: list[str]) -> dict[str, str]:
+        """读取指定模型的上游简介，复用目录缓存，不读取令牌列表或价格口径。
+
+        Args:
+            settings: 复用控制台认证与地址，不向返回值传播配置。
+            models: 实时可调用目录中的精确模型 ID，不从简介目录扩展可用模型。
+
+        Returns:
+            模型 ID 到非空简介的映射；缺少配置、简介或查询失败时省略对应项。
+        """
+        secret = settings.yyapi_access_token
+        if not models or secret is None or not secret.get_secret_value().strip():
+            return {}
+        try:
+            base, headers, _ = self._control_request(settings, secret.get_secret_value())
+            payload = await self._descriptions.get(
+                f"{base}/api/pricing",
+                headers,
+                client=self.client,
+            )
+            if payload.get("success") is not True:
+                return {}
+            rows = payload.get("data")
+            if not isinstance(rows, list):
+                return {}
+            requested = set(models)
+            result: dict[str, str] = {}
+            seen: set[str] = set()
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                name, description = row.get("model_name"), row.get("description")
+                if not isinstance(name, str) or name not in requested:
+                    continue
+                if name in seen:
+                    return {}
+                seen.add(name)
+                if isinstance(description, str) and description.strip():
+                    result[name] = description
+            return result
+        except (PricingLookupError, httpx.HTTPError, ValueError, TypeError):
+            # 简介不可用不能阻断模型目录，也不传播上游异常中的认证信息。
+            return {}
 
     async def for_models(
         self, settings: Settings, provider: str, models: list[str]
@@ -158,7 +204,9 @@ class YyapiPricingService:
             note = "价格同步暂时失败，请稍后重新获取模型列表。"
         return {model: ModelPricePreview(status="unavailable", note=note) for model in models}
 
-    async def _catalog(self, settings: Settings, token: str) -> PricingCatalog:
+    @staticmethod
+    def _control_request(settings: Settings, token: str) -> tuple[str, dict[str, str], str]:
+        """统一校验控制台地址并构造认证头，缓存身份仅使用摘要。"""
         base = settings.yyapi_control_base_url.rstrip("/")
         parsed = urlparse(base)
         if (
@@ -173,13 +221,17 @@ class YyapiPricingService:
         ):
             raise PricingLookupError("价格服务地址配置无效，请站长核对。")
         identity = hashlib.sha256(f"{base}\0{token}\0{settings.yyapi_user_id}".encode()).hexdigest()
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        if settings.yyapi_user_id is not None:
+            headers["New-Api-User"] = str(settings.yyapi_user_id)
+        return base, headers, identity
+
+    async def _catalog(self, settings: Settings, token: str) -> PricingCatalog:
+        base, headers, identity = self._control_request(settings, token)
         async with self._lock:
             cached = self._cache.get(identity)
             if cached and time.monotonic() - cached[0] < 60:
                 return cached[1]
-            headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-            if settings.yyapi_user_id is not None:
-                headers["New-Api-User"] = str(settings.yyapi_user_id)
             if self.client is not None:
                 result = await self._load(self.client, base, headers)
             else:

@@ -302,3 +302,87 @@ async def test_free_and_unconfigured_channels_do_not_request_price_service() -> 
             result = await service.for_models(configured, "openai", ["test"])
             assert result["test"].status == "unavailable"
     assert requests == []
+
+
+@pytest.mark.anyio
+async def test_model_descriptions_read_only_metadata_and_reuse_catalog_cache() -> None:
+    requests: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.url.path == "/api/pricing"
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": [
+                    {
+                        "model_name": "video",
+                        "description": "所有参考素材合计最多 4 项。",
+                        "model_price": 99,
+                        "enable_groups": ["private-group"],
+                    },
+                    {"model_name": "image", "description": "支持图片编辑。"},
+                    {"model_name": "empty", "description": " "},
+                    {"model_name": "invalid", "description": 4},
+                ],
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        service = YyapiPricingService(client)
+        result = await service.descriptions(settings(), ["video", "empty", "invalid", "missing"])
+        assert result == {"video": "所有参考素材合计最多 4 项。"}
+        assert await service.descriptions(settings(), ["image"]) == {"image": "支持图片编辑。"}
+        assert len(requests) == 1
+        encoded = json.dumps(result)
+        assert "synthetic-console" not in encoded
+        assert "private-group" not in encoded
+        await service.descriptions(
+            settings(yyapi_access_token=SecretStr("rotated-synthetic-token")),
+            ["video"],
+        )
+        assert len(requests) == 2
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failure", ["auth", "network", "invalid", "duplicate"])
+async def test_model_description_failure_remains_unknown(failure: str) -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        if failure == "network":
+            raise httpx.ConnectError("synthetic-private-error", request=request)
+        if failure == "auth":
+            return httpx.Response(401)
+        if failure == "invalid":
+            return httpx.Response(200, json={"success": False, "data": []})
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": [
+                    {"model_name": "video", "description": "最多4项"},
+                    {"model_name": "video", "description": "最多9项"},
+                ],
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        assert await YyapiPricingService(client).descriptions(settings(), ["video"]) == {}
+
+
+@pytest.mark.anyio
+async def test_missing_description_configuration_does_not_make_requests() -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        pytest.fail("配置缺失或地址不可信时不应发送请求")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+        service = YyapiPricingService(client)
+        assert await service.descriptions(settings(), []) == {}
+        assert await service.descriptions(settings(yyapi_access_token=None), ["video"]) == {}
+        assert (
+            await service.descriptions(
+                settings(yyapi_control_base_url="https://other-provider.example"),
+                ["video"],
+            )
+            == {}
+        )

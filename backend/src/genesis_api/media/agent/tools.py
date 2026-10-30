@@ -10,6 +10,8 @@ from pydantic import ValidationError
 
 from genesis_api.agent.context import require_actor
 from genesis_api.agent.tool_inputs import ToolArray, tool_validation_error
+from genesis_api.billing.pricing import yyapi_pricing_service
+from genesis_api.billing.service import is_yyapi
 from genesis_api.core.config import Settings
 from genesis_api.database.session import SessionLocal
 from genesis_api.identity.models import User
@@ -31,13 +33,13 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
 
     @tool
     async def get_video_generation_models(model_id: str | None = None) -> dict[str, object]:
-        """查询实际可用的视频模型与独立生成时长，创建视频节点方案前必须调用。
+        """查询可用视频模型、上游简介与本地参数快照，规划前必须调用。
 
         Args:
             model_id: 指定模型 ID 时仅查询该模型；省略时返回全部可用模型。
 
         Returns:
-            可用模型、参数是否已知、支持时长与参考素材能力。未知参数不能猜测。
+            可用模型及 description 简介；简介中的明确限制用于规划，未知参数不能猜测。
 
         Raises:
             ToolException: 视频服务未配置或实时目录暂时不可用。
@@ -46,14 +48,29 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
             ids = await video.available_models(settings)
         except HTTPException as exc:
             raise ToolException(str(exc.detail)) from None
+        ids = [item for item in ids if model_id is None or item == model_id]
+        descriptions = (
+            await yyapi_pricing_service.descriptions(settings, ids)
+            if is_yyapi(settings.video_api_base_url)
+            else {}
+        )
         return {
             "models": [
-                {**CATALOG[item].data(), "parameters_known": True}
-                if item in CATALOG
-                else {"id": item, "parameters_known": False}
+                {
+                    **(
+                        {**CATALOG[item].data(), "parameters_known": True}
+                        if item in CATALOG
+                        else {"id": item, "parameters_known": False}
+                    ),
+                    **({"description": descriptions[item]} if item in descriptions else {}),
+                }
                 for item in ids
-                if model_id is None or item == model_id
             ],
+            "description_source": "供应商模型广场，复用目录缓存；缺少 description 表示暂无简介",
+            "parameters_source": (
+                "durations、ratios、resolutions、images、videos 等来自本地文档快照，"
+                "并非实时能力接口"
+            ),
             "references_ready": settings.video_public_base_url.startswith("https://"),
             "duration_semantics": "durations 是每个节点单次生成的秒数，不是成片剪辑时长。",
             "editing_available": False,
@@ -113,20 +130,40 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
             query: 名称片段；空字符串返回全部可用图片模型。
 
         Returns:
-            真实模型及图生图说明；尺寸是否被上游接受须生成时核实。
+            真实模型、图生图说明与上游 description 简介；未说明的尺寸不能猜测。
         """
         try:
             rows = await image.available_models(settings)
         except HTTPException as exc:
             raise ToolException(str(exc.detail)) from None
         needle = "".join(c for c in query.casefold() if c.isalnum())
+        rows = [
+            row
+            for row in rows
+            if needle in "".join(c for c in str(row["id"]).casefold() if c.isalnum())
+        ]
+        descriptions = (
+            await yyapi_pricing_service.descriptions(settings, [str(row["id"]) for row in rows])
+            if is_yyapi(settings.image_api_base_url)
+            else {}
+        )
         return {
             "models": [
-                row
+                {
+                    **row,
+                    **(
+                        {"description": descriptions[str(row["id"])]}
+                        if str(row["id"]) in descriptions
+                        else {}
+                    ),
+                }
                 for row in rows
-                if needle in "".join(c for c in str(row["id"]).casefold() if c.isalnum())
             ],
-            "size_support": "目录未声明逐模型尺寸限制，沿用节点尺寸设置协议，不保证生成成功",
+            "description_source": "供应商模型广场，复用目录缓存；缺少 description 表示暂无简介",
+            "size_support": (
+                "尺寸限制以 description 明确说明为依据；"
+                "未声明时沿用节点尺寸设置协议，不保证生成成功"
+            ),
         }
 
     @tool
