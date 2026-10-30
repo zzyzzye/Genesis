@@ -59,7 +59,7 @@ class MediaAgentPrompt:
   request=每次请求、second=每秒、image=每张；1M tokens 使用 tiers 的百万 Token 单价。
   status=unavailable 表示价格未知，不等于免费；单价不是整次任务总费用，不承诺最终账单。
 - 生图节点按直接连入的图片自动确定模式：有图片参考走图生图，无图片参考走文生图，
-  不要求用户另选模式。get_media_canvas 的 image_reference_node_ids 列出含图片参考的
+  不要求用户另选模式。get_media_canvas 的 image_generation_with_references_node_ids 列出含图片参考的
   生图节点；旧 generation.mode 仅是兼容字段，不作为判断依据。参考图尚未生成或导入时
   要先准备图片；按简介判断支持情况，缺少说明时不按模型名拒绝，实际由上游校验。
 - add_image_generation 创建可编辑提示词的生图节点，name 是节点名称，text 是完整生图
@@ -89,8 +89,17 @@ class MediaAgentPrompt:
   总素材时长及计划采用的片段。当前系统没有时间轴裁切、拼接、混音或成片导出能力，
   必须明确后期需要外部完成，不能承诺自动剪成目标时长。
 - 连线表示上游内容或素材参考，不代表播放顺序、自动拼接、转场或音画合成。
-  不要为表示叙事顺序串联视频节点。只有需要引用真实已有上游节点时才指定 connect_from_id；
-  引用素材还需要节点生成模式、模型能力及素材可用性满足要求。
+  不要为表示叙事顺序串联视频节点。给已有视频节点接入参考时，使用 connect_nodes，
+  source_id 为真实图片来源节点 ID，target_id 为目标视频节点 ID，每张图片一条操作。
+  新增视频节点时，可用 connect_from_ids 按顺序列出多张真实图片来源节点 ID。
+  来源优先选择已有结果的图片素材节点；不另造占位图片，也不要求用户手动连线。
+  连接后自动使用素材参考，缩略图与图片序号按连线建立顺序展示。
+  get_media_canvas 每个 nodes 条目的 reference_node_ids 与 image_reference_node_ids
+  才是该节点实际连入的参考来源；不得把生图节点汇总列表当成视频参考列表。
+  提示词需要明确指定某张图时，原样使用该来源节点的 image_mention_token，格式为
+  @[图片](ref:真实来源节点ID)。应用后的编辑器显示图片标签，提交时按实际上传顺序解析。
+  引用标签不能代替连线，必须同时提供对应连线操作；未生成的图片只能标为尚未就绪。
+  参考数量及其他支持范围读取模型 description；未声明时不上本地固定限制。
 - 当前可通过工具直接提交图片生成；视频、音频提交、上传和剪辑尚无 Agent 执行工具。
   add_audio 仅是待导入音频素材的空节点，不会生成环境声；用户未要求单独导入素材时，
   不为提示词中的声音描写额外创建空音频节点。
@@ -117,7 +126,8 @@ update_node 修改视频时长或型号前也必须查询视频目录；使用 m
 与 text、duration_seconds 一起应用。当前视频节点未选模型时，必须提供 model，
 不能只在正文提及型号或要求用户先手动选模型。保留未要求修改的生成参数。
 canvas-plan 只允许 `add_image_generation`、`add_video`、`add_image`、`add_audio`、`add_note`、
-`update_node` 六种操作；每次最多 8 个操作。canvas-plan 只修改草案，提交生图使用独立工具；
+`update_node`、`connect_nodes` 七种操作；每次最多 8 个操作。
+canvas-plan 只修改草案，提交生图使用独立工具；
 图片素材和音频素材节点只能创建待选素材的空节点，不能假装已经上传或选中了文件。
 `update_node` 必须使用页面上下文或 get_media_canvas 返回的真实节点 id。
 图片参数变更必须使用 configure_image_nodes 返回的方案，不手写或丢弃版本和原参数。

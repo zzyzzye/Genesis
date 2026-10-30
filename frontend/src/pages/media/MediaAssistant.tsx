@@ -14,7 +14,8 @@ export type MediaCanvasActions = { save: () => Promise<void>; getDocument: () =>
 export type MediaAssistantNode = { id: string; type: string; name: string; text: string; assetId: string | null; durationSeconds?: number; model?: string; mode?: string }
 type MediaCanvasOperation =
   | { action: 'add_image_generation'; name: string; text: string }
-  | { action: 'add_video'; name: string; text: string; duration_seconds: number; model?: string; generation?: GenerationSettings; connect_from_id?: string }
+  | { action: 'add_video'; name: string; text: string; duration_seconds: number; model?: string; generation?: GenerationSettings; connect_from_id?: string; connect_from_ids?: string[] }
+  | { action: 'connect_nodes'; source_id: string; target_id: string }
   | { action: 'add_image'; name: string; text: string }
   | { action: 'add_audio'; name: string; text: string }
   | { action: 'add_note'; text: string }
@@ -45,7 +46,10 @@ function canvasPlanFromMessage(content: string): MediaCanvasPlan | null {
       if (action === 'add_video' && typeof operation.name === 'string' && typeof operation.text === 'string') {
         if (typeof operation.duration_seconds !== 'number' || !Number.isInteger(operation.duration_seconds) || operation.duration_seconds < 1 || operation.duration_seconds > 60) return null
         if (operation.model !== undefined && (typeof operation.model !== 'string' || !operation.model.trim())) return null
-        operations.push({ action, name: operation.name.slice(0, 120), text: operation.text.slice(0, 2000), duration_seconds: operation.duration_seconds, ...(typeof operation.model === 'string' ? { model: operation.model } : {}), ...(typeof operation.connect_from_id === 'string' ? { connect_from_id: operation.connect_from_id } : {}) })
+        if (operation.connect_from_ids !== undefined && (!Array.isArray(operation.connect_from_ids) || operation.connect_from_ids.some(id => typeof id !== 'string' || !id.trim()))) return null
+        operations.push({ action, name: operation.name.slice(0, 120), text: operation.text.slice(0, 2000), duration_seconds: operation.duration_seconds, ...(typeof operation.model === 'string' ? { model: operation.model } : {}), ...(typeof operation.connect_from_id === 'string' ? { connect_from_id: operation.connect_from_id } : {}), ...(Array.isArray(operation.connect_from_ids) ? { connect_from_ids: operation.connect_from_ids as string[] } : {}) })
+      } else if (action === 'connect_nodes' && typeof operation.source_id === 'string' && typeof operation.target_id === 'string' && operation.source_id && operation.target_id && operation.source_id !== operation.target_id) {
+        operations.push({ action, source_id: operation.source_id, target_id: operation.target_id })
       } else if ((action === 'add_image_generation' || action === 'add_image' || action === 'add_audio') && typeof operation.name === 'string' && typeof operation.text === 'string') {
         operations.push({ action, name: operation.name.slice(0, 120), text: operation.text.slice(0, 2000) })
       } else if (action === 'add_note' && typeof operation.text === 'string') {
@@ -77,9 +81,10 @@ function planSummary(plan: MediaCanvasPlan) {
   const audios = plan.operations.filter((item) => item.action === 'add_audio').length
   const notes = plan.operations.filter((item) => item.action === 'add_note').length
   const updates = plan.operations.filter((item) => item.action === 'update_node').length
+  const connections = plan.operations.filter(item => item.action === 'connect_nodes').length
   const settings = [...new Set(plan.operations.flatMap(item => item.action === 'update_node' ? item.generation ? [`${item.generation.model} · ${item.generation.image_ratio} · ${item.generation.image_resolution}`] : item.model ? [item.model] : [] : []))]
   const seconds = plan.operations.reduce((total, item) => total + (item.action === 'add_video' ? item.duration_seconds : 0), 0)
-  return [imageGenerations && `新增 ${imageGenerations} 个生图节点`, videos && `新增 ${videos} 个生视频节点`, videos && `生成素材共 ${seconds} 秒`, images && `新增 ${images} 个待选图片节点`, audios && `新增 ${audios} 个待导入音频节点`, notes && `新增 ${notes} 条便签`, updates && `更新 ${updates} 个节点`, ...settings].filter(Boolean).join(' · ')
+  return [imageGenerations && `新增 ${imageGenerations} 个生图节点`, videos && `新增 ${videos} 个生视频节点`, videos && `生成素材共 ${seconds} 秒`, images && `新增 ${images} 个待选图片节点`, audios && `新增 ${audios} 个待导入音频节点`, notes && `新增 ${notes} 条便签`, updates && `更新 ${updates} 个节点`, connections && `添加 ${connections} 条参考连线`, ...settings].filter(Boolean).join(' · ')
 }
 
 export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, selectedNode, onApplyCanvasPlan, canvasActions }: {

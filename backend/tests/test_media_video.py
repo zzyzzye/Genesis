@@ -441,6 +441,67 @@ async def test_reference_links_are_task_scoped_and_expiring(
 
 
 @pytest.mark.anyio
+async def test_image_mentions_follow_uploaded_order_and_deduplicate_assets(
+    fixture: VideoFixture,
+) -> None:
+    state = fixture
+    assets = [(await state.client.post(
+        f"projects/{state.project_id}/assets",
+        files={"file": (f"reference-{index}.png", b"reference", "image/png")},
+    )).json() for index in range(2)]
+    snapshot = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    doc = snapshot["document"]
+    sources = [str(uuid4()) for _ in range(3)]
+    doc["nodes"][0]["text"] = (
+        f"先看@[图片](ref:{sources[0]})，再看@[图片](ref:{sources[1]})，"
+        f"同图@[图片](ref:{sources[2]})"
+    )
+    # 保留旧文生视频 mode，参考仍以真实连线为准，不能悄悄丢图。
+    doc["nodes"][0]["generation"]["mode"] = "text"
+    doc["nodes"] += [{
+        "id": source, "type": "image", "asset_id": assets[index % 2]["id"],
+        "x": 0, "y": 0, "width": 360, "height": 280,
+    } for index, source in enumerate(sources)]
+    doc["edges"] = [{
+        "id": str(uuid4()), "source": sources[index], "target": state.node_id,
+    } for index in (1, 0, 2)]
+    await state.client.put(f"projects/{state.project_id}/canvas", json={
+        "version": snapshot["version"], "document": doc,
+    })
+    assert (await submit(state)).status_code == 202
+    payload = json.loads(next(r for r in state.requests if r.method == "POST").content)
+    assert len(payload["image_urls"]) == 2
+    assert assets[1]["id"] in payload["image_urls"][0]
+    assert assets[0]["id"] in payload["image_urls"][1]
+    assert "先看图片2，再看图片1，同图图片2" in payload["prompt"]
+    assert all(source not in payload["prompt"] for source in sources)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pending", [False, True])
+async def test_missing_or_unready_image_mention_never_submits(
+    fixture: VideoFixture, pending: bool,
+) -> None:
+    state = fixture
+    snapshot = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    doc = snapshot["document"]
+    source = str(uuid4())
+    doc["nodes"][0]["text"] = f"以@[图片](ref:{source})为参考"
+    if pending:
+        doc["nodes"].append({
+            "id": source, "type": "image", "asset_id": None,
+            "x": 0, "y": 0, "width": 360, "height": 280,
+        })
+        doc["edges"] = [{"id": str(uuid4()), "source": source, "target": state.node_id}]
+    await state.client.put(f"projects/{state.project_id}/canvas", json={
+        "version": snapshot["version"], "document": doc,
+    })
+    response = await submit(state)
+    assert response.status_code == 422
+    assert not any(request.method == "POST" for request in state.requests)
+
+
+@pytest.mark.anyio
 async def test_provider_rejection_and_directory_failure(fixture: VideoFixture) -> None:
     state = fixture
     state.create_code = 400

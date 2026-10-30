@@ -28,6 +28,7 @@ from genesis_api.identity.models import User
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service
 from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset
+from genesis_api.media.prompt_references import resolve_image_mentions
 from genesis_api.media.schemas import CanvasDocument, CanvasNode, GenerationSubmit
 
 logger = logging.getLogger(__name__)
@@ -211,12 +212,14 @@ def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -
     if node is None or not node.text.strip() or not node.generation.model:
         raise HTTPException(422, "请先保存生图节点，并填写提示词和选择模型")
     ids: list[str] = []
+    image_numbers: dict[UUID, int] = {}
     for source in reference_nodes(document, node.id):
         if source.asset_id is None:
             if source.type in ("image", "image_generation"):
                 raise HTTPException(422, "参考图片尚未就绪，请先生成或导入图片，或断开该参考")
             continue
         if str(source.asset_id) in ids:
+            image_numbers[source.id] = ids.index(str(source.asset_id)) + 1
             continue
         asset = service.asset_for(session, task.owner_id, source.asset_id)
         if asset.kind != "image":
@@ -226,9 +229,11 @@ def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -
         if not (service.STORAGE_ROOT / str(asset.id)).is_file():
             raise HTTPException(422, "参考图片文件不可用，请重新导入")
         ids.append(str(asset.id))
+        image_numbers[source.id] = len(ids)
     # 生图模式由当前参考决定，旧草稿中的手动 mode 不再控制上游接口。
     node = node.model_copy(
         update={
+            "text": resolve_image_mentions(node.text, image_numbers),
             "generation": node.generation.model_copy(
                 update={"mode": "reference" if ids else "text"}
             )

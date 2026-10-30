@@ -27,6 +27,7 @@ type GenerationProps = {
   onModelChange?: (model: VideoModel | null) => void
   referenceCount?: number
   referencesPending?: boolean
+  referenceError?: string
   controls?: ReactNode
 }
 export function VideoGeneration(props: GenerationProps) {
@@ -35,7 +36,7 @@ export function VideoGeneration(props: GenerationProps) {
 export function ImageGeneration(props: GenerationProps) {
   return <GenerationControls {...props} kind="image" />
 }
-function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask, onModelChange, referenceCount = 0, referencesPending = false, controls, kind }: GenerationProps & { kind: 'video' | 'image' }) {
+function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask, onModelChange, referenceCount = 0, referencesPending = false, referenceError, controls, kind }: GenerationProps & { kind: 'video' | 'image' }) {
   const isImage = kind === 'image'
   const noun = isImage ? '图片' : '视频'
   const modelsPath = `/${kind}-models`
@@ -116,7 +117,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
     } finally { active.current = false; setBusy(false) }
   }, [onSave, tasksPath, node.id, acknowledged, isImage, onTask])
   const blocked = busy || Boolean(task && running(task.status)) || task?.status === 'unknown' && !acknowledged
-  const referenceBlocked = isImage ? referencesPending : (node.generation?.mode ?? 'text') !== 'text' && catalog && !catalog.references_ready
+  const referenceBlocked = referencesPending || Boolean(referenceError) || (!isImage && (node.generation?.mode ?? 'text') !== 'text' && catalog && !catalog.references_ready)
   return <div className="media-video-generation">
     <div className="media-video-generation-actions">
       <GenerationModelPicker models={catalog?.models ?? []} value={model?.id ?? ''} label={`${noun}生成模型`} placeholder={catalog ? catalog.configured ? `选择${noun}模型` : `尚未配置${noun}服务` : `加载${noun}模型…`} disabled={busy || !catalog?.models.length} onChange={chooseModel} />
@@ -127,9 +128,9 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
     </div>
     {catalog && !catalog.configured && <p>{noun}服务尚未配置，请先在服务端配置{noun} API Key。</p>}
     {catalog?.configured && !catalog.models.length && <p>暂无可用{noun}模型，可刷新重试。</p>}
-    {isImage && referencesPending && <p role="status">参考图片尚未就绪，请先生成或导入图片，或断开该参考。</p>}
-    {!isImage && referenceBlocked && catalog?.configured && model && <p>参考素材暂不可用：需先部署公网地址并启用素材访问。</p>}
-    {!isImage && referenceCount > 0 && (node.generation?.mode ?? 'text') === 'text' && <p>切换到「素材参考」后才会发送连入的参考素材。</p>}
+    {referencesPending && <p role="status">参考图片尚未就绪，请先生成或导入图片，或断开该参考。</p>}
+    {referenceError && <p role="status">{referenceError}</p>}
+    {!isImage && !referencesPending && !referenceError && referenceBlocked && catalog?.configured && model && <p>参考素材暂不可用：需先部署公网地址并启用素材访问。</p>}
     {task && !(isImage && task.status === 'completed') && <div className="media-video-task" role="status"><span>{(isImage ? imageStatusText[task.status] : statusText[task.status]) ?? task.status}{!isImage && running(task.status) ? ` ${task.progress}%` : ''}</span>{!isImage && task.status === 'completed' && task.asset_id && node.asset_id !== task.asset_id && <button type="button" disabled={busy} onClick={() => {
       setBusy(true)
       void api<Asset>(`/assets/${task.asset_id}`).then(onResult).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false))

@@ -28,10 +28,11 @@ import { canvasEditorTransition, useLiveReducedMotion } from '../../lib/motion'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, FolderOpen, GripVertical, Hand, ImagePlus, LoaderCircle, Map as MapIcon, MousePointer2, Music2, Play, Shapes, StickyNote, Type, Upload, X } from 'lucide-react'
 import { api, defaultGenerationSettings, type Asset, type Document, type Edge, type Node, type Project, type VideoFrame, upload } from './api'
-import { imageReferences, incomingReferences } from './canvasReferences'
+import { connectReference, displayPrompt, imageMentionPattern, imageMentionToken, imageReferenceNumbers, imageReferences, incomingReferences, syncReferenceModes } from './canvasReferences'
 import { AssetPreview } from './AssetPreview'
 import { AssetLibrary } from './AssetLibrary'
 import { CanvasReferenceEdge } from './CanvasReferenceEdge'
+import { ReferencePrompt, type ReferencePromptHandle } from './ReferencePrompt'
 import { ImageGeneration, VideoGeneration, type GenerationTask } from './VideoGeneration'
 import { useImageGenerationResults } from './useImageGenerationResults'
 import { ImageParameters } from './ImageParameters'
@@ -145,7 +146,7 @@ function GenerationNodeView({ id, data, selected, dragging }: NodeProps<CanvasFl
     <div className="media-node-grip media-node-drag-handle media-video-grip" title="拖动移动节点"><Icon size={17} aria-hidden="true" /><input className="nodrag" aria-label={`${label}名称`} value={node.name ?? ''} maxLength={120} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onPatch(id, { name: event.target.value }, false)} /><GripVertical className="media-node-drag-mark" size={16} aria-hidden="true" /></div>
     <div className="media-video-preview-shell media-node-drag-handle">
       <div className="media-video-screen">
-        {preview ? <div className="media-node-drag-surface nowheel nopan media-node-preview"><AssetPreview asset={preview} controls={selected || isAudio} /></div> : node.asset_id && data.assetsLoading ? <div role="status">正在加载预览素材…</div> : <div className="media-video-placeholder"><Icon size={64} aria-hidden="true" /><span>{node.text.trim() || (isImage ? '描述想要生成的图片，或添加参考素材' : isAudio ? '描述想要生成的声音，或添加参考音频' : '描述想要生成的视频，或添加参考素材')}</span></div>}
+        {preview ? <div className="media-node-drag-surface nowheel nopan media-node-preview"><AssetPreview asset={preview} controls={selected || isAudio} /></div> : node.asset_id && data.assetsLoading ? <div role="status">正在加载预览素材…</div> : <div className="media-video-placeholder"><Icon size={64} aria-hidden="true" /><span>{displayPrompt(node.text.trim(), data.references) || (isImage ? '描述想要生成的图片，或添加参考素材' : isAudio ? '描述想要生成的声音，或添加参考音频' : '描述想要生成的视频，或添加参考素材')}</span></div>}
       </div>
     </div>
     <AnimatePresence>{data.editorOpen && <CanvasGenerationEditor key={id} id={id} data={data} dragging={dragging} />}</AnimatePresence>
@@ -195,6 +196,7 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
   const isVideo = node.type === 'video'
   const previewAssets = data.previewAssets.filter((asset) => isImage ? asset.kind === 'image' : isAudio ? asset.kind === 'audio' : asset.kind !== 'audio')
   const fileInput = useRef<HTMLInputElement>(null)
+  const referencePrompt = useRef<ReferencePromptHandle>(null)
   const appendPromptToken = (token: string) => data.onTextChange(id, `${node.text}${node.text ? ' ' : ''}${token}`)
   const [cameraOpen, setCameraOpen] = useState(false)
   const [referencesOpen, setReferencesOpen] = useState(false)
@@ -202,7 +204,11 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
   const settings = node.generation ?? defaultGenerationSettings()
   const patchSettings = (patch: Partial<typeof settings>) => data.onPatch(id, { generation: { ...settings, ...patch } })
   const imageRefs = imageReferences(data.references)
-  const modeControl = <select aria-label="参考模式" value={settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}><option value="text">{isAudio ? '文生音频' : '文生视频'}</option><option value="reference">{isAudio ? '音频参考' : '素材参考'}</option>{isVideo && <option value="first_last">首尾帧</option>}</select>
+  const imageNumbers = imageReferenceNumbers(data.references)
+  const missingMention = [...node.text.matchAll(imageMentionPattern)].some(match => !imageRefs.some(reference => reference.node.id === match[1]))
+  const hasMaterial = data.references.some(item => item.asset || ['image', 'image_generation', 'video', 'video_asset', 'audio', 'audio_generation'].includes(item.node.type))
+  const videoMode = hasMaterial ? settings.mode === 'first_last' ? 'first_last' : 'reference' : 'text'
+  const modeControl = <select aria-label="参考模式" value={isVideo ? videoMode : settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}>{(!isVideo || !hasMaterial) && <option value="text">{isAudio ? '文生音频' : '文生视频'}</option>}{(!isVideo || hasMaterial) && <option value="reference">{isAudio ? '音频参考' : '素材参考'}</option>}{isVideo && hasMaterial && <option value="first_last">首尾帧</option>}</select>
   const parameterControl = isImage ? <GenerationParameters image summary={imageSettingsSummary(settings)}><ImageParameters settings={settings} onChange={patchSettings} /></GenerationParameters> : <GenerationParameters summary={[!isAudio && settings.ratio, !isAudio && settings.resolution, `${node.duration_seconds ?? 5}s`, !isVideo && `${settings.count}个`].filter(Boolean).join(' · ')}>
     <label>{isAudio ? '音频时长' : '镜头时长'}<span><input key={node.duration_seconds} type="number" aria-label={isAudio ? '音频时长' : '镜头时长'} aria-invalid={Boolean(durationError)} aria-describedby={durationError ? `duration-error-${id}` : undefined} min={1} max={600} step={1} defaultValue={node.duration_seconds ?? 5} onFocus={data.onInteractionStart} onBlur={(event) => {
       const seconds = Number(event.target.value)
@@ -238,10 +244,10 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
       {data.references.length > 0 && <div className="media-node-references" aria-label="连入参考">{data.references.map(({ node: source, asset }, index) => {
         const name = asset?.name || source.name || source.text.slice(0, 40) || '空节点'
         return <div key={source.id} className="media-reference-item" role="group" aria-label={`参考 ${index + 1}：${name}`}>
-          <div className="media-reference-thumbnail" title={name}>
+          <button type="button" className="media-reference-thumbnail" title={isVideo && imageRefs.some(item => item.node.id === source.id) ? `在提示词中引用：${name}` : name} aria-label={`引用参考：${source.name || name}`} disabled={!isVideo || !imageRefs.some(item => item.node.id === source.id)} onMouseDown={event => event.preventDefault()} onClick={() => referencePrompt.current?.insertImage(source.id)}>
             {asset && asset.kind !== 'audio' ? <AssetPreview key={asset.id} asset={asset} thumbnail /> : asset?.kind === 'audio' || source.type === 'audio' || source.type === 'audio_generation' ? <Music2 size={20} strokeWidth={1.6} aria-label="音频参考" /> : source.type === 'image' || source.type === 'image_generation' ? <ImagePlus size={20} strokeWidth={1.6} aria-label="待就绪图片参考" /> : !source.asset_id && source.text ? <Type size={20} strokeWidth={1.6} aria-label="文字参考" /> : source.type === 'video' || source.type === 'video_asset' ? <Film size={20} strokeWidth={1.6} aria-hidden="true" /> : <ImagePlus size={20} strokeWidth={1.6} aria-hidden="true" />}
-            <span className="media-reference-index" aria-hidden="true">{index + 1}</span>
-          </div>
+            <span className="media-reference-index" aria-hidden="true">{isVideo && imageNumbers.has(source.id) ? `图${imageNumbers.get(source.id)}` : index + 1}</span>
+          </button>
         </div>
       })}</div>}
       {referencesOpen && <div className="media-node-reference-panel">
@@ -254,8 +260,8 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
         </div>)}</div> : <p>选择上游节点，或从它的连接点拖线到当前节点。</p>}
       </div>}
       <input ref={fileInput} className="media-video-file-input" type="file" accept={isImage ? 'image/jpeg,image/png,image/webp,image/gif,image/avif' : isAudio ? 'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/webm,audio/aac' : 'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska'} aria-label={`导入${nodeTypeLabel(node.type)}${isImage ? '参考' : '预览'}素材`} onChange={(event) => { const file = event.target.files?.[0]; if (file) void (isVideo ? data.onUploadPreview(id, file) : data.onUploadNodeAsset(id, isAudio ? 'audio' : 'image', file)); event.target.value = '' }} />
-      <textarea className="resize-none" aria-label={isImage ? '图片提示词' : isAudio ? '音频提示词' : '镜头描述'} value={node.text} placeholder={isImage ? '描述想要生成的图片内容，可引用画布素材' : isAudio ? '描述声音、音乐风格或环境氛围，可引用画布素材' : '描述画面、人物动作与声音，可引用连入节点的文字'} maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />
-      {isVideo ? <VideoGeneration projectId={data.projectId} node={node} controls={<>{modeControl}{parameterControl}</>} referenceCount={data.references.filter((item) => item.asset).length} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={parameterControl} referenceCount={imageRefs.length} referencesPending={imageRefs.some(({ asset }) => !asset)} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onImageTask} onResult={(asset) => data.onGenerated(id, asset)} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
+      {isVideo && (imageRefs.length > 0 || node.text.includes('](ref:')) ? <ReferencePrompt ref={referencePrompt} value={node.text} references={imageRefs} label="镜头描述" onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={text => data.onTextChange(id, text)} /> : <textarea className="resize-none" aria-label={isImage ? '图片提示词' : isAudio ? '音频提示词' : '镜头描述'} value={node.text} placeholder={isImage ? '描述想要生成的图片内容，可引用画布素材' : isAudio ? '描述声音、音乐风格或环境氛围，可引用画布素材' : '描述画面、人物动作与声音，可引用连入节点的文字'} maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />}
+      {isVideo ? <VideoGeneration projectId={data.projectId} node={{ ...node, generation: { ...settings, mode: videoMode } }} controls={<>{modeControl}{parameterControl}</>} referenceCount={data.references.filter((item) => item.asset).length} referencesPending={data.references.some(item => !item.asset && (Boolean(item.node.asset_id) || ["image", "image_generation", "video", "video_asset", "audio", "audio_generation"].includes(item.node.type)))} referenceError={missingMention ? "提示词中的图片引用已断开，请重新连线或删除该引用。" : undefined} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onResult={(asset) => data.onGenerated(id, asset)} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={parameterControl} referenceCount={imageRefs.length} referencesPending={imageRefs.some(({ asset }) => !asset)} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onImageTask} onResult={(asset) => data.onGenerated(id, asset)} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
     </section>
 }
 
@@ -452,7 +458,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     const existing = current.edges.some((edge) => edge.source === sourceId && edge.target === id)
     if (existing === connected) return
     const edges = connected ? [...current.edges, { id: crypto.randomUUID(), source: sourceId, target: id }] : current.edges.filter((edge) => edge.source !== sourceId || edge.target !== id)
-    canvas.apply({ ...current, edges })
+    canvas.apply(connected ? connectReference(current, sourceId, id) : syncReferenceModes({ ...current, edges }))
   }, [canvas])
 
   const openAssets = useCallback(() => {
@@ -689,7 +695,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     pasteCount.current += 1
     const offset = 48 * pasteCount.current
     const idMap = new Map(copied.nodes.map((node) => [node.id, crypto.randomUUID()]))
-    const nodes = copied.nodes.map((node) => ({ ...node, id: idMap.get(node.id)!, member_ids: node.member_ids?.map((id) => idMap.get(id)!), x: node.x + offset, y: node.y + offset }))
+    const nodes = copied.nodes.map((node) => ({ ...node, id: idMap.get(node.id)!, text: node.text.replace(imageMentionPattern, (token, id: string) => idMap.has(id) ? imageMentionToken(idMap.get(id)!) : token), member_ids: node.member_ids?.map((id) => idMap.get(id)!), x: node.x + offset, y: node.y + offset }))
     const edges = copied.edges.map((edge) => ({ id: crypto.randomUUID(), source: idMap.get(edge.source)!, target: idMap.get(edge.target)! }))
     const current = canvas.current.current
     canvas.apply({ ...current, nodes: [...current.nodes, ...nodes], edges: [...current.edges, ...edges] })
@@ -786,7 +792,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     if (changes.some((change) => change.type === 'select' || change.type === 'remove')) setSelectedEdges(next.filter((edge) => edge.selected).map((edge) => edge.id))
     if (!changes.some((change) => change.type === 'remove')) return
     const current = canvas.current.current
-    canvas.apply({ ...current, edges: next.map(({ id, source, target }) => ({ id, source, target })) })
+    canvas.apply(syncReferenceModes({ ...current, edges: next.map(({ id, source, target }) => ({ id, source, target })) }))
   }, [canvas, flowEdges])
 
   const onConnect = useCallback(({ source, target }: Connection) => {
@@ -795,7 +801,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     if (!current.nodes.some((node) => node.id === source) || !current.nodes.some((node) => node.id === target)) return
     if (current.nodes.some((node) => (node.id === source || node.id === target) && node.type === 'group')) return
     if (current.edges.some((edge) => edge.source === source && edge.target === target)) return
-    canvas.apply({ ...current, edges: [...current.edges, { id: crypto.randomUUID(), source, target }] })
+    canvas.apply(connectReference(current, source, target))
   }, [canvas])
 
   async function action(fn: () => Promise<void>) {
@@ -827,6 +833,13 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   function applyAgentPlan(plan: MediaCanvasPlan) {
     const current = canvas.current.current
     for (const operation of plan.operations) {
+      if (operation.action === 'connect_nodes') {
+        connectReference(current, operation.source_id, operation.target_id)
+        continue
+      }
+      if (operation.action === 'add_video') for (const source of [...(operation.connect_from_ids ?? []), ...(operation.connect_from_id ? [operation.connect_from_id] : [])]) {
+        if (!current.nodes.some(node => node.id === source && node.type !== 'group')) throw new Error('参考来源节点已失效，未修改任何节点。')
+      }
       if (operation.action !== 'update_node') continue
       const target = current.nodes.find(node => node.id === operation.node_id)
       if (!target) throw new Error('目标节点已不存在，未修改任何节点。')
@@ -851,6 +864,13 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       return { x, y }
     }
     for (const operation of plan.operations) {
+      if (operation.action === 'connect_nodes') {
+        const connected = connectReference({ ...current, nodes, edges }, operation.source_id, operation.target_id)
+        nodes.splice(0, nodes.length, ...connected.nodes)
+        edges.splice(0, edges.length, ...connected.edges)
+        affectedIds.push(operation.target_id)
+        continue
+      }
       if (operation.action === 'update_node') {
         const index = nodes.findIndex((node) => node.id === operation.node_id)
         if (index < 0) continue
@@ -882,12 +902,16 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       const requestedSource = operation.connect_from_id ? nodes.find((node) => node.id === operation.connect_from_id) : undefined
       const node: Node = { id: crypto.randomUUID(), type: 'video', asset_id: null, name: operation.name, duration_seconds: operation.duration_seconds, ...(operation.model ? { generation: operation.generation ?? { ...defaultGenerationSettings(), model: operation.model } } : {}), text: operation.text, ...place(generationNodeSize.width, generationNodeSize.height, requestedSource ?? previousVideo), ...generationNodeSize }
       nodes.push(node); affectedIds.push(node.id)
-      if (requestedSource) edges.push({ id: crypto.randomUUID(), source: requestedSource.id, target: node.id })
+      for (const source of [...(operation.connect_from_ids ?? []), ...(operation.connect_from_id ? [operation.connect_from_id] : [])]) {
+        const connected = connectReference({ ...current, nodes, edges }, source, node.id)
+        nodes.splice(0, nodes.length, ...connected.nodes)
+        edges.splice(0, edges.length, ...connected.edges)
+      }
       previousVideo = node
     }
     if (!affectedIds.length) return
     canvas.apply({ ...current, nodes, edges })
-    setSelected(affectedIds)
+    setSelected([...new Set(affectedIds)])
     setSelectedEdges([])
     setError('')
   }

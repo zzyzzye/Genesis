@@ -54,25 +54,20 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
             "editing_available": False,
         }
 
-    def read_canvas(project_id: UUID) -> tuple[int, CanvasDocument, set[UUID]]:
+    def read_canvas(project_id: UUID) -> tuple[int, CanvasDocument, dict[UUID, str]]:
         """在独立短事务中复用归属检查读取画布，不持锁等待上游。"""
         try:
             actor_id = require_actor(module="media")
             with SessionLocal() as session:
                 project = service.project_for(session, actor_id, project_id)
                 document = CanvasDocument.model_validate(project.canvas)
-                image_targets = {
-                    node.id
+                source_kinds = {
+                    node.id: service.asset_for(session, actor_id, node.asset_id).kind
+                    if node.asset_id is not None else
+                    "image" if node.type in ("image", "image_generation") else node.type
                     for node in document.nodes
-                    if node.type == "image_generation"
-                    and any(
-                        service.asset_for(session, actor_id, source.asset_id).kind == "image"
-                        if source.asset_id is not None
-                        else source.type in ("image", "image_generation")
-                        for source in image.reference_nodes(document, node.id)
-                    )
                 }
-                return project.version, document, image_targets
+                return project.version, document, source_kinds
         except (HTTPException, RuntimeError) as exc:
             raise ToolException(
                 str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
@@ -88,14 +83,27 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
         Returns:
             作品版本、全部节点和连线；不包含浏览器尚未保存的编辑。
         """
-        version, document, image_targets = await asyncio.to_thread(read_canvas, project_id)
+        version, document, source_kinds = await asyncio.to_thread(read_canvas, project_id)
+        references = {
+            node.id: image.reference_nodes(document, node.id) for node in document.nodes
+        }
         return {
             "project_id": str(project_id),
             "version": version,
-            "nodes": [node.model_dump(mode="json") for node in document.nodes],
+            "nodes": [{
+                **node.model_dump(mode="json"),
+                "reference_node_ids": [str(source.id) for source in references[node.id]],
+                "image_reference_node_ids": [
+                    str(source.id) for source in references[node.id]
+                    if source_kinds[source.id] == "image"
+                ],
+                "image_mention_token": f"@[图片](ref:{node.id})"
+                if source_kinds[node.id] == "image" else None,
+            } for node in document.nodes],
             "edges": [edge.model_dump(mode="json") for edge in document.edges],
-            "image_reference_node_ids": [
-                str(node.id) for node in document.nodes if node.id in image_targets
+            "image_generation_with_references_node_ids": [
+                str(node.id) for node in document.nodes if node.type == "image_generation"
+                and any(source_kinds[source.id] == "image" for source in references[node.id])
             ],
             "source": "已保存画布；浏览器未保存修改可能不同",
         }

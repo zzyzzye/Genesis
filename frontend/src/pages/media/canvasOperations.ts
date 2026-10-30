@@ -1,4 +1,5 @@
 import type { Document, Node } from './api'
+import { syncReferenceModes } from './canvasReferences'
 
 export const generationNodeSize = { width: 640, height: 402 }
 
@@ -8,6 +9,7 @@ export const nodeTypeLabel = (type: Node['type']) => ({ video: '生视频节点'
 export const audioAssetNodeSize = { width: 360, height: 88 }
 
 export function normalizeCanvasNodePresets(document: Document): Document {
+  document = syncReferenceModes(document)
   let changed = false
   const nodes = document.nodes.map((node) => {
     if (node.type === 'audio' && node.width === 360 && node.height === 230) {
@@ -65,5 +67,5 @@ export function removeSelection(document: Document, selectedNodes: string[], sel
     : node)
   nodes = nodes.filter((node) => node.type !== 'group' || (node.member_ids?.length ?? 0) >= 2)
   const remaining = new Set(nodes.map((node) => node.id))
-  return { ...document, nodes, edges: document.edges.filter((edge) => remaining.has(edge.source) && remaining.has(edge.target) && !removedEdges.has(edge.id)) }
+  return syncReferenceModes({ ...document, nodes, edges: document.edges.filter((edge) => remaining.has(edge.source) && remaining.has(edge.target) && !removedEdges.has(edge.id)) })
 }

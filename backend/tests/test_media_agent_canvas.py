@@ -163,7 +163,10 @@ def test_configuration_checks_actual_references_instead_of_legacy_mode(
             }
             session.commit()
         canvas = asyncio.run(entries["get_media_canvas"].ainvoke({"project_id": str(project_id)}))
-        assert canvas["image_reference_node_ids"] == [str(ids[1])]
+        assert canvas["image_generation_with_references_node_ids"] == [str(ids[1])]
+        target = next(node for node in canvas["nodes"] if node["id"] == str(ids[1]))
+        assert target["image_reference_node_ids"] == [str(ids[0])]
+        assert target["reference_node_ids"] == [str(ids[0])]
         assert isinstance(asyncio.run(entries["configure_image_nodes"].ainvoke(args)), dict)
 
 

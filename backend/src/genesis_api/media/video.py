@@ -21,6 +21,7 @@ from genesis_api.database.session import SessionLocal
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service
 from genesis_api.media.models import MediaAsset, ProjectAsset, VideoGeneration
+from genesis_api.media.prompt_references import resolve_image_mentions
 from genesis_api.media.schemas import CanvasDocument
 
 logger = logging.getLogger(__name__)
@@ -135,14 +136,25 @@ def build_payload(
     sources = {n.id: n for n in document.nodes}
     references: dict[str, list[str]] = {"image": [], "video": [], "audio": []}
     ids: list[str] = []
-    if node.generation.mode != "text":
+    image_numbers: dict[UUID, int] = {}
+    image_assets: list[UUID] = []
+    connected = [sources[edge.source] for edge in document.edges if (
+        edge.target == node.id and edge.source in sources and edge.source != node.id
+        and (sources[edge.source].asset_id is not None or sources[edge.source].type in (
+            "image", "image_generation", "video", "video_asset", "audio", "audio_generation",
+        ))
+    )]
+    if not connected and node.generation.mode != "text":
+        raise HTTPException(422, "请先连接参考素材节点")
+    if connected:
         if not settings.video_public_base_url.startswith("https://"):
             raise HTTPException(422, "素材参考需先部署公网 HTTPS 地址并配置视频素材访问地址")
-        for edge in document.edges:
-            source = sources.get(edge.source)
-            if edge.target != node.id or source is None or source.asset_id is None:
-                continue
+        for source in connected:
+            if source.asset_id is None:
+                raise HTTPException(422, "参考素材尚未就绪，请先生成或导入素材，或断开该参考")
             asset_id = source.asset_id
+            if asset_id in image_assets:
+                image_numbers[source.id] = image_assets.index(asset_id) + 1
             if str(asset_id) in ids:
                 continue
             asset = service.asset_for(session, task.owner_id, asset_id)
@@ -151,6 +163,9 @@ def build_payload(
             if not (service.STORAGE_ROOT / str(asset.id)).is_file():
                 raise HTTPException(422, "参考素材文件不可用，请重新导入")
             ids.append(str(asset.id))
+            if asset.kind == "image":
+                image_assets.append(asset.id)
+                image_numbers[source.id] = len(image_assets)
             token = reference_token(task, asset.id, settings)
             references[asset.kind].append(
                 f"{settings.video_public_base_url.rstrip('/')}{settings.api_v1_prefix}"
@@ -166,7 +181,7 @@ def build_payload(
     task.reference_ids = ids
     payload: dict[str, object] = {
         "model": node.generation.model,
-        "prompt": node.text.strip(),
+        "prompt": resolve_image_mentions(node.text.strip(), image_numbers),
         "duration": node.duration_seconds,
         "aspect_ratio": node.generation.ratio,
         "resolution": node.generation.resolution.lower(),

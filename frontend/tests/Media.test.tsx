@@ -458,6 +458,27 @@ describe('作品画布', () => {
     expect(() => applyPlan?.({ title: '过期方案', operations: [{ action: 'add_note', text: '不能部分应用' }, { action: 'update_node', node_id: 'missing', text: '过期修改' }] })).toThrow('目标节点已不存在')
     expect(screen.queryByRole('textbox', { name: '便签内容' })).not.toBeInTheDocument()
   })
+  it('方案批量接入四张图片，按指定顺序保存连线、自动切换参考且可以整体撤销', async () => {
+    const sources = Array.from({ length: 4 }, (_, index) => ({ ...note, id: `image-${index}`, type: 'image' as const, asset_id: null, name: `图${index + 1}` }))
+    const target = { ...note, id: 'video-target', type: 'video' as const, generation: media.defaultGenerationSettings() }
+    const document = { ...emptyDocument(), nodes: [...sources, target] }
+    const request = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试', version: 0 }))
+    let applyPlan: ((plan: MediaCanvasPlan) => void) | null = null
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" onAgentCanvasApplyChange={apply => { applyPlan = apply }} /></MemoryRouter>)
+    await waitFor(() => expect(applyPlan).not.toBeNull())
+    const operations = sources.map(source => ({ action: 'connect_nodes' as const, source_id: source.id, target_id: target.id }))
+    expect(() => applyPlan?.({ title: '失效参考', operations: [...operations, { action: 'connect_nodes', source_id: 'missing', target_id: target.id }] })).toThrow('已失效')
+    act(() => applyPlan?.({ title: '四图参考', operations }))
+    expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveValue('reference')
+    expect(screen.getAllByRole('button', { name: /^引用参考：图/ })).toHaveLength(4)
+    await waitFor(() => {
+      const saved = request.mock.calls.filter(([path, method]) => path.endsWith('/canvas') && method === 'PUT').at(-1)?.[2] as { document: Document }
+      expect(saved.document.edges.map(edge => edge.source)).toEqual(sources.map(source => source.id))
+      expect(saved.document.nodes.at(-1)?.generation?.mode).toBe('reference')
+    })
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    expect(screen.queryByRole('group', { name: /^参考 1：/ })).not.toBeInTheDocument()
+  })
   it('批量图片参数保留提示词和布局，过期方案不会覆盖新编辑', async () => {
     const nodes = Array.from({ length: 5 }, (_, index) => ({ ...note, id: crypto.randomUUID(), type: 'image_generation' as const, text: `原提示词${index}`, generation: { ...media.defaultGenerationSettings(), sound: false } }))
     const document: Document = { ...emptyDocument(), nodes }
