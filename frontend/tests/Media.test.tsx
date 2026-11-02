@@ -214,17 +214,14 @@ describe('作品画布', () => {
     expect(result.current.document.edges).toEqual([])
     expect(result.current.document.frame).toEqual({ width: 1920, height: 1080 })
   })
-  it.each([false, true])('打开画布默认 100%%，保留视口中心及草稿内容（本地草稿：%s）', async (restoreDraft) => {
+  it.each([false, true])('打开画布原样恢复用户保存的位置、缩放和内容（本地草稿：%s）', async (restoreDraft) => {
     const document: Document = { ...emptyDocument(), nodes: [note], viewport: { x: 30, y: 40, zoom: .5 } }
     if (restoreDraft) localStorage.setItem('genesis-media-draft:user:zoom-default', JSON.stringify({ version: 1, document }))
     vi.spyOn(media, 'api').mockResolvedValue({ version: 1, document: restoreDraft ? emptyDocument() : document })
     const { result } = renderHook(() => useCanvas('zoom-default', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
     expect(result.current.document.nodes).toEqual([{ ...note, name: '便签 1' }])
-    const viewport = result.current.document.viewport
-    expect(viewport.zoom).toBe(1)
-    expect((window.innerWidth / 2 - viewport.x) / viewport.zoom).toBe((window.innerWidth / 2 - 30) / .5)
-    expect((window.innerHeight / 2 - viewport.y) / viewport.zoom).toBe((window.innerHeight / 2 - 40) / .5)
+    expect(result.current.document.viewport).toEqual(document.viewport)
   })
   it('更新旧生成节点预设时保持中心、内容和视口，自定义尺寸不变且可撤销', async () => {
     const video = { ...note, type: 'video' as const, name: '视频节点 1', width: 820, height: 670 }
@@ -255,7 +252,7 @@ describe('作品画布', () => {
     const shape = { ...note, type: 'shape' as const, text: '' }
     const other = { ...note, id: crypto.randomUUID(), x: 400 }
     const edge = { id: crypto.randomUUID(), source: shape.id, target: other.id }
-    const document: Document = { ...emptyDocument(), nodes: [shape, other], edges: [edge] }
+    const document: Document = { ...emptyDocument(), nodes: [shape, other], edges: [edge], viewport: { x: -240, y: 170, zoom: .6 } }
     vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
     render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
     await waitFor(() => expect(screen.getByRole('button', { name: '改为生视频节点' })).toBeInTheDocument())
@@ -265,6 +262,30 @@ describe('作品画布', () => {
     const saved = JSON.parse(localStorage.getItem('genesis-media-draft:user:project')!) as { document: Document }
     expect(saved.document.nodes.find((node) => node.id === shape.id)).toMatchObject({ type: 'video', x: shape.x, y: shape.y, width: 640, height: 402 })
     expect(saved.document.edges).toEqual([edge])
+    expect(saved.document.viewport).toEqual(document.viewport)
+  })
+  it('窗口变窄和新增节点都保留当前视口，不自动适应或居中', async () => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1440, 960))
+    const document: Document = { ...emptyDocument(), nodes: [note], viewport: { x: -730, y: 290, zoom: .7 } }
+    vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    await screen.findByRole('textbox', { name: '便签名称' })
+    const viewport = window.document.querySelector('.react-flow__viewport')!.getAttribute('style')
+    const width = window.innerWidth
+    try {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 })
+      fireEvent(window, new Event('resize'))
+      await act(async () => { await new Promise((resolve) => window.setTimeout(resolve, 200)) })
+      expect(window.document.querySelector('.react-flow__viewport')).toHaveAttribute('style', viewport)
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+    }
+    fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
+    fireEvent.click(screen.getByRole('button', { name: '便签' }))
+    expect(screen.getAllByRole('textbox', { name: '便签名称' })).toHaveLength(2)
+    const saved = JSON.parse(localStorage.getItem('genesis-media-draft:user:project')!) as { document: Document }
+    expect(saved.document.viewport).toEqual(document.viewport)
   })
   it('保存布局与视口，并支持撤销重做', async () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })

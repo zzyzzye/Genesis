@@ -601,10 +601,10 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     const name = original.name && !/^形状 \d+$/.test(original.name) ? original.name : defaultNodeName('video', current.nodes)
     const converted: Node = { ...original, type: 'video', name, duration_seconds: 5, ...generationNodeSize }
     const next = { ...current, nodes: current.nodes.map((node) => node.id === id ? converted : node) }
-    canvas.apply({ ...next, viewport: fittedViewport({ ...next, nodes: [converted] }) ?? current.viewport })
+    canvas.apply(next)
     setSelected([id])
     setSelectedEdges([])
-  }, [canvas, fittedViewport])
+  }, [canvas])
 
   const flowNodes = useMemo<CanvasFlowNode[]>(() => canvas.document.nodes.map((node) => ({
     id: node.id,
@@ -961,8 +961,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     const connection = paletteAnchor?.connection
     const edge = connection ? { id: crypto.randomUUID(), source: connection.side === 'right' ? connection.id : node.id, target: connection.side === 'right' ? node.id : connection.id } : null
     const next = { ...current, nodes: [...current.nodes, node], edges: edge ? [...current.edges, edge] : current.edges }
-    // 创建保留当前缩放，只平移到新节点，避免整张画布突然缩放。
-    canvas.apply({ ...next, viewport: { ...current.viewport, x: window.innerWidth / 2 - (node.x + node.width / 2) * current.viewport.zoom, y: Math.max(90, (window.innerHeight - node.height * current.viewport.zoom - (isGenerationNode(node) ? 360 : 100)) / 2) - node.y * current.viewport.zoom } })
+    canvas.apply(next)
     setSelected([node.id])
     setSelectedEdges([])
     setNodeMenu(false)
@@ -1035,19 +1034,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       setError(reason instanceof Error ? reason.message : '画布排版失败，请重试。')
     }
   }
-
-  useEffect(() => {
-    let width = window.innerWidth
-    let timer: number | undefined
-    const onResize = () => {
-      if (window.innerWidth === width) return
-      width = window.innerWidth
-      window.clearTimeout(timer)
-      timer = window.setTimeout(fit, 160)
-    }
-    window.addEventListener('resize', onResize)
-    return () => { window.removeEventListener('resize', onResize); window.clearTimeout(timer) }
-  })
 
   async function fork() {
     const newProject = await api<Project>('/projects', 'POST', { name: `${project?.name ?? '作品'}（本地副本）`.slice(0, 120) })

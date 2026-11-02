@@ -23,7 +23,7 @@ const nodes: Node[] = types.map((type, index) => ({
   height: type === 'audio' ? 88 : state === 'drag' && ['video', 'image_generation', 'audio_generation'].includes(type) ? 402 : 220,
 }))
 nodes.unshift({ id: 'review-node-group', type: 'group', asset_id: null, text: '开场分镜', member_ids: nodes.slice(0, 3).map((node) => node.id), x: 50, y: 106, width: state === 'drag' ? 2210 : 1210, height: 294 })
-let document: Document = { ...emptyDocument(), nodes: state === 'empty' ? [] : nodes }
+let document: Document = { ...emptyDocument(), nodes: state === 'empty' ? [] : nodes, ...(state === 'free-pan' ? { viewport: { x: 125, y: 70, zoom: .65 } } : {}) }
 let version = 0
 const snapshotKey = `genesis-node-name-review:snapshot:${state ?? 'normal'}`
 const snapshot = sessionStorage.getItem(snapshotKey)
