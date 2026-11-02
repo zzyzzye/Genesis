@@ -174,7 +174,7 @@ function GenerationNodeView({ id, data, selected, dragging }: NodeProps<CanvasFl
     <div className="media-node-grip media-node-drag-handle media-video-grip" title="拖动移动节点"><Icon size={17} aria-hidden="true" /><CanvasNodeName id={id} data={data} /><GripVertical className="media-node-drag-mark" size={16} aria-hidden="true" /></div>
     <div className="media-video-preview-shell media-node-drag-handle">
       <div className="media-video-screen">
-        {preview ? <div className="media-node-drag-surface nowheel nopan media-node-preview"><AssetPreview asset={preview} controls={selected || isAudio} /></div> : node.asset_id && data.assetsLoading ? <div role="status">正在加载预览素材…</div> : <div className="media-video-placeholder"><Icon size={64} aria-hidden="true" /><span>{displayPrompt(node.text.trim(), data.references) || (isImage ? '描述想要生成的图片，或添加参考素材' : isAudio ? '描述想要生成的声音，或添加参考音频' : '描述想要生成的视频，或添加参考素材')}</span></div>}
+        {preview ? <div className="media-node-drag-surface nopan media-node-preview"><AssetPreview asset={preview} controls={selected || isAudio} /></div> : node.asset_id && data.assetsLoading ? <div role="status">正在加载预览素材…</div> : <div className="media-video-placeholder"><Icon size={64} aria-hidden="true" /><span>{displayPrompt(node.text.trim(), data.references) || (isImage ? '描述想要生成的图片，或添加参考素材' : isAudio ? '描述想要生成的声音，或添加参考音频' : '描述想要生成的视频，或添加参考素材')}</span></div>}
       </div>
     </div>
     <AnimatePresence>{data.editorOpen && <CanvasGenerationEditor key={id} id={id} data={data} dragging={dragging} />}</AnimatePresence>
@@ -209,7 +209,7 @@ function GenerationParameters({ summary, disabled, image = false, children }: { 
       event.preventDefault(); event.stopPropagation()
       panel.current?.hidePopover?.(); setOpen(false)
     }}>{summary}<ChevronDown size={13} /></button>
-    <div ref={panel} popover={nativePopover ? 'auto' : undefined} hidden={!nativePopover && !open} data-open={open} className={`media-generation-popover media-node-generation-settings nodrag nowheel nopan ${image ? 'media-image-parameters' : ''}`} aria-label="生成参数" onToggle={(event) => setOpen(event.currentTarget.matches(':popover-open'))} onKeyDown={(event) => {
+    <div ref={panel} popover={nativePopover ? 'auto' : undefined} hidden={!nativePopover && !open} data-open={open} className={`media-generation-popover media-node-generation-settings nodrag nowheel media-wheel-isolated nopan ${image ? 'media-image-parameters' : ''}`} aria-label="生成参数" onToggle={(event) => setOpen(event.currentTarget.matches(':popover-open'))} onKeyDown={(event) => {
       if (event.key !== 'Escape') return
       event.preventDefault(); event.stopPropagation()
       panel.current?.hidePopover?.(); setOpen(false); trigger.current?.focus()
@@ -311,21 +311,22 @@ function MediaAssetNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
     <div className="media-node-grip media-node-drag-handle" title="拖动移动节点"><Icon size={16} aria-hidden="true" /><CanvasNodeName id={id} data={data} /><GripVertical className="media-node-drag-mark" size={16} aria-hidden="true" /></div>
     <input ref={fileInput} className="media-video-file-input" type="file" accept={isImage ? 'image/jpeg,image/png,image/webp,image/gif,image/avif' : kind === 'video' ? 'video/mp4,video/webm,video/quicktime,video/x-matroska' : 'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/webm,audio/aac'} aria-label={`导入${label}素材`} onChange={(event) => { const file = event.target.files?.[0]; if (file) void data.onUploadNodeAsset(id, kind, file); event.target.value = '' }} />
     {node.asset_id && data.assetsLoading ? <div className="media-node-media-empty" role="status">正在加载素材…</div> : asset
-      ? <div className="media-node-drag-surface nowheel nopan media-node-preview"><AssetPreview asset={asset} controls onImageDimensions={(width, height) => {
+      ? <div className="media-node-drag-surface nopan media-node-preview"><AssetPreview asset={asset} controls onImageDimensions={(width, height) => {
         // 初次放入的图片按原图比例定高，不覆盖用户手动调整的尺寸。
         if (width > 0 && height > 0 && node.width === 360 && node.height === 280) data.onPatch(id, { height: Math.max(80, Math.min(4000, node.width * height / width)) }, false)
       }} /></div>
-      : result ? <div className="media-node-drag-surface nowheel nopan media-node-media-empty media-image-result" role="status" aria-busy={generating}>
+      : result ? <div className="media-node-drag-surface nopan media-node-media-empty media-image-result" role="status" aria-busy={generating}>
         {generating ? <LoaderCircle size={28} className="is-spinning" aria-hidden="true" /> : <ImagePlus size={28} aria-hidden="true" />}
         <strong>{resultLabel}</strong>{result.error && <span>{result.error}</span>}
-      </div> : <div className="media-node-drag-surface nowheel nopan media-node-media-empty"><Icon size={24} aria-hidden="true" /><div className="nodrag"><button type="button" onClick={() => fileInput.current?.click()}>导入{kindLabel}</button><button type="button" onClick={() => data.onOpenNodeAssets(id, kind)}>选择作品素材</button></div></div>}
-    {asset && <div className="media-node-media-actions nodrag nowheel nopan"><button type="button" aria-label="导入替换" title="导入替换" onClick={() => fileInput.current?.click()}><Upload size={15} aria-hidden="true" /></button><button type="button" aria-label="选择作品素材" title="选择作品素材" onClick={() => data.onOpenNodeAssets(id, kind)}><FolderOpen size={15} aria-hidden="true" /></button><button type="button" aria-label="清空节点素材" title="清空节点素材" onClick={() => data.onPatch(id, { asset_id: null, image_result:null })}><X size={15} aria-hidden="true" /></button></div>}
+      </div> : <div className="media-node-drag-surface nopan media-node-media-empty"><Icon size={24} aria-hidden="true" /><div className="nodrag"><button type="button" onClick={() => fileInput.current?.click()}>导入{kindLabel}</button><button type="button" onClick={() => data.onOpenNodeAssets(id, kind)}>选择作品素材</button></div></div>}
+    {asset && <div className="media-node-media-actions nodrag nopan"><button type="button" aria-label="导入替换" title="导入替换" onClick={() => fileInput.current?.click()}><Upload size={15} aria-hidden="true" /></button><button type="button" aria-label="选择作品素材" title="选择作品素材" onClick={() => data.onOpenNodeAssets(id, kind)}><FolderOpen size={15} aria-hidden="true" /></button><button type="button" aria-label="清空节点素材" title="清空节点素材" onClick={() => data.onPatch(id, { asset_id: null, image_result:null })}><X size={15} aria-hidden="true" /></button></div>}
     <Handle type="source" position={Position.Right} aria-label="输出连接点" />
   </article>
 }
 
 function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>) {
   const [editingEmptyShape, setEditingEmptyShape] = useState(false)
+  const [textFocused, setTextFocused] = useState(false)
   const isNote = type === 'note'
   const isText = type === 'text'
   const isShape = type === 'shape'
@@ -339,19 +340,19 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
     {!isGroup && <Handle type="target" position={Position.Left} aria-label="输入连接点" />}
     <div className="media-node-grip media-node-drag-handle" title="拖动移动节点"><CanvasNodeName id={id} data={data} />{isGroup && <span className="media-node-member-count">{data.source.member_ids?.length ?? 0} 个节点</span>}<GripVertical className="media-node-drag-mark" size={16} aria-hidden="true" /></div>
     {isShape && !data.source.text.trim() && !editingEmptyShape
-      ? <div className="media-shape-convert nodrag nowheel nopan"><span>这是旧的形状节点</span><button onClick={() => data.onConvertToVideo(id)}>改为生视频节点</button><button className="media-shape-edit" onClick={() => setEditingEmptyShape(true)}>保留形状并编辑文字</button></div>
+      ? <div className="media-shape-convert nodrag nopan"><span>这是旧的形状节点</span><button onClick={() => data.onConvertToVideo(id)}>改为生视频节点</button><button className="media-shape-edit" onClick={() => setEditingEmptyShape(true)}>保留形状并编辑文字</button></div>
       : isNote || isText || isShape
       ? <textarea
-          className="nodrag nowheel nopan resize-none"
+          className={`nodrag nopan resize-none${textFocused ? ' nowheel' : ''}`}
           aria-label={isNote ? '便签内容' : isText ? '文字内容' : '形状文字'}
           value={data.source.text}
           placeholder={isNote ? '写下镜头、情绪或灵感…' : isText ? '点击这里输入文字…' : '输入形状标签…'}
           maxLength={20000}
-          onFocus={data.onInteractionStart}
-          onBlur={data.onInteractionEnd}
+          onFocus={() => { setTextFocused(true); data.onInteractionStart() }}
+          onBlur={() => { setTextFocused(false); data.onInteractionEnd() }}
           onChange={(event) => data.onTextChange(id, event.target.value)}
         />
-      : !isGroup && data.asset && <div className="media-node-drag-surface nowheel nopan media-node-preview"><AssetPreview asset={data.asset} controls /></div>}
+      : !isGroup && data.asset && <div className="media-node-drag-surface nopan media-node-preview"><AssetPreview asset={data.asset} controls /></div>}
     {!isGroup && <Handle type="source" position={Position.Right} aria-label="输出连接点" />}
   </article>
 }
@@ -389,6 +390,8 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const [selected, setSelected] = useState<string[]>([])
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
   const [draggingNode, setDraggingNode] = useState(false)
+  // 复用原生手势起止，平移跨过节点时不移交滚轮，也不启动新的节点拖拽。
+  const [wheelPanning, setWheelPanning] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [clipboardProjectId, setClipboardProjectId] = useState<string | null>(null)
   const [menu, setMenu] = useState(false)
@@ -1078,11 +1081,13 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         minZoom={.02}
         maxZoom={4}
         nodesConnectable
+        nodesDraggable={!wheelPanning || draggingNode}
         connectionRadius={28}
         selectionOnDrag={tool === 'select'}
         selectionMode={SelectionMode.Partial}
         panOnDrag={tool === 'pan' ? [0, 1] : [1]}
         panOnScroll
+        noWheelClassName={wheelPanning ? 'media-wheel-isolated' : 'nowheel'}
         zoomOnDoubleClick={false}
         panActivationKeyCode="Space"
         zoomOnScroll={false}
@@ -1141,8 +1146,9 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         autoPanOnNodeFocus={false}
         onNodeDragStart={() => { beginInteraction(); setDraggingNode(true) }}
         onNodeDragStop={() => { endInteraction(); setDraggingNode(false) }}
+        onMoveStart={(event, next) => { if (event?.type === 'wheel') setWheelPanning(true); updateViewport(next) }}
         onMove={(_, next) => updateViewport(next)}
-        onMoveEnd={(_, next) => updateViewport(next)}
+        onMoveEnd={(_, next) => { setWheelPanning(false); updateViewport(next) }}
         proOptions={{ hideAttribution: true }}
       >{canvas.document.background !== 'none' && <Background variant={canvas.document.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots} color="#3a444b" gap={24} size={1} />}{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#101116cc" nodeColor={(node) => node.type === 'video' ? '#7b8a92' : node.type === 'image' ? '#8d9da0' : node.type === 'audio' ? '#768d92' : node.type === 'shape' ? '#8298a3' : node.type === 'note' ? '#758992' : '#687981'} />}</ReactFlow>}
       {draggingFile && <div className="media-canvas-drop" aria-hidden="true">松开鼠标，将素材放入画布</div>}

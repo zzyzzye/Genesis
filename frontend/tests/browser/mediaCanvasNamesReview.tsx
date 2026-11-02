@@ -9,9 +9,15 @@ if (!import.meta.env.DEV || !['127.0.0.1', 'localhost'].includes(location.hostna
 // 与真实路由一致，先加载工作区基础样式，再加载画布专用覆盖样式。
 const { ProjectCanvas } = await import('../../src/pages/media/ProjectCanvas')
 const state = new URLSearchParams(location.search).get('state')
+const wheelAssets = [
+  { id: 'wheel-image', name: '合成参考画面.svg', kind: 'image', mime_type: 'image/svg+xml', size: 1024, in_library: false },
+  { id: 'wheel-audio', name: '合成静音.wav', kind: 'audio', mime_type: 'audio/wav', size: 8044, in_library: false },
+]
 const types: Node['type'][] = ['note', 'text', 'shape', 'image', 'audio', 'video_asset', 'video', 'image_generation', 'audio_generation', 'asset']
 const nodes: Node[] = types.map((type, index) => ({
-  id: `review-node-${type}`, type, asset_id: null, text: type === 'note' ? '镜头从雨后的街道缓慢推进，保留环境声。' : type === 'text' ? '这是正文，改名不会改动它。' : type === 'shape' ? '第一幕' : '',
+  id: `review-node-${type}`, type,
+  asset_id: state === 'wheel' ? ['image', 'asset', 'image_generation'].includes(type) ? 'wheel-image' : ['audio', 'audio_generation'].includes(type) ? 'wheel-audio' : null : null,
+  text: type === 'note' ? state === 'wheel' ? '用于检查编辑时的内部滚动。\n'.repeat(80) : '镜头从雨后的街道缓慢推进，保留环境声。' : type === 'text' ? '这是正文，改名不会改动它。' : type === 'shape' ? '第一幕' : '',
   x: 80 + index % 3 * (state === 'drag' ? 900 : 410), y: 150 + Math.floor(index / 3) * (state === 'drag' ? 600 : 330),
   width: state === 'drag' && ['video', 'image_generation', 'audio_generation'].includes(type) ? 640 : 330,
   height: type === 'audio' ? 88 : state === 'drag' && ['video', 'image_generation', 'audio_generation'].includes(type) ? 402 : 220,
@@ -40,10 +46,20 @@ window.fetch = async (input, init) => {
   }
   if (init?.method && init.method !== 'GET') return json({ detail: '验收页面只允许合成画布保存。' }, 503)
   if (path.endsWith('/canvas')) return json({ version, document })
-  if (path.endsWith('/assets')) return json({ items: [], total: 0 })
+  if (state === 'wheel' && path === '/assets/wheel-image/file') return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#303030"/><path d="M0 300 180 120 370 290 500 180 640 320V360H0Z" fill="#606060"/><text x="24" y="48" fill="#eee" font-family="sans-serif" font-size="26">双指平移验收 · 合成参考画面</text></svg>', { headers: { 'Content-Type': 'image/svg+xml' } })
+  if (state === 'wheel' && path === '/assets/wheel-audio/file') {
+    const bytes = new Uint8Array(8044)
+    const header = new DataView(bytes.buffer)
+    for (const [offset, label] of [[0, 'RIFF'], [8, 'WAVE'], [12, 'fmt '], [36, 'data']] as const) for (let i = 0; i < label.length; i++) bytes[offset + i] = label.charCodeAt(i)
+    header.setUint32(4, 8036, true); header.setUint32(16, 16, true); header.setUint16(20, 1, true); header.setUint16(22, 1, true)
+    header.setUint32(24, 8000, true); header.setUint32(28, 8000, true); header.setUint16(32, 1, true); header.setUint16(34, 8, true); header.setUint32(40, 8000, true)
+    bytes.fill(128, 44)
+    return new Response(bytes, { headers: { 'Content-Type': 'audio/wav' } })
+  }
+  if (path.endsWith('/assets')) return json({ items: state === 'wheel' ? wheelAssets : [], total: state === 'wheel' ? wheelAssets.length : 0 })
   if (path.endsWith('-models')) return json({ configured: false, references_ready: false, models: [] })
   if (path.includes('-generations')) return json([])
-  if (path === '/projects/node-name-review') return json({ id: 'node-name-review', name: '节点名称验收', version: 0 })
+  if (path === '/projects/node-name-review') return json({ id: 'node-name-review', name: state === 'wheel' ? '双指平移验收' : '节点名称验收', version: 0 })
   return json({ detail: '验收页面不访问真实 API。' }, 503)
 }
 window.addEventListener('pagehide', () => localStorage.removeItem(draftKey))

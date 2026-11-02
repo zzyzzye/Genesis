@@ -18,6 +18,34 @@ const node: Node = { id: 'moving', type: 'note', name: '调度便签', asset_id:
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); flow.props = null })
 
 describe('画布拖动同步', () => {
+  it('双指平移经过节点和输入区不断开；新手势在聚焦便签内滚动，失焦后恢复平移', async () => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const document: Document = { ...emptyDocument(), nodes: [node, { ...node, id: 'image', type: 'image', name: '参考图', x: 500 }] }
+    vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'wheel', name: '平移验收', version: 0 }))
+    let actions: MediaCanvasActions | null = null
+    render(<MemoryRouter><ProjectCanvas projectId="wheel" userId="wheel-user" onAgentActionsChange={(value) => { actions = value }} /></MemoryRouter>)
+    const image = await screen.findByTestId('rf__node-image')
+    const positions = document.nodes.map(({ x, y }) => [x, y])
+    const preview = image.querySelector('.media-node-media-empty')!
+    fireEvent.wheel(preview, { deltaX: 40, deltaY: 80, bubbles: true, cancelable: true })
+    await waitFor(() => expect(actions!.getDocument().viewport).toMatchObject({ x: -20, y: -40 }))
+    expect(flow.props!.nodesDraggable).toBe(false)
+    const textarea = screen.getByRole('textbox', { name: '便签内容' })
+    fireEvent.wheel(textarea, { deltaY: 80, bubbles: true, cancelable: true })
+    await waitFor(() => expect(actions!.getDocument().viewport.y).toBe(-80))
+    fireEvent.focus(textarea)
+    fireEvent.wheel(textarea, { deltaY: 80, bubbles: true, cancelable: true })
+    await waitFor(() => expect(actions!.getDocument().viewport.y).toBe(-120))
+    await waitFor(() => expect(flow.props!.nodesDraggable).toBe(true))
+    fireEvent.wheel(textarea, { deltaY: 80, bubbles: true, cancelable: true })
+    expect(actions!.getDocument().viewport.y).toBe(-120)
+    fireEvent.blur(textarea)
+    fireEvent.wheel(textarea, { deltaY: 80, bubbles: true, cancelable: true })
+    await waitFor(() => expect(actions!.getDocument().viewport.y).toBe(-160))
+    expect(actions!.getDocument().nodes.map(({ x, y }) => [x, y])).toEqual(positions)
+    await waitFor(() => expect(flow.props!.nodesDraggable).toBe(true))
+  })
+
   it('连续坐标更新只改动最新文档的几何信息，不回滚缩放、正文或异步新增结果', () => {
     const result: Node = { ...node, id: 'result', type: 'image', asset_id: 'image', width: 360, height: 203 }
     const current: Document = { ...emptyDocument(), nodes: [{ ...node, name: '最新名字', text: '最新正文', width: 400 }, result], edges: [{ id: 'reference', source: node.id, target: result.id }] }

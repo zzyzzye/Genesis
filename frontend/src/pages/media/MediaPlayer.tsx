@@ -12,7 +12,7 @@ export default function MediaPlayer({ src, kind, name, onError }: {
   name: string
   onError: () => void
 }) {
-  return <div className={`media-player-shell is-${kind} nodrag nopan nowheel`} onPointerDown={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+  return <div className={`media-player-shell is-${kind} nodrag nopan`} onPointerDown={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
     <I18nProvider locale="zh-CN" translations={zhCN}>
       {kind === 'audio' ? <AudioPlayer>
         <NeutralAudioSkin className="media-asset-player" aria-label={`音频播放器：${name}`}>

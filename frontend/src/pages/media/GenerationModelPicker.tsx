@@ -53,7 +53,7 @@ export function GenerationModelPicker({ models, value, disabled, label, placehol
     <button ref={trigger} type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined} aria-describedby={preview && !open ? `${id}-preview` : undefined} disabled={disabled} onPointerEnter={event => { if (selected && event.pointerType !== 'touch') show(selected, event.currentTarget) }} onPointerLeave={leave} onFocus={event => { if (selected && !open) show(selected, event.currentTarget) }} onBlur={closePreview} onClick={() => { closePreview(); setQuery(''); setOpen(!open) }}>
       <span>{selected?.id ?? placeholder}</span><ChevronDown size={12} aria-hidden="true" />
     </button>
-    {open && <div ref={menu} data-model-menu="generation" popover={native ? 'auto' : undefined} className="media-generation-model-menu nodrag nowheel nopan" onToggle={event => { if (event.newState === 'closed') { setOpen(false); closePreview() } }} onKeyDown={event => {
+    {open && <div ref={menu} data-model-menu="generation" popover={native ? 'auto' : undefined} className="media-generation-model-menu nodrag nowheel media-wheel-isolated nopan" onToggle={event => { if (event.newState === 'closed') { setOpen(false); closePreview() } }} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return }
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
         const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]')]
