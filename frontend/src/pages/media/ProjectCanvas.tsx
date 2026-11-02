@@ -12,7 +12,6 @@ import {
   ReactFlow,
   SelectionMode,
   applyEdgeChanges,
-  applyNodeChanges,
   type Connection,
   type Edge as FlowEdge,
   type EdgeChange,
@@ -23,6 +22,7 @@ import {
   type Viewport,
 } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import { AnimatePresence, motion, useIsPresent } from 'motion/react'
 import { canvasEditorTransition, useLiveReducedMotion } from '../../lib/motion'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -41,7 +41,7 @@ import { ProjectDialog } from './MediaHome'
 import type { MediaAssistantNode, MediaCanvasActions, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
 import { arrangeCanvas } from './canvasLayout'
-import { audioAssetNodeSize, defaultNodeName, generationNodeSize, groupSelection, isGenerationNode, nodeTypeLabel, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
+import { applyCanvasNodeChanges, audioAssetNodeSize, defaultNodeName, generationNodeSize, groupSelection, isGenerationNode, nodeTypeLabel, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
 
 type CanvasNodeData = {
   projectId: string
@@ -358,16 +358,6 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
 
 const nodeTypes = { asset: CanvasNodeView, note: CanvasNodeView, text: CanvasNodeView, shape: CanvasNodeView, group: CanvasNodeView, video: GenerationNodeView, image_generation: GenerationNodeView, audio_generation: GenerationNodeView, video_asset: MediaAssetNodeView, image: MediaAssetNodeView, audio: MediaAssetNodeView }
 const edgeTypes = { reference: CanvasReferenceEdge }
-function documentNode(flowNode: CanvasFlowNode): Node {
-  return {
-    ...flowNode.data.source,
-    x: flowNode.position.x,
-    y: flowNode.position.y,
-    width: flowNode.width ?? flowNode.measured?.width ?? flowNode.data.source.width,
-    height: flowNode.height ?? flowNode.measured?.height ?? flowNode.data.source.height,
-  }
-}
-
 export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCanvasApplyChange, onAgentActionsChange }: { projectId: string; userId: string; onAgentNodeChange?: (node: MediaAssistantNode | null) => void; onAgentCanvasApplyChange?: (apply: ((plan: MediaCanvasPlan) => void) | null) => void; onAgentActionsChange?: (actions: MediaCanvasActions | null) => void }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -788,33 +778,28 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   })
 
   const onNodesChange = useCallback((changes: NodeChange<CanvasFlowNode>[]) => {
-    // 同一帧可能连续收到坐标变化，始终以最新文档合并，避免旧渲染覆盖新位置。
-    const current = canvas.current.current
-    const latest = new Map(current.nodes.map((node) => [node.id, node]))
-    const next = applyNodeChanges(changes, flowNodes.filter((node) => latest.has(node.id)).map((node) => {
-      const source = latest.get(node.id)!
-      return { ...node, position: { x: source.x, y: source.y }, data: { ...node.data, source } }
-    }))
-    if (changes.some((change) => change.type === 'select' || change.type === 'remove')) setSelected(next.filter((node) => node.selected).map((node) => node.id))
-    const contentChanged = changes.some((change) => change.type === 'remove' || change.type === 'position' && Boolean(change.position) || change.type === 'dimensions' && Boolean(change.setAttributes))
-    if (!contentChanged) return
-    if (!interactionActive.current) canvas.checkpoint()
-    const positions = new Map(next.map((node) => [node.id, node.position]))
-    const moved = new Set(changes.flatMap((change) => change.type === 'position' && change.position ? [change.id] : []))
-    for (const group of current.nodes.filter((node) => node.type === 'group' && moved.has(node.id))) {
-      const position = positions.get(group.id)
-      if (!position) continue
-      const dx = position.x - group.x
-      const dy = position.y - group.y
-      for (const member of group.member_ids ?? []) {
-        if (moved.has(member)) continue
-        const original = current.nodes.find((node) => node.id === member)
-        if (original) positions.set(member, { x: original.x + dx, y: original.y + dy })
+    if (changes.some((change) => change.type === 'select' || change.type === 'remove')) setSelected((previous) => {
+      const selected = new Set(previous)
+      for (const change of changes) {
+        if (change.type === 'remove' || change.type === 'select' && !change.selected) selected.delete(change.id)
+        else if (change.type === 'select') selected.add(change.id)
       }
+      return [...selected]
+    })
+    const positionChanged = changes.some((change) => change.type === 'position' && Boolean(change.position))
+    if (!positionChanged && !changes.some((change) => change.type === 'remove' || change.type === 'dimensions' && Boolean(change.setAttributes))) return
+    const apply = () => {
+      const current = canvas.current.current
+      const next = applyCanvasNodeChanges(current, changes)
+      if (next === current) return
+      if (!interactionActive.current) canvas.checkpoint()
+      canvas.apply(next, false)
     }
-    const nodes = next.map((node) => ({ ...documentNode(node), x: positions.get(node.id)?.x ?? node.position.x, y: positions.get(node.id)?.y ?? node.position.y }))
-    canvas.apply(removeSelection({ ...current, nodes }, [], []), false)
-  }, [canvas, flowNodes])
+    // 原生拖动事件在下一次鼠标移动前提交画面，避免受控节点用较早的坐标回绘。
+    // 测量事件可能来自 React effect，不能同步刷新。
+    if (changes.some((change) => change.type === 'position' && change.position && change.dragging !== undefined)) flushSync(apply)
+    else apply()
+  }, [canvas])
 
   const onEdgesChange = useCallback((changes: EdgeChange<FlowEdge>[]) => {
     const next = applyEdgeChanges(changes, flowEdges)

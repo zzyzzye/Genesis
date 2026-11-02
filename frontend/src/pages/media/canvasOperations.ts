@@ -1,3 +1,4 @@
+import { applyNodeChanges, type NodeChange, type Node as FlowNode } from '@xyflow/react'
 import type { Document, Node } from './api'
 import { syncReferenceModes } from './canvasReferences'
 
@@ -7,6 +8,35 @@ export const generationNodeSize = { width: 640, height: 402 }
 export const isGenerationNode = (node: Pick<Node, 'type'>) => node.type === 'video' || node.type === 'image_generation' || node.type === 'audio_generation'
 export const nodeTypeLabel = (type: Node['type']) => ({ video: '生视频节点', image_generation: '生图节点', audio_generation: '生音频节点', video_asset: '视频节点', image: '图片节点', audio: '音频节点', asset: '素材节点', note: '便签', text: '文本', shape: '形状', group: '分组' })[type]
 export const audioAssetNodeSize = { width: 360, height: 88 }
+
+export function applyCanvasNodeChanges(document: Document, changes: NodeChange<FlowNode>[]): Document {
+  // 仅从最新文档投影几何信息，不用上一帧的节点重建正文、尺寸或异步生成结果。
+  const next = applyNodeChanges(changes, document.nodes.map((node) => ({ id: node.id, position: { x: node.x, y: node.y }, width: node.width, height: node.height, data: {} })))
+  const positions = new Map(next.map((node) => [node.id, node.position]))
+  const moved = new Set(changes.flatMap((change) => change.type === 'position' && change.position ? [change.id] : []))
+  for (const group of document.nodes.filter((node) => node.type === 'group' && moved.has(node.id))) {
+    const position = positions.get(group.id)
+    if (!position) continue
+    for (const member of group.member_ids ?? []) {
+      if (moved.has(member)) continue
+      const original = document.nodes.find((node) => node.id === member)
+      if (original) positions.set(member, { x: original.x + position.x - group.x, y: original.y + position.y - group.y })
+    }
+  }
+  const latest = new Map(document.nodes.map((node) => [node.id, node]))
+  const nodes = next.flatMap((node) => {
+    const original = latest.get(node.id)
+    if (!original) return []
+    const position = positions.get(node.id) ?? node.position
+    const width = node.width ?? original.width
+    const height = node.height ?? original.height
+    return original.x === position.x && original.y === position.y && original.width === width && original.height === height
+      ? [original] : [{ ...original, ...position, width, height }]
+  })
+  if (nodes.length === document.nodes.length && nodes.every((node, index) => node === document.nodes[index])) return document
+  const result = { ...document, nodes }
+  return changes.some((change) => change.type === 'remove') ? removeSelection(result, [], []) : result
+}
 
 export function defaultNodeName(type: Node['type'], nodes: readonly Pick<Node, 'name'>[]): string {
   const names = new Set(nodes.map((node) => node.name?.trim()))
