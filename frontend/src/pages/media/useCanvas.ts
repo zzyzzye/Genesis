@@ -48,7 +48,7 @@ export function useCanvas(projectId: string, userId: string) {
     }
     current.current = next; setDocument(next); history.current = compacted ? [{ ...original, viewport: next.viewport }] : []; future.current = []
     setDirty(JSON.stringify(next) !== saved.current); setReady(true)
-    setStatus(blocked.current ? '检测到冲突，已保留本地草稿' : compacted ? '已更新节点布局，可撤销' : JSON.stringify(next) === saved.current ? '已保存' : original !== serverDocument ? '已恢复本地草稿' : '已打开')
+    setStatus(blocked.current ? '检测到冲突，已保留本地草稿' : compacted ? '已更新节点，可撤销' : JSON.stringify(next) === saved.current ? '已保存' : original !== serverDocument ? '已恢复本地草稿' : '已打开')
   }, [key, projectId])
   useEffect(() => { let active = true; void Promise.resolve().then(async () => { if (active) await load(true) }).catch((reason: Error) => { if (active) setStatus(reason.message) }); return () => { active = false } }, [load])
   const save = useCallback(async (): Promise<void> => {

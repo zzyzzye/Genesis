@@ -8,8 +8,30 @@ export const isGenerationNode = (node: Pick<Node, 'type'>) => node.type === 'vid
 export const nodeTypeLabel = (type: Node['type']) => ({ video: '生视频节点', image_generation: '生图节点', audio_generation: '生音频节点', video_asset: '视频节点', image: '图片节点', audio: '音频节点', asset: '素材节点', note: '便签', text: '文本', shape: '形状', group: '分组' })[type]
 export const audioAssetNodeSize = { width: 360, height: 88 }
 
+export function defaultNodeName(type: Node['type'], nodes: readonly Pick<Node, 'name'>[]): string {
+  const names = new Set(nodes.map((node) => node.name?.trim()))
+  let index = 1
+  while (names.has(`${nodeTypeLabel(type)} ${index}`)) index += 1
+  return `${nodeTypeLabel(type)} ${index}`
+}
+
+export function normalizeCanvasNodeNames(document: Document): Document {
+  const named = document.nodes.filter((node) => node.name?.trim())
+  let changed = false
+  const nodes = document.nodes.map((node) => {
+    if (node.name?.trim()) return node
+    // 旧分组把标题存在正文中；迁移名称时保留原正文，避免破坏旧草稿。
+    const name = (node.type === 'group' ? node.text.trim().slice(0, 120) : '') || defaultNodeName(node.type, named)
+    const next = { ...node, name }
+    named.push(next)
+    changed = true
+    return next
+  })
+  return changed ? { ...document, nodes } : document
+}
+
 export function normalizeCanvasNodePresets(document: Document): Document {
-  document = syncReferenceModes(document)
+  document = normalizeCanvasNodeNames(syncReferenceModes(document))
   let changed = false
   const nodes = document.nodes.map((node) => {
     if (node.type === 'audio' && node.width === 360 && node.height === 230) {
@@ -47,7 +69,7 @@ export function groupSelection(document: Document, selected: string[]): { docume
   if (right - left + 60 > 4000 || bottom - top + 84 > 4000) return null
   const group: Node = {
     id: crypto.randomUUID(), type: 'group', asset_id: null, member_ids: members.map((node) => node.id),
-    text: '新分组', x: left - 30, y: top - 54, width: right - left + 60, height: bottom - top + 84,
+    name: defaultNodeName('group', document.nodes), text: '', x: left - 30, y: top - 54, width: right - left + 60, height: bottom - top + 84,
   }
   return { document: { ...document, nodes: [group, ...document.nodes] }, groupId: group.id }
 }
