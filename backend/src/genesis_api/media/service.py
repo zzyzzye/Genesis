@@ -1,6 +1,8 @@
-"""影音归属查询与素材回收；事务提交和实际文件删除由路由编排。"""
+"""影音归属查询、节点改名与素材回收；事务提交由调用方编排。"""
 
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -8,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from genesis_api.media.models import MediaAsset, MediaProject, ProjectAsset
+from genesis_api.media.schemas import CanvasDocument, ProjectWrite
 
 STORAGE_ROOT = Path("/data/media")
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
@@ -57,6 +60,58 @@ def project_for(session: Session, owner_id: UUID, project_id: UUID) -> MediaProj
     if project is None:
         raise HTTPException(404, "作品不存在")
     return project
+
+
+def rename_node(
+    session: Session,
+    owner_id: UUID,
+    project_id: UUID,
+    node_id: UUID,
+    name: str,
+    expected_version: int,
+) -> dict[str, object]:
+    """按作品版本改名一个节点，保留原始画布的所有其他字段。
+
+    Args:
+        session: 调用方提交事务的会话，行锁覆盖版本检查和改名。
+        owner_id: 已认证的用户标识，不接受模型指定身份。
+        project_id: 当前用户拥有的作品。
+        node_id: 作品内真实节点，所有节点类型均支持。
+        name: 去除首尾空白后为 1–120 字符的名称。
+        expected_version: 读取画布时取得的版本；同名重放不重复写入。
+
+    Returns:
+        节点原名、新名、作品版本和是否实际改动；调用方负责提交。
+
+    Raises:
+        HTTPException: 作品或节点不可访问返回 404，过期修改返回 409。
+        ValidationError: 名称为空或超过长度限制。
+    """
+    name = ProjectWrite(name=name).name
+    project = project_for(session, owner_id, project_id)
+    document = CanvasDocument.model_validate(project.canvas)
+    index = next((i for i, node in enumerate(document.nodes) if node.id == node_id), None)
+    if index is None:
+        raise HTTPException(404, "节点不存在")
+    previous_name = document.nodes[index].name
+    changed = previous_name != name
+    if changed:
+        if project.version != expected_version:
+            raise HTTPException(409, "画布已更新，请重新读取画布后改名")
+        # 只复制目标名称，不用默认值重建旧画布或改动正文、布局及素材关联。
+        nodes = list(cast(list[dict[str, object]], project.canvas["nodes"]))
+        nodes[index] = {**nodes[index], "name": name}
+        project.canvas = {**project.canvas, "nodes": nodes}
+        project.version += 1
+        project.updated_at = datetime.now(UTC)
+    return {
+        "project_id": str(project_id),
+        "node_id": str(node_id),
+        "previous_name": previous_name,
+        "name": name,
+        "version": project.version,
+        "changed": changed,
+    }
 
 
 def asset_for(session: Session, owner_id: UUID, asset_id: UUID) -> MediaAsset:

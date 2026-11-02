@@ -2,6 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type Document, defaultVideoFrame, emptyDocument, MediaError, type Snapshot } from './api'
 import { normalizeCanvasNodePresets } from './canvasOperations'
 
+function completeDocument(document: Document): Document {
+  return { ...document, edges: document.edges ?? [], background: document.background ?? 'dots', frame: document.frame ?? defaultVideoFrame() }
+}
+
+function withoutNodeNames(document: Document): string {
+  return JSON.stringify({ ...document, nodes: document.nodes.map((node) => ({ ...node, name: undefined })) }, (_key, value: unknown) => value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))) : value)
+}
+
 export function useCanvas(projectId: string, userId: string) {
   const [document, setDocument] = useState<Document>(emptyDocument)
   const [ready, setReady] = useState(false)
@@ -11,6 +19,7 @@ export function useCanvas(projectId: string, userId: string) {
   const current = useRef(document)
   const version = useRef(0)
   const saved = useRef('')
+  const serverBase = useRef<Document>(emptyDocument())
   const pending = useRef<Promise<void> | null>(null)
   const blocked = useRef(false)
   const history = useRef<Document[]>([])
@@ -24,7 +33,8 @@ export function useCanvas(projectId: string, userId: string) {
   }, [key])
   const load = useCallback(async (restoreDraft = false) => {
     const snapshot = await api<Snapshot>(`/projects/${projectId}/canvas`)
-    const serverDocument = { ...snapshot.document, edges: snapshot.document.edges ?? [], background: snapshot.document.background ?? 'dots', frame: snapshot.document.frame ?? defaultVideoFrame() }
+    const serverDocument = completeDocument(snapshot.document)
+    serverBase.current = serverDocument
     version.current = snapshot.version; saved.current = JSON.stringify(serverDocument)
     let next = serverDocument
     blocked.current = false; setConflict(false)
@@ -61,7 +71,7 @@ export function useCanvas(projectId: string, userId: string) {
     const operation = (async () => {
       try {
         const result = await api<Snapshot>(`/projects/${projectId}/canvas`, 'PUT', { version: version.current, document: next })
-        version.current = result.version; saved.current = encoded
+        version.current = result.version; saved.current = encoded; serverBase.current = completeDocument(result.document)
         const clean = JSON.stringify(current.current) === encoded
         setDirty(!clean); setStatus(clean ? '已保存' : '有待保存修改')
         if (!clean) setDocument({ ...current.current })
@@ -71,6 +81,39 @@ export function useCanvas(projectId: string, userId: string) {
         if (reason instanceof MediaError && reason.status === 409) { blocked.current = true; setConflict(true) }
         setStatus(`保存失败：${(reason as Error).message}`); throw reason
       }
+    })()
+    pending.current = operation
+    try { await operation } finally { pending.current = null }
+  }, [key, projectId])
+  const syncNodeNames = useCallback(async (): Promise<void> => {
+    // 与已有保存队列串行；409 后仍可核对工具改名，不能自动覆盖其他远端修改。
+    while (pending.current) await pending.current.catch(() => undefined)
+    const operation = (async () => {
+      const snapshot = await api<Snapshot>(`/projects/${projectId}/canvas`)
+      if (snapshot.version < version.current) throw new Error('改名同步版本过期，请重试。')
+      const serverDocument = completeDocument(snapshot.document)
+      if (withoutNodeNames(serverBase.current) !== withoutNodeNames(serverDocument)) {
+        blocked.current = true; setConflict(true); setStatus('远端画布还有其他修改，请先处理冲突')
+        throw new Error('远端画布还有其他修改，已保留本地草稿。')
+      }
+      const before = current.current
+      const baseline = new Map(serverBase.current.nodes.map((node) => [node.id, node]))
+      const remote = new Map(serverDocument.nodes.map((node) => [node.id, node]))
+      const nodes = before.nodes.map((node) => {
+        const old = baseline.get(node.id), next = remote.get(node.id)
+        // 本地后来改名、删除或新增的节点继续以本地意图为准。
+        return old && next && node.name === old.name && next.name !== old.name ? { ...node, name: next.name } : node
+      })
+      const changed = nodes.some((node, index) => node !== before.nodes[index])
+      if (changed) { history.current.push(before); history.current = history.current.slice(-60); future.current = [] }
+      const next = JSON.stringify(before) === saved.current ? serverDocument : changed ? { ...before, nodes } : before
+      version.current = snapshot.version; serverBase.current = serverDocument; saved.current = JSON.stringify(serverDocument)
+      current.current = next; setDocument(next === before ? { ...next } : next)
+      blocked.current = false; setConflict(false)
+      const dirty = JSON.stringify(next) !== saved.current
+      setDirty(dirty); setStatus(dirty ? '已同步改名，有待保存本地修改' : '已保存')
+      if (dirty) localStorage.setItem(key, JSON.stringify({ version: snapshot.version, document: next }))
+      else localStorage.removeItem(key)
     })()
     pending.current = operation
     try { await operation } finally { pending.current = null }
@@ -88,5 +131,5 @@ export function useCanvas(projectId: string, userId: string) {
   function checkpoint() { history.current.push(current.current); history.current = history.current.slice(-60); future.current = [] }
   function undo() { const previous = history.current.pop(); if (previous) { future.current.push(current.current); apply(previous, false) } }
   function redo() { const next = future.current.pop(); if (next) { history.current.push(current.current); apply(next, false) } }
-  return { document, current, ready, status, conflict, apply, save, load, undo, redo, checkpoint }
+  return { document, current, ready, status, conflict, apply, save, load, syncNodeNames, undo, redo, checkpoint }
 }

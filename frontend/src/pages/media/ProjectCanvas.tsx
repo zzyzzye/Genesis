@@ -137,17 +137,18 @@ function CanvasNodeName({ id, data }: { id: string; data: CanvasNodeData }) {
   const [draft, setDraft] = useState<string | null>(null)
   const cancelled = useRef(false)
   const name = data.source.name || nodeTypeLabel(data.source.type)
+  const originalName = useRef(name)
   return <input
     className="media-node-name nodrag"
     aria-label={`${nodeTypeLabel(data.source.type)}名称`}
     title="点击改名；Enter 保存，Escape 取消"
     value={draft ?? name}
     maxLength={120}
-    onFocus={() => { cancelled.current = false; setDraft(name) }}
+    onFocus={() => { cancelled.current = false; originalName.current = name; setDraft(name) }}
     onChange={(event) => setDraft(event.target.value)}
     onBlur={() => {
-      const next = draft?.trim() || name
-      if (!cancelled.current && next !== name) data.onPatch(id, { name: next })
+      const next = draft?.trim() || originalName.current
+      if (!cancelled.current && next !== originalName.current && next !== name) data.onPatch(id, { name: next })
       setDraft(null)
     }}
     onKeyDown={(event) => {
@@ -367,10 +368,18 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const [assets, setAssets] = useState<Record<string, Asset>>({})
   const [error, setError] = useState('')
   const onImageTask = useImageGenerationResults(projectId, canvas, setAssets)
-  const { save: saveCanvas, current: canvasDocument } = canvas
+  const { save: saveCanvas, current: canvasDocument, syncNodeNames } = canvas
   useEffect(() => {
     if (!canvas.ready) { onAgentActionsChange?.(null); return }
-    onAgentActionsChange?.({save:saveCanvas,getDocument:() => canvasDocument.current,attachImageTask:async resource => {
+    onAgentActionsChange?.({save:saveCanvas,getDocument:() => canvasDocument.current,syncNodeNames:async () => {
+      try {
+        await syncNodeNames()
+        setError(current => current.startsWith('节点已改名，但画布同步失败') ? '' : current)
+      } catch {
+        setError('节点已改名，但画布同步失败；已保留本地编辑，正在重新读取。')
+        throw new Error('节点改名同步失败')
+      }
+    },attachImageTask:async resource => {
       if (resource.scope_id !== projectId || !canvasDocument.current.nodes.some(node=>node.id === resource.parent_id && node.type === 'image_generation')) return
       try {
         const task = await api<GenerationTask>(`/projects/${projectId}/image-generations/${resource.id}`)
@@ -383,7 +392,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       }
     }})
     return () => onAgentActionsChange?.(null)
-  }, [canvas.ready, canvasDocument, onAgentActionsChange, onImageTask, projectId, saveCanvas])
+  }, [canvas.ready, canvasDocument, onAgentActionsChange, onImageTask, projectId, saveCanvas, syncNodeNames])
   const [assetsLoading, setAssetsLoading] = useState(true)
   const [renameOpen, setRenameOpen] = useState(false)
   const [assetTarget, setAssetTarget] = useState<{ id: string; kind: Asset['kind']; allowImageForVideo: boolean } | null>(null)

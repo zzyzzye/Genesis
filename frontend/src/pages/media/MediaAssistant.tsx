@@ -10,7 +10,7 @@ import { imageRatios, imageResolutions, imageSizePatch } from './imageSettings'
 
 type MediaAssistantPage = 'projects' | 'project' | 'canvas' | 'assets'
 export type MediaGenerationResource = NonNullable<AiToolCall['resource']>
-export type MediaCanvasActions = { save: () => Promise<void>; getDocument: () => Document; attachImageTask: (resource: MediaGenerationResource) => Promise<void> }
+export type MediaCanvasActions = { save: () => Promise<void>; getDocument: () => Document; attachImageTask: (resource: MediaGenerationResource) => Promise<void>; syncNodeNames?: () => Promise<void> }
 export type MediaAssistantNode = { id: string; type: string; name: string; text: string; assetId: string | null; durationSeconds?: number; model?: string; mode?: string }
 type MediaCanvasOperation =
   | { action: 'add_image_generation'; name: string; text: string }
@@ -96,26 +96,29 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
   onApplyCanvasPlan?: (plan: MediaCanvasPlan) => void
   canvasActions?: MediaCanvasActions | null
 }) {
-  const [generationResources, setGenerationResources] = useState<Record<string, MediaGenerationResource>>({})
-  const attachedGenerations = useRef(new Set<string>())
+  const [canvasResources, setCanvasResources] = useState<Record<string, MediaGenerationResource>>({})
+  const attachedResources = useRef(new Set<string>())
   useEffect(() => {
     if (!canvasActions || !projectId) return
     let active = true
     let timer: ReturnType<typeof setTimeout> | undefined
     const attach = async () => {
       let retry = false
-      for (const resource of Object.values(generationResources)) {
-        if (!active || resource.scope_id !== projectId || attachedGenerations.current.has(resource.id)) continue
+      for (const resource of Object.values(canvasResources)) {
+        if (!active || resource.scope_id !== projectId || attachedResources.current.has(resource.id)) continue
         try {
-          await canvasActions.attachImageTask(resource)
-          if (active) attachedGenerations.current.add(resource.id)
+          if (resource.kind === 'canvas_node_rename') {
+            if (!canvasActions.syncNodeNames) throw new Error('画布尚未就绪')
+            await canvasActions.syncNodeNames()
+          } else await canvasActions.attachImageTask(resource)
+          if (active) attachedResources.current.add(resource.id)
         } catch { retry = true }
       }
       if (active && retry) timer = setTimeout(() => { void attach() }, 3000)
     }
     void attach()
     return () => { active = false; clearTimeout(timer) }
-  }, [canvasActions, generationResources, projectId])
+  }, [canvasActions, canvasResources, projectId])
   const [appliedPlans, setAppliedPlans] = useState<Set<string>>(() => new Set())
   const applying = useRef(false)
   const [pendingPlan, setPendingPlan] = useState<string | null>(null)
@@ -188,8 +191,8 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
       await canvasActions.save()
     } : undefined,
     onToolCalls: calls => {
-      const resources = calls.flatMap(call => call.status === 'succeeded' && call.name === 'submit_image_generation' && call.resource?.module === 'media' && call.resource.kind === 'image_generation' && call.resource.parent_id ? [call.resource] : [])
-      if (resources.length) setGenerationResources(current => resources.every(resource => current[resource.id]) ? current : {...current,...Object.fromEntries(resources.map(resource=>[resource.id,resource]))})
+      const resources = calls.flatMap(call => call.status === 'succeeded' && call.resource?.module === 'media' && call.resource.parent_id && (call.name === 'submit_image_generation' && call.resource.kind === 'image_generation' || call.name === 'rename_node' && call.resource.kind === 'canvas_node_rename') ? [call.resource] : [])
+      if (resources.length) setCanvasResources(current => resources.every(resource => current[resource.id]) ? current : {...current,...Object.fromEntries(resources.map(resource=>[resource.id,resource]))})
     },
     contextLabel: discussionNode ? <><span>正在讨论 · {nodeLabel(discussionNode)}</span><button className="media-assistant__dismiss-node" type="button" aria-label="移除当前讨论节点" onClick={() => setDismissedNodeId(discussionNode.id)}><X aria-hidden="true" /></button></> : `当前页面：${pageLabels[page]}`,
     context: {

@@ -20,6 +20,7 @@ def test_media_package_preserves_prompt_and_public_entry() -> None:
         "configure_image_nodes",
         "submit_image_generation",
         "get_image_generation_task",
+        "rename_node",
     ]
 
 

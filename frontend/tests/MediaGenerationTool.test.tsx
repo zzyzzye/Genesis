@@ -37,6 +37,7 @@ it('用户发送前保存画布，工具回执只为第一张建立结果连线�
   render(<MemoryRouter initialEntries={['/media/projects/project/canvas']}><Routes><Route path="/media/projects/:projectId/canvas" element={<MediaPage/>}/></Routes></MemoryRouter>)
   await screen.findByTestId('rf__node-first')
   fireEvent.change(screen.getAllByRole('textbox',{name:'生图节点名称'})[0]!,{target:{value:'01 新名称'}})
+  fireEvent.blur(screen.getAllByRole('textbox',{name:'生图节点名称'})[0]!)
   fireEvent.click(screen.getByRole('button',{name:'镜头搭档'}))
   fireEvent.change(screen.getByRole('textbox',{name:'向镜头搭档提问'}),{target:{value:'生成第一张图片，提交生成'}})
   fireEvent.click(screen.getByRole('button',{name:'发送给镜头搭档'}))

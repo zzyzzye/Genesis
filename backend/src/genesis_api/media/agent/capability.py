@@ -20,12 +20,12 @@ class MediaAgentCapability:
 
     @staticmethod
     def build_tools(settings: Settings) -> list[BaseTool]:
-        """取得影音规划工具和明确授权的图片任务工具。
+        """取得影音规划、节点改名和明确授权的图片任务工具。
 
         Args:
             settings: 供模型目录、生图与计费复用现有服务配置。
 
         Returns:
-            画布读取、目录、参数方案及复用现有生图服务的提交与查询工具。
+            画布读取、节点改名、目录、参数方案及图片任务提交与查询工具。
         """
         return build_media_tools(settings)

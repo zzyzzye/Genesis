@@ -1,11 +1,14 @@
 """验证真实身份隔离、图片目录查询及批量参数方案不提交生成。"""
 
 import asyncio
+import json
 from collections.abc import Iterator
+from copy import deepcopy
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
+from langchain_core.messages import ToolMessage
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -20,6 +23,118 @@ from genesis_api.media.models import MediaProject
 from genesis_api.media.schemas import CanvasDocument
 
 type CanvasTools = tuple[UUID, UUID, list[UUID], sessionmaker[Session]]
+
+
+@pytest.mark.parametrize(
+    "node_type",
+    [
+        "note",
+        "text",
+        "shape",
+        "group",
+        "asset",
+        "video",
+        "image_generation",
+        "audio_generation",
+        "image",
+        "audio",
+        "video_asset",
+    ],
+)
+def test_rename_node_saves_only_name_and_replay_is_idempotent(
+    canvas_tools: CanvasTools,
+    node_type: str,
+) -> None:
+    """真实工具直接保存所有类型的标题，重放不再次增加画布版本。"""
+    actor_id, project_id, ids, sessions = canvas_tools
+    with sessions() as session:
+        project = session.get(MediaProject, project_id)
+        assert project is not None
+        original = deepcopy(project.canvas)
+        original["nodes"][0]["type"] = node_type
+        if node_type == "group":
+            original["nodes"][0]["member_ids"] = list(map(str, ids[1:3]))
+        project.canvas = original
+        session.commit()
+    entry = next(t for t in media_tools.build_media_tools(Settings()) if t.name == "rename_node")
+    args = {
+        "project_id": str(project_id),
+        "node_id": str(ids[0]),
+        "name": "  开场空镜  ",
+        "expected_version": 0,
+    }
+    with agent_invocation_context(actor_id, "member", "media"):
+        message = asyncio.run(
+            entry.ainvoke(
+                {
+                    "type": "tool_call",
+                    "id": "rename",
+                    "name": entry.name,
+                    "args": args,
+                }
+            )
+        )
+        assert isinstance(message, ToolMessage) and message.status == "success"
+        assert json.loads(str(message.content))["changed"] is True
+        assert message.artifact["resource"]["kind"] == "canvas_node_rename"
+        assert message.artifact["resource"]["scope_id"] == str(project_id)
+        assert message.artifact["resource"]["parent_id"] == str(ids[0])
+        replay = asyncio.run(entry.ainvoke(args))
+        assert replay["changed"] is False and replay["version"] == 1
+    with sessions() as session:
+        project = session.get(MediaProject, project_id)
+        assert project is not None and project.version == 1
+        expected = deepcopy(original)
+        expected["nodes"][0]["name"] = "开场空镜"
+        assert project.canvas == expected
+
+
+@pytest.mark.parametrize("name", ["", "   ", "长" * 121])
+def test_rename_rejects_empty_or_long_names(canvas_tools: CanvasTools, name: str) -> None:
+    """无效输入不产生部分写入或版本变化。"""
+    actor_id, project_id, ids, sessions = canvas_tools
+    entry = next(t for t in media_tools.build_media_tools(Settings()) if t.name == "rename_node")
+    with agent_invocation_context(actor_id, "member", "media"):
+        result = asyncio.run(
+            entry.ainvoke(
+                {
+                    "project_id": str(project_id),
+                    "node_id": str(ids[0]),
+                    "name": name,
+                    "expected_version": 0,
+                }
+            )
+        )
+    assert result == "节点名称去掉首尾空白后须为 1–120 字符"
+    with sessions() as session:
+        project = session.get(MediaProject, project_id)
+        assert project is not None and project.version == 0
+
+
+def test_rename_rejects_wrong_actor_missing_node_and_stale_version(
+    canvas_tools: CanvasTools,
+) -> None:
+    """权限、归属、节点和版本均在服务端校验，不能用模型参数绕过。"""
+    actor_id, project_id, ids, sessions = canvas_tools
+    entry = next(t for t in media_tools.build_media_tools(Settings()) if t.name == "rename_node")
+    args = {
+        "project_id": str(project_id),
+        "node_id": str(ids[0]),
+        "name": "新名",
+        "expected_version": 0,
+    }
+    assert "有效的业务用户身份" in asyncio.run(entry.ainvoke(args))
+    with agent_invocation_context(actor_id, "member", "blog"):
+        assert "有效的业务用户身份" in asyncio.run(entry.ainvoke(args))
+    with agent_invocation_context(uuid4(), "member", "media"):
+        assert asyncio.run(entry.ainvoke(args)) == "作品不存在"
+    with agent_invocation_context(actor_id, "member", "media"):
+        assert asyncio.run(entry.ainvoke({**args, "node_id": str(uuid4())})) == "节点不存在"
+        assert "画布已更新" in asyncio.run(entry.ainvoke({**args, "expected_version": 9}))
+        assert isinstance(asyncio.run(entry.ainvoke({**args, "expected_version": -1})), str)
+    with sessions() as session:
+        project = session.get(MediaProject, project_id)
+        assert project is not None and project.version == 0
 
 
 @pytest.fixture

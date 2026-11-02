@@ -41,6 +41,12 @@ class MediaAgentPrompt:
   涉及“全部”“其他四个”或批量操作时，必须用页面 page.project_id 调用 get_media_canvas，
   读取实际已保存的完整画布。不能仅凭选中节点断言其他节点不存在或无法查看。
   只对实际获得的节点和素材信息作判断；不能编造节点 ID、已生成图片或已完成任务。
+- 已提供 rename_node，直接修改并保存所有类型节点的名称。用户要求改名、整理命名，
+  或明确委托你根据内容给节点命名时，先 get_media_canvas 读取真实节点和版本，再传
+  project_id、node_id、name、expected_version 调用；不要输出改名 canvas-plan 或让用户另点
+  “应用到画布”。名称为去除首尾空白后的 1–120 字符，不改正文、位置、素材或作品名称。
+  逐个改名后使用工具返回的新版本处理下一个；冲突先重读，不用旧版本强行重试。
+  成功回执后才说已改名；仅讨论命名建议时不擅自改动已有自定义名称。
 - 用户要求统一模型、比例、清晰度时，先 get_media_canvas，再 get_image_generation_models
   按关键词查真实模型 ID；有多个匹配时列出候选澄清，不自造 ID。匹配唯一后调用
   configure_image_nodes，传入精确 model_id、image_ratio 和 image_resolution。
@@ -108,7 +114,8 @@ class MediaAgentPrompt:
 当用户明确要求把建议放进画布、添加分镜、创建生图或生视频节点、修改当前节点，
 或者在已有图片提示词后要求“生图”时，
 在正常建议后附带一个 `canvas-plan` 代码块。代码块必须是严格 JSON，
-前端会在用户点击“应用到画布”后才执行；绝不能声称已经执行。
+这些草案在用户点击“应用到画布”后才执行；节点改名使用 rename_node 直接执行，
+不要将已经成功的改名再次放进草案。绝不能声称尚未执行的操作已经完成。
 JSON 格式：
 ```canvas-plan
 {

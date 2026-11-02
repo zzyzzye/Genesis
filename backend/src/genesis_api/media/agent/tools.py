@@ -1,12 +1,13 @@
-"""影音规划与生图工具，复用现有画布、归属、生成和计费服务。"""
+"""影音规划、节点改名与生图工具，复用现有画布、归属、生成和计费服务。"""
 
 import asyncio
+from typing import Annotated
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from fastapi import HTTPException
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, ToolException, tool
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
 
 from genesis_api.agent.context import require_actor
 from genesis_api.agent.tool_inputs import ToolArray, tool_validation_error
@@ -19,13 +20,13 @@ from genesis_api.media.schemas import CanvasDocument, GenerationSettings, Genera
 
 
 def build_media_tools(settings: Settings) -> list[BaseTool]:
-    """装配画布、模型、参数方案及用户明确要求的图片任务工具。
+    """装配画布、模型、参数方案、节点改名与图片任务工具。
 
     Args:
         settings: 供现有视频服务读取实时目录，不向模型返回连接配置。
 
     Returns:
-        规划工具和复用现有生图服务的提交、查询工具。
+        规划、节点改名与复用现有生图服务的提交、查询工具。
     """
 
     @tool
@@ -107,6 +108,59 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
             ],
             "source": "已保存画布；浏览器未保存修改可能不同",
         }
+
+    @tool(response_format="content_and_artifact")
+    async def rename_node(
+        project_id: UUID,
+        node_id: UUID,
+        name: str,
+        expected_version: Annotated[int, Field(ge=0)],
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        """直接改名并保存当前用户画布中的一个节点，无需另点应用按钮。
+
+        Args:
+            project_id: 当前作品 ID，先用 get_media_canvas 读取真实画布。
+            node_id: 要改名的真实节点 ID，支持所有节点类型。
+            name: 新名称，去掉首尾空白后须为 1–120 字符。
+            expected_version: get_media_canvas 返回的最新版本，冲突时重读。
+
+        Returns:
+            已保存的原名、新名与版本，以及用于前端同步的资源回执。
+            同名调用不会再次增加版本；只修改标题，不修改正文、位置或素材。
+
+        Raises:
+            ToolException: 身份无效、节点不可访问、名称无效或画布版本过期。
+        """
+
+        def rename() -> tuple[dict[str, object], dict[str, object]]:
+            try:
+                actor_id = require_actor(module="media")
+                with SessionLocal() as session:
+                    result = service.rename_node(
+                        session, actor_id, project_id, node_id, name, expected_version
+                    )
+                    session.commit()
+                receipt_id = uuid5(
+                    NAMESPACE_URL,
+                    f"genesis:rename:{project_id}:{node_id}:{expected_version}:{result['name']}",
+                )
+                return result, {
+                    "resource": {
+                        "module": "media",
+                        "kind": "canvas_node_rename",
+                        "id": str(receipt_id),
+                        "scope_id": str(project_id),
+                        "parent_id": str(node_id),
+                    }
+                }
+            except ValidationError:
+                raise ToolException("节点名称去掉首尾空白后须为 1–120 字符") from None
+            except (HTTPException, RuntimeError) as exc:
+                raise ToolException(
+                    str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+                ) from None
+
+        return await asyncio.to_thread(rename)
 
     @tool
     async def get_image_generation_models(query: str = "") -> dict[str, object]:
@@ -318,6 +372,7 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
         configure_image_nodes,
         submit_image_generation,
         get_image_generation_task,
+        rename_node,
     ]
     for entry in result:
         entry.handle_tool_error = True
