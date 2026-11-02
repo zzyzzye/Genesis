@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown, Cpu } from 'lucide-react'
 import { ModelPriceTooltip } from '../../features/agent/ModelPriceTooltip'
 import type { VideoModel } from './VideoGeneration'
 import './GenerationModelPicker.css'
@@ -51,7 +51,7 @@ export function GenerationModelPicker({ models, value, disabled, label, placehol
   }, [open, close])
   return <div className="media-generation-model-picker">
     <button ref={trigger} type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined} aria-describedby={preview && !open ? `${id}-preview` : undefined} disabled={disabled} onPointerEnter={event => { if (selected && event.pointerType !== 'touch') show(selected, event.currentTarget) }} onPointerLeave={leave} onFocus={event => { if (selected && !open) show(selected, event.currentTarget) }} onBlur={closePreview} onClick={() => { closePreview(); setQuery(''); setOpen(!open) }}>
-      <span>{selected?.id ?? placeholder}</span><ChevronDown size={12} aria-hidden="true" />
+      <Cpu size={14} aria-hidden="true" /><span>{selected?.id ?? placeholder}</span><ChevronDown size={12} aria-hidden="true" />
     </button>
     {open && <div ref={menu} data-model-menu="generation" popover={native ? 'auto' : undefined} className="media-generation-model-menu nodrag nowheel media-wheel-isolated nopan" onToggle={event => { if (event.newState === 'closed') { setOpen(false); closePreview() } }} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return }

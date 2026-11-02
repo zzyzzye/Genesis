@@ -18,9 +18,9 @@ const nodes: Node[] = types.map((type, index) => ({
   id: `review-node-${type}`, type,
   asset_id: state === 'wheel' ? ['image', 'asset', 'image_generation'].includes(type) ? 'wheel-image' : ['audio', 'audio_generation'].includes(type) ? 'wheel-audio' : null : null,
   text: type === 'note' ? state === 'wheel' ? '用于检查编辑时的内部滚动。\n'.repeat(80) : '镜头从雨后的街道缓慢推进，保留环境声。' : type === 'text' ? '这是正文，改名不会改动它。' : type === 'shape' ? '第一幕' : '',
-  x: 80 + index % 3 * (state === 'drag' ? 900 : 410), y: 150 + Math.floor(index / 3) * (state === 'drag' ? 600 : 330),
-  width: state === 'drag' && ['video', 'image_generation', 'audio_generation'].includes(type) ? 640 : 330,
-  height: type === 'audio' ? 88 : state === 'drag' && ['video', 'image_generation', 'audio_generation'].includes(type) ? 402 : 220,
+  x: 80 + index % 3 * (['drag', 'toolbar'].includes(state ?? '') ? 900 : 410), y: 150 + Math.floor(index / 3) * (['drag', 'toolbar'].includes(state ?? '') ? 600 : 330),
+  width: ['drag', 'toolbar'].includes(state ?? '') && ['video', 'image_generation', 'audio_generation'].includes(type) ? 640 : 330,
+  height: type === 'audio' ? 88 : ['drag', 'toolbar'].includes(state ?? '') && ['video', 'image_generation', 'audio_generation'].includes(type) ? 402 : 220,
 }))
 nodes.unshift({ id: 'review-node-group', type: 'group', asset_id: null, text: '开场分镜', member_ids: nodes.slice(0, 3).map((node) => node.id), x: 50, y: 106, width: state === 'drag' ? 2210 : 1210, height: 294 })
 let document: Document = { ...emptyDocument(), nodes: state === 'empty' ? [] : nodes, ...(state === 'free-pan' ? { viewport: { x: 125, y: 70, zoom: .65 } } : {}) }
@@ -57,7 +57,7 @@ window.fetch = async (input, init) => {
     return new Response(bytes, { headers: { 'Content-Type': 'audio/wav' } })
   }
   if (path.endsWith('/assets')) return json({ items: state === 'wheel' ? wheelAssets : [], total: state === 'wheel' ? wheelAssets.length : 0 })
-  if (path.endsWith('-models')) return json({ configured: false, references_ready: false, models: [] })
+  if (path.endsWith('-models')) return json(state === 'toolbar' ? { configured: true, references_ready: true, models: [{ id: path.includes('image') ? '合成影像模型 · 高清编辑与多图参考' : '合成视频模型 · 电影运动', description: '隔离模型配置工具栏验收，不调用真实生成服务。' }] } : { configured: false, references_ready: false, models: [] })
   if (path.includes('-generations')) return json([])
   if (path === '/projects/node-name-review') return json({ id: 'node-name-review', name: state === 'wheel' ? '双指平移验收' : '节点名称验收', version: 0 })
   return json({ detail: '验收页面不访问真实 API。' }, 503)

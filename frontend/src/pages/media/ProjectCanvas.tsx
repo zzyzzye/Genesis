@@ -26,7 +26,7 @@ import { flushSync } from 'react-dom'
 import { AnimatePresence, motion, useIsPresent } from 'motion/react'
 import { canvasEditorTransition, useLiveReducedMotion } from '../../lib/motion'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, FolderOpen, GripVertical, Hand, ImagePlus, LoaderCircle, Map as MapIcon, MousePointer2, Music2, Play, Shapes, StickyNote, Type, Upload, Workflow, X } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ClipboardPaste, Copy, Film, FolderOpen, GripVertical, Hand, ImagePlus, LoaderCircle, Map as MapIcon, MousePointer2, Music2, Play, Shapes, SlidersHorizontal, StickyNote, Type, Upload, Workflow, X } from 'lucide-react'
 import { api, defaultGenerationSettings, type Asset, type Document, type Edge, type Node, type Project, type VideoFrame, upload } from './api'
 import { connectReference, displayPrompt, imageMentionPattern, imageMentionToken, imageReferenceNumbers, imageReferences, incomingReferences, syncReferenceModes } from './canvasReferences'
 import { AssetPreview } from './AssetPreview'
@@ -209,7 +209,7 @@ function GenerationParameters({ summary, disabled, image = false, children }: { 
       if (event.key !== 'Escape' || !open) return
       event.preventDefault(); event.stopPropagation()
       panel.current?.hidePopover?.(); setOpen(false)
-    }}>{summary}<ChevronDown size={13} /></button>
+    }}><SlidersHorizontal size={13} aria-hidden="true" />{summary}<ChevronDown size={13} aria-hidden="true" /></button>
     <div ref={panel} popover={nativePopover ? 'auto' : undefined} hidden={!nativePopover && !open} data-open={open} className={`media-generation-popover media-node-generation-settings nodrag nowheel media-wheel-isolated nopan ${image ? 'media-image-parameters' : ''}`} aria-label="生成参数" onToggle={(event) => setOpen(event.currentTarget.matches(':popover-open'))} onKeyDown={(event) => {
       if (event.key !== 'Escape') return
       event.preventDefault(); event.stopPropagation()
