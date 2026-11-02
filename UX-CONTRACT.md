@@ -119,6 +119,10 @@
 
 ## Canonical UI Map
 
+影音制作首页由 `MediaHome` 与 `ProjectPreview` 共同拥有：顶栏创建项目、监看最近编辑项目的真实图片、六项工具创建命名画布、最近项目与全部项目保留 q/view URL 状态。监看仅是素材预览，不伪装视频播放、时间线或生成状态。图片来自当前作品的鉴权素材 API，最多读取前四项中不超过 8 MiB 的图片，首页不读取视频；封面接近视口才加载。切换画面沿用原生按钮、aria-pressed 和可见勾选，退出和更换素材释放临时地址，迟到响应不得更新旧项目。加载、无图片、无项目、预览失败和列表失败分别呈现；预览失败保留项目、画布和素材入口，并可原位重试。`AssetPreview` 的 passive 变体用于链接或按钮内部，避免嵌套重试按钮。
+
+项目管理复用 `StudioActionMenu` 的顶层弹层、方向键/Home/End、Escape 和焦点恢复，颜色由 home 令牌映射既有 studio 角色；创建、改名和删除复用 `ProjectDialog` 与 `useModalDialog`。创建和改名默认聚焦名称，删除默认聚焦取消；失败保留输入，提交期间只读并阻止重复操作，取消不写入。浏览器验收入口为 `frontend/tests/browser/media-home.html`，仅本地开发可用，API 读写由合成响应隔离；组件证据为 `MediaHome.test.tsx`、`ProjectPreview.test.tsx` 与 `AssetPreview.test.tsx`。
+
 生图模式由 `canvasReferences.ts` 的直接图片参考筛选、`VideoGeneration.tsx` 的只读状态及后端 `media/image.py` 的归属和文件校验共同实现。图片生成不依赖旧 generation.mode；有有效图片参考以 multipart 调用 edits，无图片参考以 JSON 调用 generations。图片参考尚未就绪、文件不可用、数量超过 16 或模型不支持编辑时阻止提交；不静默回退文生图。上传、素材选择、连线、断开、撤销及重新打开均遵循同一规则，文字和其他媒体不计入图片参考。Agent 按 get_media_canvas 返回的 image_reference_node_ids 识别含图片参考的节点，配置模型工具也按实际连线校验能力。
 
 影音与博客助手的共享状态和任务入口由 `features/agent/AgentAssistant.tsx` 拥有，历史目录、附件与模型组件继续复用既有实现；业务入口只提供当前上下文和方案。会话 API 的 `surface` 默认 `studio`，影音显式传 `media`；创建、分页、正文、重命名、批量删除和续写均校验所属模块及当前用户。旧历史迁移为 studio，全选不会删除另一模块的记录；普通用户只能使用自己的影音历史，博客历史继续限定所有者。附件继续使用现有私有附件库；影音上传、下载与模型附件读取允许已登录成员及所有者，逐次校验文件归属，博客后台仍限所有者，不新增公开链接或博客写工具。影音不展示无实际作用的自动执行切换，画布方案始终需点击「应用到画布」。
