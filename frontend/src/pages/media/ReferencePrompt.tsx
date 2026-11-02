@@ -48,6 +48,10 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
     if (!host.current) return
     const editor = new EditorView({ parent: host.current, doc: initial, extensions: [
       minimalSetup, EditorView.lineWrapping, placeholder('描述画面与动作，输入 @ 引用连入的图片'),
+      EditorView.theme({
+        '.cm-content ::selection, .cm-content::selection': { backgroundColor: '#505050', color: '#ffffff' },
+        '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: '#505050' },
+      }),
       EditorView.contentAttributes.of({ 'aria-label': label, 'aria-multiline': 'true', role: 'textbox' }),
       EditorState.phrases.of({ Completions: '图片参考', 'No completions found': '没有匹配的图片参考' }),
       EditorView.domEventHandlers({ focus: () => { focus() }, blur: () => { blur() } }),
