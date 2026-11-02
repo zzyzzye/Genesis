@@ -1,20 +1,20 @@
 /* 两个业务共用助手交互；此处仅拥有影音的暗色与悬浮几何。 */
 .media-assistant.studio-assistant {
   --studio-line:var(--assistant-line);
-  --studio-navigation:#2b2b2b;
-  --assistant-paper:#232323;
-  --assistant-surface:#2c2c2c;
-  --assistant-composer:#2e2e2e;
-  --assistant-hover:#393939;
-  --assistant-ink:#e8e8e8;
-  --assistant-muted:#b0b0b0;
-  --assistant-accent:#82c8ae;
-  --assistant-accent-hover:#9bd8c1;
-  --assistant-accent-ink:#19251c;
-  --assistant-selected:#3a3a3a;
-  --assistant-line:#3d3d3d;
-  --assistant-menu:#343434;
-  --assistant-history:#1c1c1c;
+  --studio-navigation:var(--home-panel);
+  --assistant-paper:var(--home-sidebar);
+  --assistant-surface:var(--home-panel);
+  --assistant-composer:var(--home-field);
+  --assistant-hover:var(--home-hover);
+  --assistant-ink:var(--home-text);
+  --assistant-muted:var(--home-muted);
+  --assistant-accent:var(--home-accent);
+  --assistant-accent-hover:var(--home-accent-hover);
+  --assistant-accent-ink:var(--home-accent-ink);
+  --assistant-selected:var(--home-selected);
+  --assistant-line:var(--home-line);
+  --assistant-menu:var(--home-field);
+  --assistant-history:var(--home-bg);
   --assistant-error:#f2b4a8;
   --studio-paper:var(--assistant-paper);
   --studio-ink:var(--assistant-ink);
@@ -23,9 +23,9 @@
   --studio-editor-hover:var(--assistant-hover);
   --studio-accent:var(--assistant-accent);
   --studio-ui:Inter,"PingFang SC","Microsoft YaHei",sans-serif;
-  --scroll-thumb:#5d5d5d;
-  --scroll-hover:#7c7c7c;
-  --scroll-active:#9b9b9b;
+  --scroll-thumb:var(--home-muted);
+  --scroll-hover:var(--home-accent);
+  --scroll-active:var(--home-accent-hover);
   color-scheme:dark;
 }
 .media-assistant.studio-assistant.is-open {
@@ -69,7 +69,7 @@
 .media-assistant .studio-assistant__conversation-heading { color:var(--assistant-muted); }
 .media-assistant .studio-assistant__conversation-heading>strong { font-size:11px; }
 .media-assistant .studio-assistant__resize { left:-5px; }
-.media-assistant .studio-assistant__ring-track { stroke:#5d5d5d; }
+.media-assistant .studio-assistant__ring-track { stroke:var(--assistant-line); }
 .media-assistant .blog-workflow-dialog::backdrop { background:#0009; }
 .media-assistant .blog-workflow-dialog button.blog-workflow-dialog__confirm { background:var(--assistant-accent); color:var(--assistant-accent-ink); }
 .media-assistant .blog-workflow-dialog button.blog-workflow-dialog__confirm:is(:hover,:focus-visible):not(:disabled) { background:var(--assistant-accent-hover); color:var(--assistant-accent-ink); }
