@@ -117,6 +117,40 @@ describe('画布视频与图片共用结果流程', () => {
   const videoSource: Node = { ...source, type:'video', generation:{ ...defaultGenerationSettings(), ratio:'9:16', count:4 } }
   const videoAsset: Asset = { id:'video-asset', name:'夜市 · 视频 1', kind:'video', mime_type:'video/mp4', size:32, in_library:false }
 
+  it.each(['video', 'image'] as const)('同一 %s 生成节点连续完成两次任务，保留每批成品和一对多连线', async kind => {
+    const origin = kind === 'video' ? videoSource : source
+    const count = kind === 'video' ? 1 : 2
+    const results: Asset[] = Array.from({length:count * 2}, (_, index) => ({
+      id:`${kind}-${index}`, name:`成品 ${index + 1}`, kind, mime_type:kind === 'video' ? 'video/mp4' : 'image/png', size:32, in_library:false,
+    }))
+    const first = {...task, id:'first-task', status:'completed', asset_id:results[0]!.id, asset_ids:results.slice(0,count).map(asset => asset.id)}
+    const second = {...task, id:'second-task', status:'completed', asset_id:results[count]!.id, asset_ids:results.slice(count).map(asset => asset.id)}
+    const {view,api} = setup({...emptyDocument(),nodes:[origin]}, results)
+    await waitFor(() => expect(view.result.current.canvas.ready).toBe(true))
+    api.mockImplementation((path,method,body) => Promise.resolve(
+      path.endsWith('/canvas') && method === 'PUT' ? {version:1,document:(body as {document:Document}).document}
+        : path.startsWith('/assets/') ? results.find(asset => path === `/assets/${asset.id}`)
+          : path.endsWith('/first-task') ? first : second,
+    ))
+    act(() => view.result.current.onTask({...first,status:'processing',asset_id:null,asset_ids:[]}))
+    await waitFor(() => expect(view.result.current.canvas.document.nodes.filter(node => node.asset_id)).toHaveLength(count))
+    const previous = view.result.current.canvas.document.nodes.filter(node => node.asset_id)
+    act(() => view.result.current.onTask({...second,status:'processing',asset_id:null,asset_ids:[]}))
+    await waitFor(() => expect(view.result.current.canvas.document.nodes.filter(node => node.asset_id)).toHaveLength(count * 2))
+    act(() => { view.result.current.onTask(first); view.result.current.onTask(second) })
+    const document = view.result.current.canvas.document
+    expect(document.nodes).toHaveLength(1 + count * 2)
+    expect(document.nodes.filter(node => previous.some(old => old.id === node.id))).toEqual(previous)
+    expect(document.nodes.filter(node => node.asset_id).map(node => node.asset_id)).toEqual(results.map(asset => asset.id))
+    expect(document.edges).toHaveLength(count * 2)
+    expect(document.edges.every(edge => edge.source === origin.id)).toBe(true)
+    expect(new Set(document.edges.map(edge => edge.target)).size).toBe(count * 2)
+    expect(document.nodes[0]).toEqual(origin)
+    await act(async () => { await view.result.current.canvas.save() })
+    expect(api).toHaveBeenCalledWith('/projects/project/canvas','PUT',expect.objectContaining({document}))
+    expect(api.mock.calls.some(([,method]) => method === 'POST')).toBe(false)
+  })
+
   it('提交时自动创建一个视频成品占位与连线，按视频画幅定高且不覆盖草稿预览', async () => {
     const { view } = setup({ ...emptyDocument(), nodes:[videoSource] }, [videoAsset])
     await waitFor(() => expect(view.result.current.canvas.ready).toBe(true))

@@ -55,6 +55,34 @@ describe('视频节点生成', () => {
     await act(async () => {resolve({id:'task',node_id:node.id,status:'queued',progress:0,error:'',asset_id:null}); await Promise.resolve()})
   })
 
+  it('完成后可以从同一节点再次生成，每次使用新的任务标识', async () => {
+    const requests: {request_id:string;node_id:string}[] = []
+    const completed: {id:string;node_id:string;status:string;progress:number;error:string;asset_id:string}[] = []
+    vi.spyOn(media,'api').mockImplementation((path,method,body) => {
+      if (method === 'POST') {
+        const request = body as {request_id:string;node_id:string}
+        requests.push(request)
+        const next = {id:request.request_id,node_id:request.node_id,status:'completed',progress:100,error:'',asset_id:`asset-${requests.length}`}
+        completed.unshift(next)
+        return Promise.resolve(next)
+      }
+      return Promise.resolve(path === '/video-models' ? {configured:true,references_ready:true,models:[model]} : completed)
+    })
+    const state = props()
+    render(<VideoGeneration {...state} />)
+    for (let index = 0; index < 2; index++) {
+      await waitFor(() => expect(screen.getByRole('button',{name:'生成视频'})).toBeEnabled())
+      fireEvent.click(screen.getByRole('button',{name:'生成视频'}))
+      await waitFor(() => expect(requests).toHaveLength(index + 1))
+      await waitFor(() => expect(state.onTask).toHaveBeenCalledWith(expect.objectContaining({id:requests[index]?.request_id,status:'completed'})))
+    }
+    expect(requests[0]?.node_id).toBe(node.id)
+    expect(requests[1]?.node_id).toBe(node.id)
+    expect(requests[1]?.request_id).not.toBe(requests[0]?.request_id)
+    expect(state.onTask).toHaveBeenCalledWith(expect.objectContaining({id:requests[0]?.request_id,status:'completed'}))
+    expect(state.onTask).toHaveBeenCalledWith(expect.objectContaining({id:requests[1]?.request_id,status:'completed'}))
+  })
+
   it('未知结果必须明确核实；断网重试复用同一请求标识', async () => {
     const requests: unknown[]=[]
     const api=vi.spyOn(media,'api').mockImplementation((path,method,body) => {
