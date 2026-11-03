@@ -482,7 +482,7 @@ async def save_task(task_id: UUID) -> None:
                     data = await public_image(row["url"])
                 if not data or len(data) > MAX_IMAGE_BYTES:
                     raise ValueError("图片为空或超过大小限制")
-                mime, extension = image_type(data)
+                mime, _ = image_type(data)
                 asset_id = uuid4()
                 path = service.STORAGE_ROOT / str(asset_id)
                 paths.append(path)
@@ -491,7 +491,7 @@ async def save_task(task_id: UUID) -> None:
                     MediaAsset(
                         id=asset_id,
                         owner_id=task.owner_id,
-                        name=f"生成图片-{str(task.id)[:8]}-{index + 1}{extension}",
+                        name=service.generated_asset_name(task.snapshot, "image", index),
                         mime_type=mime,
                         kind="image",
                         size=len(data),

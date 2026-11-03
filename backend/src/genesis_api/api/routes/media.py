@@ -1,7 +1,7 @@
 """私有影音 API：校验资源归属、画布关联、并发版本与上传边界。"""
 
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
@@ -248,12 +248,28 @@ def canvas(
         session: 当前请求的查询会话。
 
     Returns:
-        version 与 document；客户端后续保存时需携带读到的版本。
+        version 与 document；必要时先校准素材名称并递增版本，
+        客户端后续保存时需携带读到的版本。
 
     Raises:
         HTTPException: 作品不存在或归属不符，返回 404。
     """
     project = service.project_for(session, user.id, project_id)
+    previous = CanvasDocument.model_validate(project.canvas)
+    document = service.sync_asset_names(session, project, previous)
+    if any(node.name != old.name for node, old in zip(document.nodes, previous.nodes, strict=True)):
+        # 记住校准后的名称基线，避免另一作品改名后，普通位置保存被误判为再次改名。
+        rows = cast(list[dict[str, object]], project.canvas["nodes"])
+        project.canvas = {
+            **project.canvas,
+            "nodes": [
+                {**row, "name": node.name} if node.name != old.name else row
+                for row, node, old in zip(rows, document.nodes, previous.nodes, strict=True)
+            ],
+        }
+        project.version += 1
+        project.updated_at = datetime.now(UTC)
+        session.commit()
     return {"version": project.version, "document": project.canvas}
 
 
@@ -330,7 +346,8 @@ def save_canvas(
                 grouped_ids.add(member_id)
         elif node.member_ids:
             raise HTTPException(422, "只有分组节点可以包含成员")
-    project.canvas = data.document.model_dump(mode="json")
+    document = service.sync_asset_names(session, project, data.document, rename=True)
+    project.canvas = document.model_dump(mode="json")
     project.version += 1
     project.updated_at = datetime.now(UTC)
     session.commit()

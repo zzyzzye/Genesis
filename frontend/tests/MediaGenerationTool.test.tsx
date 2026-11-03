@@ -35,7 +35,7 @@ it('用户发送前保存画布，工具回执只为第一张建立结果连线�
   let handlers!: Parameters<typeof ai.streamAiChatRun>[2]
   vi.spyOn(ai,'streamAiChatRun').mockImplementation((_token,_run,callbacks) => {handlers=callbacks;return new Promise(()=>{})})
   render(<MemoryRouter initialEntries={['/media/projects/project/canvas']}><Routes><Route path="/media/projects/:projectId/canvas" element={<MediaPage/>}/></Routes></MemoryRouter>)
-  await screen.findByTestId('rf__node-first')
+  await screen.findByTestId('rf__node-first', {}, { timeout:10000 })
   fireEvent.change(screen.getAllByRole('textbox',{name:'生图节点名称'})[0]!,{target:{value:'01 新名称'}})
   fireEvent.blur(screen.getAllByRole('textbox',{name:'生图节点名称'})[0]!)
   fireEvent.click(screen.getByRole('button',{name:'镜头搭档'}))

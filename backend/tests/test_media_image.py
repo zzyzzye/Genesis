@@ -30,7 +30,7 @@ from genesis_api.identity.models import User, UserRole
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import image, service
 from genesis_api.media.agent import tools as media_tools
-from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset
+from genesis_api.media.models import ImageGeneration, MediaAsset, MediaProject, ProjectAsset
 
 PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jbcQAAAAASUVORK5CYII="
@@ -63,7 +63,11 @@ async def fixture(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncGenera
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     Base.metadata.create_all(engine)
-    settings = Settings(image_api_key=SecretStr("synthetic-image-test-key"))
+    settings = Settings(
+        image_api_key=SecretStr("synthetic-image-test-key"),
+        yyapi_access_token=None,
+        yyapi_user_id=None,
+    )
     model_catalog.entries.clear()
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
@@ -387,6 +391,104 @@ async def test_models_configuration_and_generation(fixture: ImageFixture) -> Non
     state.settings.image_api_key = None
     assert (await state.client.get("image-models")).json()["configured"] is False
     assert (await submit(state)).status_code == 503
+
+
+@pytest.mark.anyio
+async def test_result_name_is_stored_and_shared_with_canvas(fixture: ImageFixture) -> None:
+    """成品名入库，多个画布引用改名后仍与下载和素材接口一致。"""
+    state = fixture
+    await save_node(state, name="炭火烧烤")
+    assert (await submit(state)).status_code == 202
+    task = await latest(state)
+    asset_id = task["asset_id"]
+    metadata = (await state.client.get(f"assets/{asset_id}")).json()
+    assert metadata["name"] == "炭火烧烤 · 图片 1"
+    assert metadata["download_name"] == "炭火烧烤 · 图片 1.png"
+    current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    result = {
+        "id": str(uuid4()),
+        "type": "image",
+        "asset_id": asset_id,
+        "name": "占位旧名",
+        "text": "",
+        "x": 800,
+        "y": 0,
+        "width": 360,
+        "height": 360,
+    }
+    duplicate = {**result, "id": str(uuid4()), "y": 500}
+    current["document"]["nodes"].extend([result, duplicate])
+    response = await state.client.put(f"projects/{state.project_id}/canvas", json=current)
+    assert response.status_code == 200
+    saved = response.json()
+    assert [n["name"] for n in saved["document"]["nodes"][1:]] == ["炭火烧烤 · 图片 1"] * 2
+    saved["document"]["nodes"][1]["name"] = "开场烧烤成品"
+    response = await state.client.put(f"projects/{state.project_id}/canvas", json=saved)
+    assert response.status_code == 200
+    assert [n["name"] for n in response.json()["document"]["nodes"][1:]] == ["开场烧烤成品"] * 2
+    assert (await state.client.get(f"assets/{asset_id}")).json()["name"] == "开场烧烤成品"
+
+    download = await state.client.get(f"assets/{asset_id}/file")
+    assert download.content == PNG
+    assert "%E5%BC%80%E5%9C%BA" in download.headers["content-disposition"]
+    conflicting = response.json()
+    conflicting["document"]["nodes"][1]["name"] = "名称甲"
+    conflicting["document"]["nodes"][2]["name"] = "名称乙"
+    assert (
+        await state.client.put(f"projects/{state.project_id}/canvas", json=conflicting)
+    ).status_code == 422
+    assert (await state.client.get(f"assets/{asset_id}")).json()["name"] == "开场烧烤成品"
+
+    asset = state.session.get(MediaAsset, UUID(asset_id))
+    assert asset is not None
+    service.rename_node(
+        state.session,
+        asset.owner_id,
+        UUID(state.project_id),
+        UUID(result["id"]),
+        "助手改名后的成品",
+        response.json()["version"],
+    )
+    state.session.commit()
+    assert (await state.client.get(f"assets/{asset_id}")).json()["name"] == "助手改名后的成品"
+
+
+@pytest.mark.anyio
+async def test_shared_asset_position_save_does_not_revert_another_project_name(
+    fixture: ImageFixture,
+) -> None:
+    """校准旧别名后，仅移动节点不能覆盖另一作品后续修改的素材名。"""
+    state = fixture
+    await save_node(state, name="烧烤镜头")
+    assert (await submit(state)).status_code == 202
+    asset = state.session.get(MediaAsset, UUID((await latest(state))["asset_id"]))
+    assert asset is not None
+    node = {
+        "id": str(uuid4()),
+        "type": "image",
+        "asset_id": str(asset.id),
+        "name": "历史画布别名",
+        "text": "",
+        "x": 0,
+        "y": 0,
+        "width": 360,
+        "height": 280,
+    }
+    project = MediaProject(owner_id=asset.owner_id, name="复用作品", canvas={"nodes": [node]})
+    state.session.add(project)
+    state.session.flush()
+    state.session.add(ProjectAsset(project_id=project.id, asset_id=asset.id))
+    state.session.commit()
+    snapshot = (await state.client.get(f"projects/{project.id}/canvas")).json()
+    assert snapshot["document"]["nodes"][0]["name"] == asset.name
+    assert project.canvas["nodes"][0]["name"] == asset.name
+    asset.name = "另一作品的新名称"
+    state.session.commit()
+    snapshot["document"]["nodes"][0]["x"] = 100
+    saved = await state.client.put(f"projects/{project.id}/canvas", json=snapshot)
+    assert saved.status_code == 200
+    assert saved.json()["document"]["nodes"][0]["name"] == "另一作品的新名称"
+    assert asset.name == "另一作品的新名称"
 
 
 @pytest.mark.anyio

@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from genesis_api.core.uploads import media_filename
 from genesis_api.media.models import MediaAsset, MediaProject, ProjectAsset
 from genesis_api.media.schemas import CanvasDocument, ProjectWrite
 
@@ -33,6 +34,93 @@ ALLOWED_TYPES = {
     "audio/webm",
     "audio/aac",
 }
+
+
+def generated_asset_name(snapshot: dict[str, object], kind: str, index: int = 0) -> str:
+    """按提交时的节点名及结果序号命名，不将任务标识作为素材名称。"""
+    title = snapshot.get("name")
+    label = "图片" if kind == "image" else "视频"
+    base = (
+        title.strip()
+        if isinstance(title, str) and title.strip()
+        else ("生图" if kind == "image" else "生视频")
+    )
+    suffix = f" · {label} {index + 1}"
+    return base[: 120 - len(suffix)] + suffix
+
+
+def sync_asset_names(
+    session: Session,
+    project: MediaProject,
+    document: CanvasDocument,
+    *,
+    rename: bool = False,
+) -> CanvasDocument:
+    """素材节点共用数据库名称；保存时仅将明确的节点改名写回素材。
+
+    Args:
+        session: 调用方提交的事务会话。
+        project: 已校验归属并锁定的作品。
+        document: 待读取或保存的完整画布。
+        rename: 保存时检测相对已保存画布的改名；读取不修改数据库。
+
+    Returns:
+        素材节点名称与素材记录一致的画布，生成草稿名称保持独立。
+
+    Raises:
+        HTTPException: 同一素材收到多个冲突名称时返回 422。
+    """
+    material_types = {"image", "video_asset", "audio", "asset"}
+    ids = {
+        node.asset_id for node in document.nodes if node.type in material_types and node.asset_id
+    }
+    if not ids:
+        return document
+    assets = {
+        asset.id: asset
+        for asset in session.scalars(
+            select(MediaAsset)
+            .join(ProjectAsset, ProjectAsset.asset_id == MediaAsset.id)
+            .where(
+                MediaAsset.id.in_(ids),
+                MediaAsset.owner_id == project.owner_id,
+                ProjectAsset.project_id == project.id,
+            )
+            .order_by(MediaAsset.id)
+            .with_for_update(of=MediaAsset)
+        )
+    }
+    previous = {node.id: node for node in CanvasDocument.model_validate(project.canvas).nodes}
+    names: dict[UUID, str] = {}
+    if rename:
+        for node in document.nodes:
+            old = previous.get(node.id)
+            if (
+                node.type not in material_types
+                or node.asset_id not in assets
+                or old is None
+                or old.asset_id != node.asset_id
+                or not node.name.strip()
+                or node.name == old.name
+            ):
+                continue
+            assert node.asset_id is not None
+            name = node.name.strip()
+            if node.asset_id in names and names[node.asset_id] != name:
+                raise HTTPException(422, "同一素材不能同时使用不同名称")
+            names[node.asset_id] = name
+        for asset_id, name in names.items():
+            assets[asset_id].name = name
+    return document.model_copy(
+        update={
+            "nodes": [
+                node.model_copy(update={"name": assets[node.asset_id].name[:120]})
+                if node.type in material_types and node.asset_id in assets
+                else node
+                for node in document.nodes
+            ]
+        }
+    )
 
 
 def project_for(session: Session, owner_id: UUID, project_id: UUID) -> MediaProject:
@@ -101,6 +189,18 @@ def rename_node(
         # 只复制目标名称，不用默认值重建旧画布或改动正文、布局及素材关联。
         nodes = list(cast(list[dict[str, object]], project.canvas["nodes"]))
         nodes[index] = {**nodes[index], "name": name}
+        target = document.nodes[index]
+        material_types = {"image", "video_asset", "audio", "asset"}
+        if target.asset_id and target.type in material_types:
+            synchronized = sync_asset_names(
+                session,
+                project,
+                CanvasDocument.model_validate({**project.canvas, "nodes": nodes}),
+                rename=True,
+            )
+            for position, node in enumerate(synchronized.nodes):
+                if node.asset_id == target.asset_id and node.type in material_types:
+                    nodes[position] = {**nodes[position], "name": node.name}
         project.canvas = {**project.canvas, "nodes": nodes}
         project.version += 1
         project.updated_at = datetime.now(UTC)
@@ -148,11 +248,12 @@ def asset_data(asset: MediaAsset) -> dict[str, object]:
         asset: 已通过归属检查的素材实体。
 
     Returns:
-        素材标识、名称、类型、大小与是否保留在账户库的标记。
+        素材标识、显示名、下载文件名、类型、大小与账户库保留标记。
     """
     return {
         "id": str(asset.id),
         "name": asset.name,
+        "download_name": media_filename(asset.name, asset.mime_type),
         "kind": asset.kind,
         "mime_type": asset.mime_type,
         "size": asset.size,

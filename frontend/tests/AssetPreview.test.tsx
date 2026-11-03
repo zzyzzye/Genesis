@@ -21,6 +21,12 @@ describe('素材播放器', () => {
   })
   afterEach(() => vi.restoreAllMocks())
 
+  it('素材显示名称与下载文件名同源，下载保留服务端补齐的类型后缀', async () => {
+    render(<AssetPreview asset={{ ...audio, kind:'image', name:'烧烤成品', download_name:'烧烤成品.png', mime_type:'image/png' }} controls />)
+    expect(await screen.findByRole('link', { name:'下载原文件' })).toHaveAttribute('download', '烧烤成品.png')
+    expect(screen.getByRole('img', { name:'烧烤成品' })).toBeInTheDocument()
+  })
+
   it('音频使用中文播放控件，操作不触发节点拖动，卸载释放私有文件地址', async () => {
     const onPointerDown = vi.fn()
     const { container, unmount } = render(<div onPointerDown={onPointerDown}><AssetPreview asset={audio} controls /></div>)

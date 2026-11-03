@@ -27,8 +27,9 @@ export function useImageGenerationResults(projectId: string, canvas: ReturnType<
       const [w = 1, h = 1] = (settings?.image_ratio || settings?.image_size?.replace('x', ':') || '1:1').split(':').map(Number)
       const height = Number.isFinite(w / h) && w > 0 && h > 0 ? Math.max(80, Math.min(4000, 360 * h / w)) : 360
       for (let index = 0; index < (settings?.count ?? 1); index++) {
+        const suffix = ` · 图片 ${index + 1}`
         const result: Node = {
-          id:crypto.randomUUID(),type:'image',asset_id:null,name:`${source.name || '生图'} · 图片 ${index + 1}`.slice(0,120),text:'',
+          id:crypto.randomUUID(),type:'image',asset_id:null,name:`${(source.name || '生图').slice(0,120-suffix.length)}${suffix}`,text:'',
           x:Math.min(1000000, source.x + source.width + 160),y:Math.max(-1000000, Math.min(1000000, source.y + source.height / 2 + 21 - height / 2)),width:360,height,
           image_result:{ task_id:task.id,index,status:task.status,error },
         }
@@ -65,7 +66,8 @@ export function useImageGenerationResults(projectId: string, canvas: ReturnType<
         const status = missing ? 'failed' : task.status
         const error = (missing ? '上游未返回这张图片，请查看生图节点的任务状态。' : task.error).slice(0,2000)
         if (node.asset_id === assetId && result.status === status && result.error === error) return node
-        return { ...node,asset_id:assetId,image_result:{ ...result,status,error } }
+        const stored = assets.find(item => item.id === assetId)
+        return { ...node,asset_id:assetId,...(stored ? { name:stored.name.slice(0,120) } : {}),image_result:{ ...result,status,error } }
       })
       if (nodes.some((node, index) => node !== document.nodes[index])) apply({ ...document,nodes }, false)
     }

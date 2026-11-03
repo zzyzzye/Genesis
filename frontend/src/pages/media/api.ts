@@ -1,6 +1,6 @@
 import { authFetch, authUpload, getStoredAuthToken, handleStudioUnauthorized } from '../../lib/auth'
 
-export type Asset = { id: string; name: string; kind: 'image' | 'video' | 'audio'; mime_type: string; size: number; in_library: boolean }
+export type Asset = { id: string; name: string; download_name?: string; kind: 'image' | 'video' | 'audio'; mime_type: string; size: number; in_library: boolean }
 export type Project = { id: string; name: string; version: number; updated_at: string }
 export type GenerationSettings = { model: string; mode: 'text' | 'reference' | 'first_last'; ratio: '16:9' | '9:16' | '1:1' | '4:3' | '3:4' | '21:9' | '2:3' | '3:2'; resolution: '480P' | '720P' | '1080P' | '768P' | '2160P' | '2K'; count: 1 | 2 | 4; sound: boolean; image_size?: string; image_quality?: '' | 'low' | 'standard' | 'medium' | 'high'; image_resolution?: '' | '1K' | '2K' | '4K'; image_ratio?: '' | '1:1' | '1:2' | '2:1' | '9:16' | '16:9' | '3:4' | '4:3' | '3:2' | '2:3' | '5:4' | '4:5' | '21:9' | '9:21'; image_background?: '' | 'auto' | 'opaque' | 'transparent' }
 export const defaultGenerationSettings = (): GenerationSettings => ({ model: '', mode: 'text', ratio: '16:9', resolution: '720P', count: 1, sound: true })

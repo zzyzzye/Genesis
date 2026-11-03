@@ -500,7 +500,9 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
 
   const patchNode = useCallback((id: string, patch: Partial<Node>, record = true) => {
     const current = canvas.current.current
-    canvas.apply({ ...current, nodes: current.nodes.map((node) => node.id === id ? { ...node, ...patch } : node) }, record)
+    const target = current.nodes.find(node => node.id === id)
+    const renameAsset = patch.name !== undefined && target?.asset_id && ['image', 'video_asset', 'audio', 'asset'].includes(target.type)
+    canvas.apply({ ...current, nodes: current.nodes.map((node) => node.id === id ? { ...node, ...patch } : renameAsset && node.asset_id === target.asset_id && ['image', 'video_asset', 'audio', 'asset'].includes(node.type) ? { ...node, name:patch.name } : node) }, record)
   }, [canvas])
 
   const changeReference = useCallback((id: string, sourceId: string, connected: boolean) => {
@@ -536,8 +538,8 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   }, [patchNode, projectId])
 
   const openNodeAssets = useCallback((id: string, kind: 'image' | 'audio' | 'video') => {
-    setAssetTarget({ id, kind, allowImageForVideo: canvas.document.nodes.some((node) => node.id === id && node.type === 'video') })
-  }, [canvas.document.nodes])
+    void canvas.save().then(() => setAssetTarget({ id, kind, allowImageForVideo: canvas.current.current.nodes.some((node) => node.id === id && node.type === 'video') })).catch((reason: Error) => setError(reason.message))
+  }, [canvas])
 
   const assignNodeAsset = useCallback((id: string, asset: Asset) => {
     const current = canvas.current.current

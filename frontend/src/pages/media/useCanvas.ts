@@ -66,8 +66,15 @@ export function useCanvas(projectId: string, userId: string) {
     const operation = (async () => {
       try {
         const result = await api<Snapshot>(`/projects/${projectId}/canvas`, 'PUT', { version: version.current, document: next })
-        version.current = result.version; saved.current = encoded; serverBase.current = completeDocument(result.document)
+        const stored = completeDocument(result.document)
+        const names = new Map(stored.nodes.filter(node => node.asset_id && node.name?.trim() && ['image', 'video_asset', 'audio', 'asset'].includes(node.type)).map(node => [node.id, node]))
+        const canonical = { ...next, nodes: next.nodes.map(node => {
+          const source = names.get(node.id)
+          return source && source.asset_id === node.asset_id && source.name !== node.name ? { ...node, name:source.name } : node
+        }) }
+        version.current = result.version; saved.current = JSON.stringify(canonical); serverBase.current = stored
         const clean = JSON.stringify(current.current) === encoded
+        if (clean && canonical.nodes.some((node, index) => node !== next.nodes[index])) { current.current = canonical; setDocument(canonical) }
         setDirty(!clean); setStatus(clean ? '已保存' : '有待保存修改')
         if (!clean) setDocument({ ...current.current })
         if (clean) localStorage.removeItem(key)

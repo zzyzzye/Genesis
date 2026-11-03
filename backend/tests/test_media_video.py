@@ -60,6 +60,8 @@ async def fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncGener
     )
     Base.metadata.create_all(engine)
     settings = Settings(
+        yyapi_access_token=None,
+        yyapi_user_id=None,
         video_api_key=SecretStr("synthetic-video-key"),
         video_public_base_url="https://serenova.cn",
         agent_action_secret=SecretStr("test-video-reference-signing-key-only"),

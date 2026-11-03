@@ -390,10 +390,7 @@ async def save_result(task: VideoGeneration, session: Session) -> None:
         asset = MediaAsset(
             id=asset_id,
             owner_id=task.owner_id,
-            name=f"生成视频-{str(task.id)[:8]}"
-            + {"video/webm": ".webm", "video/quicktime": ".mov", "video/x-matroska": ".mkv"}.get(
-                mime, ".mp4"
-            ),
+            name=service.generated_asset_name(task.snapshot, "video"),
             mime_type=mime,
             kind="video",
             size=size,
