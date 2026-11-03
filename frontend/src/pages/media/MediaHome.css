@@ -1,4 +1,4 @@
-:root:has(.media-workspace),.media-workspace,.media-home,.media-home-dialog { --home-bg:#090909; --home-sidebar:#111; --home-panel:#181818; --home-hover:#242424; --home-selected:#212121; --home-field:#202020; --home-line:#262626; --home-text:#f1f5ff; --home-muted:#a0a8b8; --home-accent:#438bff; --home-accent-hover:#67a2ff; --home-accent-ink:#07162e; --home-preview:#141414; --home-assistant:var(--home-accent); }
+:root:has(.media-workspace),.media-workspace,.media-home,.media-home-dialog { --home-bg:#090909; --home-sidebar:#111; --home-panel:#181818; --home-hover:#242424; --home-selected:#212121; --home-field:#202020; --home-line:#262626; --home-text:#ededed; --home-muted:#a3a3a3; --home-accent:#e6e6e6; --home-accent-hover:#fff; --home-accent-ink:#191919; --home-preview:#141414; --home-assistant:var(--home-accent); }
 .media-workspace,.media-home,.media-home-dialog { color:var(--home-text); font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif; font-size:14px; color-scheme:dark; }
 :root:has(.media-workspace) { --scroll-thumb:#666; --scroll-hover:#888; --scroll-active:#aaa; background:var(--home-bg); color-scheme:dark; }
 .media-home { min-height:100dvh; background:var(--home-bg); }
@@ -12,7 +12,7 @@ body:has(.media-workspace) { min-width:0; background:var(--home-bg); }
 .media-home :is(h1,h2,h3,p),.media-home-dialog :is(h2,p) { margin:0; }
 .media-home-sidebar { position:fixed; inset:0 auto 0 0; z-index:20; display:flex; flex-direction:column; width:224px; padding:24px 16px 16px; background:var(--home-sidebar); border-right:1px solid var(--home-line); overflow:auto; }
 .media-home-brand { --genesis-logo-size:28px; --genesis-wordmark-size:22px; display:flex; align-items:center; gap:9px; min-height:44px; padding:0 10px; margin-bottom:28px; color:#fff; }
-.media-home-brand-label { font-size:8px; letter-spacing:1.5px; color:var(--home-accent); align-self:flex-end; margin-bottom:5px; }
+.media-home-brand-label { font-size:8px; letter-spacing:1.5px; color:var(--home-muted); align-self:flex-end; margin-bottom:5px; }
 .media-home .media-home-primary,.media-home-dialog .media-home-primary { min-height:40px; padding:10px 16px; background:var(--home-accent); color:var(--home-accent-ink); font-weight:550; }
 .media-home .media-home-primary:is(:hover,:focus-visible),.media-home-dialog .media-home-primary:is(:hover,:focus-visible) { background:var(--home-accent-hover); color:var(--home-accent-ink); }
 .media-home-sidebar>.media-home-primary { width:100%; justify-content:flex-start; margin-bottom:14px; }
