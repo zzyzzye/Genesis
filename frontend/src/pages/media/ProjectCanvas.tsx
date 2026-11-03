@@ -52,7 +52,6 @@ type CanvasNodeData = {
   source: Node
   asset?: Asset
   assetsLoading: boolean
-  previewAssets: Asset[]
   references: ReturnType<typeof incomingReferences>
   referenceCandidates: Node[]
   onReferenceChange: (id: string, sourceId: string, connected: boolean) => void
@@ -247,7 +246,6 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
   const isImage = node.type === 'image_generation'
   const isAudio = node.type === 'audio_generation'
   const isVideo = node.type === 'video'
-  const previewAssets = data.previewAssets.filter((asset) => isImage ? asset.kind === 'image' : isAudio ? asset.kind === 'audio' : asset.kind !== 'audio')
   const fileInput = useRef<HTMLInputElement>(null)
   const referencePrompt = useRef<ReferencePromptHandle>(null)
   const appendPromptToken = (token: string) => data.onTextChange(id, `${node.text}${node.text ? ' ' : ''}${token}`)
@@ -278,7 +276,6 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
     {isVideo && <label>清晰度<select aria-label="生成清晰度" value={settings.resolution} onChange={(event) => patchSettings({ resolution: event.target.value as typeof settings.resolution })}>{['480P', '720P', '1080P', '768P', '2160P', '2K'].map((quality) => <option key={quality}>{quality}</option>)}</select></label>}
     {isVideo && <p>以上为请求参数预设，实际支持范围请查看模型简介，提交时由上游校验。</p>}
     {!isVideo && <label>数量<select aria-label="生成数量" value={settings.count} onChange={(event) => patchSettings({ count: Number(event.target.value) as typeof settings.count })}>{[1, 2, 4].map((count) => <option key={count} value={count}>{count} {isImage ? '张' : '个'}</option>)}</select></label>}
-    <label className="media-video-asset-picker"><span>预览素材</span><select aria-label={`${nodeTypeLabel(node.type)}预览素材`} value={node.asset_id ?? ''} onChange={(event) => data.onPatch(id, { asset_id: event.target.value || null })}><option value="">暂未选择</option>{previewAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>
     {durationError && <p className="media-node-field-error" id={`duration-error-${id}`} aria-live="polite">{durationError}</p>}
   </GenerationParameters>
   return <section className="media-video-composer nodrag nowheel nopan" aria-label={isImage ? '生图草稿' : isAudio ? '生音频草稿' : '镜头草稿'} onKeyDown={(event) => {
@@ -578,8 +575,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     }
   }, [assignNodeAsset, projectId])
 
-  const previewAssets = useMemo(() => Object.values(assets), [assets])
-
   useEffect(() => {
     const selectedNode = selected.length === 1 ? canvas.document.nodes.find((node) => node.id === selected[0]) : undefined
     onAgentNodeChange?.(selectedNode ? {
@@ -656,7 +651,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       source: node,
       asset: assets[node.asset_id ?? ''],
       assetsLoading,
-      previewAssets,
       references: incomingReferences(canvas.document, node.id, assets),
       referenceCandidates: canvas.document.nodes.filter((source) => source.id !== node.id && source.type !== 'group' && !canvas.document.edges.some((edge) => edge.source === source.id && edge.target === node.id)),
       onReferenceChange: changeReference,
@@ -674,7 +668,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       editorOpen: selected.length === 1 && selected[0] === node.id && !nodeMenu && !contextMenu,
       onCloseEditor: () => setSelected([]),
     },
-  })), [assets, assetsLoading, beginInteraction, canvas.document, canvas.save, changeReference, contextMenu, convertToVideo, draggingNode, endInteraction, nodeMenu, onImageTask, openAssets, openNodeAssets, patchNode, previewAssets, projectId, selected, updateText, uploadNodeAsset, uploadPreview])
+  })), [assets, assetsLoading, beginInteraction, canvas.document, canvas.save, changeReference, contextMenu, convertToVideo, draggingNode, endInteraction, nodeMenu, onImageTask, openAssets, openNodeAssets, patchNode, projectId, selected, updateText, uploadNodeAsset, uploadPreview])
 
   const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
     ...edge,

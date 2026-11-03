@@ -105,8 +105,6 @@
 .media-node-editor .media-video-composer-footer { gap:8px; font-size:12px; }
 .media-node-editor .media-video-composer-footer small { font-size:11px; }
 .media-editor .media-node-editor .media-video-spec { padding:4px 8px; margin-left:0; }
-.media-node-editor .media-video-asset-picker { max-width:37%; }
-.media-node-editor .media-video-asset-picker>span { flex:none; white-space:nowrap; }
 .media-node-editor .media-node-references { gap:4px; max-height:105px; overflow:auto; }
 .media-node-editor .media-node-references>div { gap:6px; font-size:12px; }
 .media-node-editor .media-node-references button { flex:none; min-height:25px; padding:2px 7px; }
@@ -194,7 +192,6 @@
 .media-reference-details span { flex:1 1 100px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--media-node-font-size); }
 .media-reference-details small { color:#aaa; font-size:12px; }
 .media-editor .media-node-editor .media-reference-details button { min-height:26px; padding:2px 7px; }
-.media-node-editor .media-node-generation-settings .media-video-asset-picker { max-width:none; }
 
 /* 素材本身就是节点内容，名称和管理操作放在内容外侧。 */
 .media-editor .media-node--material { background:transparent; }
@@ -257,10 +254,8 @@
 .media-editor .media-generation-popover :is(input,select):focus { background:var(--media-node-field); border:0; outline:0; box-shadow:none; }
 .media-editor .media-generation-popover input { width:52px; }
 .media-editor .media-generation-popover input[aria-label="图片输出尺寸"] { width:126px; }
-.media-editor .media-generation-popover .media-video-asset-picker { max-width:none; }
 .media-editor .media-generation-popover p { margin:0; line-height:1.6; }
 .media-editor .media-generation-popover p:not(.media-node-field-error) { color:var(--media-node-muted); }
-.media-editor .media-generation-popover .media-video-asset-picker>span { color:var(--media-node-muted); }
 .media-video-generation p { margin:0; color:#aaa; line-height:1.6; overflow-wrap:anywhere; }
 .media-video-generation .media-video-task { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#ddd; }
 .media-video-generation .media-video-unknown { display:flex; align-items:flex-start; gap:6px; color:#bbb; line-height:1.5; }

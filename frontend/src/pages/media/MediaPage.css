@@ -177,8 +177,6 @@
 .media-video-composer-top label,.media-video-composer-footer label { display:flex; align-items:center; gap:7px; min-width:0; }
 .media-video-composer :is(select,button) { min-height:29px; padding:3px 9px; border:0; border-radius:999px; background:#303030; color:#d5d5d5; font-size:var(--media-node-font-size); }
 .media-video-composer-top button { color:#b8c0c4; }
-.media-video-asset-picker { max-width:38%; color:#838b8f; }
-.media-video-asset-picker select { min-width:0; max-width:130px; }
 .media-video-composer :is(select,button):focus-visible { outline:0; }
 .media-video-composer textarea:focus-visible { outline:0; border:0; background:transparent; box-shadow:none; }
 .media-video-composer-top button { white-space:nowrap; cursor:pointer; }

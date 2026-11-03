@@ -633,6 +633,7 @@ describe('作品画布', () => {
     expect(screen.getByRole('button', { name: '选择' })).toHaveAttribute('aria-pressed', 'true')
   })
   it('视频节点可直接上传预览素材，失败后重试原文件', async () => {
+    vi.spyOn(media, 'fileBlob').mockRejectedValue(new Error('预览不可用'))
     vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
     const assetId = crypto.randomUUID()
     const uploader = vi.spyOn(media, 'upload').mockRejectedValueOnce(new Error('连接中断')).mockResolvedValue({ id: assetId, name: 'frame.png', kind: 'image', mime_type: 'image/png', size: 4, in_library: false })
@@ -645,7 +646,8 @@ describe('作品画布', () => {
     await waitFor(() => expect(uploader).toHaveBeenCalledTimes(2))
     expect(uploader).toHaveBeenLastCalledWith('/projects/project/assets', file, expect.any(Function))
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
-    await waitFor(() => expect(screen.getByRole('combobox', { name: '生视频节点预览素材' })).toHaveValue(assetId))
+    expect(screen.queryByRole('combobox', { name: '生视频节点预览素材' })).not.toBeInTheDocument()
+    await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: assetId })))
   })
   it('节点素材在画布内选择，引用失败保留弹窗并可重试', async () => {
     const asset = { id: crypto.randomUUID(), name: '镜头参考.png', kind: 'image' as const, mime_type: 'image/png', size: 4, in_library: true }
@@ -667,7 +669,8 @@ describe('作品画布', () => {
     fireEvent.click(screen.getByRole('button', { name: '用于当前节点' }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '选择节点素材' })).not.toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
-    expect(screen.getByRole('combobox', { name: '生视频节点预览素材' })).toHaveValue(asset.id)
+    expect(screen.queryByRole('combobox', { name: '生视频节点预览素材' })).not.toBeInTheDocument()
+    await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: asset.id })))
     expect(request).toHaveBeenCalledWith('/projects/project/assets/reference', 'POST', { asset_id: asset.id })
   })
   it('上传失败显示原因并可在原作品内重试', async () => {
