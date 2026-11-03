@@ -594,7 +594,7 @@ describe('作品画布', () => {
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     fireEvent.change(screen.getByRole('spinbutton', { name: '镜头时长' }), { target: { value: '10' } })
     fireEvent.blur(screen.getByRole('spinbutton', { name: '镜头时长' }))
-    fireEvent.change(screen.getByRole('combobox', { name: '画面比例' }), { target: { value: '9:16' } })
+    fireEvent.click(screen.getByRole('button', { name: '画面比例 9:16' }))
     expect(screen.queryByRole('combobox', { name: '生成声音' })).not.toBeInTheDocument()
     fireEvent.keyDown(screen.getByRole('spinbutton', { name: '镜头时长' }), { key: 'Escape' })
     expect(screen.getByRole('button', { name: '生成参数' })).toHaveAttribute('aria-expanded', 'false')

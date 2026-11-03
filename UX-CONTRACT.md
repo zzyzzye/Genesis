@@ -262,7 +262,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | 模块管理入口 / Navigation | React Router、Studio | App.tsx、Studio.tsx、Account.tsx | 所属模块下的 /studio 直接进入管理，旧博客链接保留路径、查询参数与锚点 | 直接访问、旧链接跳转、账户入口、桌面与窄屏 |
 | 文章阅读布局与搜索 | PublicBlog、ArticleDocument、ArticleToc、BlogSearch | BlogPage.tsx、BlogReader.css、BlogDirectory.css、useModalDialog | 复用目录的搜索、焦点管理与 q 查询；正文锚点和评论不变；桌面侧栏只使用公开作者资料，手机目录移到正文前；不增加 Live2D、知识图谱或未接通的订阅表单 | 搜索加载/空态/结果、Escape 与恢复、目录定位/选中/折叠、长标题与代码块、桌面/390/320px |
 | 账户登录 / 注册 Form | AccountLayout、AccountForm、Account、SessionRecovery | Account.tsx/CSS、lib/auth.ts、lib/api.ts、auth.py 的注册约束 | 普通按钮切换模式；noValidate 与关联字段错误、首错聚焦；密码默认隐藏、可切换显示；提交保留表单、同步锁防重、输入只读；失败保留内存输入；离开忽略迟到响应；注册已成功但自动登录失败时回到登录，避免重复创建；返回路径沿用原有规则 | 桌面/390/320px、登录/注册/失效/初始加载、校验、输入法、密码切换、提交中与重试、成功返回及成员/作者资料、离开时的迟到响应 |
-| Select/Listbox | 原生 select | premium-ui.json、AgentModelPicker、ReasoningEffortControl、BlogAssistant、ProjectCanvas、AssetLibrary | 简单枚举使用系统菜单管理弹出几何与键盘；思考模式/强度、执行方式、素材类型、画布参数维持原生行为；模型目录搜索沿用现有专用面板 | 浏览器展开、选择、Escape，组件测试 |
+| Select/Listbox | 原生 select、ImageParameters、VideoParameters、RatioOptions | premium-ui.json、AgentModelPicker、ReasoningEffortControl、BlogAssistant、ProjectCanvas、AssetLibrary | 简单枚举使用系统菜单管理弹出几何与键盘；思考模式/强度、执行方式、素材类型和参考模式维持原生行为；图片/视频生成参数复用选项块，视频时长使用原生 range 和 number；模型目录搜索沿用现有专用面板 | 浏览器展开、选择、Escape，组件测试 |
 | 表单下拉箭头 | base.css 的原生 select 关闭态 | DESIGN.md、既有 select | 单选框统一箭头尺寸、居中和右侧留白，保留系统菜单及键盘行为；助手执行方式不再叠加第二个箭头 | 闭合/展开、键盘与 Escape、浅色/暗色、长值和窄屏 |
 | 账户资料 | AccountProfile、AccountLayout 的 profile 变体 | Account.tsx/CSS、public/images/account/still-life.jpg | 左侧静物、右侧资料的扁平分栏；仅作者显示写作台；头像失败回落首字；空错误不占位；保存与退出同组；保留原校验、防重及失败输入 | 桌面与短屏、390/320px、空简介、长昵称、图片失败、聚焦、校验、提交中、保存成功与失败、成员/作者 |
 | Form | AccountForm、AccountProfile、AiChatPanel、ProjectDialog 与各业务表单 | Account.tsx、AiChatPanel.tsx、ProjectCanvas.tsx、MediaHome.tsx | 提交表单使用 noValidate、业务校验及重复提交锁；个人资料必填/长度/头像地址错误与字段关联并聚焦首错，保存失败保留输入；节点编辑无需表单提交 | 校验、焦点、提交锁、失败重试、整数时长、保存恢复 |
@@ -292,6 +292,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 - 导入或选择素材会回填到原节点。选择图片或音频时禁止使用其他种类；视频预览可使用图片或视频。素材必须已关联到当前作品，不能绕过私有访问权限。
 - 节点名称和描述沿用自动保存、本地草稿、版本冲突与撤销机制。时长为 1–600 的整数秒；非法输入保留上次有效值并显示提示。这是草稿时长，生成服务的模型限制待接入时另行处理。
 - 运镜选择插入具体中文动作。生成参数仅保存草稿，不创建远端任务，也不展示虚构模型。
+- 视频的比例、清晰度与生图共用选项块及 aria-pressed；视频时长滑杆与精确输入保持同步，非法输入保留原值并显示字段错误。4K 显示值仍保存为 2160P，原有其他预设继续可选。参数浮层保留 Escape 关闭并恢复入口焦点、视口避让和内部滚动；视频仍一次提交一个任务。
 - 图片、音频导入失败可以重试原文件；同一时刻仅导入一个文件，进度在现有画布状态区域显示。
 
 ## 助手方案
