@@ -272,7 +272,6 @@
 .media-editor .media-generation-popover p { margin:0; line-height:1.6; }
 .media-editor .media-generation-popover p:not(.media-node-field-error) { color:var(--media-node-muted); }
 .media-video-generation p { margin:0; color:#aaa; line-height:1.6; overflow-wrap:anywhere; }
-.media-video-generation .media-video-task { display:flex; align-items:center; justify-content:space-between; gap:8px; color:#ddd; }
 .media-video-generation .media-video-unknown { display:flex; align-items:flex-start; gap:6px; color:#bbb; line-height:1.5; }
 .media-video-generation .media-video-unknown input { width:14px; height:14px; flex:none; margin:2px 0; }
 .media-video-generation .is-spinning { animation:media-video-spin 1s linear infinite; }

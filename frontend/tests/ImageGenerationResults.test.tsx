@@ -2,7 +2,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
 import { useCanvas } from '../src/pages/media/useCanvas'
-import { useImageGenerationResults } from '../src/pages/media/useImageGenerationResults'
+import { useGenerationResults } from '../src/pages/media/useGenerationResults'
 import { defaultGenerationSettings, emptyDocument, type Asset, type Document, type Node } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
 import type { GenerationTask } from '../src/pages/media/VideoGeneration'
@@ -12,17 +12,17 @@ const task: GenerationTask = {id:'task',node_id:source.id,status:'processing',pr
 const assets: Asset[] = ['a','b'].map(id => ({id,name:`${id}.png`,kind:'image',mime_type:'image/png',size:4,in_library:false}))
 afterEach(() => { cleanup();localStorage.clear();vi.useRealTimers();vi.restoreAllMocks() })
 
-function setup(document: Document = {...emptyDocument(),nodes:[source]}) {
+function setup(document: Document = {...emptyDocument(),nodes:[source]}, availableAssets = assets) {
   let currentTask = task
   const api = vi.spyOn(media,'api').mockImplementation((path,method,body) => {
     if (path.endsWith('/canvas')) return Promise.resolve(method === 'PUT' ? {version:1,document:(body as {document:Document}).document} : {version:0,document})
-    if (path.startsWith('/assets/')) return Promise.resolve(assets.find(asset => path===`/assets/${asset.id}`))
+    if (path.startsWith('/assets/')) return Promise.resolve(availableAssets.find(asset => path===`/assets/${asset.id}`))
     return Promise.resolve(currentTask)
   })
   const view = renderHook(() => {
     const canvas = useCanvas('project','user')
     const [loaded,setAssets] = useState<Record<string,Asset>>({})
-    const onTask = useImageGenerationResults('project',canvas,setAssets)
+    const onTask = useGenerationResults('project',canvas,setAssets)
     return {canvas,onTask,loaded}
   })
   return {view,api,setTask:(next:GenerationTask) => {currentTask=next}}
@@ -110,5 +110,51 @@ describe('画布图片生成结果',() => {
     await waitFor(() => expect(view.result.current.canvas.document.nodes.find(node=>node.image_result)?.image_result?.error).toContain('读取失败'))
     expect(view.result.current.canvas.document.nodes.find(node=>node.image_result)?.image_result?.error).not.toContain('未查到生成任务')
     expect(api.mock.calls.some(([,method])=>method==='POST')).toBe(false)
+  })
+})
+
+describe('画布视频与图片共用结果流程', () => {
+  const videoSource: Node = { ...source, type:'video', generation:{ ...defaultGenerationSettings(), ratio:'9:16', count:4 } }
+  const videoAsset: Asset = { id:'video-asset', name:'夜市 · 视频 1', kind:'video', mime_type:'video/mp4', size:32, in_library:false }
+
+  it('提交时自动创建一个视频成品占位与连线，按视频画幅定高且不覆盖草稿预览', async () => {
+    const { view } = setup({ ...emptyDocument(), nodes:[videoSource] }, [videoAsset])
+    await waitFor(() => expect(view.result.current.canvas.ready).toBe(true))
+    act(() => view.result.current.onTask({ ...task, status:'requesting' }))
+    const results = view.result.current.canvas.document.nodes.filter(node => node.video_result)
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({ type:'video_asset', asset_id:null, width:360, height:640, video_result:{status:'requesting',index:0} })
+    expect(view.result.current.canvas.document.edges).toEqual([expect.objectContaining({ source:source.id, target:results[0]?.id })])
+    expect(view.result.current.canvas.document.nodes[0]).toEqual(videoSource)
+    expect(view.result.current.canvas.document.viewport).toEqual(emptyDocument().viewport)
+  })
+
+  it('关闭编辑器或重开画布仍自动填充视频，不再 POST、不重复结果或连线', async () => {
+    const result: Node = { ...videoSource, id:'video-result', type:'video_asset', video_result:{task_id:task.id,index:0,status:'processing',error:''} }
+    const edge = { id:'video-edge', source:source.id, target:result.id }
+    const { view, api, setTask } = setup({ ...emptyDocument(), nodes:[videoSource,result], edges:[edge] }, [videoAsset])
+    setTask({ ...task, status:'completed', asset_id:videoAsset.id })
+    await waitFor(() => expect(view.result.current.canvas.document.nodes.find(node => node.id === result.id)?.asset_id).toBe(videoAsset.id))
+    expect(api).toHaveBeenCalledWith('/projects/project/video-generations/task')
+    expect(view.result.current.loaded[videoAsset.id]).toEqual(videoAsset)
+    expect(view.result.current.canvas.document.nodes.find(node => node.id === result.id)?.name).toBe(videoAsset.name)
+    act(() => view.result.current.onTask({ ...task, status:'completed', asset_id:videoAsset.id }))
+    expect(view.result.current.canvas.document.nodes).toHaveLength(2)
+    expect(view.result.current.canvas.document.edges).toEqual([edge])
+    expect(api.mock.calls.some(([,method]) => method === 'POST')).toBe(false)
+  })
+
+  it('视频失败和重试保存复用占位，删除后同一任务通知不会复活节点', async () => {
+    const { view } = setup({ ...emptyDocument(), nodes:[videoSource] }, [videoAsset])
+    await waitFor(() => expect(view.result.current.canvas.ready).toBe(true))
+    act(() => view.result.current.onTask({ ...task, status:'download_failed', error:'保存失败' }))
+    expect(view.result.current.canvas.document.nodes.find(node => node.video_result)?.video_result?.status).toBe('download_failed')
+    act(() => view.result.current.onTask({ ...task, status:'downloading' }))
+    expect(view.result.current.canvas.document.nodes.filter(node => node.video_result)).toHaveLength(1)
+    act(() => view.result.current.canvas.apply({ ...emptyDocument(), nodes:[videoSource] }))
+    act(() => view.result.current.onTask(task))
+    expect(view.result.current.canvas.document.nodes).toHaveLength(1)
+    act(() => view.result.current.onTask({ ...task, id:'next-video-task' }))
+    expect(view.result.current.canvas.document.nodes.filter(node => node.video_result)).toHaveLength(1)
   })
 })

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowUp, LoaderCircle, RefreshCw } from 'lucide-react'
-import { api, MediaError, defaultGenerationSettings, type Asset, type GenerationSettings, type Node } from './api'
-import { BillingStatus } from '../../features/billing/BillingControls'
+import { api, MediaError, defaultGenerationSettings, type GenerationSettings, type Node } from './api'
 import type { BillingOperation } from '../../features/billing/api'
 import { getStoredAuthToken } from '../../lib/auth'
 import { createModelCatalogCache } from '../../lib/modelCatalogCache'
@@ -14,15 +13,12 @@ const generationCatalog = createModelCatalogCache<ModelList>()
 export type GenerationTask = { id: string; node_id: string; status: string; progress: number; error: string; asset_id: string | null; asset_ids?: string[]; generation?: GenerationSettings | null; billing?: BillingOperation | null }
 type Task = GenerationTask
 const running = (status: string) => ['submitting', 'queued', 'processing', 'downloading'].includes(status)
-const statusText: Record<string, string> = { submitting:'正在提交', queued:'排队中', processing:'生成中', downloading:'正在保存视频', download_failed:'视频保存失败', completed:'视频已生成', failed:'生成失败', unknown:'创建结果待核实', acknowledged:'已核实旧任务' }
-const imageStatusText: Record<string, string> = { submitting:'正在提交',processing:'生成中',downloading:'正在保存图片',download_failed:'图片保存失败',failed:'生成失败',unknown:'创建结果待核实',acknowledged:'已核实旧任务' }
 
 type GenerationProps = {
   projectId: string
   node: Node
   onPatch: (patch: Partial<Node>) => void
   onSave: () => Promise<void>
-  onResult: (asset: Asset) => void
   onTask?: (task: GenerationTask, createResults?: boolean) => void
   onModelChange?: (model: VideoModel | null) => void
   referenceCount?: number
@@ -36,7 +32,7 @@ export function VideoGeneration(props: GenerationProps) {
 export function ImageGeneration(props: GenerationProps) {
   return <GenerationControls {...props} kind="image" />
 }
-function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask, onModelChange, referenceCount = 0, referencesPending = false, referenceError, controls, kind }: GenerationProps & { kind: 'video' | 'image' }) {
+function GenerationControls({ projectId, node, onPatch, onSave, onTask, onModelChange, referenceCount = 0, referencesPending = false, referenceError, controls, kind }: GenerationProps & { kind: 'video' | 'image' }) {
   const isImage = kind === 'image'
   const noun = isImage ? '图片' : '视频'
   const modelsPath = `/${kind}-models`
@@ -73,10 +69,10 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
         const tasks = await api<Task[]>(`${tasksPath}?node_id=${node.id}`)
         if (!current) return
         setTask(tasks[0] ?? null)
-        if (isImage && tasks[0]) onTask?.(tasks[0], false)
+        if (tasks[0]) onTask?.(tasks[0], false)
         if (tasks.some(row => row.id === requestId.current)) requestId.current = null
         setError('')
-        if (tasks[0] && running(tasks[0].status)) timer = setTimeout(() => { void refresh() }, isImage ? 2000 : 15000)
+        if (tasks[0] && running(tasks[0].status)) timer = setTimeout(() => { void refresh() }, 2000)
       } catch (reason) {
         if (current) { setError((reason as Error).message); timer = setTimeout(() => { void refresh() }, 15000) }
       }
@@ -110,12 +106,12 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
       // 主动核实后的重新提交是新意图；普通断网重试继续复用原标识。
       if (acknowledged) requestId.current = null
       requestId.current ??= crypto.randomUUID()
-      if (isImage) onTask?.({ id:requestId.current,node_id:node.id,status:'requesting',progress:0,error:'',asset_id:null })
+      onTask?.({ id:requestId.current,node_id:node.id,status:'requesting',progress:0,error:'',asset_id:null })
       const created = await api<Task>(tasksPath, 'POST', { request_id:requestId.current, node_id:node.id, acknowledge_unknown:acknowledged })
-      if (isImage) onTask?.(created)
+      onTask?.(created)
       setTask(created); requestId.current = null; setAcknowledged(false); setAttempt((value) => value + 1)
     } catch (reason) {
-      if (isImage && requestId.current) onTask?.({ id:requestId.current,node_id:node.id,status:reason instanceof MediaError && (reason.status < 500 || reason.status === 503) ? 'failed' : 'unknown',progress:0,error:(reason as Error).message,asset_id:null })
+      if (requestId.current) onTask?.({ id:requestId.current,node_id:node.id,status:reason instanceof MediaError && (reason.status < 500 || reason.status === 503) ? 'failed' : 'unknown',progress:0,error:(reason as Error).message,asset_id:null })
       if (reason instanceof MediaError && reason.status >= 400 && reason.status < 500) {
         requestId.current = null
         setError(`${reason.message}。请核对参数与余额后重试。`)
@@ -123,7 +119,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
         setError(reason.message)
       } else setError(`${(reason as Error).message}。请先刷新任务状态；再次点击会使用同一请求标识。`)
     } finally { active.current = false; setBusy(false) }
-  }, [onSave, tasksPath, node.id, acknowledged, isImage, onTask])
+  }, [onSave, tasksPath, node.id, acknowledged, onTask])
   const blocked = busy || Boolean(task && running(task.status)) || task?.status === 'unknown' && !acknowledged
   const referenceBlocked = referencesPending || Boolean(referenceError) || (!isImage && (node.generation?.mode ?? 'text') !== 'text' && catalog && !catalog.references_ready)
   return <div className="media-video-generation">
@@ -139,15 +135,9 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
     {referencesPending && <p role="status">参考图片尚未就绪，请先生成或导入图片，或断开该参考。</p>}
     {referenceError && <p role="status">{referenceError}</p>}
     {!isImage && !referencesPending && !referenceError && referenceBlocked && catalog?.configured && model && <p>参考素材暂不可用：需先部署公网地址并启用素材访问。</p>}
-    {task && !(isImage && task.status === 'completed') && <div className="media-video-task" role="status"><span>{(isImage ? imageStatusText[task.status] : statusText[task.status]) ?? task.status}{!isImage && running(task.status) ? ` ${task.progress}%` : ''}</span>{!isImage && task.status === 'completed' && task.asset_id && node.asset_id !== task.asset_id && <button type="button" disabled={busy} onClick={() => {
-      setBusy(true)
-      void api<Asset>(`/assets/${task.asset_id}`).then(onResult).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false))
-    }}>使用生成结果</button>}</div>}
-    {task?.error && <p role="status">{task.error}</p>}
-    <BillingStatus initial={task?.billing} />
     {task?.status === 'download_failed' && <button type="button" disabled={busy} onClick={() => {
       setBusy(true)
-      void api<Task>(`${tasksPath}/${task.id}/retry-download`, 'POST').then((next) => { if (isImage) onTask?.(next); setTask(next); setAttempt((value) => value + 1) }).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false))
+      void api<Task>(`${tasksPath}/${task.id}/retry-download`, 'POST').then((next) => { onTask?.(next); setTask(next); setAttempt((value) => value + 1) }).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false))
     }}>重试保存{noun}</button>}
     {task?.status === 'unknown' && <label className="media-video-unknown"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />已核实上次任务，确认重新提交可能产生新的费用</label>}
     {(catalogError || error) && <p role="alert">{catalogError || error}</p>}

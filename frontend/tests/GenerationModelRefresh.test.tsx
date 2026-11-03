@@ -16,7 +16,7 @@ it.each(['image', 'video'] as const)('%s 菜单主动刷新目录，保留选择
   const api = vi.spyOn(media, 'api').mockImplementation(path => path === `/${kind}-models?refresh=true` ? pending : Promise.resolve(path === `/${kind}-models` ? initial : []))
   const onPatch = vi.fn()
   const onSave = vi.fn()
-  render(<Component projectId="project" node={node} onPatch={onPatch} onSave={onSave} onResult={vi.fn()} />)
+  render(<Component projectId="project" node={node} onPatch={onPatch} onSave={onSave} />)
   await waitFor(() => expect(screen.getByRole('button', { name:`${noun}生成模型` })).toHaveTextContent('current-model'))
   fireEvent.click(screen.getByRole('button', { name:`${noun}生成模型` }))
   const search = screen.getByRole('textbox', { name:'搜索生成模型' })
@@ -52,7 +52,7 @@ it.each(['image', 'video'] as const)('%s 空目录可在菜单重试，刷新失
     }
     return Promise.resolve(path === `/${kind}-models` ? { configured:true, references_ready:true, models:[] } : [])
   })
-  render(<Component projectId="project" node={node} onPatch={vi.fn()} onSave={vi.fn()} onResult={vi.fn()} />)
+  render(<Component projectId="project" node={node} onPatch={vi.fn()} onSave={vi.fn()} />)
   await screen.findByText(`暂无可用${noun}模型，可刷新重试。`)
   fireEvent.click(screen.getByRole('button', { name:`${noun}生成模型` }))
   expect(screen.getByText('暂无可用模型，可刷新重试。')).toBeInTheDocument()

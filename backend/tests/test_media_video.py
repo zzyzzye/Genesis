@@ -341,6 +341,45 @@ async def test_completed_video_is_private_asset_and_invalid_download_cleans_up(
 
 
 @pytest.mark.anyio
+async def test_video_result_link_survives_canvas_reload(fixture: VideoFixture) -> None:
+    """视频结果关联与连线随画布保存，恢复只查询并自动保存已有视频。"""
+    state = fixture
+    task_id = (await submit(state)).json()["id"]
+    current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    source = current["document"]["nodes"][0]
+    result_id = str(uuid4())
+    metadata = {"task_id": task_id, "index": 0, "status": "processing", "error": ""}
+    current["document"]["nodes"].append(
+        {**source, "id": result_id, "type": "video_asset", "video_result": metadata}
+    )
+    edge = {"id": str(uuid4()), "source": source["id"], "target": result_id}
+    current["document"]["edges"].append(edge)
+    saved = await state.client.put(f"projects/{state.project_id}/canvas", json=current)
+    assert saved.status_code == 200
+    restored = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    assert restored["document"]["nodes"][-1]["video_result"] == metadata
+    assert edge in restored["document"]["edges"]
+    before = sum(request.method == "POST" for request in state.requests)
+    state.status = "completed"
+    task = state.session.get(VideoGeneration, UUID(task_id))
+    assert task is not None
+    await video.refresh_task(task, state.session, state.settings)
+    completed = await state.client.get(
+        f"projects/{state.project_id}/video-generations/{task_id}"
+    )
+    assert completed.json()["status"] == "completed"
+    asset_id = completed.json()["asset_id"]
+    assert (await state.client.get(f"assets/{asset_id}/file")).content == state.content
+    assert sum(request.method == "POST" for request in state.requests) == before
+    missing = await state.client.get(
+        f"projects/{state.project_id}/video-generations/{uuid4()}"
+    )
+    assert missing.status_code == 404
+    wrong_project = await state.client.get(f"projects/{uuid4()}/video-generations/{task_id}")
+    assert wrong_project.status_code == 404
+
+
+@pytest.mark.anyio
 async def test_running_video_prevents_project_deletion(fixture: VideoFixture) -> None:
     state = fixture
     await submit(state)

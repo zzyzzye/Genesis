@@ -54,6 +54,22 @@ def video_tasks(
     return [video.task_data(row) for row in rows]
 
 
+@router.get("/projects/{project_id}/video-generations/{task_id}")
+def video_task(
+    project_id: UUID, task_id: UUID, user: CurrentUserDependency, session: SessionDependency
+) -> dict[str, object]:
+    """按持久任务标识恢复视频结果，不依赖编辑面板或最近任务列表。
+
+    Raises:
+        HTTPException: 作品或任务不属于当前用户时返回 404。
+    """
+    service.project_for(session, user.id, project_id)
+    task = session.get(VideoGeneration, task_id)
+    if task is None or task.owner_id != user.id or task.project_id != project_id:
+        raise HTTPException(404, "视频任务不存在")
+    return video.task_data(task)
+
+
 @router.post("/projects/{project_id}/video-generations", status_code=202)
 async def create_video_task(
     project_id: UUID,

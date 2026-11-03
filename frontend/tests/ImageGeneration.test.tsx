@@ -6,7 +6,7 @@ import * as media from '../src/pages/media/api'
 
 const model: VideoModel = { id:'gpt-image-2',description:'支持图片编辑。' }
 const node: Node = { id:'image-node',type:'image_generation',asset_id:null,text:'雨夜街道',x:0,y:0,width:640,height:402,generation:{...defaultGenerationSettings(),model:model.id,mode:'reference'} }
-const props = () => ({projectId:'project',node,referenceCount:1,onPatch:vi.fn(),onSave:vi.fn().mockResolvedValue(undefined),onResult:vi.fn(),onModelChange:vi.fn()})
+const props = () => ({projectId:'project',node,referenceCount:1,onPatch:vi.fn(),onSave:vi.fn().mockResolvedValue(undefined),onModelChange:vi.fn()})
 const catalog = {configured:true,references_ready:true,models:[model]}
 afterEach(()=>vi.restoreAllMocks())
 
@@ -115,7 +115,7 @@ describe('生图节点',()=>{
     expect(screen.queryByLabelText('生成图片结果')).not.toBeInTheDocument()
     expect(screen.queryByText('图片已生成')).not.toBeInTheDocument()
     expect(api.mock.calls.some(([path])=>path.startsWith('/assets/'))).toBe(false)
-    expect(state.onResult).not.toHaveBeenCalled()
+    expect(state.onPatch).not.toHaveBeenCalled()
     expect(api.mock.calls.some(call=>call[1]==='POST')).toBe(false)
     expect(state.onPatch).not.toHaveBeenCalled()
   })
@@ -126,9 +126,11 @@ describe('生图节点',()=>{
       if(method==='POST'){task={...task,status:'downloading'};return Promise.resolve(task)}
       return Promise.resolve(path==='/image-models'?catalog:[task])
     })
-    render(<ImageGeneration {...props()} />)
+    const state = props()
+    render(<ImageGeneration {...state} />)
     fireEvent.click(await screen.findByRole('button',{name:'重试保存图片'}))
-    await screen.findByText('正在保存图片')
+    await waitFor(() => expect(screen.getByRole('button',{name:'生成图片'})).toBeDisabled())
+    expect(screen.queryByText('正在保存图片')).not.toBeInTheDocument()
     expect(api.mock.calls.filter(call=>call[1]==='POST')).toEqual([['/projects/project/image-generations/saved/retry-download','POST']])
   })
 })

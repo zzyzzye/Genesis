@@ -53,8 +53,8 @@ class GenerationSubmit(BaseModel):
     acknowledge_unknown: bool = False
 
 
-class ImageResult(BaseModel):
-    """图片结果节点的任务关联，用于刷新后恢复状态，不触发生成。"""
+class GenerationResult(BaseModel):
+    """媒体结果节点的任务关联，用于刷新后恢复状态，不触发生成。"""
 
     task_id: UUID
     index: int = Field(strict=True, ge=0, le=3)
@@ -97,7 +97,8 @@ class CanvasNode(BaseModel):
     name: str = Field(default="", max_length=120)
     duration_seconds: int = Field(default=5, strict=True, ge=1, le=600)
     generation: GenerationSettings = Field(default_factory=GenerationSettings)
-    image_result: ImageResult | None = None
+    image_result: GenerationResult | None = None
+    video_result: GenerationResult | None = None
     text: str = Field(default="", max_length=20000)
     x: float = Field(allow_inf_nan=False, ge=-1000000, le=1000000)
     y: float = Field(allow_inf_nan=False, ge=-1000000, le=1000000)
