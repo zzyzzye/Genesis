@@ -9,6 +9,17 @@ const models: VideoModel[] = [
   { id: 'unknown-model' },
 ]
 afterEach(cleanup)
+
+it('菜单挂在页面层，内部滚动保留菜单，背景滚动关闭菜单', () => {
+  const { trigger } = setup()
+  fireEvent.click(trigger)
+  const menu = screen.getByRole('listbox').parentElement!
+  expect(menu.parentElement).toBe(document.body)
+  fireEvent.wheel(menu, { deltaY: 100 })
+  expect(screen.getByRole('listbox')).toBeInTheDocument()
+  fireEvent.wheel(document.body, { deltaY: 100 })
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+})
 function setup(value = 'request-model') {
   const onChange = vi.fn()
   render(<GenerationModelPicker models={models} value={value} disabled={false} label="视频生成模型" placeholder="选择模型" onChange={onChange} />)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Cpu } from 'lucide-react'
+import { createPortal } from 'react-dom'
 import { ModelPriceTooltip } from '../../features/agent/ModelPriceTooltip'
 import type { VideoModel } from './VideoGeneration'
 import './GenerationModelPicker.css'
@@ -46,14 +47,19 @@ export function GenerationModelPicker({ models, value, disabled, label, placehol
     surface.style.top = `${Math.max(12, Math.min(anchor.top - bounds.height - 8, window.innerHeight - bounds.height - 12))}px`
     search.current?.focus()
     const resize = () => close()
+    const outsideWheel = (event: WheelEvent) => {
+      if (event.target instanceof Node && surface.contains(event.target)) return
+      close()
+    }
     window.addEventListener('resize', resize)
-    return () => window.removeEventListener('resize', resize)
+    document.addEventListener('wheel', outsideWheel, true)
+    return () => { window.removeEventListener('resize', resize); document.removeEventListener('wheel', outsideWheel, true) }
   }, [open, close])
   return <div className="media-generation-model-picker">
     <button ref={trigger} type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined} aria-describedby={preview && !open ? `${id}-preview` : undefined} disabled={disabled} onPointerEnter={event => { if (selected && event.pointerType !== 'touch') show(selected, event.currentTarget) }} onPointerLeave={leave} onFocus={event => { if (selected && !open) show(selected, event.currentTarget) }} onBlur={closePreview} onClick={() => { closePreview(); setQuery(''); setOpen(!open) }}>
       <Cpu size={14} aria-hidden="true" /><span>{selected?.id ?? placeholder}</span><ChevronDown size={12} aria-hidden="true" />
     </button>
-    {open && <div ref={menu} data-model-menu="generation" popover={native ? 'auto' : undefined} className="media-generation-model-menu nodrag nowheel media-wheel-isolated nopan" onToggle={event => { if (event.newState === 'closed') { setOpen(false); closePreview() } }} onKeyDown={event => {
+    {open && createPortal(<div ref={menu} data-model-menu="generation" popover={native ? 'auto' : undefined} className="media-generation-model-menu nodrag nowheel media-wheel-isolated nopan" onWheel={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onToggle={event => { if (event.newState === 'closed') { setOpen(false); closePreview() } }} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return }
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
         const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]')]
@@ -70,7 +76,7 @@ export function GenerationModelPicker({ models, value, disabled, label, placehol
         {filtered.map(model => <button type="button" role="option" aria-selected={value === model.id} aria-describedby={preview?.model.id === model.id ? `${id}-preview` : undefined} key={model.id} onPointerEnter={event => { if (event.pointerType !== 'touch') show(model, event.currentTarget) }} onPointerLeave={leave} onFocus={event => show(model, event.currentTarget)} onBlur={closePreview} onClick={() => { onChange(model.id); close(true) }}><span>{model.id}</span>{value === model.id && <Check size={13} aria-hidden="true" />}</button>)}
       </div>
       {!filtered.length && <p>没有匹配的模型</p>}
-    </div>}
-    {preview && <ModelPriceTooltip id={`${id}-preview`} model={{ ...preview.model, description: preview.model.description ?? '' }} trigger={preview.trigger} onDismiss={closePreview} onEnter={cancelClose} onLeave={leave} />}
+    </div>, document.body)}
+    {preview && <ModelPriceTooltip appearance="canvas" id={`${id}-preview`} model={{ ...preview.model, description: preview.model.description ?? '' }} trigger={preview.trigger} onDismiss={closePreview} onEnter={cancelClose} onLeave={leave} />}
   </div>
 }

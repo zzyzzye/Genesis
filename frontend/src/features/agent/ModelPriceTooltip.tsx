@@ -12,7 +12,8 @@ const rows: { field: keyof Pick<TokenPriceTier, 'input' | 'output' | 'cache_read
 const tierNames: Record<string, string> = { short: '短上下文', long: '长上下文', base: '标准', standard: '标准', free: '免费' }
 
 /** 价格只作只读提示；使用浏览器顶层，避免被模型列表和助手裁切。 */
-export function ModelPriceTooltip({ id, model, trigger, onDismiss, onEnter, onLeave }: {
+export function ModelPriceTooltip({ id, model, trigger, onDismiss, onEnter, onLeave, appearance }: {
+  appearance?: 'canvas'
   id: string
   model: { id: string; name?: string | null; description?: string; pricing?: ModelPricePreview | null }
   trigger: HTMLElement
@@ -27,6 +28,7 @@ export function ModelPriceTooltip({ id, model, trigger, onDismiss, onEnter, onLe
     const surface = panel.current!
     const theme = getComputedStyle(trigger)
     for (const token of ['--reasoning-text', '--reasoning-muted', '--reasoning-hover', '--assistant-paper', '--assistant-surface']) {
+      if (appearance === 'canvas' && token === '--reasoning-muted') continue
       surface.style.setProperty(token, theme.getPropertyValue(token))
     }
     if (native) surface.showPopover()
@@ -62,11 +64,11 @@ export function ModelPriceTooltip({ id, model, trigger, onDismiss, onEnter, onLe
       window.removeEventListener('resize', onDismiss)
       if (native && surface.matches(':popover-open')) surface.hidePopover()
     }
-  }, [native, onDismiss, trigger, model])
+  }, [native, onDismiss, trigger, model, appearance])
 
   const available = pricing?.status === 'available' || pricing?.status === 'free'
   const symbol = pricing?.currency === 'USD' ? '$' : '¥'
-  return createPortal(<div ref={panel} id={id} className="model-price-tooltip" popover={native ? 'manual' : undefined} role="tooltip" onPointerEnter={onEnter} onPointerLeave={onLeave}>
+  return createPortal(<div ref={panel} id={id} className={`model-price-tooltip${appearance === 'canvas' ? ' model-price-tooltip--canvas' : ''}`} popover={native ? 'manual' : undefined} role="tooltip" onWheel={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onPointerEnter={onEnter} onPointerLeave={onLeave}>
     <strong>{model.name ? modelDisplayName(model.name) : model.id}</strong>
     {model.description !== undefined && <p className="model-price-tooltip__description">{model.description || '暂无模型简介'}</p>}
     {available && pricing.unit !== '1M tokens' && pricing.amount != null ? <>

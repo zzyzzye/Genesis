@@ -57,7 +57,7 @@ window.fetch = async (input, init) => {
     return new Response(bytes, { headers: { 'Content-Type': 'audio/wav' } })
   }
   if (path.endsWith('/assets')) return json({ items: state === 'wheel' ? wheelAssets : [], total: state === 'wheel' ? wheelAssets.length : 0 })
-  if (path.endsWith('-models')) return json(state === 'toolbar' ? { configured: true, references_ready: true, models: [{ id: path.includes('image') ? '合成影像模型 · 高清编辑与多图参考' : '合成视频模型 · 电影运动', description: '隔离模型配置工具栏验收，不调用真实生成服务。' }] } : { configured: false, references_ready: false, models: [] })
+  if (path.endsWith('-models')) return json(state === 'toolbar' ? { configured: true, references_ready: true, models: Array.from({ length: 24 }, (_, index) => ({ id: `合成${path.includes('image') ? '影像' : '视频'}模型-${index + 1}`, description: '隔离模型配置工具栏验收，不调用真实生成服务。', pricing: { status: index === 1 ? 'unavailable' : 'available', currency: 'CNY', unit: 'request', amount: '0.55', tiers: [], note: index === 1 ? '价格服务尚未配置，暂无法预览。' : '实际上游账单为准。' } })) } : { configured: false, references_ready: false, models: [] })
   if (path.includes('-generations')) return json([])
   if (path === '/projects/node-name-review') return json({ id: 'node-name-review', name: state === 'wheel' ? '双指平移验收' : '节点名称验收', version: 0 })
   return json({ detail: '验收页面不访问真实 API。' }, 503)
