@@ -1,5 +1,5 @@
 .media-editor .media-video-composer { position:relative; flex:0 0 auto; min-height:0; margin:0; padding:8px 16px 16px; border-radius:0; background:transparent; }
-.media-editor .media-video-composer textarea { min-height:200px; max-height:320px; field-sizing:content; flex:0 0 auto; margin:12px 0 16px; padding:0 2px; font-size:var(--media-node-font-size); line-height:1.65; }
+.media-editor .media-video-composer textarea { min-height:180px; max-height:288px; field-sizing:content; flex:0 0 auto; margin:12px 0 16px; padding:0 2px; font-size:var(--media-node-font-size); line-height:1.65; }
 .media-video-composer-top { flex-wrap:wrap; }
 .media-video-composer-top>span { margin-right:auto; color:#aaa; }
 .media-node-reference-picker { margin-right:auto; }
@@ -162,10 +162,10 @@
 .media-reference-thumbnail { position:relative; display:flex; align-items:center; justify-content:center; flex:none; width:var(--media-reference-size); height:var(--media-reference-size); overflow:hidden; border-radius:8px; background:#303030; color:#bdbdbd; }
 .media-editor .media-node-editor button.media-reference-thumbnail { min-height:0; padding:0; border:0; border-radius:8px; outline:0; box-shadow:none; }
 .media-editor .media-node-editor button.media-reference-thumbnail:disabled { opacity:1; cursor:default; }
-.media-reference-prompt { min-height:200px; flex:0 0 auto; margin:12px 0 16px; padding:0 2px; box-sizing:border-box; font-size:var(--media-node-font-size); line-height:1.65; }
+.media-reference-prompt { min-height:180px; flex:0 0 auto; margin:12px 0 16px; padding:0 2px; box-sizing:border-box; font-size:var(--media-node-font-size); line-height:1.65; }
 .media-reference-prompt .cm-editor { background:transparent; color:inherit; outline:0; }
 .media-reference-prompt .cm-editor.cm-focused { outline:0; }
-.media-reference-prompt .cm-scroller { min-height:200px; max-height:320px; font-family:inherit; line-height:1.65; overflow:auto; overscroll-behavior:contain; scroll-padding-block:8px; }
+.media-reference-prompt .cm-scroller { min-height:180px; max-height:288px; font-family:inherit; line-height:1.65; overflow:auto; overscroll-behavior:contain; scroll-padding-block:8px; }
 .media-reference-prompt .cm-content { padding:0; caret-color:#e8e8e8; }
 .media-reference-prompt .cm-line { padding:0; }
 .media-editor .media-video-composer textarea,.media-reference-prompt,.media-reference-prompt .cm-editor,.media-reference-prompt .cm-scroller,.media-reference-prompt .cm-content,.media-reference-prompt .cm-line,.media-prompt-mention { cursor:text; }

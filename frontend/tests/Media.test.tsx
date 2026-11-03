@@ -94,7 +94,7 @@ describe('作品画布', () => {
     expect(size).toHaveAttribute('tabindex', '0')
     fireEvent.keyDown(size, { key: 'ArrowRight' })
     fireEvent.keyDown(size, { key: 'ArrowDown', shiftKey: true })
-    expect(screen.getByRole('group', { name: /调整生视频节点大小/ })).toHaveAccessibleName(/650 × 452/)
+    expect(screen.getByRole('group', { name: /调整生视频节点大小/ })).toHaveAccessibleName(/610 × 428/)
     fireEvent.click(screen.getByRole('button', { name: '关闭节点编辑' }))
     expect(screen.queryByRole('textbox', { name: '镜头描述' })).not.toBeInTheDocument()
   })
@@ -129,7 +129,7 @@ describe('作品画布', () => {
     await waitFor(() => {
       const saved = request.mock.calls.find(([path, method]) => path.endsWith('/canvas') && method === 'PUT')?.[2] as { document: Document }
       expect(saved.document.nodes.map((node) => node.type)).toEqual(['image_generation', 'image', 'video_asset'])
-      expect(saved.document.nodes[0]).toMatchObject({ text: '雨夜街道，电影感构图', width: 640, height: 402, generation: { mode: 'text', image_size:'2048x1152', image_resolution:'2K', image_ratio:'16:9', image_background:'transparent', count:2 } })
+      expect(saved.document.nodes[0]).toMatchObject({ text: '雨夜街道，电影感构图', width: 600, height: 378, generation: { mode: 'text', image_size:'2048x1152', image_resolution:'2K', image_ratio:'16:9', image_background:'transparent', count:2 } })
     })
   })
   it('生图上传建立图片参考与连线，不覆盖生成预览或移动视口', async () => {
@@ -186,7 +186,7 @@ describe('作品画布', () => {
     await waitFor(() => {
       const saved = request.mock.calls.find(([path, method]) => path.endsWith('/canvas') && method === 'PUT')?.[2] as { document: Document }
       expect(saved.document.nodes[0]).toMatchObject({ type: 'audio', width: 360, height: 88 })
-      expect(saved.document.nodes[1]).toMatchObject({ type: 'audio_generation', text: '细雨、远处车流与低沉钢琴', duration_seconds: 30, width: 640, height: 402 })
+      expect(saved.document.nodes[1]).toMatchObject({ type: 'audio_generation', text: '细雨、远处车流与低沉钢琴', duration_seconds: 30, width: 600, height: 378 })
       expect(saved.document.edges).toHaveLength(1)
     })
   })
@@ -226,12 +226,14 @@ describe('作品画布', () => {
   it('更新旧生成节点预设时保持中心、内容和视口，自定义尺寸不变且可撤销', async () => {
     const video = { ...note, type: 'video' as const, name: '视频节点 1', width: 820, height: 670 }
     const custom = { ...video, id: crypto.randomUUID(), name: '视频节点 开场', width: 900 }
-    const document: Document = { ...emptyDocument(), nodes: [video, custom], viewport: { x: 20, y: -50, zoom: 1 } }
+    const recentPreset = { ...video, id: crypto.randomUUID(), name: '生视频节点 2', width: 640, height: 402 }
+    const document: Document = { ...emptyDocument(), nodes: [video, custom, recentPreset], viewport: { x: 20, y: -50, zoom: 1 } }
     vi.spyOn(media, 'api').mockResolvedValue({ version: 1, document })
     const { result } = renderHook(() => useCanvas('legacy-video', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    expect(result.current.document.nodes[0]).toEqual({ ...video, name: '生视频节点 1', width: 640, height: 402, x: video.x + 90, y: video.y + 134 })
+    expect(result.current.document.nodes[0]).toEqual({ ...video, name: '生视频节点 1', width: 600, height: 378, x: video.x + 110, y: video.y + 146 })
     expect(result.current.document.nodes[1]).toEqual(custom)
+    expect(result.current.document.nodes[2]).toEqual({ ...recentPreset, width: 600, height: 378, x: recentPreset.x + 20, y: recentPreset.y + 12 })
     expect(result.current.document.viewport).toEqual(document.viewport)
     act(() => result.current.undo())
     expect(result.current.document).toEqual(document)
@@ -243,7 +245,7 @@ describe('作品画布', () => {
     vi.spyOn(media, 'api').mockResolvedValue({ version: 2, document })
     const { result } = renderHook(() => useCanvas('legacy-draft', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
-    expect(result.current.document.nodes[0]).toMatchObject({ text: '本地未保存镜头', width: 640, height: 402 })
+    expect(result.current.document.nodes[0]).toMatchObject({ text: '本地未保存镜头', width: 600, height: 378 })
     expect(result.current.conflict).toBe(true)
     await expect(result.current.save()).rejects.toThrow('请先处理保存冲突')
   })
@@ -260,7 +262,7 @@ describe('作品画布', () => {
     expect(screen.getByRole('textbox', { name: '镜头描述' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '改为生视频节点' })).not.toBeInTheDocument()
     const saved = JSON.parse(localStorage.getItem('genesis-media-draft:user:project')!) as { document: Document }
-    expect(saved.document.nodes.find((node) => node.id === shape.id)).toMatchObject({ type: 'video', x: shape.x, y: shape.y, width: 640, height: 402 })
+    expect(saved.document.nodes.find((node) => node.id === shape.id)).toMatchObject({ type: 'video', x: shape.x, y: shape.y, width: 600, height: 378 })
     expect(saved.document.edges).toEqual([edge])
     expect(saved.document.viewport).toEqual(document.viewport)
   })

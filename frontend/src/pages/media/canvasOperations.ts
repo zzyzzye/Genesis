@@ -2,7 +2,7 @@ import { applyNodeChanges, type NodeChange, type Node as FlowNode } from '@xyflo
 import type { Document, Node } from './api'
 import { syncReferenceModes } from './canvasReferences'
 
-export const generationNodeSize = { width: 640, height: 402 }
+export const generationNodeSize = { width: 600, height: 378 }
 
 // 旧 video 类型继续表示生视频节点，避免把已有提示词节点误转为素材。
 export const isGenerationNode = (node: Pick<Node, 'type'>) => node.type === 'video' || node.type === 'image_generation' || node.type === 'audio_generation'
@@ -69,7 +69,7 @@ export function normalizeCanvasNodePresets(document: Document): Document {
       return { ...node, ...audioAssetNodeSize, y: node.y + (node.height - audioAssetNodeSize.height) / 2 }
     }
     if (!isGenerationNode(node)) return node
-    const preset = node.width === 820 && node.height === 670 || node.width === 480 && node.height === 312
+    const preset = node.width === 820 && node.height === 670 || node.width === 480 && node.height === 312 || node.width === 640 && node.height === 402
     const name = node.type === 'video' ? node.name?.replace(/^视频节点(\s+\d+)?$/, '生视频节点$1') : node.name
     if (!preset && name === node.name) return node
     changed = true
