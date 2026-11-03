@@ -16,8 +16,8 @@ it('连线幂等、进入参考模式并拒绝失效来源，引用绑定节点�
   expect(connectReference(connected, source.id, target.id)).toBe(connected)
   expect(() => connectReference(doc, 'missing', target.id)).toThrow('已失效')
   expect(() => connectReference(doc, source.id, source.id)).toThrow('已失效')
-  expect(displayPrompt(imageMentionToken(source.id), incomingReferences(connected, target.id, {}))).toBe('@图片1')
-  expect(displayPrompt(imageMentionToken(source.id), [])).toBe('@已断开图片')
+  expect(displayPrompt(imageMentionToken(source.id), incomingReferences(connected, target.id, {}))).toBe('生串上架')
+  expect(displayPrompt(imageMentionToken(source.id), [])).toBe('已断开图片')
 })
 
 it('在光标处插入图片标签；名称变化不改绑定，断线后显示缺失且不抹掉提示词', () => {
@@ -27,22 +27,22 @@ it('在光标处插入图片标签；名称变化不改绑定，断线后显示�
   const { rerender } = render(<ReferencePrompt {...props} />)
   act(() => ref.current?.insertImage(source.id))
   expect(change).toHaveBeenLastCalledWith(`${imageMentionToken(source.id)} 烤制：`)
-  expect(screen.getByText('@图片1 · 生串上架')).toBeInTheDocument()
+  expect(screen.getByText('生串上架')).toBeInTheDocument()
   const value = `${imageMentionToken(source.id)} 烤制：`
   change.mockClear()
   rerender(<ReferencePrompt {...props} value={value} references={[{ node: { ...source, name: '更名后的图' }, asset: undefined }]} />)
-  expect(screen.getByText('@图片1 · 更名后的图')).toBeInTheDocument()
+  expect(screen.getByText('更名后的图')).toBeInTheDocument()
   expect(change).not.toHaveBeenCalled()
   rerender(<ReferencePrompt {...props} value={value} references={[]} />)
-  expect(screen.getByText('@已断开图片')).toBeInTheDocument()
+  expect(screen.getByText('已断开图片')).toBeInTheDocument()
   expect(change).not.toHaveBeenCalled()
 })
 
-it('同一文件的多个来源节点共享图片序号，顺序变化时标签跟随实际发送顺序', () => {
+it('同一文件共享上传序号，标签始终只显示名称，不随参考顺序变化', () => {
   const duplicate = { ...source, id: 'duplicate' }
   const second = { ...source, id: 'second', asset_id: 'second-asset' }
   const references = [second, source, duplicate].map(node => ({ node, asset: undefined }))
   expect([...imageReferenceNumbers(references)]).toEqual([[second.id, 1], [source.id, 2], [duplicate.id, 2]])
-  expect(displayPrompt(imageMentionToken(source.id), references)).toBe('@图片2')
-  expect(displayPrompt(imageMentionToken(source.id), references.slice(1))).toBe('@图片1')
+  expect(displayPrompt(imageMentionToken(source.id), references)).toBe('生串上架')
+  expect(displayPrompt(imageMentionToken(source.id), references.slice(1))).toBe('生串上架')
 })

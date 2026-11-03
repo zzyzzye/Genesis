@@ -3,7 +3,7 @@ import { Annotation, Compartment, EditorState, Prec, Transaction } from '@codemi
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, placeholder, tooltips } from '@codemirror/view'
 import { minimalSetup } from 'codemirror'
 import { useEffect, useEffectEvent, useImperativeHandle, useRef, useState, type Ref } from 'react'
-import { imageMentionPattern, imageMentionToken, imageReferenceNumbers, type incomingReferences } from './canvasReferences'
+import { imageMentionPattern, imageMentionToken, type incomingReferences } from './canvasReferences'
 
 type References = ReturnType<typeof incomingReferences>
 export type ReferencePromptHandle = { insertImage: (id: string) => void }
@@ -30,8 +30,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
   const view = useRef<EditorView | null>(null)
   const [initial] = useState(value)
   const [referenceConfig] = useState(() => new Compartment())
-  const numbers = imageReferenceNumbers(references)
-  const referenceState = JSON.stringify(references.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', ready: Boolean(asset), number: numbers.get(node.id) })))
+  const referenceState = JSON.stringify(references.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', ready: Boolean(asset) })))
   const change = useEffectEvent(onChange)
   const focus = useEffectEvent(onFocus)
   const blur = useEffectEvent(onBlur)
@@ -69,11 +68,11 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
   }, [value])
 
   useEffect(() => {
-    const entries = JSON.parse(referenceState) as { id: string; name: string; ready: boolean; number: number }[]
+    const entries = JSON.parse(referenceState) as { id: string; name: string; ready: boolean }[]
     const decorations = (editor: EditorView) => Decoration.set([...editor.state.doc.toString().matchAll(imageMentionPattern)].map(match => {
       const index = entries.findIndex(item => item.id === match[1])
       const reference = entries[index]
-      const label = reference ? `@图片${reference.number} · ${reference.name}` : '@已断开图片'
+      const label = reference?.name ?? '已断开图片'
       return Decoration.replace({ widget: new ImageMention(label, !reference) }).range(match.index, match.index + match[0].length)
     }))
     const mentions = ViewPlugin.fromClass(class {
@@ -87,7 +86,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
         const match = context.matchBefore(/@[^@\s[\]()]*$/u)
         if (!match || context.view?.composing) return null
         return { from: match.from, options: entries.map(entry => ({
-          label: `@图片${entry.number} ${entry.name}`,
+          label: `@${entry.name}`, displayLabel: entry.name,
           detail: entry.ready ? '已连接' : '图片未就绪', type: 'variable',
           apply: `${imageMentionToken(entry.id)} `,
         })), validFor: /^@?[^@\s[\]()]*$/u }

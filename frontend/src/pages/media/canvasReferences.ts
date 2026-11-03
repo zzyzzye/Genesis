@@ -52,9 +52,8 @@ export function imageReferenceNumbers(references: ReturnType<typeof incomingRefe
 }
 
 export function displayPrompt(text: string, references: ReturnType<typeof incomingReferences>) {
-  const numbers = imageReferenceNumbers(references)
+  const names = new Map(imageReferences(references).map(({ node, asset }) => [node.id, node.name || asset?.name || '未命名图片']))
   return text.replace(imageMentionPattern, (_token, id: string) => {
-    const number = numbers.get(id)
-    return number === undefined ? '@已断开图片' : `@图片${number}`
+    return names.get(id) ?? '已断开图片'
   })
 }

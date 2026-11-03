@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import './mediaCanvasNamesReview.css'
 import { emptyDocument, type Document, type Node } from '../../src/pages/media/api'
 import type { MediaCanvasActions } from '../../src/pages/media/MediaAssistant'
+import { imageMentionToken } from '../../src/pages/media/canvasReferences'
 
 if (!import.meta.env.DEV || !['127.0.0.1', 'localhost'].includes(location.hostname)) throw new Error('仅用于本地浏览器验收')
 // 与真实路由一致，先加载工作区基础样式，再加载画布专用覆盖样式。
@@ -23,7 +24,13 @@ const nodes: Node[] = types.map((type, index) => ({
   height: type === 'audio' ? 88 : ['drag', 'toolbar'].includes(state ?? '') && ['video', 'image_generation', 'audio_generation'].includes(type) ? 402 : 220,
 }))
 nodes.unshift({ id: 'review-node-group', type: 'group', asset_id: null, text: '开场分镜', member_ids: nodes.slice(0, 3).map((node) => node.id), x: 50, y: 106, width: state === 'drag' ? 2210 : 1210, height: 294 })
-let document: Document = { ...emptyDocument(), nodes: state === 'empty' ? [] : nodes, ...(state === 'free-pan' ? { viewport: { x: 125, y: 70, zoom: .65 } } : {}) }
+if (state === 'references') {
+  const image = nodes.find(node => node.type === 'image')!
+  const video = nodes.find(node => node.type === 'video')!
+  image.name = '生串上架'
+  video.text = `承接${imageMentionToken(image.id)}的画面，保持人物与光线一致。`
+}
+let document: Document = { ...emptyDocument(), nodes: state === 'empty' ? [] : nodes, ...(state === 'references' ? { edges:[{ id:'review-image-reference', source:'review-node-image', target:'review-node-video' }] } : {}), ...(state === 'free-pan' ? { viewport: { x: 125, y: 70, zoom: .65 } } : {}) }
 let version = 0
 const snapshotKey = `genesis-node-name-review:snapshot:${state ?? 'normal'}`
 const snapshot = sessionStorage.getItem(snapshotKey)
