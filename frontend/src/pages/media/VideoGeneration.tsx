@@ -43,6 +43,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
   const tasksPath = `/projects/${projectId}/${kind}-generations`
   const [catalog, setCatalog] = useState<ModelList | null>(null)
   const [catalogError, setCatalogError] = useState('')
+  const [catalogLoading, setCatalogLoading] = useState(true)
   const [task, setTask] = useState<Task | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -61,7 +62,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
     void generationCatalog(getStoredAuthToken() ?? '', modelsPath, () => api<ModelList>(`${modelsPath}${refresh ? '?refresh=true' : ''}`), refresh).then((data) => {
       if (!data || !Array.isArray(data.models)) throw new Error(`${noun}模型目录格式无效，请重试`)
       if (current) { setCatalog(data); setCatalogError('') }
-    }).catch((reason: Error) => { if (current) setCatalogError(reason.message) })
+    }).catch((reason: Error) => { if (current) setCatalogError(reason.message) }).finally(() => { if (current) setCatalogLoading(false) })
     return () => { current = false }
   }, [catalogRevision, modelsPath, noun])
   useEffect(() => {
@@ -84,6 +85,13 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
     return () => { current = false; clearTimeout(timer) }
   }, [tasksPath, node.id, attempt, isImage, onTask])
 
+  const refreshModels = () => {
+    if (catalogLoading || busy) return
+    setCatalogLoading(true)
+    setCatalogError('')
+    forceCatalogRefresh.current = true
+    setCatalogRevision(value => value + 1)
+  }
   const chooseModel = (id: string) => {
     const selected = catalog?.models.find((item) => item.id === id)
     if (!selected) return
@@ -120,10 +128,10 @@ function GenerationControls({ projectId, node, onPatch, onSave, onResult, onTask
   const referenceBlocked = referencesPending || Boolean(referenceError) || (!isImage && (node.generation?.mode ?? 'text') !== 'text' && catalog && !catalog.references_ready)
   return <div className="media-video-generation">
     <div className="media-video-generation-actions">
-      <GenerationModelPicker models={catalog?.models ?? []} value={model?.id ?? ''} label={`${noun}生成模型`} placeholder={catalog ? catalog.configured ? `选择${noun}模型` : `尚未配置${noun}服务` : `加载${noun}模型…`} disabled={busy || !catalog?.models.length} onChange={chooseModel} />
+      <GenerationModelPicker models={catalog?.models ?? []} value={model?.id ?? ''} label={`${noun}生成模型`} placeholder={catalog ? catalog.configured ? `选择${noun}模型` : `尚未配置${noun}服务` : `加载${noun}模型…`} disabled={busy} loading={catalogLoading} onChange={chooseModel} onRefresh={refreshModels} />
       {isImage && <span className="media-video-spec" aria-label="图片生成模式" title="根据连入的图片参考自动确定">{referenceCount ? '图生图' : '文生图'}</span>}
       {controls}
-      <button type="button" aria-label={`刷新${noun}模型与任务`} title="刷新模型与任务" onClick={() => { forceCatalogRefresh.current = true; setCatalogRevision(value => value + 1); setAttempt(value => value + 1) }}><RefreshCw size={14} /></button>
+      <button type="button" aria-label={`刷新${noun}模型与任务`} title="刷新模型与任务" disabled={busy || catalogLoading} onClick={() => { refreshModels(); setAttempt(value => value + 1) }}><RefreshCw size={14} /></button>
       <button type="button" className="media-video-submit" aria-label={`生成${noun}`} title={`生成${noun}`} disabled={Boolean(blocked || referenceBlocked || !model || !node.text.trim())} onClick={() => void submit()}>{busy || task && running(task.status) ? <LoaderCircle size={15} className="is-spinning" /> : <ArrowUp size={16} />}</button>
     </div>
     {catalog && !catalog.configured && <p>{noun}服务尚未配置，请先在服务端配置{noun} API Key。</p>}
