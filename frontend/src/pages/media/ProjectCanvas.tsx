@@ -680,7 +680,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     ...edge,
     type: 'reference',
     selected: selectedEdges.includes(edge.id),
-    style: { stroke: selectedEdges.includes(edge.id) ? '#c0c6ca' : '#858e94', strokeWidth: selectedEdges.includes(edge.id) ? 2 : 1.5 },
+    style: { stroke: selectedEdges.includes(edge.id) ? '#c5c5c5' : '#858585', strokeWidth: selectedEdges.includes(edge.id) ? 2 : 1.5 },
   })), [canvas.document.edges, selectedEdges])
 
   const fetchAssets = useCallback(async () => {
@@ -1169,7 +1169,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         onMove={(_, next) => updateViewport(next)}
         onMoveEnd={(_, next) => { setWheelPanning(false); updateViewport(next) }}
         proOptions={{ hideAttribution: true }}
-      >{canvas.document.background !== 'none' && <Background variant={canvas.document.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots} color="#3a444b" gap={24} size={1} />}{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#101116cc" nodeColor={(node) => node.type === 'video' ? '#7b8a92' : node.type === 'image' ? '#8d9da0' : node.type === 'audio' ? '#768d92' : node.type === 'shape' ? '#8298a3' : node.type === 'note' ? '#758992' : '#687981'} />}</ReactFlow>}
+      >{canvas.document.background !== 'none' && <Background variant={canvas.document.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots} color="#383838" gap={24} size={1} />}{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#191919cc" nodeColor={(node) => node.selected ? '#c5c5c5' : '#686868'} />}</ReactFlow>}
       {draggingFile && <div className="media-canvas-drop" aria-hidden="true">松开鼠标，将素材放入画布</div>}
       {uploadProgress !== null && <div className="media-canvas-upload" role="status">正在导入素材 · {uploadProgress}%</div>}
       {canvas.ready && canvas.document.nodes.length === 0 && !nodeMenu && <div className="media-canvas-empty"><small>影像创作空间</small><h1>从一个画面开始。</h1><p>创建生图或生视频节点，填写提示词并连接参考素材。</p><div className="media-canvas-empty-actions"><button className="media-accent" onClick={() => addNode('image_generation')}>＋ 添加生图节点</button><button onClick={() => addNode('video')}>＋ 添加生视频节点</button><button onClick={() => void navigate(`/media/projects/${projectId}/assets`)}>打开作品素材库</button></div></div>}
