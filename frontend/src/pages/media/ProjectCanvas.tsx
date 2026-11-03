@@ -12,6 +12,7 @@ import {
   ReactFlow,
   SelectionMode,
   applyEdgeChanges,
+  useViewport,
   type Connection,
   type Edge as FlowEdge,
   type EdgeChange,
@@ -21,7 +22,7 @@ import {
   type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react'
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { AnimatePresence, motion, useIsPresent } from 'motion/react'
 import { canvasEditorTransition, useLiveReducedMotion } from '../../lib/motion'
@@ -187,22 +188,45 @@ function GenerationParameters({ summary, disabled, image = false, children }: { 
   const trigger = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const nativePopover = typeof HTMLElement.prototype.togglePopover === 'function'
+  const viewport = useViewport()
+  const frame = useRef<number | null>(null)
+  const position = useCallback(() => {
+    const surface = panel.current
+    const button = trigger.current
+    if (!surface || !button) return
+    if (button.closest('.media-node-editor[aria-hidden="true"]')) {
+      surface.hidePopover?.()
+      setOpen(false)
+      return
+    }
+    const rect = button.getBoundingClientRect()
+    const width = Math.min(image ? 340 : 300, window.innerWidth - 24)
+    surface.style.width = `${width}px`
+    surface.style.maxHeight = `${window.innerHeight - 24}px`
+    surface.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))}px`
+    const height = surface.getBoundingClientRect().height
+    surface.style.top = `${Math.max(12, Math.min(rect.top - height - 8, window.innerHeight - height - 12))}px`
+  }, [image])
+  useLayoutEffect(() => {
+    if (!open) return
+    // 等待 React Flow 提交视口变换，再读取节点按钮的实际屏幕位置。
+    if (frame.current !== null) cancelAnimationFrame(frame.current)
+    frame.current = requestAnimationFrame(position)
+    return () => { if (frame.current !== null) cancelAnimationFrame(frame.current) }
+  }, [open, position, viewport.x, viewport.y, viewport.zoom, children])
   useEffect(() => {
     const close = () => { panel.current?.hidePopover?.(); setOpen(false) }
     window.addEventListener('resize', close)
-    return () => window.removeEventListener('resize', close)
+    return () => {
+      window.removeEventListener('resize', close)
+      if (frame.current !== null) cancelAnimationFrame(frame.current)
+    }
   }, [])
   return <>
-    <button ref={trigger} className="media-video-spec" type="button" aria-label="生成参数" aria-expanded={open} disabled={disabled} onClick={(event) => {
-      const rect = event.currentTarget.getBoundingClientRect()
+    <button ref={trigger} className="media-video-spec" type="button" aria-label="生成参数" aria-expanded={open} disabled={disabled} onClick={() => {
       if (panel.current) {
-        const width = Math.min(image ? 340 : 300, window.innerWidth - 24)
-        panel.current.style.width = `${width}px`
-        panel.current.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - width - 12))}px`
-        panel.current.style.maxHeight = `${window.innerHeight - 24}px`
         panel.current.togglePopover?.()
-        const height = panel.current.getBoundingClientRect().height
-        panel.current.style.top = `${Math.max(12, Math.min(rect.top - height - 8, window.innerHeight - height - 12))}px`
+        position()
         setOpen(!open)
       }
     }} onKeyDown={(event) => {
