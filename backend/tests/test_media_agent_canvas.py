@@ -4,6 +4,7 @@ import asyncio
 import json
 from collections.abc import Iterator
 from copy import deepcopy
+from typing import cast
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -51,9 +52,10 @@ def test_rename_node_saves_only_name_and_replay_is_idempotent(
         project = session.get(MediaProject, project_id)
         assert project is not None
         original = deepcopy(project.canvas)
-        original["nodes"][0]["type"] = node_type
+        original_nodes = cast(list[dict[str, object]], original["nodes"])
+        original_nodes[0]["type"] = node_type
         if node_type == "group":
-            original["nodes"][0]["member_ids"] = list(map(str, ids[1:3]))
+            original_nodes[0]["member_ids"] = list(map(str, ids[1:3]))
         project.canvas = original
         session.commit()
     entry = next(t for t in media_tools.build_media_tools(Settings()) if t.name == "rename_node")
@@ -85,7 +87,7 @@ def test_rename_node_saves_only_name_and_replay_is_idempotent(
         project = session.get(MediaProject, project_id)
         assert project is not None and project.version == 1
         expected = deepcopy(original)
-        expected["nodes"][0]["name"] = "开场空镜"
+        cast(list[dict[str, object]], expected["nodes"])[0]["name"] = "开场空镜"
         assert project.canvas == expected
 
 

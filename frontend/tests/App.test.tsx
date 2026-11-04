@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from '../src/App'
@@ -263,7 +263,7 @@ describe('App', () => {
     expect(screen.queryByRole('navigation', { name: '主导航' })).not.toBeInTheDocument()
     expect(window.localStorage.getItem('genesis-account-token')).toBe('dev-token')
     expect(screen.queryByRole('link', { name: '登录并继续' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('link', { name: '账户素材库' }))
+    fireEvent.click(within(screen.getByRole('navigation', { name: '创作空间' })).getByRole('link', { name: '素材库' }))
     expect(await screen.findByRole('heading', { name: '账户素材库' })).toBeInTheDocument()
     expect(await screen.findByText('素材库还是空的')).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: '素材库' })).not.toBeInTheDocument()

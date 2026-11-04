@@ -647,7 +647,7 @@ describe('作品画布', () => {
     expect(uploader).toHaveBeenLastCalledWith('/projects/project/assets', file, expect.any(Function))
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     expect(screen.queryByRole('combobox', { name: '生视频节点预览素材' })).not.toBeInTheDocument()
-    await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: assetId })))
+    await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: assetId }), expect.any(AbortSignal)))
   })
   it('节点素材在画布内选择，引用失败保留弹窗并可重试', async () => {
     const asset = { id: crypto.randomUUID(), name: '镜头参考.png', kind: 'image' as const, mime_type: 'image/png', size: 4, in_library: true }
@@ -670,7 +670,7 @@ describe('作品画布', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '选择节点素材' })).not.toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     expect(screen.queryByRole('combobox', { name: '生视频节点预览素材' })).not.toBeInTheDocument()
-    await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: asset.id })))
+    await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: asset.id }), expect.any(AbortSignal)))
     expect(request).toHaveBeenCalledWith('/projects/project/assets/reference', 'POST', { asset_id: asset.id })
   })
   it('上传失败显示原因并可在原作品内重试', async () => {

@@ -1,7 +1,7 @@
 """私有影音 API：校验资源归属、画布关联、并发版本与上传边界。"""
 
 from datetime import UTC, datetime
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
@@ -11,10 +11,12 @@ from sqlalchemy import delete, func, select
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
 from genesis_api.api.routes.blog_attachments import private_file, upload_file
 from genesis_api.api.routes.media_image import router as image_router
+from genesis_api.api.routes.media_playback import router as playback_router
 from genesis_api.api.routes.media_video import router as video_router
 from genesis_api.blog.attachments import AttachmentRead
 from genesis_api.core.uploads import copy_upload
 from genesis_api.media import service
+from genesis_api.media.canvas_migration import detach_legacy_video_results
 from genesis_api.media.image import result_cache
 from genesis_api.media.models import (
     ImageGeneration,
@@ -34,6 +36,7 @@ from genesis_api.media.schemas import (
 router = APIRouter(prefix="/media", tags=["影音系统"])
 router.include_router(video_router)
 router.include_router(image_router)
+router.include_router(playback_router)
 
 
 @router.post("/agent/attachments/files", response_model=AttachmentRead, status_code=201)
@@ -256,17 +259,11 @@ def canvas(
     """
     project = service.project_for(session, user.id, project_id)
     previous = CanvasDocument.model_validate(project.canvas)
-    document = service.sync_asset_names(session, project, previous)
-    if any(node.name != old.name for node, old in zip(document.nodes, previous.nodes, strict=True)):
+    document = detach_legacy_video_results(session, project, previous)
+    document = service.sync_asset_names(session, project, document)
+    if document != previous:
         # 记住校准后的名称基线，避免另一作品改名后，普通位置保存被误判为再次改名。
-        rows = cast(list[dict[str, object]], project.canvas["nodes"])
-        project.canvas = {
-            **project.canvas,
-            "nodes": [
-                {**row, "name": node.name} if node.name != old.name else row
-                for row, node, old in zip(rows, document.nodes, previous.nodes, strict=True)
-            ],
-        }
+        project.canvas = document.model_dump(mode="json")
         project.version += 1
         project.updated_at = datetime.now(UTC)
         session.commit()

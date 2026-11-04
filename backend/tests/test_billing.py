@@ -1054,13 +1054,17 @@ def test_paid_model_without_maximum_price_review_can_start(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("price,settled", [(1, True), (2, False)])
+@pytest.mark.parametrize("autoflush", [True, False])
 async def test_new_model_settlement_verifies_channel_unit_without_price_policy(
     state: Any,
     price: int,
     settled: bool,
+    autoflush: bool,
 ) -> None:
     """从公开状态核验额度换算；未知口径保留待核对，不猜金额也不记零费用。"""
     session, user, _, settings, factory, _ = state
+    # 生产会话关闭自动 flush，防止测试隐式写入掩盖 refresh 丢失规则的问题。
+    factory.configure(autoflush=autoflush)
     operation = admit(
         session,
         user,

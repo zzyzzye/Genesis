@@ -247,6 +247,8 @@ async def reconcile_once(
                                 "channel"
                             ) == channel and not operation.policy.get("quota_per_cny"):
                                 operation.policy = {**operation.policy, "quota_per_cny": unit}
+                    # 生产会话关闭 autoflush；apply_rows 的 refresh 不能丢弃刚核验的口径。
+                    session.flush()
                     # 消费先于退款，接口记录顺序不影响首次结算。
                     rows = [r for r in data["data"] if isinstance(r, dict)]
                     apply_rows(session, channel, sorted(rows, key=lambda r: r.get("type") == 6))

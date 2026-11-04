@@ -26,12 +26,20 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
   }
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
-export async function fileBlob(asset: Asset): Promise<Blob> {
+export async function fileBlob(asset: Pick<Asset, 'id'> & Partial<Asset>, signal?: AbortSignal): Promise<Blob> {
   const headers = { Authorization: `Bearer ${getStoredAuthToken() ?? ''}` }
-  const response = await authFetch(`${base}/assets/${asset.id}/file`, { headers })
+  const response = await authFetch(`${base}/assets/${asset.id}/file`, { headers, signal })
   handleStudioUnauthorized(response.status, headers)
   if (!response.ok) throw new Error('素材读取失败，请重试')
   return response.blob()
+}
+
+export async function playbackUrl(assetId: string, signal?: AbortSignal): Promise<string> {
+  const headers = { Authorization: `Bearer ${getStoredAuthToken() ?? ''}` }
+  const response = await authFetch(`${base}/assets/${assetId}/playback`, { method: 'POST', headers, credentials: 'include', signal })
+  if (!response.ok) throw new Error('素材播放授权失败，请重试')
+  // 单素材授权由 HttpOnly Cookie 携带，播放器直接按需读取文件，不下载整份 Blob。
+  return `${base}/assets/${assetId}/stream`
 }
 export async function upload(path: string, file: File, progress: (value: number) => void): Promise<Asset> {
   const form = new FormData(); form.append('file', file)

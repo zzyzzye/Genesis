@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import httpx
@@ -481,7 +481,7 @@ async def test_shared_asset_position_save_does_not_revert_another_project_name(
     state.session.commit()
     snapshot = (await state.client.get(f"projects/{project.id}/canvas")).json()
     assert snapshot["document"]["nodes"][0]["name"] == asset.name
-    assert project.canvas["nodes"][0]["name"] == asset.name
+    assert cast(list[dict[str, object]], project.canvas["nodes"])[0]["name"] == asset.name
     asset.name = "另一作品的新名称"
     state.session.commit()
     snapshot["document"]["nodes"][0]["x"] = 100
