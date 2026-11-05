@@ -31,8 +31,10 @@ export function syncReferenceModes(document: Document): Document {
   const materials = new Set(document.nodes.filter(node => node.asset_id || ['image', 'image_generation', 'video', 'video_asset', 'audio', 'audio_generation'].includes(node.type)).map(node => node.id))
   const targets = new Set(document.edges.filter(edge => edge.source !== edge.target && materials.has(edge.source)).map(edge => edge.target))
   const nodes = document.nodes.map<Node>(node => {
-    if (node.type !== 'video' && node.type !== 'audio_generation') return node
-    const mode = targets.has(node.id) ? node.generation?.mode === 'first_last' ? 'first_last' : 'reference' : 'text'
+    if (node.type !== 'video' && node.type !== 'image_generation' && node.type !== 'audio_generation') return node
+    const mentioned = new Set([...node.text.matchAll(imageMentionPattern)].map(match => match[1]))
+    const used = document.edges.some(edge => edge.target === node.id && document.nodes.some(source => source.id === edge.source && (['image', 'image_generation'].includes(source.type) ? mentioned.has(source.id) : materials.has(source.id))))
+    const mode = (node.type === 'audio_generation' ? targets.has(node.id) : used) ? node.generation?.mode === 'first_last' ? 'first_last' : 'reference' : 'text'
     return (node.generation?.mode ?? 'text') === mode ? node : { ...node, generation: { ...defaultGenerationSettings(), ...node.generation, mode } }
   })
   return nodes.some((node, index) => node !== document.nodes[index]) ? { ...document, nodes } : document

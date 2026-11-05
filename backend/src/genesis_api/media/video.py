@@ -21,7 +21,7 @@ from genesis_api.database.session import SessionLocal
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service
 from genesis_api.media.models import MediaAsset, ProjectAsset, VideoGeneration
-from genesis_api.media.prompt_references import resolve_image_mentions
+from genesis_api.media.prompt_references import mentioned_image_nodes, resolve_image_mentions
 from genesis_api.media.schemas import CanvasDocument
 
 logger = logging.getLogger(__name__)
@@ -144,8 +144,15 @@ def build_payload(
             "image", "image_generation", "video", "video_asset", "audio", "audio_generation",
         ))
     )]
-    if not connected and node.generation.mode != "text":
-        raise HTTPException(422, "请先连接参考素材节点")
+    # 图片只有在提示词中显式引用才提交，未使用的候选不触发素材校验。
+    mentioned = mentioned_image_nodes(node.text)
+    connected = [source for source in connected if (
+        source.type not in ("image", "image_generation") or str(source.id) in mentioned
+    )]
+    if not connected and node.generation.mode != "first_last":
+        node = node.model_copy(
+            update={"generation": node.generation.model_copy(update={"mode": "text"})}
+        )
     if connected:
         if not settings.video_public_base_url.startswith("https://"):
             raise HTTPException(422, "素材参考需先部署公网 HTTPS 地址并配置视频素材访问地址")
@@ -158,6 +165,8 @@ def build_payload(
             if str(asset_id) in ids:
                 continue
             asset = service.asset_for(session, task.owner_id, asset_id)
+            if asset.kind == "image" and str(source.id) not in mentioned:
+                continue
             if session.get(ProjectAsset, (task.project_id, asset.id)) is None:
                 raise HTTPException(422, "参考素材不在当前作品中")
             if not (service.STORAGE_ROOT / str(asset.id)).is_file():

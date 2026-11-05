@@ -260,9 +260,7 @@ async def test_submit_is_idempotent_and_recovers_after_reload(fixture: VideoFixt
     [
         {"text": ""},
         {"generation": {"model": "not-in-live-catalog"}},
-        {"generation": {"model": "unverified-model", "mode": "reference"}},
         {"generation": {"model": "grok-imagine-video", "count": 2}},
-        {"generation": {"model": "grok-imagine-video", "mode": "reference"}},
     ],
 )
 async def test_invalid_parameters_never_create_upstream_task(
@@ -414,6 +412,7 @@ async def test_reference_links_are_task_scoped_and_expiring(
     doc = snapshot["document"]
     source_id = str(uuid4())
     doc["nodes"][0]["generation"]["mode"] = "reference"
+    doc["nodes"][0]["text"] = f"参考@[图片](ref:{source_id})"
     doc["nodes"].append(
         {
             "id": source_id,
@@ -482,6 +481,22 @@ async def test_reference_links_are_task_scoped_and_expiring(
 
 
 @pytest.mark.anyio
+async def test_connected_image_without_mention_is_not_sent(fixture: VideoFixture) -> None:
+    snapshot = (await fixture.client.get(f"projects/{fixture.project_id}/canvas")).json()
+    source = str(uuid4())
+    snapshot["document"]["nodes"].append(
+        {"id": source, "type": "image", "x": 0, "y": 0, "width": 360, "height": 280}
+    )
+    snapshot["document"]["edges"] = [
+        {"id": str(uuid4()), "source": source, "target": fixture.node_id}
+    ]
+    await fixture.client.put(f"projects/{fixture.project_id}/canvas", json=snapshot)
+    assert (await submit(fixture)).status_code == 202
+    payload = json.loads(next(r for r in fixture.requests if r.method == "POST").content)
+    assert "image_urls" not in payload
+
+
+@pytest.mark.anyio
 async def test_image_mentions_follow_uploaded_order_and_deduplicate_assets(
     fixture: VideoFixture,
 ) -> None:
@@ -493,6 +508,10 @@ async def test_image_mentions_follow_uploaded_order_and_deduplicate_assets(
     snapshot = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
     doc = snapshot["document"]
     sources = [str(uuid4()) for _ in range(3)]
+    unused = str(uuid4())
+    doc["nodes"].append(
+        {"id": unused, "type": "image", "x": 0, "y": 0, "width": 360, "height": 280}
+    )
     doc["nodes"][0]["text"] = (
         f"先看@[图片](ref:{sources[0]})，再看@[图片](ref:{sources[1]})，"
         f"同图@[图片](ref:{sources[2]})"
@@ -506,6 +525,7 @@ async def test_image_mentions_follow_uploaded_order_and_deduplicate_assets(
     doc["edges"] = [{
         "id": str(uuid4()), "source": sources[index], "target": state.node_id,
     } for index in (1, 0, 2)]
+    doc["edges"].append({"id": str(uuid4()), "source": unused, "target": state.node_id})
     await state.client.put(f"projects/{state.project_id}/canvas", json={
         "version": snapshot["version"], "document": doc,
     })

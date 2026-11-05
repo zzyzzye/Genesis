@@ -8,6 +8,11 @@ from fastapi import HTTPException
 MENTION = re.compile(r"@\[图片\]\(ref:([a-zA-Z0-9_-]+)\)")
 
 
+def mentioned_image_nodes(text: str) -> set[str]:
+    """读取显式引用的图片节点；连线本身仅提供候选素材。"""
+    return {match[1] for match in MENTION.finditer(text)}
+
+
 def resolve_image_mentions(text: str, image_numbers: dict[UUID, int]) -> str:
     """按实际发送顺序解析引用，断线或未就绪的引用禁止降级为普通文字。
 

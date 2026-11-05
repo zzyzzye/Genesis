@@ -42,7 +42,8 @@ describe('作品画布', () => {
     await waitFor(() => {
       const saved = (request.mock.calls.filter(([, method]) => method === 'PUT').at(-1)?.[2] as { document: Document }).document
       expect(saved.nodes).toHaveLength(2)
-      expect(saved.nodes.find(node => node.id === 'target')).toMatchObject({ asset_id: null, text: '保留提示词', generation: { mode: 'reference' } })
+      expect(saved.nodes.find(node => node.id === 'target')).toMatchObject({ asset_id: null, text: '保留提示词' })
+      expect(saved.nodes.find(node => node.id === 'target')?.generation?.mode ?? 'text').toBe('text')
       const source = saved.nodes.find(node => node.asset_id === asset.id)!
       expect(saved.edges).toEqual([expect.objectContaining({ source: source.id, target: 'target' })])
     })
@@ -262,7 +263,7 @@ describe('作品画布', () => {
     fireEvent.click(screen.getByRole('button',{name:'作品菜单'}))
     fireEvent.click(screen.getByRole('button',{name:'立即保存 / 重试'}))
     await waitFor(()=>{
-      const saved=request.mock.calls.find(([path,method])=>path.endsWith('/canvas')&&method==='PUT')?.[2] as {document:Document}
+      const saved=request.mock.calls.filter(([path,method])=>path.endsWith('/canvas')&&method==='PUT').at(-1)?.[2] as {document:Document}
       const generator=saved.document.nodes.find(node=>node.type===type)
       const reference=saved.document.nodes.find(node=>node.type==='image')
       expect(generator?.asset_id).toBeNull()
@@ -632,12 +633,12 @@ describe('作品画布', () => {
     const operations = sources.map(source => ({ action: 'connect_nodes' as const, source_id: source.id, target_id: target.id }))
     expect(() => applyPlan?.({ title: '失效参考', operations: [...operations, { action: 'connect_nodes', source_id: 'missing', target_id: target.id }] })).toThrow('已失效')
     act(() => applyPlan?.({ title: '四图参考', operations }))
-    expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveValue('reference')
+    expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveValue('text')
     expect(screen.getAllByRole('button', { name: /^引用参考：图/ })).toHaveLength(4)
     await waitFor(() => {
       const saved = request.mock.calls.filter(([path, method]) => path.endsWith('/canvas') && method === 'PUT').at(-1)?.[2] as { document: Document }
       expect(saved.document.edges.map(edge => edge.source)).toEqual(sources.map(source => source.id))
-      expect(saved.document.nodes.at(-1)?.generation?.mode).toBe('reference')
+      expect(saved.document.nodes.at(-1)?.generation?.mode).toBe('text')
     })
     fireEvent.click(screen.getByRole('button', { name: '撤销' }))
     expect(screen.queryByRole('group', { name: /^参考 1：/ })).not.toBeInTheDocument()
@@ -760,7 +761,7 @@ describe('作品画布', () => {
     await waitFor(() => expect(uploader).toHaveBeenCalledTimes(2))
     expect(uploader).toHaveBeenLastCalledWith('/projects/project/assets', file, expect.any(Function))
     expect(await screen.findByRole('group', { name: '参考 1：frame.png' })).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveValue('reference')
+    expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveValue('text')
     fireEvent.click(screen.getByRole('button', { name: '引用参考：frame.png' }))
     expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveTextContent('frame.png')
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))

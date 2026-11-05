@@ -125,7 +125,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onTask, onModelC
   return <div className="media-video-generation">
     <div className="media-video-generation-actions">
       <GenerationModelPicker models={catalog?.models ?? []} value={model?.id ?? ''} label={`${noun}生成模型`} placeholder={catalog ? catalog.configured ? `选择${noun}模型` : `尚未配置${noun}服务` : `加载${noun}模型…`} disabled={busy} loading={catalogLoading} onChange={chooseModel} onRefresh={refreshModels} />
-      {isImage && <span className="media-video-spec" aria-label="图片生成模式" title="根据连入的图片参考自动确定">{referenceCount ? '图生图' : '文生图'}</span>}
+      {isImage && <span className="media-video-spec" aria-label="图片生成模式" title="根据提示词中 @ 引用的图片确定">{referenceCount ? '图生图' : '文生图'}</span>}
       {controls}
       <button type="button" aria-label={`刷新${noun}模型与任务`} title="刷新模型与任务" disabled={busy || catalogLoading} onClick={() => { refreshModels(); setAttempt(value => value + 1) }}><RefreshCw size={14} /></button>
       <button type="button" className="media-video-submit" aria-label={`生成${noun}`} title={`生成${noun}`} disabled={Boolean(blocked || referenceBlocked || !model || !node.text.trim())} onClick={() => void submit()}>{busy || task && running(task.status) ? <LoaderCircle size={15} className="is-spinning" /> : <ArrowUp size={16} />}</button>

@@ -235,6 +235,7 @@ async def test_agent_rejects_stale_canvas_and_unready_reference(
         assert "画布已更新" in await tool.ainvoke(args, config=config)
         snapshot = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
         source = str(uuid4())
+        snapshot["document"]["nodes"][0]["text"] = f"参考@[图片](ref:{source})"
         snapshot["document"]["nodes"].append(
             {
                 **snapshot["document"]["nodes"][0],
@@ -557,6 +558,13 @@ async def test_image_edit_uses_local_multipart_without_public_base(
         {"id": str(uuid4()), "source": node_id, "target": state.node_id}
     ]
     current["document"]["nodes"][0]["text"] = f"保留@[图片](ref:{node_id})中的人物服装"
+    unused = str(uuid4())
+    current["document"]["nodes"].append(
+        {"id": unused, "type": "image", "x": 0, "y": 0, "width": 360, "height": 280}
+    )
+    current["document"]["edges"].append(
+        {"id": str(uuid4()), "source": unused, "target": state.node_id}
+    )
     assert (
         await state.client.put(f"projects/{state.project_id}/canvas", json=current)
     ).status_code == 200
@@ -615,8 +623,9 @@ async def test_without_image_reference_ignores_legacy_mode(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("ready", [False, True])
+@pytest.mark.parametrize("mentioned", [False, True])
 async def test_image_reference_cannot_be_silently_ignored(
-    fixture: ImageFixture, ready: bool
+    fixture: ImageFixture, ready: bool, mentioned: bool
 ) -> None:
     current = (await fixture.client.get(f"projects/{fixture.project_id}/canvas")).json()
     source_id = str(uuid4())
@@ -638,6 +647,8 @@ async def test_image_reference_cannot_be_silently_ignored(
         source["asset_id"] = asset["id"]
         current["document"]["nodes"][0]["generation"]["model"] = "new-image-model"
     current["document"]["nodes"].append(source)
+    if mentioned:
+        current["document"]["nodes"][0]["text"] = f"参考@[图片](ref:{source_id})"
     current["document"]["edges"] = [
         {"id": str(uuid4()), "source": source_id, "target": fixture.node_id}
     ]
@@ -645,7 +656,10 @@ async def test_image_reference_cannot_be_silently_ignored(
         await fixture.client.put(f"projects/{fixture.project_id}/canvas", json=current)
     ).status_code == 200
     response = await submit(fixture)
-    if ready:
+    if not mentioned:
+        assert response.status_code == 202
+        assert any(request.url.path.endswith("/images/generations") for request in fixture.requests)
+    elif ready:
         assert response.status_code == 202
         assert any(request.url.path.endswith("/images/edits") for request in fixture.requests)
     else:

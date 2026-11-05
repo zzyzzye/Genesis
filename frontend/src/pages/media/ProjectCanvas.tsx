@@ -255,9 +255,12 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
   const settings = node.generation ?? defaultGenerationSettings()
   const patchSettings = (patch: Partial<typeof settings>) => data.onPatch(id, { generation: { ...settings, ...patch } })
   const imageRefs = imageReferences(data.references)
+  const mentioned = new Set([...node.text.matchAll(imageMentionPattern)].map(match => match[1]))
+  const usedImages = imageRefs.filter(item => mentioned.has(item.node.id))
+  const usedReferences = data.references.filter(item => !imageRefs.includes(item) || mentioned.has(item.node.id))
   const imageNumbers = imageReferenceNumbers(data.references)
   const missingMention = [...node.text.matchAll(imageMentionPattern)].some(match => !imageRefs.some(reference => reference.node.id === match[1]))
-  const hasMaterial = data.references.some(item => item.asset || ['image', 'image_generation', 'video', 'video_asset', 'audio', 'audio_generation'].includes(item.node.type))
+  const hasMaterial = usedReferences.some(item => item.asset || ['image', 'image_generation', 'video', 'video_asset', 'audio', 'audio_generation'].includes(item.node.type))
   const videoMode = hasMaterial ? settings.mode === 'first_last' ? 'first_last' : 'reference' : 'text'
   const modeControl = <select aria-label="参考模式" value={isVideo ? videoMode : settings.mode} onChange={(event) => patchSettings({ mode: event.target.value as typeof settings.mode })}>{(!isVideo || !hasMaterial) && <option value="text">{isAudio ? '文生音频' : '文生视频'}</option>}{(!isVideo || hasMaterial) && <option value="reference">{isAudio ? '音频参考' : '素材参考'}</option>}{isVideo && hasMaterial && <option value="first_last">首尾帧</option>}</select>
   const parameterControl = isImage ? <GenerationParameters image summary={imageSettingsSummary(settings)}><ImageParameters settings={settings} onChange={patchSettings} /></GenerationParameters> : isVideo ? <GenerationParameters video summary={`${settings.ratio} · ${settings.resolution === '2160P' ? '4K' : settings.resolution} · ${node.duration_seconds ?? 5}s`}><VideoParameters settings={settings} duration={node.duration_seconds ?? 5} onChange={patchSettings} onDurationChange={duration_seconds => data.onPatch(id, { duration_seconds }, false)} onInteractionStart={data.onInteractionStart} onInteractionEnd={data.onInteractionEnd} /></GenerationParameters> : <GenerationParameters summary={`${node.duration_seconds ?? 5}s · ${settings.count}个`}>
@@ -309,7 +312,7 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
       </div>}
       <input ref={fileInput} className="media-video-file-input" type="file" accept={isImage ? 'image/jpeg,image/png,image/webp,image/gif,image/avif' : isAudio ? 'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/webm,audio/aac' : 'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska'} aria-label={`导入${nodeTypeLabel(node.type)}${isImage || isVideo ? '参考' : '预览'}素材`} onChange={(event) => { const file = event.target.files?.[0]; if (file) void data.onUploadNodeAsset(id, isAudio ? 'audio' : isVideo && file.type.startsWith('video/') ? 'video' : 'image', file); event.target.value = '' }} />
       {(isVideo || isImage) && (imageRefs.length > 0 || data.imageCandidates.length > 0 || node.text.includes('](ref:')) ? <ReferencePrompt ref={referencePrompt} value={node.text} references={imageRefs} candidates={data.imageCandidates} label={isImage ? "图片提示词" : "镜头描述"} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(text, sourceId) => data.onTextChange(id, text, sourceId)} /> : <textarea className="resize-none" aria-label={isImage ? '图片提示词' : isAudio ? '音频提示词' : '镜头描述'} value={node.text} placeholder={isImage ? '描述想要生成的图片内容，可引用画布素材' : isAudio ? '描述声音、音乐风格或环境氛围，可引用画布素材' : '描述画面、人物动作与声音，可引用连入节点的文字'} maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />}
-      {isVideo ? <VideoGeneration projectId={data.projectId} node={{ ...node, generation: { ...settings, mode: videoMode } }} controls={<>{modeControl}{parameterControl}</>} referenceCount={data.references.filter((item) => item.asset).length} referencesPending={data.references.some(item => !item.asset && (Boolean(item.node.asset_id) || ["image", "image_generation", "video", "video_asset", "audio", "audio_generation"].includes(item.node.type)))} referenceError={missingMention ? "提示词中的图片引用已断开，请重新连线或删除该引用。" : undefined} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onGenerationTask} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={parameterControl} referenceCount={imageRefs.length} referencesPending={imageRefs.some(({ asset }) => !asset)} referenceError={missingMention ? "提示词中的图片引用已断开，请重新连线或删除该引用。" : undefined} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onGenerationTask} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
+      {isVideo ? <VideoGeneration projectId={data.projectId} node={{ ...node, generation: { ...settings, mode: videoMode } }} controls={<>{modeControl}{parameterControl}</>} referenceCount={usedReferences.filter((item) => item.asset).length} referencesPending={usedReferences.some(item => !item.asset && (Boolean(item.node.asset_id) || ["image", "image_generation", "video", "video_asset", "audio", "audio_generation"].includes(item.node.type)))} referenceError={missingMention ? "提示词中的图片引用已断开，请重新连线或删除该引用。" : undefined} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onGenerationTask} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={parameterControl} referenceCount={usedImages.length} referencesPending={usedImages.some(({ asset }) => !asset)} referenceError={missingMention ? "提示词中的图片引用已断开，请重新连线或删除该引用。" : undefined} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onGenerationTask} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
     </section>
 }
 
@@ -491,10 +494,10 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
 
   const updateText = useCallback((id: string, text: string, sourceId?: string) => {
     const current = sourceId ? connectReference(canvas.current.current, sourceId, id) : canvas.current.current
-    canvas.apply({
+    canvas.apply(syncReferenceModes({
       ...current,
       nodes: current.nodes.map((node) => node.id === id ? { ...node, text } : node),
-    }, false)
+    }), false)
   }, [canvas])
 
   const patchNode = useCallback((id: string, patch: Partial<Node>, record = true) => {
@@ -535,7 +538,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     // 上传和素材选择都建立可见参考连线，结果预览继续独立保留。
     const reference: Node = {id:sourceId,type:asset.kind === 'video' ? 'video_asset' : 'image',name:asset.name.slice(0,120),asset_id:asset.id,text:'',x:Math.max(-1000000,target.x-480),y:Math.min(1000000,target.y+references*312),width:360,height:280}
     const document = connectReference({ ...current, nodes:[...current.nodes, reference] }, sourceId, id)
-    canvas.apply(target.type === 'image_generation' ? { ...document, nodes:document.nodes.map(node => node.id === id ? { ...node, generation:{ ...(node.generation ?? defaultGenerationSettings()), mode:'reference' } } : node) } : document)
+    canvas.apply(document)
   }, [canvas, patchNode])
 
   const uploadNodeAsset = useCallback(async (id: string, kind: Asset['kind'], file: File) => {

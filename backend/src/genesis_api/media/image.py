@@ -28,7 +28,7 @@ from genesis_api.identity.models import User
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service
 from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset
-from genesis_api.media.prompt_references import resolve_image_mentions
+from genesis_api.media.prompt_references import mentioned_image_nodes, resolve_image_mentions
 from genesis_api.media.schemas import CanvasDocument, CanvasNode, GenerationSubmit
 
 logger = logging.getLogger(__name__)
@@ -213,7 +213,10 @@ def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -
         raise HTTPException(422, "请先保存生图节点，并填写提示词和选择模型")
     ids: list[str] = []
     image_numbers: dict[UUID, int] = {}
+    mentioned = mentioned_image_nodes(node.text)
     for source in reference_nodes(document, node.id):
+        if str(source.id) not in mentioned:
+            continue
         if source.asset_id is None:
             if source.type in ("image", "image_generation"):
                 raise HTTPException(422, "参考图片尚未就绪，请先生成或导入图片，或断开该参考")

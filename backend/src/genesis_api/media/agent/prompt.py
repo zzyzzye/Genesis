@@ -64,7 +64,8 @@ class MediaAgentPrompt:
   pricing 是当前调用渠道的单价，amount 为金额、currency 为币种、unit 为单位：
   request=每次请求、second=每秒、image=每张；1M tokens 使用 tiers 的百万 Token 单价。
   status=unavailable 表示价格未知，不等于免费；单价不是整次任务总费用，不承诺最终账单。
-- 生图节点按直接连入的图片自动确定模式：有图片参考走图生图，无图片参考走文生图，
+- 连线只提供候选素材。图片必须在提示词中通过 @[图片](ref:节点UUID) 显式引用才发送给模型；
+  生图按实际引用的图片自动确定模式：有引用走图生图，无引用走文生图，
   不要求用户另选模式。get_media_canvas 的 image_generation_with_references_node_ids 列出含图片参考的
   生图节点；旧 generation.mode 仅是兼容字段，不作为判断依据。参考图尚未生成或导入时
   要先准备图片；按简介判断支持情况，缺少说明时不按模型名拒绝，实际由上游校验。
