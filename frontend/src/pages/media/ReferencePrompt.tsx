@@ -8,6 +8,7 @@ import { imageMentionPattern, imageMentionToken, type incomingReferences } from 
 type References = ReturnType<typeof incomingReferences>
 export type ReferencePromptHandle = { insertImage: (id: string) => void }
 const externalChange = Annotation.define<boolean>()
+const selectedReference = Annotation.define<string>()
 
 class ImageMention extends WidgetType {
   constructor(readonly label: string, readonly missing: boolean) { super() }
@@ -21,9 +22,9 @@ class ImageMention extends WidgetType {
   }
 }
 
-export function ReferencePrompt({ value, references, label, onChange, onFocus, onBlur, ref }: {
-  value: string; references: References; label: string
-  onChange: (text: string) => void; onFocus: () => void; onBlur: () => void
+export function ReferencePrompt({ value, references, candidates = [], label, onChange, onFocus, onBlur, ref }: {
+  value: string; references: References; candidates?: References; label: string
+  onChange: (text: string, sourceId?: string) => void; onFocus: () => void; onBlur: () => void
   ref?: Ref<ReferencePromptHandle>
 }) {
   const host = useRef<HTMLDivElement>(null)
@@ -31,6 +32,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
   const [initial] = useState(value)
   const [referenceConfig] = useState(() => new Compartment())
   const referenceState = JSON.stringify(references.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', ready: Boolean(asset) })))
+  const candidateState = JSON.stringify(candidates.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', ready: Boolean(asset) })))
   const change = useEffectEvent(onChange)
   const focus = useEffectEvent(onFocus)
   const blur = useEffectEvent(onBlur)
@@ -46,7 +48,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
   useEffect(() => {
     if (!host.current) return
     const editor = new EditorView({ parent: host.current, doc: initial, extensions: [
-      minimalSetup, EditorView.lineWrapping, placeholder('描述想要生成的内容，输入 @ 引用连入的图片'),
+      minimalSetup, EditorView.lineWrapping, placeholder('描述想要生成的内容，输入 @ 选择画布图片并连接'),
       EditorView.theme({
         '.cm-content ::selection, .cm-content::selection': { backgroundColor: '#505050', color: '#ffffff' },
         '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: '#505050' },
@@ -54,7 +56,11 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
       EditorView.contentAttributes.of({ 'aria-label': label, 'aria-multiline': 'true', role: 'textbox' }),
       EditorState.phrases.of({ Completions: '图片参考', 'No completions found': '没有匹配的图片参考' }),
       EditorView.domEventHandlers({ focus: () => { focus() }, blur: () => { blur() } }),
-      EditorView.updateListener.of(update => { if (update.docChanged && !update.transactions.some(transaction => transaction.annotation(externalChange))) change(update.state.doc.toString()) }),
+      EditorView.updateListener.of(update => { if (update.docChanged && !update.transactions.some(transaction => transaction.annotation(externalChange))) {
+        const sourceId = update.transactions.map(transaction => transaction.annotation(selectedReference)).find(Boolean)
+        if (sourceId) change(update.state.doc.toString(), sourceId)
+        else change(update.state.doc.toString())
+      } }),
       EditorState.changeFilter.of(transaction => transaction.newDoc.length <= 20000),
       referenceConfig.of([]), Prec.highest(keymap.of(completionKeymap)), tooltips({ parent: document.body }),
     ] })
@@ -69,6 +75,8 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
 
   useEffect(() => {
     const entries = JSON.parse(referenceState) as { id: string; name: string; ready: boolean }[]
+    const available = JSON.parse(candidateState) as typeof entries
+    const choices = [...entries.map(entry => ({ ...entry, connected: true })), ...available.filter(entry => !entries.some(item => item.id === entry.id)).map(entry => ({ ...entry, connected: false }))]
     const decorations = (editor: EditorView) => Decoration.set([...editor.state.doc.toString().matchAll(imageMentionPattern)].map(match => {
       const index = entries.findIndex(item => item.id === match[1])
       const reference = entries[index]
@@ -85,14 +93,18 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
       autocompletion({ icons: false, tooltipClass: () => 'media-prompt-completions', override: [(context: CompletionContext) => {
         const match = context.matchBefore(/@[^@\s[\]()]*$/u)
         if (!match || context.view?.composing) return null
-        return { from: match.from, options: entries.map(entry => ({
+        return { from: match.from, options: choices.map(entry => ({
           label: `@${entry.name}`, displayLabel: entry.name,
-          detail: entry.ready ? '已连接' : '图片未就绪', type: 'variable',
-          apply: `${imageMentionToken(entry.id)} `,
+          detail: entry.connected ? entry.ready ? '已连接' : '图片未就绪' : '选择后连接', type: 'variable',
+          apply: (editor: EditorView, _completion: unknown, from: number, to: number) => {
+            const token = `${imageMentionToken(entry.id)} `
+            // 引用文本和连线由画布在同一次更新中保存，避免留下悬空引用。
+            editor.dispatch({ changes: { from, to, insert: token }, selection: { anchor: from + token.length }, annotations: selectedReference.of(entry.id) })
+          },
         })), validFor: /^@?[^@\s[\]()]*$/u }
       }], activateOnTyping: true }),
     ]) })
-  }, [referenceConfig, referenceState])
+  }, [referenceConfig, referenceState, candidateState])
 
   return <div className="media-reference-prompt" ref={host} />
 }

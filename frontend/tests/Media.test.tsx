@@ -11,6 +11,8 @@ import * as ai from '../src/lib/api'
 import { groupSelection, removeSelection, resizedNodeDimensions, ungroupSelection } from '../src/pages/media/canvasOperations'
 import { accountAuthTokenKey } from '../src/lib/auth'
 import { imageReferences, incomingReferences } from '../src/pages/media/canvasReferences'
+import { EditorView } from '@codemirror/view'
+import { startCompletion } from '@codemirror/autocomplete'
 
 const note = { id: 'b3e3d0d5-2494-47e0-9fb9-e661a1384cb0', type: 'note' as const, asset_id: null, text: '镜头一', x: 10, y: 20, width: 250, height: 180 }
 const canvasActions = { save: () => Promise.resolve(), getDocument: emptyDocument, attachImageTask: () => Promise.resolve() }
@@ -26,6 +28,36 @@ describe('作品画布', () => {
     vi.spyOn(ai, 'createAiChatRun').mockResolvedValue({ id: 'media-run', status: 'pending' })
   })
   afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks() })
+  it.each(['image_generation', 'video'] as const)('%s 在 @ 中选择未连接图片，同步保存引用和连线且不重复连接', async type => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const asset: media.Asset = { id: 'mention-image', name: '画布人物.png', kind: 'image', mime_type: 'image/png', size: 4, in_library: false }
+    const source = { ...note, id: crypto.randomUUID(), type: 'image' as const, asset_id: asset.id, name: asset.name }
+    const target = { ...note, id: crypto.randomUUID(), type, text: '', x: 500 }
+    const document: Document = { ...emptyDocument(), nodes: [source, target] }
+    const api = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { document, version: 1 } : path.includes('/assets') ? { items: [asset], total: 1 } : { id: 'project', name: '测试作品', version: 1 }))
+    vi.spyOn(media, 'fileBlob').mockResolvedValue(new Blob(['image']))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:reference')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    fireEvent.click(await screen.findByTestId(`rf__node-${target.id}`))
+    const textbox = screen.getByRole('textbox', { name: type === 'video' ? '镜头描述' : '图片提示词' })
+    const editor = EditorView.findFromDOM(textbox)!
+    fireEvent.focus(textbox)
+    act(() => { editor.dispatch({ changes: { from: 0, insert: '@' }, selection: { anchor: 1 } }); startCompletion(editor) })
+    await screen.findByText('选择后连接')
+    fireEvent.mouseDown(screen.getByRole('option', { name: '画布人物.png选择后连接' }))
+    expect(screen.getByRole('button', { name: '引用参考：画布人物.png' })).toBeEnabled()
+    expect(textbox).toHaveTextContent('画布人物.png')
+    fireEvent.click(screen.getByRole('button', { name: '引用参考：画布人物.png' }))
+    fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
+    await waitFor(() => {
+      const saves = api.mock.calls.filter(([, method]) => method === 'PUT')
+      const saved = (saves.at(-1)?.[2] as { document: Document }).document
+      expect(saved.edges).toEqual([expect.objectContaining({ source: source.id, target: target.id })])
+      expect(saved.nodes.find(node => node.id === target.id)?.text.match(/ref:/g)).toHaveLength(2)
+    })
+  })
   it('参考只取直接连入节点，保持连线顺序并过滤重复、自连和失效连线', () => {
     const image = { ...note, id: crypto.randomUUID(), type: 'image' as const, asset_id: 'image' }
     const video = { ...note, id: crypto.randomUUID(), type: 'video' as const }
