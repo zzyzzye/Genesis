@@ -132,7 +132,9 @@ describe('作品画布', () => {
       expect(saved.document.nodes[0]).toMatchObject({ text: '雨夜街道，电影感构图', width: 600, height: 378, generation: { mode: 'text', image_size:'2048x1152', image_resolution:'2K', image_ratio:'16:9', image_background:'transparent', count:2 } })
     })
   })
-  it('生图上传建立图片参考与连线，不覆盖生成预览或移动视口', async () => {
+  it.each([
+    ['生图', 'image_generation'], ['生视频', 'video'],
+  ] as const)('%s 上传建立图片参考与连线，不覆盖生成预览或移动视口', async (label, type) => {
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
     const asset: media.Asset = {id:'image-upload',name:'人物.png',kind:'image',mime_type:'image/png',size:12,in_library:false}
     const request=vi.spyOn(media,'api').mockImplementation(path=>Promise.resolve(path.endsWith('/canvas')?{version:0,document:emptyDocument()}:path.includes('/assets')?{items:[],total:0}:{id:'project',name:'测试作品',version:0}))
@@ -141,19 +143,21 @@ describe('作品画布', () => {
     vi.spyOn(URL,'createObjectURL').mockReturnValue('blob:image-reference')
     vi.spyOn(URL,'revokeObjectURL').mockImplementation(()=>{})
     render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
-    fireEvent.click(await screen.findByRole('button',{name:'＋ 添加生图节点'}))
+    fireEvent.click(await screen.findByRole('button',{name:`＋ 添加${label}节点`}))
     const viewport=window.document.querySelector('.react-flow__viewport')?.getAttribute('style')
-    fireEvent.change(screen.getByLabelText('导入生图节点参考素材'),{target:{files:[new File(['image'],'人物.png',{type:'image/png'})]}})
+    fireEvent.change(screen.getByLabelText(`导入${label}节点参考素材`),{target:{files:[new File(['image'],'人物.png',{type:'image/png'})]}})
     await screen.findByRole('group',{name:'参考 1：人物.png'})
-    expect(screen.queryByRole('combobox',{name:'参考模式'})).not.toBeInTheDocument()
+    if (type === 'video') expect(screen.getByRole('combobox',{name:'参考模式'})).toHaveValue('reference')
+    else expect(screen.queryByRole('combobox',{name:'参考模式'})).not.toBeInTheDocument()
     expect(window.document.querySelector('.react-flow__viewport')?.getAttribute('style')).toBe(viewport)
     fireEvent.click(screen.getByRole('button',{name:'作品菜单'}))
     fireEvent.click(screen.getByRole('button',{name:'立即保存 / 重试'}))
     await waitFor(()=>{
       const saved=request.mock.calls.find(([path,method])=>path.endsWith('/canvas')&&method==='PUT')?.[2] as {document:Document}
-      const generator=saved.document.nodes.find(node=>node.type==='image_generation')
+      const generator=saved.document.nodes.find(node=>node.type===type)
       const reference=saved.document.nodes.find(node=>node.type==='image')
       expect(generator?.asset_id).toBeNull()
+      expect(generator?.generation?.mode).toBe('reference')
       expect(reference?.asset_id).toBe(asset.id)
       expect(saved.document.edges).toEqual([expect.objectContaining({source:reference?.id,target:generator?.id})])
     })
@@ -664,7 +668,9 @@ describe('作品画布', () => {
       expect(saved.document.edges).toEqual([expect.objectContaining({ source:reference.id, target:generator.id })])
     })
   })
-  it('节点素材在画布内选择，引用失败保留弹窗并可重试', async () => {
+  it.each([
+    ['生图', 'image_generation'], ['生视频', 'video'],
+  ] as const)('%s 选择作品素材创建参考，失败可重试，重复选择不重复建节点', async (label, type) => {
     const asset = { id: crypto.randomUUID(), name: '镜头参考.png', kind: 'image' as const, mime_type: 'image/png', size: 4, in_library: true }
     let failReference = true
     vi.spyOn(media, 'fileBlob').mockRejectedValue(new Error('预览不可用'))
@@ -676,19 +682,37 @@ describe('作品画布', () => {
       return Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [asset], total: 1 } : { id: 'project', name: '测试作品', version: 0, method })
     })
     render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
-    fireEvent.click(await screen.findByRole('button', { name: '＋ 添加生视频节点' }))
+    fireEvent.click(await screen.findByRole('button', { name: `＋ 添加${label}节点` }))
     fireEvent.click(screen.getByRole('button', { name: '作品素材' }))
     expect(await screen.findByRole('dialog', { name: '选择节点素材' })).toBeInTheDocument()
     fireEvent.click(await screen.findByRole('button', { name: '用于当前节点' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('引用失败，请重试')
     fireEvent.click(screen.getByRole('button', { name: '用于当前节点' }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '选择节点素材' })).not.toBeInTheDocument())
-    expect(await screen.findByRole('button', { name: '引用参考：镜头参考.png' })).toBeEnabled()
-    expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveValue('reference')
+    expect(await screen.findByRole('group', { name: '参考 1：镜头参考.png' })).toBeInTheDocument()
+    if (type === 'video') {
+      expect(screen.getByRole('button', { name: '引用参考：镜头参考.png' })).toBeEnabled()
+      expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveValue('reference')
+    }
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     expect(screen.queryByRole('combobox', { name: '生视频节点预览素材' })).not.toBeInTheDocument()
     await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: asset.id }), expect.any(AbortSignal)))
     expect(request).toHaveBeenCalledWith('/projects/project/assets/reference', 'POST', { asset_id: asset.id })
+    fireEvent.click(screen.getByRole('button', { name: '作品素材' }))
+    fireEvent.click(await screen.findByRole('button', { name: '用于当前节点' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '选择节点素材' })).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
+    await waitFor(() => {
+      const saved = request.mock.calls.filter(([path, method]) => path.endsWith('/canvas') && method === 'PUT').at(-1)?.[2] as { document: Document }
+      expect(saved.document.nodes).toHaveLength(2)
+      const generator = saved.document.nodes.find(node => node.type === type)!
+      const reference = saved.document.nodes.find(node => node.type === 'image')!
+      expect(generator.asset_id).toBeNull()
+      expect(generator.generation?.mode).toBe('reference')
+      expect(reference.asset_id).toBe(asset.id)
+      expect(saved.document.edges).toEqual([expect.objectContaining({ source:reference.id, target:generator.id })])
+    })
   })
   it('上传失败显示原因并可在原作品内重试', async () => {
     vi.spyOn(media, 'api').mockResolvedValue({ items: [], total: 0 })
