@@ -16,7 +16,10 @@ from genesis_api.api.routes.media_video import router as video_router
 from genesis_api.blog.attachments import AttachmentRead
 from genesis_api.core.uploads import copy_upload
 from genesis_api.media import service
-from genesis_api.media.canvas_migration import detach_legacy_video_results
+from genesis_api.media.canvas_migration import (
+    detach_legacy_video_results,
+    restore_legacy_video_image_references,
+)
 from genesis_api.media.image import result_cache
 from genesis_api.media.models import (
     ImageGeneration,
@@ -251,7 +254,7 @@ def canvas(
         session: 当前请求的查询会话。
 
     Returns:
-        version 与 document；必要时先校准素材名称并递增版本，
+        version 与 document；必要时恢复历史参考及成品、校准素材名称并递增版本，
         客户端后续保存时需携带读到的版本。
 
     Raises:
@@ -260,6 +263,7 @@ def canvas(
     project = service.project_for(session, user.id, project_id)
     previous = CanvasDocument.model_validate(project.canvas)
     document = detach_legacy_video_results(session, project, previous)
+    document = restore_legacy_video_image_references(session, project, document)
     document = service.sync_asset_names(session, project, document)
     if document != previous:
         # 记住校准后的名称基线，避免另一作品改名后，普通位置保存被误判为再次改名。

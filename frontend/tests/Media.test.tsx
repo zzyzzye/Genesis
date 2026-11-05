@@ -632,22 +632,37 @@ describe('作品画布', () => {
     fireEvent.keyDown(window, { key: 'v' })
     expect(screen.getByRole('button', { name: '选择' })).toHaveAttribute('aria-pressed', 'true')
   })
-  it('视频节点可直接上传预览素材，失败后重试原文件', async () => {
+  it('视频上传参考图失败后重试，建立连线、缩略图和可插入引用并保存', async () => {
     vi.spyOn(media, 'fileBlob').mockRejectedValue(new Error('预览不可用'))
-    vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
+    const request = vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document: emptyDocument() } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品', version: 0 }))
     const assetId = crypto.randomUUID()
     const uploader = vi.spyOn(media, 'upload').mockRejectedValueOnce(new Error('连接中断')).mockResolvedValue({ id: assetId, name: 'frame.png', kind: 'image', mime_type: 'image/png', size: 4, in_library: false })
     render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
     fireEvent.click(await screen.findByRole('button', { name: '＋ 添加生视频节点' }))
     const file = new File(['data'], 'frame.png', { type: 'image/png' })
-    fireEvent.change(screen.getByLabelText('导入生视频节点预览素材'), { target: { files: [file] } })
+    fireEvent.change(screen.getByLabelText('导入生视频节点参考素材'), { target: { files: [file] } })
     expect(await screen.findByRole('button', { name: '重试上传' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '重试上传' }))
     await waitFor(() => expect(uploader).toHaveBeenCalledTimes(2))
     expect(uploader).toHaveBeenLastCalledWith('/projects/project/assets', file, expect.any(Function))
+    expect(await screen.findByRole('group', { name: '参考 1：frame.png' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveValue('reference')
+    fireEvent.click(screen.getByRole('button', { name: '引用参考：frame.png' }))
+    expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveTextContent('frame.png')
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     expect(screen.queryByRole('combobox', { name: '生视频节点预览素材' })).not.toBeInTheDocument()
     await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: assetId }), expect.any(AbortSignal)))
+    fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
+    await waitFor(() => {
+      const saved = request.mock.calls.filter(([path, method]) => path.endsWith('/canvas') && method === 'PUT').at(-1)?.[2] as { document: Document }
+      const generator = saved.document.nodes.find(node => node.type === 'video')!
+      const reference = saved.document.nodes.find(node => node.type === 'image')!
+      expect(generator.asset_id).toBeNull()
+      expect(reference.asset_id).toBe(assetId)
+      expect(generator.text).toContain(`@[图片](ref:${reference.id})`)
+      expect(saved.document.edges).toEqual([expect.objectContaining({ source:reference.id, target:generator.id })])
+    })
   })
   it('节点素材在画布内选择，引用失败保留弹窗并可重试', async () => {
     const asset = { id: crypto.randomUUID(), name: '镜头参考.png', kind: 'image' as const, mime_type: 'image/png', size: 4, in_library: true }
@@ -668,6 +683,8 @@ describe('作品画布', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('引用失败，请重试')
     fireEvent.click(screen.getByRole('button', { name: '用于当前节点' }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '选择节点素材' })).not.toBeInTheDocument())
+    expect(await screen.findByRole('button', { name: '引用参考：镜头参考.png' })).toBeEnabled()
+    expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveValue('reference')
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     expect(screen.queryByRole('combobox', { name: '生视频节点预览素材' })).not.toBeInTheDocument()
     await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: asset.id }), expect.any(AbortSignal)))

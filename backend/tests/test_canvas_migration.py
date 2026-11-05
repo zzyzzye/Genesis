@@ -137,3 +137,47 @@ def test_canvas_read_persists_migration_once(
     second = canvas(project.id, user, session)
     assert first == second and second["version"] == version + 1
     assert len(CanvasDocument.model_validate(second["document"]).nodes) == 3
+
+
+@pytest.mark.parametrize("already_linked", [False, True])
+def test_canvas_restores_uploaded_image_as_reference(
+    legacy: tuple[Session, MediaProject, CanvasDocument, VideoGeneration],
+    already_linked: bool,
+) -> None:
+    """旧图片预览恢复为连入参考，复用已有图，不误改原来的输出连线。"""
+    session, project, document, task = legacy
+    asset = session.get(MediaAsset, task.asset_id)
+    assert asset is not None
+    asset.kind = "image"
+    asset.mime_type = "image/png"
+    task.status = "processing"
+    source = document.nodes[0]
+    if already_linked:
+        image = CanvasNode(
+            id=uuid4(),
+            type="image",
+            asset_id=asset.id,
+            x=-400,
+            y=0,
+            width=360,
+            height=280,
+        )
+        document.nodes.append(image)
+        document.edges.append(CanvasEdge(id=uuid4(), source=image.id, target=source.id))
+    project.canvas = document.model_dump(mode="json")
+    session.commit()
+    user = session.get(User, project.owner_id)
+    assert user is not None
+    first = canvas(project.id, user, session)
+    changed = CanvasDocument.model_validate(first["document"])
+    assert len(changed.nodes) == 3 and len(changed.edges) == 2
+    generator = changed.nodes[0]
+    assert generator.asset_id is None and generator.text == source.text
+    assert generator.generation.mode == "reference"
+    assert changed.viewport == document.viewport
+    assert changed.edges[0] == document.edges[0]
+    reference = changed.nodes[-1]
+    assert reference.type == "image" and reference.asset_id == asset.id
+    assert changed.edges[-1].source == reference.id and changed.edges[-1].target == generator.id
+    session.expire_all()
+    assert canvas(project.id, user, session) == first

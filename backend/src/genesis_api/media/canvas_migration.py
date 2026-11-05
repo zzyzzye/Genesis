@@ -1,4 +1,4 @@
-"""打开旧画布时拆分已完成的视频结果，不重放任务或复制素材文件。"""
+"""打开旧画布时恢复图片参考和独立视频成品，不重放任务或复制素材文件。"""
 
 from uuid import uuid4
 
@@ -7,6 +7,95 @@ from sqlalchemy.orm import Session
 
 from genesis_api.media.models import MediaAsset, MediaProject, ProjectAsset, VideoGeneration
 from genesis_api.media.schemas import CanvasDocument, CanvasEdge, CanvasNode, GenerationResult
+
+
+def restore_legacy_video_image_references(
+    session: Session, project: MediaProject, document: CanvasDocument
+) -> CanvasDocument:
+    """将旧上传入口误放进视频预览的图片恢复为连入参考。
+
+    只处理本作品已关联且归属正确的图片，不把视频成品倒接为参考。
+    保留提示词、结果连线和视口；已连入同一图片时复用，容量不足时不丢原图。
+    调用方持有作品锁，并与画布版本一起提交。
+    """
+    asset_ids = {node.asset_id for node in document.nodes if node.type == "video" and node.asset_id}
+    if not asset_ids:
+        return document
+    assets = {
+        asset.id: asset
+        for asset in session.scalars(
+            select(MediaAsset)
+            .join(ProjectAsset, ProjectAsset.asset_id == MediaAsset.id)
+            .where(
+                MediaAsset.id.in_(asset_ids),
+                MediaAsset.owner_id == project.owner_id,
+                MediaAsset.kind == "image",
+                ProjectAsset.project_id == project.id,
+            )
+        )
+    }
+    nodes = list(document.nodes)
+    edges = list(document.edges)
+    changed = False
+    for index, target in enumerate(document.nodes):
+        asset = assets.get(target.asset_id) if target.type == "video" and target.asset_id else None
+        if asset is None:
+            continue
+        incoming = {edge.source for edge in edges if edge.target == target.id}
+        reference = next(
+            (
+                node
+                for node in nodes
+                if node.id != target.id and node.id in incoming and node.asset_id == asset.id
+            ),
+            None,
+        )
+        if reference is None:
+            if len(nodes) >= 1000 or len(edges) >= 2000:
+                continue
+            x = max(-1000000, target.x - 480)
+            y = target.y
+            # 新参考向下避让，不移动已有布局。
+            while overlaps := [
+                node
+                for node in nodes
+                if x < node.x + node.width + 32
+                and x + 392 > node.x
+                and y < node.y + node.height + 64
+                and y + 344 > node.y
+            ]:
+                next_y = max(node.y + node.height + 96 for node in overlaps)
+                if next_y > 999720:
+                    break
+                y = next_y
+            if overlaps:
+                continue
+            reference = CanvasNode(
+                id=uuid4(),
+                type="image",
+                name=asset.name[:120],
+                asset_id=asset.id,
+                x=x,
+                y=y,
+                width=360,
+                height=280,
+            )
+            nodes.append(reference)
+            edges.append(CanvasEdge(id=uuid4(), source=reference.id, target=target.id))
+        nodes[index] = target.model_copy(
+            update={
+                "asset_id": None,
+                "generation": target.generation.model_copy(
+                    update={
+                        "mode": "first_last"
+                        if target.generation.mode == "first_last"
+                        else "reference",
+                    }
+                ),
+            }
+        )
+        changed = True
+    return document.model_copy(update={"nodes": nodes, "edges": edges}) if changed else document
 
 
 def detach_legacy_video_results(
