@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactFlowProps } from '@xyflow/react'
 import { emptyDocument, type Document, type Node } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
-import { applyCanvasNodeChanges } from '../src/pages/media/canvasOperations'
+import { applyCanvasNodeChanges, duplicateCanvasSelection } from '../src/pages/media/canvasOperations'
 import { ProjectCanvas } from '../src/pages/media/ProjectCanvas'
 import type { MediaCanvasActions } from '../src/pages/media/MediaAssistant'
 
@@ -18,6 +18,57 @@ const node: Node = { id: 'moving', type: 'note', name: '调度便签', asset_id:
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); flow.props = null })
 
 describe('画布拖动同步', () => {
+  it('整组副本重映射成员、内部连线和引用，并保留外部上游', () => {
+    const image: Node = { ...node, id: 'image', type: 'image' }
+    const video: Node = { ...node, id: 'video', type: 'video', text: '@[图片](ref:image) @[图片](ref:outside)' }
+    const outside: Node = { ...image, id: 'outside' }
+    const group: Node = { ...node, id: 'group', type: 'group', member_ids: ['image', 'video'] }
+    const document: Document = { ...emptyDocument(), nodes: [outside, group, image, video], edges: [
+      { id: 'internal', source: 'image', target: 'video' }, { id: 'upstream', source: 'outside', target: 'video' }, { id: 'downstream', source: 'video', target: 'outside' },
+    ] }
+    const result = duplicateCanvasSelection(document, ['group'])
+    const id = (original: string) => result.idMap.get(original)!
+    expect(result.idMap.size).toBe(3)
+    expect(result.document.nodes.find(item => item.id === id('group'))?.member_ids).toEqual([id('image'), id('video')])
+    expect(result.document.nodes.find(item => item.id === id('video'))?.text).toBe(`@[图片](ref:${id('image')}) @[图片](ref:outside)`)
+    expect(result.document.edges.slice(3)).toEqual([
+      expect.objectContaining({ source: id('image'), target: id('video') }), expect.objectContaining({ source: 'outside', target: id('video') }),
+    ])
+  })
+
+  it.each(['image_generation', 'video'] as const)('Alt 拖动 %s 仅移动副本，保留参考并一次撤销、保存恢复', async type => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const source = { ...node, id: 'reference', type: 'image' as const }
+    const target = { ...node, type, text: '@[图片](ref:reference)' }
+    let document: Document = { ...emptyDocument(), nodes: [source, target], edges: [{ id: 'edge', source: source.id, target: target.id }] }
+    vi.spyOn(media, 'api').mockImplementation((path, method, body) => {
+      if (path.endsWith('/canvas')) {
+        if (method === 'PUT') document = (body as { document: Document }).document
+        return Promise.resolve({ version: 0, document })
+      }
+      return Promise.resolve(path.includes('/assets') ? { items: [], total: 0 } : { id: 'alt-drag', name: '副本拖动验收' })
+    })
+    let actions: MediaCanvasActions | null = null
+    render(<MemoryRouter><ProjectCanvas projectId="alt-drag" userId="user" onAgentActionsChange={value => { actions = value }} /></MemoryRouter>)
+    await screen.findByTestId('rf__node-moving')
+    const callbacks = flow.props!
+    const moving = callbacks.nodes!.find(item => item.id === target.id)!
+    act(() => { callbacks.onNodeDragStart?.({ altKey: true } as MouseEvent, moving, [moving]) })
+    const copy = actions!.getDocument().nodes.find(item => ![source.id, target.id].includes(item.id))!
+    for (const position of [{ x: 100, y: 200 }, { x: 300, y: 400 }]) {
+      act(() => { flow.props!.onNodesChange?.([{ type: 'position', id: target.id, position, dragging: true }]) })
+      expect(actions!.getDocument().nodes.find(item => item.id === target.id)).toMatchObject({ x: 10, y: 20 })
+      expect(screen.getByTestId(`rf__node-${copy.id}`)).toHaveStyle({ transform: `translate(${position.x}px,${position.y}px)` })
+    }
+    act(() => { flow.props!.onNodeDragStop?.({} as MouseEvent, moving, [moving]) })
+    expect(actions!.getDocument().edges).toContainEqual(expect.objectContaining({ source: source.id, target: copy.id }))
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    expect(actions!.getDocument().nodes).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: '重做' }))
+    await act(async () => { await actions!.save() })
+    expect(document.nodes.find(item => item.id === copy.id)).toMatchObject({ x: 300, y: 400, text: target.text })
+    expect(document.nodes.find(item => item.id === target.id)).toMatchObject({ x: 10, y: 20 })
+  })
   it('双指平移经过节点和输入区不断开；新手势在聚焦便签内滚动，失焦后恢复平移', async () => {
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
     const document: Document = { ...emptyDocument(), nodes: [node, { ...node, id: 'image', type: 'image', name: '参考图', x: 500 }] }

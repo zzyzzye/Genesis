@@ -1,6 +1,6 @@
 import { applyNodeChanges, type NodeChange, type Node as FlowNode } from '@xyflow/react'
 import type { Document, Node } from './api'
-import { syncReferenceModes } from './canvasReferences'
+import { imageMentionPattern, imageMentionToken, syncReferenceModes } from './canvasReferences'
 
 export const generationNodeSize = { width: 600, height: 378 }
 
@@ -8,6 +8,19 @@ export const generationNodeSize = { width: 600, height: 378 }
 export const isGenerationNode = (node: Pick<Node, 'type'>) => node.type === 'video' || node.type === 'image_generation' || node.type === 'audio_generation'
 export const nodeTypeLabel = (type: Node['type']) => ({ video: '生视频节点', image_generation: '生图节点', audio_generation: '生音频节点', video_asset: '视频节点', image: '图片节点', audio: '音频节点', asset: '素材节点', note: '便签', text: '文本', shape: '形状', group: '分组' })[type]
 export const audioAssetNodeSize = { width: 360, height: 88 }
+
+export function duplicateCanvasSelection(document: Document, selected: string[], offset = { x: 48, y: 48 }) {
+  const ids = new Set(selected)
+  for (const node of document.nodes) if (node.type === 'group' && ids.has(node.id)) for (const member of node.member_ids ?? []) ids.add(member)
+  const originals = document.nodes.filter(node => ids.has(node.id))
+  const idMap = new Map(originals.map(node => [node.id, crypto.randomUUID()]))
+  const nodes = originals.map(node => ({ ...node, id: idMap.get(node.id)!, name: `${node.name || nodeTypeLabel(node.type)} - 副本`.slice(0, 120),
+    text: node.text.replace(imageMentionPattern, (token, id: string) => idMap.has(id) ? imageMentionToken(idMap.get(id)!) : token),
+    member_ids: node.member_ids?.flatMap(id => idMap.has(id) ? [idMap.get(id)!] : []), x: node.x + offset.x, y: node.y + offset.y }))
+  // 上游参考沿用原节点；内部关系改接副本，不向原有下游新增输出线。
+  const edges = document.edges.filter(edge => idMap.has(edge.target)).map(edge => ({ id: crypto.randomUUID(), source: idMap.get(edge.source) ?? edge.source, target: idMap.get(edge.target)! }))
+  return { document: syncReferenceModes({ ...document, nodes: [...document.nodes, ...nodes], edges: [...document.edges, ...edges] }), idMap }
+}
 
 export function applyCanvasNodeChanges(document: Document, changes: NodeChange<FlowNode>[]): Document {
   // 仅从最新文档投影几何信息，不用上一帧的节点重建正文、尺寸或异步生成结果。

@@ -43,7 +43,7 @@ import { ProjectDialog } from './MediaHome'
 import type { MediaAssistantNode, MediaCanvasActions, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
 import { arrangeCanvas } from './canvasLayout'
-import { applyCanvasNodeChanges, audioAssetNodeSize, defaultNodeName, generationNodeSize, groupSelection, isGenerationNode, nodeTypeLabel, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
+import { applyCanvasNodeChanges, audioAssetNodeSize, defaultNodeName, duplicateCanvasSelection, generationNodeSize, groupSelection, isGenerationNode, nodeTypeLabel, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
 
 type CanvasNodeData = {
   projectId: string
@@ -295,6 +295,7 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
             {asset && asset.kind !== 'audio' ? <AssetPreview key={asset.id} asset={asset} thumbnail passive /> : asset?.kind === 'audio' || source.type === 'audio' || source.type === 'audio_generation' ? <Music2 size={20} strokeWidth={1.6} aria-label="音频参考" /> : source.type === 'image' || source.type === 'image_generation' ? <ImagePlus size={20} strokeWidth={1.6} aria-label="待就绪图片参考" /> : !source.asset_id && source.text ? <Type size={20} strokeWidth={1.6} aria-label="文字参考" /> : source.type === 'video' || source.type === 'video_asset' ? <Film size={20} strokeWidth={1.6} aria-hidden="true" /> : <ImagePlus size={20} strokeWidth={1.6} aria-hidden="true" />}
             <span className="media-reference-index" aria-hidden="true">{(isVideo || isImage) && imageNumbers.has(source.id) ? `图${imageNumbers.get(source.id)}` : index + 1}</span>
           </button>
+          <button type="button" className="media-reference-remove" aria-label={`移除参考：${source.name || name}`} title="断开参考，保留素材节点" onClick={() => data.onReferenceChange(id, source.id, false)}><X size={12} /></button>
         </div>
       })}</div>}
       {referencesOpen && <div className="media-node-reference-panel">
@@ -438,6 +439,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const nodeMenuElement = useRef<HTMLDivElement>(null)
   const nodeMenuTrigger = useRef<HTMLButtonElement>(null)
   const interactionActive = useRef(false)
+  const dragCopies = useRef<Map<string, string> | null>(null)
   const importedFromLibrary = useRef<string | null>(null)
   const clipboard = useRef<{ projectId: string; nodes: Node[]; edges: Edge[] } | null>(null)
   const pasteCount = useRef(0)
@@ -623,7 +625,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       { type: 'source', position: Position.Right, x: node.width - 16, y: node.height / 2 + (isGenerationNode(node) ? 21 : 0) - 16, width: 32, height: 32 },
     ] : undefined,
     selected: selected.includes(node.id),
-    zIndex: node.type === 'group' ? -1 : selected.includes(node.id) ? 2 : 1,
+    zIndex: selected.includes(node.id) ? 2 : node.type === 'group' ? 0 : 1,
     dragHandle: '.media-node-drag-handle, .media-node-drag-surface',
     ariaLabel: node.name || nodeTypeLabel(node.type),
     data: {
@@ -688,9 +690,9 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     if (targetNodeId && (targetKind === 'image' || targetKind === 'audio' || targetKind === 'video')) {
       const target = canvas.current.current.nodes.find((node) => node.id === targetNodeId && (node.type === targetKind || targetKind === 'image' && node.type === 'image_generation' || targetKind === 'audio' && node.type === 'audio_generation' || targetKind === 'video' && node.type === 'video_asset'))
       if (!target || (target.type === 'video' ? asset.kind === 'audio' : asset.kind !== targetKind)) { queueMicrotask(() => setError('该素材不适用于目标节点，请重新选择。')); return }
+      try { assignNodeAsset(target.id, asset) }
+      catch (reason) { queueMicrotask(() => setError((reason as Error).message)); return }
       importedFromLibrary.current = asset.id
-      const current = canvas.current.current
-      canvas.apply({ ...current, nodes: current.nodes.map((node) => node.id === target.id ? { ...node, asset_id: asset.id } : node) })
       queueMicrotask(() => setSelected([target.id]))
       void navigate(`/media/projects/${projectId}/canvas`, { replace: true })
       return
@@ -704,7 +706,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     canvas.apply({ ...current, nodes: [...current.nodes, node] })
     queueMicrotask(() => setSelected([node.id]))
     void navigate(`/media/projects/${projectId}/canvas`, { replace: true })
-  }, [assets, canvas, location.search, navigate, projectId])
+  }, [assets, assignNodeAsset, canvas, location.search, navigate, projectId])
 
   function copySelection() {
     const current = canvas.current.current
@@ -726,10 +728,10 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     pasteCount.current += 1
     const offset = 48 * pasteCount.current
     const idMap = new Map(copied.nodes.map((node) => [node.id, crypto.randomUUID()]))
-    const nodes = copied.nodes.map((node) => ({ ...node, id: idMap.get(node.id)!, text: node.text.replace(imageMentionPattern, (token, id: string) => idMap.has(id) ? imageMentionToken(idMap.get(id)!) : token), member_ids: node.member_ids?.map((id) => idMap.get(id)!), x: node.x + offset, y: node.y + offset }))
+    const nodes = copied.nodes.map((node) => ({ ...node, id: idMap.get(node.id)!, text: node.text.replace(imageMentionPattern, (_token, id: string) => idMap.has(id) ? imageMentionToken(idMap.get(id)!) : ''), member_ids: node.member_ids?.map((id) => idMap.get(id)!), x: node.x + offset, y: node.y + offset }))
     const edges = copied.edges.map((edge) => ({ id: crypto.randomUUID(), source: idMap.get(edge.source)!, target: idMap.get(edge.target)! }))
     const current = canvas.current.current
-    canvas.apply({ ...current, nodes: [...current.nodes, ...nodes], edges: [...current.edges, ...edges] })
+    canvas.apply(syncReferenceModes({ ...current, nodes: [...current.nodes, ...nodes], edges: [...current.edges, ...edges] }))
     setSelected(nodes.map((node) => node.id))
     setSelectedEdges([])
   }
@@ -743,20 +745,29 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   }
 
   function duplicateSelection() {
-    const current = canvas.current.current
-    const ids = new Set(selected)
-    for (const node of current.nodes) if (node.type === 'group' && ids.has(node.id)) for (const member of node.member_ids ?? []) ids.add(member)
-    const originals = current.nodes.filter(node => ids.has(node.id))
-    if (!originals.length) return
-    const idMap = new Map(originals.map(node => [node.id, crypto.randomUUID()]))
-    const nodes = originals.map(node => ({ ...node, id: idMap.get(node.id)!, name: `${node.name || nodeTypeLabel(node.type)} - 副本`.slice(0, 120),
-      text: node.text.replace(imageMentionPattern, (token, id: string) => idMap.has(id) ? imageMentionToken(idMap.get(id)!) : token),
-      member_ids: node.member_ids?.flatMap(id => idMap.has(id) ? [idMap.get(id)!] : []), x: node.x + 48, y: node.y + 48 }))
-    // 副本继承上游参考；所选内部连线改接副本，不把副本接到原有下游。
-    const edges = current.edges.filter(edge => ids.has(edge.target)).map(edge => ({ id: crypto.randomUUID(), source: idMap.get(edge.source) ?? edge.source, target: idMap.get(edge.target)! }))
-    canvas.apply(syncReferenceModes({ ...current, nodes: [...current.nodes, ...nodes], edges: [...current.edges, ...edges] }))
-    setSelected(nodes.map(node => node.id))
+    const result = duplicateCanvasSelection(canvas.current.current, selected)
+    if (!result.idMap.size) return
+    canvas.apply(result.document)
+    setSelected([...result.idMap.values()])
     setSelectedEdges([])
+  }
+
+  function startNodeDrag(event: { altKey: boolean }, node: CanvasFlowNode, nodes: CanvasFlowNode[]) {
+    if (dragCopies.current) return
+    beginInteraction()
+    setDraggingNode(true)
+    if (!event.altKey) return
+    const result = duplicateCanvasSelection(canvas.current.current, nodes.length ? nodes.map(item => item.id) : [node.id], { x: 0, y: 0 })
+    dragCopies.current = result.idMap
+    canvas.apply(result.document, false)
+    setSelected([...result.idMap.values()])
+    setSelectedEdges([])
+  }
+
+  function stopNodeDrag() {
+    dragCopies.current = null
+    endInteraction()
+    setDraggingNode(false)
   }
 
   function groupSelected() {
@@ -792,6 +803,11 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       if (element?.closest('input,textarea,select,button,a,video,audio,[role="dialog"]')) return
       if (event.key.toLowerCase() === 'v' && !event.metaKey && !event.ctrlKey) setTool('select')
       if (event.key.toLowerCase() === 'h' && !event.metaKey && !event.ctrlKey) setTool('pan')
+      if (event.key === 'Tab' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        event.preventDefault(); setPaletteAnchor(null); setNodeMenu(true); setContextMenu(null); setMenu(false)
+      }
+      if ((event.metaKey || event.ctrlKey) && event.key === '0') { event.preventDefault(); fit() }
+      if (event.altKey && event.shiftKey && event.code === 'KeyF') { event.preventDefault(); arrange() }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelection() }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') { event.preventDefault(); pasteSelection() }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); duplicateSelection() }
@@ -809,6 +825,9 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   })
 
   const onNodesChange = useCallback((changes: NodeChange<CanvasFlowNode>[]) => {
+    // 保留框架当前手势的原节点标识，仅把坐标更新转给副本，原节点始终留在原位。
+    if (dragCopies.current) changes = changes.map(change => change.type === 'position' && dragCopies.current?.has(change.id)
+      ? { ...change, id: dragCopies.current.get(change.id)! } : change)
     if (changes.some((change) => change.type === 'select' || change.type === 'remove')) setSelected((previous) => {
       const selected = new Set(previous)
       for (const change of changes) {
@@ -837,7 +856,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     if (changes.some((change) => change.type === 'select' || change.type === 'remove')) setSelectedEdges(next.filter((edge) => edge.selected).map((edge) => edge.id))
     if (!changes.some((change) => change.type === 'remove')) return
     const current = canvas.current.current
-    canvas.apply(syncReferenceModes({ ...current, edges: next.map(({ id, source, target }) => ({ id, source, target })) }))
+    canvas.apply(removeSelection(current, [], changes.flatMap(change => change.type === 'remove' ? [change.id] : [])))
   }, [canvas, flowEdges])
 
   const onConnect = useCallback(({ source, target }: Connection) => {
@@ -980,7 +999,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     const connection = paletteAnchor?.connection
     const edge = connection ? { id: crypto.randomUUID(), source: connection.side === 'right' ? connection.id : node.id, target: connection.side === 'right' ? node.id : connection.id } : null
     const next = { ...current, nodes: [...current.nodes, node], edges: edge ? [...current.edges, edge] : current.edges }
-    canvas.apply(next)
+    canvas.apply(syncReferenceModes(next))
     setSelected([node.id])
     setSelectedEdges([])
     setNodeMenu(false)
@@ -1158,8 +1177,10 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         }}
         autoPanOnNodeDrag={false}
         autoPanOnNodeFocus={false}
-        onNodeDragStart={() => { beginInteraction(); setDraggingNode(true) }}
-        onNodeDragStop={() => { endInteraction(); setDraggingNode(false) }}
+        onNodeDragStart={startNodeDrag}
+        onNodeDragStop={stopNodeDrag}
+        onSelectionDragStart={(event, nodes) => { if (nodes[0]) startNodeDrag(event, nodes[0], nodes) }}
+        onSelectionDragStop={stopNodeDrag}
         onMoveStart={(event, next) => { if (event?.type === 'wheel') setWheelPanning(true); updateViewport(next) }}
         onMove={(_, next) => updateViewport(next)}
         onMoveEnd={(_, next) => { setWheelPanning(false); updateViewport(next) }}

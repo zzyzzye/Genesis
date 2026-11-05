@@ -83,6 +83,8 @@
 .media-editor .media-node-grip .media-node-name:focus { border:0; outline:0; box-shadow:none; background:transparent; }
 .media-node-member-count { flex:none; color:#aaa; white-space:nowrap; }
 .media-editor .media-node.is-group { background:#ffffff03; }
+.media-editor .react-flow__node-group { pointer-events:none; }
+.media-editor .media-node.is-group :is(.media-node-grip,.media-canvas-resize) { pointer-events:auto; }
 .media-editor .media-node.is-group .media-node-grip { background:transparent; color:#aaa; }
 .media-video-screen .media-node-preview { width:100%; height:100%; }
 .media-video-placeholder { max-width:85%; padding:24px; text-align:center; }
@@ -167,7 +169,9 @@
 
 /* 参考以固定尺寸横向排列，预览加载及长文件名不推移编辑控件。 */
 .media-node-editor .media-node-references { display:flex; align-items:flex-start; gap:4px; max-height:none; overflow-x:auto; overflow-y:hidden; margin-top:6px; padding-bottom:0; }
-.media-node-editor .media-node-references>.media-reference-item { display:flex; flex:0 0 var(--media-reference-size); min-width:0; }
+.media-node-editor .media-node-references>.media-reference-item { position:relative; display:flex; flex:0 0 var(--media-reference-size); min-width:0; }
+.media-editor .media-node-editor button.media-reference-remove { position:absolute; top:0; right:0; display:grid; place-items:center; width:20px; height:20px; min-height:0; padding:0; border:0; border-radius:50%; background:#252525bd; color:#eee; }
+.media-editor .media-node-editor button.media-reference-remove:is(:hover,:focus-visible) { background:#444; }
 .media-reference-thumbnail { position:relative; display:flex; align-items:center; justify-content:center; flex:none; width:var(--media-reference-size); height:var(--media-reference-size); overflow:hidden; border-radius:8px; background:#303030; color:#bdbdbd; }
 .media-editor .media-node-editor button.media-reference-thumbnail { min-height:0; padding:0; border:0; border-radius:8px; outline:0; box-shadow:none; }
 .media-editor .media-node-editor button.media-reference-thumbnail:disabled { opacity:1; cursor:default; }

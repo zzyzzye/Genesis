@@ -28,6 +28,46 @@ describe('作品画布', () => {
     vi.spyOn(ai, 'createAiChatRun').mockResolvedValue({ id: 'media-run', status: 'pending' })
   })
   afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks() })
+  it.each(['image_generation', 'video'] as const)('%s 从独立素材页返回时创建参考，不覆盖生成节点', async type => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const asset = { id: 'reference-asset', name: '人物.png', kind: 'image' as const, mime_type: 'image/png', size: 4, in_library: true }
+    const target = { ...note, id: 'target', type, asset_id: null, text: '保留提示词' }
+    const document = { ...emptyDocument(), nodes: [target] }
+    vi.spyOn(media, 'fileBlob').mockRejectedValue(new Error('预览不可用'))
+    const request = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 1, document } : path.includes('/assets') ? { items: [asset], total: 1 } : { id: 'project', name: '测试作品' }))
+    render(<MemoryRouter initialEntries={['/media/projects/project/canvas?addAsset=reference-asset&targetNode=target&targetKind=' + (type === 'video' ? 'video' : 'image')]}><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    expect(await screen.findByRole('group', { name: '参考 1：人物.png' }, { timeout: 3000 })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
+    await waitFor(() => {
+      const saved = (request.mock.calls.filter(([, method]) => method === 'PUT').at(-1)?.[2] as { document: Document }).document
+      expect(saved.nodes).toHaveLength(2)
+      expect(saved.nodes.find(node => node.id === 'target')).toMatchObject({ asset_id: null, text: '保留提示词', generation: { mode: 'reference' } })
+      const source = saved.nodes.find(node => node.asset_id === asset.id)!
+      expect(saved.edges).toEqual([expect.objectContaining({ source: source.id, target: 'target' })])
+    })
+  })
+  it.each(['image_generation', 'video'] as const)('%s 普通粘贴不保留外部引用标签，恢复无参考模式且不改原节点', async type => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const source = { ...note, id: 'source', type: 'image' as const }
+    const target = { ...note, id: 'target', type, text: '@[图片](ref:source) 保持服装', generation: { ...media.defaultGenerationSettings(), mode: 'reference' as const } }
+    const document: Document = { ...emptyDocument(), nodes: [source, target], edges: [{ id: 'ref', source: source.id, target: target.id }] }
+    const request = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 1, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品' }))
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    fireEvent.click(await screen.findByTestId('rf__node-target'))
+    fireEvent.click(screen.getByRole('button', { name: '复制节点' }))
+    fireEvent.click(screen.getByRole('button', { name: '粘贴节点' }))
+    fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
+    await waitFor(() => {
+      const saved = (request.mock.calls.filter(([, method]) => method === 'PUT').at(-1)?.[2] as { document: Document }).document
+      const copy = saved.nodes.find(item => !['source', 'target'].includes(item.id))!
+      expect(copy.text).toBe(' 保持服装')
+      expect(saved.nodes.find(item => item.id === target.id)?.text).toBe(target.text)
+      expect(saved.edges).toEqual(document.edges)
+      if (type === 'video') expect(copy.generation?.mode).toBe('text')
+    })
+  })
   it.each(['image_generation', 'video'] as const)('%s 创建副本保留上游引用、不连接原下游，并可撤销重做', async type => {
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
     const source = { ...note, id: 'source', type: 'image' as const, name: '人物参考' }
@@ -772,7 +812,8 @@ describe('作品画布', () => {
     await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: asset.id }), expect.any(AbortSignal)))
     expect(request).toHaveBeenCalledWith('/projects/project/assets/reference', 'POST', { asset_id: asset.id })
     fireEvent.click(screen.getByRole('button', { name: '作品素材' }))
-    fireEvent.click(await screen.findByRole('button', { name: '用于当前节点' }))
+    // 素材加载有防抖；并行回归下给真实异步渲染留出时间，不跳过结果断言。
+    fireEvent.click(await screen.findByRole('button', { name: '用于当前节点' }, { timeout: 3000 }))
     await waitFor(() => expect(screen.queryByRole('dialog', { name: '选择节点素材' })).not.toBeInTheDocument())
     fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
     fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
@@ -786,6 +827,12 @@ describe('作品画布', () => {
       expect(reference.asset_id).toBe(asset.id)
       expect(saved.document.edges).toEqual([expect.objectContaining({ source:reference.id, target:generator.id })])
     })
+    fireEvent.click(screen.getByRole('button', { name: '移除参考：镜头参考.png' }))
+    expect(screen.queryByRole('group', { name: '参考 1：镜头参考.png' })).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: type === 'video' ? '镜头描述' : '图片提示词' })).toHaveTextContent('已断开图片')
+    expect(screen.getByRole('textbox', { name: '图片节点名称' })).toHaveValue('镜头参考.png')
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: '撤销' })); await Promise.resolve() })
+    expect(screen.getByRole('group', { name: '参考 1：镜头参考.png' })).toBeInTheDocument()
   })
   it('上传失败显示原因并可在原作品内重试', async () => {
     vi.spyOn(media, 'api').mockResolvedValue({ items: [], total: 0 })
