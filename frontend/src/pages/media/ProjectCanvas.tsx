@@ -742,6 +742,23 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     setSelectedEdges([])
   }
 
+  function duplicateSelection() {
+    const current = canvas.current.current
+    const ids = new Set(selected)
+    for (const node of current.nodes) if (node.type === 'group' && ids.has(node.id)) for (const member of node.member_ids ?? []) ids.add(member)
+    const originals = current.nodes.filter(node => ids.has(node.id))
+    if (!originals.length) return
+    const idMap = new Map(originals.map(node => [node.id, crypto.randomUUID()]))
+    const nodes = originals.map(node => ({ ...node, id: idMap.get(node.id)!, name: `${node.name || nodeTypeLabel(node.type)} - 副本`.slice(0, 120),
+      text: node.text.replace(imageMentionPattern, (token, id: string) => idMap.has(id) ? imageMentionToken(idMap.get(id)!) : token),
+      member_ids: node.member_ids?.flatMap(id => idMap.has(id) ? [idMap.get(id)!] : []), x: node.x + 48, y: node.y + 48 }))
+    // 副本继承上游参考；所选内部连线改接副本，不把副本接到原有下游。
+    const edges = current.edges.filter(edge => ids.has(edge.target)).map(edge => ({ id: crypto.randomUUID(), source: idMap.get(edge.source) ?? edge.source, target: idMap.get(edge.target)! }))
+    canvas.apply(syncReferenceModes({ ...current, nodes: [...current.nodes, ...nodes], edges: [...current.edges, ...edges] }))
+    setSelected(nodes.map(node => node.id))
+    setSelectedEdges([])
+  }
+
   function groupSelected() {
     const result = groupSelection(canvas.current.current, selected)
     if (!result) { setError('请选择至少两个未分组的节点；分组尺寸不能超过 4000。'); return }
@@ -770,12 +787,14 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         selection.focusNode?.parentElement?.closest('.studio-assistant')
       )) return
       if (element?.closest('dialog[open]')) return
+      if (event.isComposing) return
       if (event.key === 'Escape') { setMenu(false); setNodeMenu(false); setContextMenu(null); setSelected([]); setSelectedEdges([]) }
       if (element?.closest('input,textarea,select,button,a,video,audio,[role="dialog"]')) return
       if (event.key.toLowerCase() === 'v' && !event.metaKey && !event.ctrlKey) setTool('select')
       if (event.key.toLowerCase() === 'h' && !event.metaKey && !event.ctrlKey) setTool('pan')
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') { event.preventDefault(); copySelection() }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') { event.preventDefault(); pasteSelection() }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'd') { event.preventDefault(); duplicateSelection() }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') { event.preventDefault(); setSelected(canvas.current.current.nodes.map((node) => node.id)) }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'g') { event.preventDefault(); if (event.shiftKey) ungroupSelected(); else groupSelected() }
       if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); removeSelected() }
@@ -1172,7 +1191,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     </div>}
     {contextMenu && <div className="media-node-context-menu" role="group" aria-label="节点操作" style={{ left: Math.max(12, Math.min(window.innerWidth - 200, contextMenu.x)), top: Math.max(76, Math.min(window.innerHeight - 240, contextMenu.y)) }}>
       <button autoFocus onClick={() => { copySelection(); setContextMenu(null) }}>复制节点<span>⌘/Ctrl C</span></button>
-      <button onClick={() => { copySelection(); pasteSelection(); setContextMenu(null) }}>创建副本</button>
+      <button aria-label="创建副本" onClick={() => { duplicateSelection(); setContextMenu(null) }}>创建副本<span>⌘/Ctrl D</span></button>
       <button disabled={selected.length < 2} onClick={() => { groupSelected(); setContextMenu(null) }}>编组<span>⌘/Ctrl G</span></button>
       <button onClick={() => { removeSelected(); setContextMenu(null) }}>移除节点<span>Delete</span></button>
     </div>}

@@ -28,6 +28,41 @@ describe('作品画布', () => {
     vi.spyOn(ai, 'createAiChatRun').mockResolvedValue({ id: 'media-run', status: 'pending' })
   })
   afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks() })
+  it.each(['image_generation', 'video'] as const)('%s 创建副本保留上游引用、不连接原下游，并可撤销重做', async type => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const source = { ...note, id: 'source', type: 'image' as const, name: '人物参考' }
+    const target = { ...note, id: 'target', type, name: '生成节点', text: '@[图片](ref:source) 保持服装', x: 500 }
+    const output = { ...note, id: 'output', x: 1100 }
+    const document: Document = { ...emptyDocument(), nodes: [source, target, output], edges: [{ id: 'input', source: 'source', target: 'target' }, { id: 'output-edge', source: 'target', target: 'output' }] }
+    const request = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 1, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '测试作品' }))
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    const targetElement = await screen.findByTestId('rf__node-target')
+    if (type === 'video') {
+      fireEvent.click(targetElement)
+      fireEvent.keyDown(window, { key: 'd', ctrlKey: true, isComposing: true })
+      expect(screen.queryByDisplayValue('生成节点 - 副本')).not.toBeInTheDocument()
+      fireEvent.keyDown(window, { key: 'd', ctrlKey: true })
+    } else {
+      fireEvent.contextMenu(targetElement)
+      fireEvent.click(screen.getByRole('button', { name: '创建副本' }))
+    }
+    expect(screen.getByDisplayValue('生成节点 - 副本')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: type === 'video' ? '镜头描述' : '图片提示词' })).toHaveTextContent('人物参考 保持服装')
+    fireEvent.click(screen.getByRole('button', { name: '撤销' }))
+    expect(screen.queryByDisplayValue('生成节点 - 副本')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '重做' }))
+    expect(screen.getByDisplayValue('生成节点 - 副本')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
+    fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
+    await waitFor(() => {
+      const saved = (request.mock.calls.filter(([, method]) => method === 'PUT').at(-1)?.[2] as { document: Document }).document
+      const copy = saved.nodes.find(node => node.name === '生成节点 - 副本')!
+      expect(copy.text).toBe(target.text)
+      expect(saved.edges).toHaveLength(3)
+      expect(saved.edges).toContainEqual(expect.objectContaining({ source: 'source', target: copy.id }))
+      expect(saved.edges.some(edge => edge.source === copy.id)).toBe(false)
+    })
+  })
   it.each(['image_generation', 'video'] as const)('%s 在 @ 中选择未连接图片，同步保存引用和连线且不重复连接', async type => {
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
     const asset: media.Asset = { id: 'mention-image', name: '画布人物.png', kind: 'image', mime_type: 'image/png', size: 4, in_library: false }
