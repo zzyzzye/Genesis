@@ -46,7 +46,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
   useEffect(() => {
     if (!host.current) return
     const editor = new EditorView({ parent: host.current, doc: initial, extensions: [
-      minimalSetup, EditorView.lineWrapping, placeholder('描述画面与动作，输入 @ 引用连入的图片'),
+      minimalSetup, EditorView.lineWrapping, placeholder('描述想要生成的内容，输入 @ 引用连入的图片'),
       EditorView.theme({
         '.cm-content ::selection, .cm-content::selection': { backgroundColor: '#505050', color: '#ffffff' },
         '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: '#505050' },

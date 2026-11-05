@@ -11,6 +11,16 @@ const catalog = {configured:true,references_ready:true,models:[model]}
 afterEach(()=>vi.restoreAllMocks())
 
 describe('生图节点',()=>{
+  it('断开的图片引用阻止生成，恢复引用后才允许提交',async()=>{
+    const api=vi.spyOn(media,'api').mockImplementation(path=>Promise.resolve(path==='/image-models'?catalog:[]))
+    const options=props()
+    const {rerender}=render(<ImageGeneration {...options} referenceError="图片引用已断开" />)
+    await screen.findByText('图片引用已断开')
+    expect(screen.getByRole('button',{name:'生成图片'})).toBeDisabled()
+    expect(api.mock.calls.some(call=>call[1]==='POST')).toBe(false)
+    rerender(<ImageGeneration {...options} />)
+    await waitFor(()=>expect(screen.getByRole('button',{name:'生成图片'})).toBeEnabled())
+  })
   it('服务端明确拒绝时只展示原错误，不拼接创建结果未知的重试提示',async()=>{
     const onTask=vi.fn()
     vi.spyOn(media,'api').mockImplementation((path,method)=>method==='POST'

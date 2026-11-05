@@ -556,6 +556,7 @@ async def test_image_edit_uses_local_multipart_without_public_base(
     current["document"]["edges"] = [
         {"id": str(uuid4()), "source": node_id, "target": state.node_id}
     ]
+    current["document"]["nodes"][0]["text"] = f"保留@[图片](ref:{node_id})中的人物服装"
     assert (
         await state.client.put(f"projects/{state.project_id}/canvas", json=current)
     ).status_code == 200
@@ -569,7 +570,19 @@ async def test_image_edit_uses_local_multipart_without_public_base(
     assert b'name="quality"' not in post.content
     assert b'name="background"\r\n\r\nopaque' in post.content
     assert b"image_urls" not in post.content
+    assert "保留图片1中的人物服装".encode() in post.content
+    assert b"ref:" not in post.content and node_id.encode() not in post.content
     assert (await latest(state))["status"] == "completed"
+
+
+@pytest.mark.anyio
+async def test_disconnected_image_mention_never_submits(fixture: ImageFixture) -> None:
+    """断线标签不能按普通提示词发送给上游，更不能创建付费生成请求。"""
+    await save_node(fixture, text=f"使用@[图片](ref:{uuid4()})中的人物")
+    result = await submit(fixture)
+    assert result.status_code == 422
+    assert "引用已断开" in result.json()["detail"]
+    assert not any(request.method == "POST" for request in fixture.requests)
 
 
 @pytest.mark.anyio
