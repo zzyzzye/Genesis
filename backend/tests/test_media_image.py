@@ -161,6 +161,145 @@ async def latest(state: ImageFixture) -> dict[str, Any]:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("model", "settings"),
+    [
+        ("seedream-5-lite", {}),
+        ("seedream-5-pro", {}),
+        ("new-image-model", {}),
+        ("gemini-3.1-flash-image", {"count": 4}),
+        ("gemini-3-pro-image-preview", {"image_ratio": "9:21"}),
+        ("gpt-image-2", {"image_size": "4096x4096"}),
+    ],
+)
+async def test_invalid_family_request_stops_before_billing_and_post(
+    fixture: ImageFixture, model: str, settings: dict[str, object]
+) -> None:
+    fixture.models.append(model)
+    await save_node(fixture, generation={"model": model, **settings})
+    assert (await submit(fixture)).status_code == 422
+    assert not any(req.method == "POST" for req in fixture.requests)
+    assert not fixture.session.scalars(select(BillingOperation)).all()
+    assert not fixture.session.scalars(select(ImageGeneration)).all()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("issue", ["format", "size"])
+@pytest.mark.parametrize("mentioned", [False, True])
+async def test_reference_file_validation_only_checks_authorized_inputs(
+    fixture: ImageFixture,
+    monkeypatch: pytest.MonkeyPatch,
+    issue: str,
+    mentioned: bool,
+) -> None:
+    """已引用的格式和体积问题先返回，不让未引用的素材阻塞普通文生图。"""
+    state = fixture
+    asset = (
+        await state.client.post(
+            f"projects/{state.project_id}/assets",
+            files={"file": ("参考.png", PNG, "image/png")},
+        )
+    ).json()
+    if issue == "format":
+        row = state.session.get(MediaAsset, UUID(asset["id"]))
+        assert row is not None
+        row.mime_type = "image/gif"
+        state.session.commit()
+    else:
+        monkeypatch.setattr(image, "MAX_IMAGE_BYTES", 4)
+    current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    source_id = str(uuid4())
+    current["document"]["nodes"].append(
+        {
+            "id": source_id,
+            "type": "image",
+            "asset_id": asset["id"],
+            "x": -400,
+            "y": 0,
+            "width": 360,
+            "height": 280,
+        }
+    )
+    current["document"]["edges"] = [
+        {"id": str(uuid4()), "source": source_id, "target": state.node_id}
+    ]
+    if mentioned:
+        current["document"]["nodes"][0]["text"] = f"参考@[图片](ref:{source_id})"
+    assert (
+        await state.client.put(
+            f"projects/{state.project_id}/canvas",
+            json=current,
+        )
+    ).status_code == 200
+    response = await submit(state)
+    assert response.status_code == (422 if mentioned else 202)
+    if mentioned:
+        assert not any(req.method == "POST" for req in state.requests)
+        assert not state.session.scalars(select(BillingOperation)).all()
+    else:
+        assert any(req.url.path == "/v1/images/generations" for req in state.requests)
+
+
+@pytest.mark.anyio
+async def test_quote_snapshot_and_sent_size_share_model_conversion(
+    fixture: ImageFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """画布 4K 意图转换后，报价、任务快照和上游尺寸必须一致，原始草稿不被改写。"""
+    from genesis_api.api.routes import billing as billing_routes
+    from genesis_api.billing import service as billing_service
+    from genesis_api.media.schemas import CanvasNode
+
+    state = fixture
+    state.app.include_router(billing_routes.router, prefix="/api/v1")
+    monkeypatch.setattr(billing_routes, "get_settings", lambda: state.settings)
+    await save_node(
+        state,
+        generation={
+            "model": "gpt-image-2",
+            "image_size": "4096x2304",
+            "image_ratio": "16:9",
+            "image_resolution": "4K",
+        },
+    )
+    response = await state.client.post(
+        "http://test/api/v1/billing/quotes",
+        json={
+            "kind": "image",
+            "project_id": state.project_id,
+            "node_id": state.node_id,
+        },
+    )
+    assert response.status_code == 201
+    quote_id = response.json()["id"]
+    request_id = uuid4()
+    submitted = await state.client.post(
+        f"projects/{state.project_id}/image-generations",
+        json={
+            "request_id": str(request_id),
+            "node_id": state.node_id,
+            "quote_id": quote_id,
+        },
+    )
+    assert submitted.status_code == 202
+    task = state.session.get(ImageGeneration, request_id)
+    quote = state.session.get(BillingOperation, UUID(quote_id))
+    assert task is not None and quote is not None
+    snapshot = CanvasNode.model_validate(task.snapshot)
+    assert snapshot.generation.image_size == "3840x2160"
+    assert quote.fingerprint == billing_service.fingerprint(
+        "image",
+        "image",
+        "gpt-image-2",
+        billing_service.media_parameters(snapshot),
+    )
+    payload = json.loads(next(req for req in state.requests if req.method == "POST").content)
+    assert payload["size"] == "3840x2160"
+    current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    assert current["document"]["nodes"][0]["generation"]["image_size"] == "4096x2304"
+
+
+@pytest.mark.anyio
 async def test_agent_submits_once_and_native_artifact_links_real_task(
     fixture: ImageFixture,
     monkeypatch: pytest.MonkeyPatch,
@@ -497,11 +636,12 @@ async def test_shared_asset_position_save_does_not_revert_another_project_name(
 @pytest.mark.anyio
 async def test_multi_image_and_explicit_size(fixture: ImageFixture) -> None:
     state = fixture
+    state.models.append("[超分] gpt-image-2.5-flare")
     state.result = {"data": [{"b64_json": base64.b64encode(PNG).decode()}] * 4}
     await save_node(
         state,
         generation={
-            "model": "new-image-model",
+            "model": "[超分] gpt-image-2.5-flare",
             "image_size": "1536x1024",
             "count": 4,
             "image_quality": "standard",
@@ -704,14 +844,28 @@ async def test_native_protocol_never_falls_back_to_another_paid_request(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("count", [2, 5, 6])
-async def test_grok_multiple_references_deduplicate_and_validate_before_billing(
-    fixture: ImageFixture, count: int
+@pytest.mark.parametrize(
+    ("model", "count", "limit"),
+    [
+        ("grok-imagine-image-2.0", 2, 5),
+        ("grok-imagine-image-2.0", 5, 5),
+        ("grok-imagine-image-2.0", 6, 5),
+        ("gemini-3.1-flash-image", 14, 14),
+        ("gemini-3.1-flash-image", 15, 14),
+        ("gemini-2.5-flash-image", 3, 3),
+        ("gemini-2.5-flash-image", 4, 3),
+        ("gpt-image-2", 16, 16),
+        ("gpt-image-2", 17, 16),
+    ],
+)
+async def test_multiple_references_deduplicate_and_validate_before_billing(
+    fixture: ImageFixture, model: str, count: int, limit: int
 ) -> None:
-    """多图走 JSON；重复素材只上传一次，未连线节点不发送，超限不计费。"""
+    """各协议只上传已引用的去重素材；超限在计费前拒绝。"""
     state = fixture
-    model = "grok-imagine-image-2.0"
     state.models.append(model)
+    if model.startswith("gemini"):
+        state.result = native_result()
     await save_node(state, generation={"model": model})
     current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
     document = current["document"]
@@ -756,9 +910,9 @@ async def test_grok_multiple_references_deduplicate_and_validate_before_billing(
     ).status_code == 200
     request_id = uuid4()
     response = await submit(state, request_id)
-    if count > 5:
+    if count > limit:
         assert response.status_code == 422
-        assert "5 张" in response.json()["detail"]
+        assert f"{limit} 张" in response.json()["detail"]
         assert not any(req.method == "POST" for req in state.requests)
         assert not state.session.scalars(select(BillingOperation)).all()
         return
@@ -767,17 +921,33 @@ async def test_grok_multiple_references_deduplicate_and_validate_before_billing(
     assert task["status"] == "completed"
     assert (service.STORAGE_ROOT / task["asset_id"]).read_bytes() == PNG
     post = next(req for req in state.requests if req.method == "POST")
-    assert post.url.path == "/v1/images/edits"
-    assert post.headers["content-type"] == "application/json"
-    payload = json.loads(post.content)
-    assert "image" not in payload
-    assert (
-        payload["images"]
-        == [{"type": "image_url", "url": f"data:image/png;base64,{base64.b64encode(PNG).decode()}"}]
-        * count
-    )
-    assert "ref:" not in payload["prompt"]
-    assert f"图片{count}" in payload["prompt"]
+    if model.startswith("gpt"):
+        assert post.url.path == "/v1/images/edits"
+        assert post.headers["content-type"].startswith("multipart/form-data")
+        assert post.content.count(b'name="image";') == count
+    else:
+        assert post.headers["content-type"] == "application/json"
+        payload = json.loads(post.content)
+        if model.startswith("gemini"):
+            assert post.url.path.endswith(":generateContent")
+            parts = payload["contents"][0]["parts"]
+            assert len(parts) == count + 1
+            assert f"图片{count}" in parts[0]["text"]
+        else:
+            assert post.url.path == "/v1/images/edits"
+            assert "image" not in payload
+            assert (
+                payload["images"]
+                == [
+                    {
+                        "type": "image_url",
+                        "url": f"data:image/png;base64,{base64.b64encode(PNG).decode()}",
+                    }
+                ]
+                * count
+            )
+            assert f"图片{count}" in payload["prompt"]
+    assert b"ref:" not in post.content
     assert (await submit(state, request_id)).json() == task
     assert sum(req.method == "POST" for req in state.requests) == 1
     operation = state.session.scalar(select(BillingOperation))
@@ -889,22 +1059,20 @@ async def test_native_transparent_background_is_rejected_before_billing(
 
 
 @pytest.mark.anyio
-async def test_native_multiple_candidates_stay_in_one_request(fixture: ImageFixture) -> None:
-    """数量传为原生候选数，不能拆成多次计费请求或把同一成品复制凑数。"""
+async def test_native_multiple_candidates_are_rejected_before_billing(
+    fixture: ImageFixture,
+) -> None:
+    """原生候选数只支持 1，不拆分为多次付费请求，也不假造多张成品。"""
     model = "gemini-nano-banana-2.1"
     fixture.models.append(model)
     fixture.result = native_result(
         [{"inlineData": {"mimeType": "image/png", "data": base64.b64encode(PNG).decode()}}] * 2
     )
     await save_node(fixture, generation={"model": model, "count": 2})
-    assert (await submit(fixture)).status_code == 202
+    assert (await submit(fixture)).status_code == 422
     posts = [req for req in fixture.requests if req.method == "POST"]
-    assert len(posts) == 1
-    assert json.loads(posts[0].content)["generationConfig"]["candidateCount"] == 2
-    task = await latest(fixture)
-    assert task["status"] == "completed"
-    assert len(task["asset_ids"]) == 2
-    assert len(set(task["asset_ids"])) == 2
+    assert not posts
+    assert not fixture.session.scalars(select(BillingOperation)).all()
 
 
 @pytest.mark.anyio
@@ -1036,7 +1204,7 @@ async def test_image_reference_cannot_be_silently_ignored(
             )
         ).json()
         source["asset_id"] = asset["id"]
-        current["document"]["nodes"][0]["generation"]["model"] = "new-image-model"
+        current["document"]["nodes"][0]["generation"]["model"] = "gpt-image-2"
     current["document"]["nodes"].append(source)
     if mentioned:
         current["document"]["nodes"][0]["text"] = f"参考@[图片](ref:{source_id})"

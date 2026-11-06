@@ -47,15 +47,19 @@
 
 图片渠道共用模型目录与计费配置，提交时按模型区分协议：
 
-- GPT Image、Imagen 等模型沿用 OpenAI Images 接口：文生图走 `/v1/images/generations`，有显式图片引用时走 `/v1/images/edits`。
+- GPT Image 2、2-pro、2.5/2.6 Sunburst/Flare 及带渠道前缀的同型号使用 OpenAI Images 接口：文生图走 `/v1/images/generations`，有显式图片引用时走 `/v1/images/edits`。尺寸按 16 像素对齐，最长边不超过 3840，比例不超过 3:1，总像素为 655360–8294400。画布比例/清晰度转换为最接近目标长边的合法尺寸，例如 4K 16:9 → 3840×2160，4K 方图 → 2880×2880；仅指定像素尺寸的旧草稿不静默缩放，非法尺寸在计费前提示调整。报价、任务快照与请求使用同一份转换后的参数，不改写画布草稿。
 - Grok Imagine Image 系列使用 JSON Images 协议：无参考时走 `/v1/images/generations`；单图编辑使用 `/v1/images/edits` 的 `image` 对象，多图使用 `images` 数组，不发送 multipart。参考图片使用本地文件的 base64 data URI，去重后最多 5 张，仍须连线且在提示词中 `@` 引用。尺寸映射到 `aspect_ratio`、小写 `resolution`（1k/2k）；4K、透明背景及不支持的比例在计费前拒绝，不静默降级。完整渠道别名保持原样。
 - Nano Banana 和 Gemini Image 系列走 `/v1beta/models/{完整公开模型名}:generateContent`。例如 `[AS专线] nano-banana-2.1`，保留渠道前缀并进行 URL 编码，不自行改写成另一个上游型号。参考图以本地图片的 `inlineData` 发送，仍必须同时连线且在提示词中 `@` 引用。
-- 原生请求使用 `generationConfig.responseModalities`，比例和清晰度映射到 `imageConfig.aspectRatio`、`imageSize`；数量映射到 `candidateCount`，是否支持多候选由上游模型决定，不拆分为多次生成请求。原生接口没有透明背景字段，选择透明背景时在提交前提示调整。
+- 原生请求使用 `generationConfig.responseModalities`，比例和清晰度映射到 `imageConfig.aspectRatio`、`imageSize`；`candidateCount` 固定为 1，用户选择多张时在计费前提示改为 1，不拆分付费请求。Gemini 3.1 Flash Image、3 Pro Image 和 Nano Banana 2.1 接入参考上限为 14；旧 Gemini 2.5 Flash Image 接入参考上限为 3，仅接受默认/1K，且不发送其不支持的 `imageSize` 字段。根据已核对的比例集合校验，旧像素尺寸允许 8 像素取整造成的 1% 比例误差。透明背景在提交前提示调整。
 - 原生响应只提取最终图片，忽略文字和思考图片，随后复用私有素材入库、结果缓存与恢复流程。失败或结果未知时不自动切换协议重发，保持每个任务一次上游调用与既有账务归属。
+- 所有参考仍须连线且在提示词中 `@`，按素材去重后检查上限（GPT 最多 16，Grok 最多 5）。当前接入接受 PNG/JPEG/WebP，单文件本地提交上限为 32 MiB，格式、文件大小和数量在计费前检查。旧画质字段继续使用上游默认值，未开放的遮罩、压缩等高级选项不发送。
+- 模型目录继续展示渠道返回的完整目录，但目录可见不等于已适配图片协议。Seedream 5 Lite/Pro 目前仅声明聊天接口，Imagen 及未核验的新型号也不再默认套用 GPT Images；本地返回明确的未适配提示，不发起生成或重复尝试其他接口。新增型号须先核验协议再扩展识别范围。
 
 协议依据：[云影 Images 文档](https://ai-document.yyapi.cloud/zh/image-api)、[Google generateContent 参考](https://ai.google.dev/api/generate-content)、[New API Gemini 适配器](https://github.com/QuantumNous/new-api/blob/main/relay/channel/gemini/adaptor.go)。2026-11-06 经 7897 代理查询[服务商公开模型目录](https://www.yyapi.cloud/api/pricing)，`[AS专线] nano-banana-2.1` 声明支持 `gemini`、`openai`（聊天），未声明 `image-generation`。文档中的 Images 模型名单不作为全渠道生图模型白名单；具体专线别名的在线生成仍需上线后验证。
 
-本次复用 Compose 后端完成 656 项全量测试，覆盖率 91.40%；相关文件 Ruff、格式检查及 `src/tests` 全库 mypy 通过。图片协议回归覆盖专线别名、默认与指定尺寸、连线且艾特的本地参考、Grok 单图/多图 JSON 与参考去重、超限参数在计费前拒绝、最终图片入库、幂等和单次账务记录、失败不切换协议重发。响应均为合成数据，未使用真实 Key 或发起付费生成。
+参数差异依据：[OpenAI 图片生成尺寸约束](https://developers.openai.com/api/docs/guides/image-generation)、[GPT 编辑参考上限](https://developers.openai.com/api/reference/resources/images/methods/edit)、[Google 图片生成](https://ai.google.dev/gemini-api/docs/image-generation)、[Gemini 3.1 Flash Image 参数](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-flash-image)。验证仅使用合成响应，不使用真实 Key，也不发起付费生成。
+
+本轮 Compose 后端全量 751 项测试通过，覆盖率 91.55%；修改文件 Ruff、格式检查及 `src/tests` 全库 mypy 通过。回归覆盖全部画布 GPT 比例/清晰度组合、完整渠道别名、Gemini 候选数与旧版本限制、各系列参考上限、引用去重、格式和大小拦截、未适配型号不发送、报价与实际参数一致、结果入库及失败不重发。
 
 Grok 协议依据：[xAI 图片生成](https://docs.x.ai/developers/model-capabilities/images/generation)、[单图编辑示例](https://docs.x.ai/developers/model-capabilities/images/prompting-guide)、[多图编辑](https://docs.x.ai/developers/model-capabilities/images/multi-image-editing)。云影公开目录目前仅为 `grok-imagine-image-2.0` 标记聊天/Responses 能力；本地协议适配与合成响应回归不能证明其网关已完整透传图片编辑字段，部署后仍需验证实际渠道。不会在失败后自动改走聊天协议重复提交付费请求。
 

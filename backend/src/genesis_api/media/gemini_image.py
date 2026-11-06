@@ -1,17 +1,36 @@
 """为 Gemini 原生生图补充协议转换，传输、计费和任务恢复仍由 image 模块负责。"""
 
 import re
-from math import gcd
 from typing import Any
 from urllib.parse import quote
 
+from fastapi import HTTPException
+
 from genesis_api.media.schemas import CanvasNode
+
+ASPECT_RATIOS = (
+    "1:1",
+    "2:3",
+    "3:2",
+    "3:4",
+    "4:3",
+    "4:5",
+    "5:4",
+    "9:16",
+    "16:9",
+    "21:9",
+)
 
 
 def uses_generate_content(model: str) -> bool:
     """识别 Nano Banana 与 Gemini Image 系列，公开渠道前缀保留给上游路由。"""
     name = model.rsplit("]", 1)[-1].strip().lower()
-    return bool(re.fullmatch(r"(?:gemini-)?nano-banana[\w.-]*|gemini[\w.-]*image[\w.-]*", name))
+    return bool(
+        re.fullmatch(
+            r"(?:gemini-)?nano-banana-2\.1(?:-as)?|gemini-(?:2\.5-flash|3\.1-flash|3-pro)-image(?:-preview)?",
+            name,
+        )
+    )
 
 
 def request_data(node: CanvasNode, base_url: str) -> tuple[str, dict[str, Any]]:
@@ -25,19 +44,35 @@ def request_data(node: CanvasNode, base_url: str) -> tuple[str, dict[str, Any]]:
         保留完整公开模型名的请求地址，以及可追加参考图片的请求体。
     """
     settings = node.generation
+    if settings.count != 1:
+        raise HTTPException(422, "Gemini 图片接口每次只支持 1 张，请将生成数量改为 1")
+    if settings.image_background == "transparent":
+        raise HTTPException(422, "该图片接口不支持透明背景参数，请选择自动或保留背景")
     config: dict[str, Any] = {
         "responseModalities": ["TEXT", "IMAGE"],
-        "candidateCount": settings.count,
+        "candidateCount": 1,
     }
     ratio: str = settings.image_ratio
     resolution: str = settings.image_resolution
     if settings.image_size and settings.image_size != "auto":
         width, height = (int(value) for value in settings.image_size.split("x"))
-        divisor = gcd(width, height)
-        ratio = ratio or f"{width // divisor}:{height // divisor}"
+        if not ratio:
+            ratios = {
+                value: float(value.split(":")[0]) / float(value.split(":")[1])
+                for value in ASPECT_RATIOS
+            }
+            ratio = min(ratios, key=lambda value: abs(ratios[value] - width / height))
+            if abs(ratios[ratio] / (width / height) - 1) > 0.01:
+                raise HTTPException(422, "Gemini 图片接口不支持该尺寸比例，请重新选择比例")
         resolution = resolution or (
             "1K" if max(width, height) <= 1024 else "2K" if max(width, height) <= 2048 else "4K"
         )
+    if ratio and ratio not in ASPECT_RATIOS:
+        raise HTTPException(422, "Gemini 图片接口不支持该比例，请重新选择图片比例")
+    if "2.5-flash-image" in settings.model:
+        if resolution not in ("", "1K"):
+            raise HTTPException(422, "Gemini 2.5 Flash Image 不支持 2K/4K，请选择默认或 1K")
+        resolution = ""
     image_config = {
         key: value for key, value in (("aspectRatio", ratio), ("imageSize", resolution)) if value
     }

@@ -1,7 +1,7 @@
 """当前用户账单及站长人工入账、价格审核和异常核对入口。"""
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
@@ -27,7 +27,9 @@ from genesis_api.billing.service import (
 )
 from genesis_api.core.config import get_settings
 from genesis_api.identity.models import User
+from genesis_api.media import image
 from genesis_api.media import service as media_service
+from genesis_api.media.models import ImageGeneration
 from genesis_api.media.schemas import CanvasDocument
 
 router = APIRouter(tags=["账务"])
@@ -158,6 +160,19 @@ def quote(
         )
         if node is None:
             raise HTTPException(404, "生成节点不存在")
+        if data.kind == "image":
+            # 报价与提交共用尺寸转换和引用解析；临时任务不入库、不调用模型。
+            node = image.prepare(
+                ImageGeneration(
+                    id=uuid4(),
+                    owner_id=user.id,
+                    project_id=project.id,
+                    node_id=node.id,
+                    snapshot={},
+                ),
+                CanvasDocument.model_validate(project.canvas),
+                session,
+            )
         model = node.generation.model
         provider = data.kind  # type: ignore[assignment]
         parameters = media_parameters(node)

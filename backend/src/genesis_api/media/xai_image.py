@@ -29,7 +29,7 @@ ASPECT_RATIOS = (
 def uses_json_edits(model: str) -> bool:
     """只识别 Grok Imagine 图片系列，渠道前缀仍完整传给供应商。"""
     name = model.rsplit("]", 1)[-1].strip().lower()
-    return bool(re.fullmatch(r"grok-imagine-image[\w.-]*", name))
+    return bool(re.fullmatch(r"grok-imagine-image-2\.0", name))
 
 
 def request_data(node: CanvasNode) -> dict[str, Any]:
