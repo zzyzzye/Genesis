@@ -50,7 +50,7 @@ export function ReferencePrompt({ value, references, candidates = [], label, onC
     const editor = new EditorView({ parent: host.current, doc: initial, extensions: [
       minimalSetup, EditorView.lineWrapping, placeholder('描述想要生成的内容，输入 @ 选择画布图片并连接'),
       EditorView.theme({
-        '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#e8e8e8' },
+        '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'currentColor' },
         '.cm-content ::selection, .cm-content::selection': { backgroundColor: '#505050', color: '#ffffff' },
         '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: '#505050' },
       }),
