@@ -437,7 +437,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const [previewRetry, setPreviewRetry] = useState<{ id: string; file: File; kind: Asset['kind'] } | null>(null)
   const uploadActive = useRef(false)
   const [tool, setTool] = useState<'select' | 'pan'>('select')
-  const [reloadOpen, setReloadOpen] = useState(false)
   const reloadDialog = useRef<HTMLDialogElement>(null)
   const [flow, setFlow] = useState<ReactFlowInstance<CanvasFlowNode> | null>(null)
   const canvasElement = useRef<HTMLDivElement>(null)
@@ -449,11 +448,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const clipboard = useRef<{ projectId: string; nodes: Node[]; edges: Edge[] } | null>(null)
   const pasteCount = useRef(0)
   const agentPlanApplyRef = useRef<(plan: MediaCanvasPlan) => void>(() => undefined)
-
-  useEffect(() => {
-    if (reloadOpen) reloadDialog.current?.showModal()
-    else if (reloadDialog.current?.open) reloadDialog.current.close()
-  }, [reloadOpen])
 
   useEffect(() => {
     if (!nodeMenu) return
@@ -1089,7 +1083,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const viewport = canvas.document.viewport
   return <main className="media-editor">
     <div className="media-project-menu"><div className="media-project-controls"><button className="media-project-back" aria-label="返回作品页" title="返回作品页" onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}`) })}><ArrowLeft size={17} /></button><button className="media-project-trigger" aria-expanded={menu} aria-label="作品菜单" onClick={() => { setMenu(!menu); setNodeMenu(false) }}><span className="media-project-name">{project?.name ?? '作品'}</span><ChevronDown size={15} /></button><FpsStatusSlot /></div>{menu && <div className="media-menu-content"><p role="status">{canvas.status}</p><label className="media-background-setting">画布背景<select aria-label="画布背景" value={canvas.document.background} onChange={(event) => canvas.apply({ ...canvas.current.current, background: event.target.value as Document['background'] })}><option value="dots">点阵</option><option value="lines">网格</option><option value="none">纯色</option></select></label><button onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}/assets`) })}>作品素材库</button><button disabled={!project} onClick={() => setRenameOpen(true)}>重命名作品</button><button onClick={() => void action(canvas.save)}>立即保存 / 重试</button></div>}</div>
-    {(error || canvas.status.startsWith('保存失败') || canvas.conflict || !canvas.ready) && <div className="media-editor-notice" role="status">{error || canvas.status}{previewRetry ? <button onClick={() => void uploadNodeAsset(previewRetry.id, previewRetry.kind, previewRetry.file)}>重试上传</button> : <button onClick={() => void action(canvas.ready ? canvas.save : () => canvas.load(true))}>重试</button>}{canvas.conflict && <><button onClick={() => setReloadOpen(true)}>重新加载</button><button onClick={() => void action(fork)}>保留为新作品</button></>}<button onClick={() => void navigate(`/media/projects/${projectId}`)}>作品页</button></div>}
+    {(error || canvas.status.startsWith('保存失败') || canvas.conflict || !canvas.ready) && <div className="media-editor-notice" role="status">{error || canvas.status}{previewRetry ? <button onClick={() => void uploadNodeAsset(previewRetry.id, previewRetry.kind, previewRetry.file)}>重试上传</button> : !canvas.conflict && <button onClick={() => void action(canvas.ready ? canvas.save : () => canvas.load(true))}>重试</button>}{canvas.conflict && <><button aria-haspopup="dialog" onClick={() => { if (reloadDialog.current && !reloadDialog.current.open) reloadDialog.current.showModal() }}>重新加载</button><button onClick={() => void action(fork)}>保留为新作品</button></>}<button onClick={() => void navigate(`/media/projects/${projectId}`)}>作品页</button></div>}
     {renameOpen && project && <ProjectDialog action={{ kind: 'rename', project }} onClose={() => setRenameOpen(false)} onSaved={(updated) => { if (updated) setProject(updated); setRenameOpen(false) }} />}
     {assetTarget && <CanvasAssetPicker projectId={projectId} target={assetTarget} onClose={() => setAssetTarget(null)} onSelect={async (asset) => {
       if (assetTarget.allowImageForVideo ? asset.kind === 'audio' : asset.kind !== assetTarget.kind) throw new Error('该素材不适用于当前节点，请重新选择。')
@@ -1098,8 +1092,8 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       assignNodeAsset(assetTarget.id, asset)
       setAssetTarget(null)
     }} />}
-    <dialog ref={reloadDialog} className="media-home-dialog" aria-labelledby="canvas-reload-title" aria-describedby="canvas-reload-description" onCancel={() => setReloadOpen(false)} onClose={() => setReloadOpen(false)}>
-      <h2 id="canvas-reload-title">加载服务器版本？</h2><p id="canvas-reload-description">当前本地修改会被替换。需要保留时，请取消并选择“保留为新作品”。</p><footer><button autoFocus type="button" onClick={() => setReloadOpen(false)}>取消</button><button type="button" onClick={() => { setReloadOpen(false); void action(() => canvas.load()) }}>放弃本地修改并加载</button></footer>
+    <dialog ref={reloadDialog} className="media-home-dialog" aria-labelledby="canvas-reload-title" aria-describedby="canvas-reload-description" onCancel={(event) => { event.preventDefault(); reloadDialog.current?.close() }}>
+      <h2 id="canvas-reload-title">加载服务器版本？</h2><p id="canvas-reload-description">当前本地修改会被替换。需要保留时，请取消并选择“保留为新作品”。</p><footer><button autoFocus type="button" onClick={() => reloadDialog.current?.close()}>取消</button><button type="button" onClick={() => { reloadDialog.current?.close(); void action(() => canvas.load()) }}>放弃本地修改并加载</button></footer>
     </dialog>
     <div ref={canvasElement} className={`media-canvas ${draggingFile ? 'is-file-over' : ''} ${connecting ? 'is-connecting' : ''}`} aria-label="作品无限画布" onDoubleClick={(event) => {
       if (!(event.target as HTMLElement).classList.contains('react-flow__pane')) return

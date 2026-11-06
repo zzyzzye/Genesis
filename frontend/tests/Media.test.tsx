@@ -460,6 +460,36 @@ describe('作品画布', () => {
     expect(request).toHaveBeenLastCalledWith('/projects/project/canvas', 'PUT', { version: 1, document: latest })
     expect(result.current.status).toBe('已保存')
   })
+  it('冲突重新加载可取消和重复打开，读取失败保留草稿，成功后解除冲突', async () => {
+    const server = { ...emptyDocument(), nodes: [{ ...note, text: '服务器正文' }] }
+    const draft = { ...server, nodes: [{ ...note, text: '本地未保存正文' }] }
+    const key = 'genesis-media-draft:user:project'
+    localStorage.setItem(key, JSON.stringify({ version: 1, document: draft }))
+    let fail = false
+    vi.spyOn(media, 'api').mockImplementation(path => {
+      if (path.endsWith('/canvas')) return fail ? Promise.reject(new Error('服务器暂不可用')) : Promise.resolve({ version: 2, document: server })
+      return Promise.resolve(path.includes('/assets') ? { items: [], total: 0 } : { id: 'project', name: '冲突验收' })
+    })
+    render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
+    const reload = await screen.findByRole('button', { name: '重新加载' })
+    expect(screen.queryByRole('button', { name: '重试' })).not.toBeInTheDocument()
+    fireEvent.click(reload)
+    expect(screen.getByRole('dialog', { name: '加载服务器版本？' })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    expect(screen.queryByRole('dialog', { name: '加载服务器版本？' })).not.toBeInTheDocument()
+    expect(localStorage.getItem(key)).toContain('本地未保存正文')
+    fireEvent.click(reload)
+    fail = true
+    fireEvent.click(screen.getByRole('button', { name: '放弃本地修改并加载' }))
+    expect(await screen.findByText('服务器暂不可用')).toBeInTheDocument()
+    expect(localStorage.getItem(key)).toContain('本地未保存正文')
+    fail = false
+    fireEvent.click(reload)
+    fireEvent.click(screen.getByRole('button', { name: '放弃本地修改并加载' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: '重新加载' })).not.toBeInTheDocument())
+    expect(screen.getByRole('textbox', { name: '便签内容' })).toHaveValue('服务器正文')
+    expect(localStorage.getItem(key)).toBeNull()
+  })
   it('409 冲突停止自动覆盖并允许重新加载', async () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
     const { result } = renderHook(() => useCanvas('project', 'user'))
