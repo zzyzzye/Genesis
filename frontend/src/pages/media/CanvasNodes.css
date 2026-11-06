@@ -305,6 +305,15 @@ body .cm-tooltip.cm-tooltip-autocomplete.media-prompt-completions>ul>li { paddin
 .media-node-camera-options p { flex-basis:100%; margin:0 0 4px; font-size:11px; color:var(--media-node-muted); }
 .media-editor .media-node-editor .media-node-camera-options button { background:transparent; border-radius:6px; padding:4px 8px; font-size:12px; }
 @media(max-width:600px) { .media-canvas-asset-picker { padding:16px; }.media-canvas-asset-picker .media-library-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.media-canvas-asset-picker .media-preview { height:100px; } }
+
+.media-readonly-badge { position:absolute; z-index:12; top:24px; right:24px; padding:8px 12px; border-radius:8px; background:#262626; color:#bbb; font-size:12px; }
+.media-readonly-node .media-node-grip { padding:10px 12px; }
+.media-readonly-node>p { margin:0; padding:12px; white-space:pre-wrap; overflow:auto; user-select:text; }
+.media-readonly-node>.media-preview { min-height:0; flex:1; }
+.media-editor .media-editor-notice,.media-editor .media-canvas-upload { position:fixed; z-index:80; top:72px; right:20px; left:auto; bottom:auto; transform:none; width:min(360px,calc(100vw - 40px)); box-sizing:border-box; display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:14px 16px; border:0; border-radius:12px; background:#2b2b2b; color:#e8e8e8; box-shadow:0 8px 28px #0004; font-size:13px; line-height:1.6; animation:media-notice-enter 180ms ease-out; }
+.media-editor .media-editor-notice button { padding:4px 8px; min-height:28px; border-radius:6px; background:#383838; font-size:12px; }
+@keyframes media-notice-enter { from { opacity:0; translate:24px 0; } to { opacity:1; translate:0 0; } }
+@media(prefers-reduced-motion:reduce) { .media-editor .media-editor-notice,.media-editor .media-canvas-upload { animation:none; } }
 .media-video-generation .is-spinning { animation:media-video-spin 1s linear infinite; }
 @keyframes media-video-spin { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .media-video-generation .is-spinning { animation:none; } }

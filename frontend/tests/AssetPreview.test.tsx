@@ -3,6 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { AssetPreview } from '../src/pages/media/AssetPreview'
 import * as media from '../src/pages/media/api'
 import { accountAuthTokenKey } from '../src/lib/auth'
+import { clearImageCache } from '../src/pages/media/imagePreview'
 
 const audio: media.Asset = { id:'audio', name:'雨声.wav', kind:'audio', mime_type:'audio/wav', size:32, in_library:false }
 const createObjectURL = vi.fn(() => 'blob:preview')
@@ -21,29 +22,28 @@ describe('素材播放器', () => {
     vi.spyOn(media, 'fileBlob').mockResolvedValue(new Blob(['preview']))
     vi.spyOn(media, 'playbackUrl').mockResolvedValue('/api/v1/media/assets/audio/stream')
   })
-  afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks() })
+  afterEach(() => { cleanup(); clearImageCache(); localStorage.clear(); vi.restoreAllMocks() })
 
-  it('成品与后打开的参考缩略图共享已加载图片，最后一个预览关闭才释放', async () => {
+  it('成品与缩略图独立读取，预览关闭后仍保留缓存', async () => {
     const asset = { ...audio, id:'shared-image', kind:'image' as const }
     const result = render(<AssetPreview asset={asset} />)
-    const original = await screen.findByRole('img', { name:asset.name })
+    await screen.findByRole('img', { name:asset.name })
     const reference = render(<AssetPreview asset={asset} thumbnail passive />)
-    expect(screen.getAllByRole('img', { name:asset.name })).toHaveLength(2)
-    expect(media.fileBlob).toHaveBeenCalledTimes(1)
-    expect(createObjectURL).toHaveBeenCalledTimes(1)
-    expect(screen.getAllByRole('img', { name:asset.name })[1]).toHaveAttribute('src', original.getAttribute('src'))
+    await waitFor(() => expect(screen.getAllByRole('img', { name:asset.name })).toHaveLength(2))
+    expect(media.fileBlob).toHaveBeenCalledTimes(2)
+    expect(createObjectURL).toHaveBeenCalledTimes(2)
     result.unmount()
     expect(revokeObjectURL).not.toHaveBeenCalled()
     reference.unmount()
-    expect(revokeObjectURL).toHaveBeenCalledTimes(1)
+    expect(revokeObjectURL).not.toHaveBeenCalled()
   })
 
-  it('同时加载合并请求，关闭缩略图不会取消成品加载，会话切换重新读取', async () => {
+  it('同尺寸预览合并请求，关闭其中一个不会取消加载，会话切换重新读取', async () => {
     let finish!: (blob: Blob) => void
     vi.mocked(media.fileBlob).mockImplementation(() => new Promise(resolve => { finish = resolve }))
     const asset = { ...audio, id:'pending-image', kind:'image' as const }
     const result = render(<AssetPreview asset={asset} />)
-    const reference = render(<AssetPreview asset={asset} thumbnail passive />)
+    const reference = render(<AssetPreview asset={asset} passive />)
     expect(media.fileBlob).toHaveBeenCalledTimes(1)
     const signal = vi.mocked(media.fileBlob).mock.calls[0]![1]!
     reference.unmount()
@@ -115,13 +115,13 @@ describe('素材播放器', () => {
     }
   })
 
-  it('加载期间卸载不再创建文件地址', async () => {
+  it('加载期间卸载保留在途请求供再次打开复用', async () => {
     let resolve!: (blob: Blob) => void
     vi.mocked(media.fileBlob).mockReturnValue(new Promise((done) => { resolve = done }))
     const { unmount } = render(<AssetPreview asset={{ ...audio, kind:'image' }} controls />)
     unmount()
     resolve(new Blob(['preview']))
-    await waitFor(() => expect(createObjectURL).not.toHaveBeenCalled())
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalledTimes(1))
   })
 
   it('素材改名不重新授权或下载，换素材立即清除旧播放器', async () => {

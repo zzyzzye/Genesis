@@ -57,6 +57,7 @@ export function useGenerationResults(projectId: string, canvas: ReturnType<typeo
     return result && !node.asset_id && !['failed', 'download_failed', 'acknowledged'].includes(result.status) ? [[node.id, result.task_id, result.status, node.video_result ? 'video' : 'image']] : []
   }))
   useEffect(() => {
+    if (canvas.readOnly) return
     const entries = JSON.parse(pending) as [string, string, string, 'image' | 'video'][]
     if (!entries.length) return
     let active = true
@@ -113,7 +114,7 @@ export function useGenerationResults(projectId: string, canvas: ReturnType<typeo
       else void poll(kind, id)
     }
     return () => { active = false; timers.forEach(clearTimeout) }
-  }, [pending, projectId, documentRef, apply, setAssets])
+  }, [pending, projectId, documentRef, apply, setAssets, canvas.readOnly])
 
   return onTask
 }

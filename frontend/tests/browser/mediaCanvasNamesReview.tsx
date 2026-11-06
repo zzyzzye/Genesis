@@ -44,6 +44,7 @@ window.fetch = async (input, init) => {
   if (!url.pathname.startsWith('/api/')) return originalFetch(input, init)
   if (!url.pathname.startsWith('/api/v1/media/')) return json({ detail: '验收页面不访问真实 API。' }, 503)
   const path = url.pathname.replace('/api/v1/media', '')
+  if (state === 'readonly' && init?.method && init.method !== 'GET') return json({ detail: '只读画布禁止写入。' }, 403)
   if (path.endsWith('/canvas') && init?.method === 'PUT') {
     document = (JSON.parse(typeof init.body === 'string' ? init.body : '{}') as { document: Document }).document
     version += 1
@@ -52,7 +53,7 @@ window.fetch = async (input, init) => {
     return json({ version, document })
   }
   if (init?.method && init.method !== 'GET') return json({ detail: '验收页面只允许合成画布保存。' }, 503)
-  if (path.endsWith('/canvas')) return json({ version, document })
+  if (path.endsWith('/canvas')) return state === 'notice' ? json({ detail: '画布暂时无法读取，请重试。' }, 503) : json({ version, document, read_only: state === 'readonly' })
   if (state === 'wheel' && path === '/assets/wheel-image/file') return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><rect width="640" height="360" fill="#303030"/><path d="M0 300 180 120 370 290 500 180 640 320V360H0Z" fill="#606060"/><text x="24" y="48" fill="#eee" font-family="sans-serif" font-size="26">双指平移验收 · 合成参考画面</text></svg>', { headers: { 'Content-Type': 'image/svg+xml' } })
   if (state === 'wheel' && path === '/assets/wheel-audio/file') {
     const bytes = new Uint8Array(8044)

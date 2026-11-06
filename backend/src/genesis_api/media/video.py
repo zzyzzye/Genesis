@@ -500,8 +500,8 @@ async def admit_task(
     Raises:
         HTTPException: 归属、版本、生成参数、模型或计费准入校验失败。
     """
-    headers(settings)
     project = service.project_for(session, user.id, project_id)
+    headers(settings)
     existing = session.get(VideoGeneration, data.request_id)
     if existing is not None:
         if (

@@ -1,22 +1,71 @@
 """验证影音素材生命周期、画布关联校验与跨账户访问隔离。"""
 
 from collections.abc import AsyncGenerator
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from genesis_api.api.dependencies import get_current_user
 from genesis_api.api.routes.media import router
+from genesis_api.api.routes.media_image import router as image_router
+from genesis_api.api.routes.media_video import router as video_router
 from genesis_api.database.base import Base
 from genesis_api.database.session import get_session
 from genesis_api.identity.models import User, UserRole
 from genesis_api.media import service
+from genesis_api.media.thumbnails import _render
+
+
+@pytest.mark.anyio
+async def test_thumbnail_cache_preserves_permissions(media_client: AsyncClient) -> None:
+    """缩略图有真实尺寸压缩，缓存命中仍检查账号与作品关联。"""
+    c = media_client
+    original = BytesIO()
+    Image.new("RGBA", (1600, 800), (80, 100, 120, 128)).save(original, format="PNG")
+    payload = original.getvalue()
+    project = (await c.post("projects", json={"name": "缩略图"})).json()["id"]
+    shared = (
+        await c.post(
+            f"projects/{project}/assets", files={"file": ("shared.png", payload, "image/png")}
+        )
+    ).json()["id"]
+    private = (
+        await c.post("assets", files={"file": ("private.png", payload, "image/png")})
+    ).json()["id"]
+    response = await c.get(f"assets/{shared}/thumbnail")
+    assert response.status_code == 200
+    assert len(response.content) < len(payload)
+    assert response.headers["cache-control"] == "private, no-store"
+    with Image.open(BytesIO(response.content)) as image:
+        assert image.size == (320, 160)
+        assert image.mode == "RGBA"
+    hits = _render.cache_info().hits
+    assert (await c.get(f"assets/{shared}/thumbnail")).content == response.content
+    assert _render.cache_info().hits == hits + 1
+    assert (await c.get(f"assets/{private}/thumbnail")).status_code == 200
+    assert (await c.get(f"assets/{shared}/file")).content == payload
+    app = c._transport.app  # type: ignore[attr-defined]
+    owner = app.dependency_overrides[get_current_user]()
+    session = app.dependency_overrides[get_session]()
+    viewer = User(handle="viewer", display_name="浏览者", role=UserRole.MEMBER)
+    session.add(viewer)
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: viewer
+    assert (await c.get(f"assets/{private}/thumbnail")).status_code == 404
+    assert (await c.get(f"assets/{shared}/thumbnail")).status_code == 200
+    assert (await c.delete(f"projects/{project}/assets/{shared}")).status_code == 404
+    app.dependency_overrides[get_current_user] = lambda: owner
+    assert (await c.delete(f"projects/{project}/assets/{shared}")).status_code == 200
+    app.dependency_overrides[get_current_user] = lambda: viewer
+    assert (await c.get(f"assets/{shared}/thumbnail")).status_code == 404
 
 
 @pytest.fixture
@@ -39,6 +88,8 @@ async def media_client(
     Base.metadata.create_all(engine)
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
+    app.include_router(image_router, prefix="/api/v1")
+    app.include_router(video_router, prefix="/api/v1")
     with Session(engine) as session:
         user = User(handle="media-test", display_name="测试", role=UserRole.MEMBER)
         session.add(user)
@@ -149,9 +200,7 @@ async def test_invalid_upload_and_canvas(
         {**node, "id": str(uuid4()), "type": kind, "asset_id": None, "text": kind}
         for kind in ("text", "shape", "image", "audio")
     ]
-    saved = await c.put(
-        f"projects/{p}/canvas", json={"version": 0, "document": {"nodes": nodes}}
-    )
+    saved = await c.put(f"projects/{p}/canvas", json={"version": 0, "document": {"nodes": nodes}})
     assert saved.status_code == 200
     assert [item["type"] for item in saved.json()["document"]["nodes"]] == [
         "text",
@@ -252,9 +301,7 @@ async def test_video_node_metadata_and_asset_reference(media_client: AsyncClient
     ).status_code == 422
     assert (await c.post(f"assets/{asset_id}/library")).status_code == 200
     assert (
-        await c.post(
-            f"projects/{project_id}/assets/reference", json={"asset_id": asset_id}
-        )
+        await c.post(f"projects/{project_id}/assets/reference", json={"asset_id": asset_id})
     ).status_code == 200
     preview = await c.put(
         endpoint, json={"version": 1, "document": {"nodes": [{**node, "asset_id": asset_id}]}}
@@ -288,15 +335,20 @@ async def test_remove_asset_cleans_connected_edges(media_client: AsyncClient) ->
                 "height": 200,
             },
             {"id": text_node, "type": "text", "x": 400, "y": 0, "width": 300, "height": 200},
-            {"id": group_id, "type": "group", "member_ids": [media_node, text_node],
-             "x": -20, "y": -40, "width": 750, "height": 280},
+            {
+                "id": group_id,
+                "type": "group",
+                "member_ids": [media_node, text_node],
+                "x": -20,
+                "y": -40,
+                "width": 750,
+                "height": 280,
+            },
         ],
         "edges": [{"id": str(uuid4()), "source": text_node, "target": media_node}],
     }
     assert (
-        await c.put(
-            f"projects/{project_id}/canvas", json={"version": 0, "document": document}
-        )
+        await c.put(f"projects/{project_id}/canvas", json={"version": 0, "document": document})
     ).status_code == 200
     result = await c.delete(f"projects/{project_id}/assets/{asset_id}")
     assert result.status_code == 200
@@ -313,28 +365,71 @@ async def test_canvas_groups_and_background_are_validated(media_client: AsyncCli
         for index in range(2)
     ]
     group = {
-        "id": str(uuid4()), "type": "group", "member_ids": [node["id"] for node in nodes],
-        "x": -20, "y": -30, "width": 550, "height": 180,
+        "id": str(uuid4()),
+        "type": "group",
+        "member_ids": [node["id"] for node in nodes],
+        "x": -20,
+        "y": -30,
+        "width": 550,
+        "height": 180,
     }
     endpoint = f"projects/{project_id}/canvas"
-    result = await c.put(endpoint, json={"version": 0, "document": {
-        "nodes": [group, *nodes], "background": "lines", "frame": {"width": 1080, "height": 1920},
-    }})
+    result = await c.put(
+        endpoint,
+        json={
+            "version": 0,
+            "document": {
+                "nodes": [group, *nodes],
+                "background": "lines",
+                "frame": {"width": 1080, "height": 1920},
+            },
+        },
+    )
     assert result.status_code == 200
     assert result.json()["document"]["background"] == "lines"
     assert result.json()["document"]["frame"] == {"width": 1080, "height": 1920}
-    assert (await c.put(endpoint, json={"version": 1, "document": {
-        "nodes": [group, *nodes], "frame": {"width": 200, "height": 1920},
-    }})).status_code == 422
+    assert (
+        await c.put(
+            endpoint,
+            json={
+                "version": 1,
+                "document": {
+                    "nodes": [group, *nodes],
+                    "frame": {"width": 200, "height": 1920},
+                },
+            },
+        )
+    ).status_code == 422
     invalid_group = {**group, "member_ids": [nodes[0]["id"], str(uuid4())]}
-    assert (await c.put(endpoint, json={"version": 1, "document": {
-        "nodes": [invalid_group, *nodes],
-    }})).status_code == 422
-    assert (await c.put(endpoint, json={"version": 1, "document": {
-        "nodes": [group, *nodes], "edges": [{
-            "id": str(uuid4()), "source": group["id"], "target": nodes[0]["id"],
-        }],
-    }})).status_code == 422
+    assert (
+        await c.put(
+            endpoint,
+            json={
+                "version": 1,
+                "document": {
+                    "nodes": [invalid_group, *nodes],
+                },
+            },
+        )
+    ).status_code == 422
+    assert (
+        await c.put(
+            endpoint,
+            json={
+                "version": 1,
+                "document": {
+                    "nodes": [group, *nodes],
+                    "edges": [
+                        {
+                            "id": str(uuid4()),
+                            "source": group["id"],
+                            "target": nodes[0]["id"],
+                        }
+                    ],
+                },
+            },
+        )
+    ).status_code == 422
 
 
 @pytest.mark.anyio
@@ -369,6 +464,9 @@ async def test_private_asset_references_and_cleanup(media_client: AsyncClient) -
 async def test_cross_account_isolation(media_client: AsyncClient) -> None:
     c = media_client
     p = (await c.post("projects", json={"name": "私有作品"})).json()["id"]
+    linked = (
+        await c.post(f"projects/{p}/assets", files={"file": ("linked.png", b"linked", "image/png")})
+    ).json()["id"]
     a = (await c.post("assets", files={"file": ("photo.png", b"image", "image/png")})).json()["id"]
     app = c._transport.app  # type: ignore[attr-defined]
     session = app.dependency_overrides[get_session]()
@@ -378,15 +476,28 @@ async def test_cross_account_isolation(media_client: AsyncClient) -> None:
     app.dependency_overrides[get_current_user] = lambda: other
     assert (await c.get("projects")).json() == []
     assert (await c.get("assets")).json()["total"] == 0
-    for route in [
-        f"projects/{p}",
-        f"projects/{p}/canvas",
-        f"projects/{p}/assets",
-        f"assets/{a}",
-        f"assets/{a}/file",
-    ]:
+    assert (await c.get(f"projects/{p}")).json()["read_only"] is True
+    assert (await c.get(f"projects/{p}/canvas")).json()["read_only"] is True
+    assert (await c.get(f"projects/{p}/assets")).status_code == 200
+    assert (await c.get(f"assets/{linked}/file")).content == b"linked"
+    assert (await c.delete(f"projects/{p}/assets/{linked}")).status_code == 404
+    for route in [f"assets/{a}", f"assets/{a}/file"]:
         assert (await c.get(route)).status_code == 404
+    document = (await c.get(f"projects/{p}/canvas")).json()["document"]
+    response = await c.put(f"projects/{p}/canvas", json={"version": 0, "document": document})
+    assert response.status_code == 404
+    assert (await c.patch(f"projects/{p}", json={"name": "越权改名"})).status_code == 404
+    response = await c.post(
+        f"projects/{p}/assets", files={"file": ("x.png", b"image", "image/png")}
+    )
+    assert response.status_code == 404
     assert (await c.post(f"assets/{a}/library")).status_code == 404
+    for kind in ("image", "video"):
+        response = await c.post(
+            f"projects/{p}/{kind}-generations",
+            json={"request_id": str(uuid4()), "node_id": str(uuid4())},
+        )
+        assert response.status_code == 404
     assert (await c.delete(f"projects/{p}")).status_code == 404
     assert (await c.delete(f"assets/{a}")).status_code == 404
 

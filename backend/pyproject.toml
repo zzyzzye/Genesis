@@ -24,6 +24,7 @@ dependencies = [
     "psycopg[binary]>=3.3.5",
     "docling-slim[format-docx,format-pdf]>=2.143.0,<3",
     "pwdlib[argon2]>=0.3.1",
+    "pillow>=13.0.0,<14",
     "pydantic-settings>=2.15.0",
     "pyjwt>=2.13.0",
     "pyyaml>=6.0.3",

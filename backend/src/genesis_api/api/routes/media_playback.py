@@ -37,7 +37,7 @@ def authorize_playback(
     授权一小时有效，并绑定原登录会话；退出后后续分段读取立即失效。
     过期后客户端通过同一接口重新授权，不重放生成请求。
     """
-    asset = service.asset_for(session, user.id, asset_id)
+    asset = service.readable_asset(session, user.id, asset_id)
     if asset.kind not in {"video", "audio"}:
         raise HTTPException(422, "该素材不支持音视频播放")
     if not (service.STORAGE_ROOT / str(asset.id)).is_file():
@@ -92,7 +92,7 @@ def stream_asset(
             raise ValueError
     except (jwt.PyJWTError, ValueError, TypeError, KeyError) as exc:
         raise HTTPException(401, "播放授权已过期，请重试加载素材") from exc
-    asset = service.asset_for(session, user_id, asset_id)
+    asset = service.readable_asset(session, user_id, asset_id)
     path = service.STORAGE_ROOT / str(asset.id)
     if not path.is_file():
         raise HTTPException(404, "素材文件不可用")

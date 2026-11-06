@@ -10,7 +10,7 @@ export type Edge = { id: string; source: string; target: string }
 export type VideoFrame = { width: number; height: number }
 export const defaultVideoFrame = (): VideoFrame => ({ width: 1920, height: 1080 })
 export type Document = { nodes: Node[]; edges: Edge[]; background: 'dots' | 'lines' | 'none'; frame: VideoFrame; viewport: { x: number; y: number; zoom: number } }
-export type Snapshot = { version: number; document: Document }
+export type Snapshot = { version: number; document: Document; read_only?: boolean }
 export const emptyDocument = (): Document => ({ nodes: [], edges: [], background: 'dots', frame: defaultVideoFrame(), viewport: { x: 0, y: 0, zoom: 1 } })
 export const base = `${import.meta.env.VITE_API_BASE_URL ?? '/api/v1'}/media`
 export class MediaError extends Error {
@@ -26,10 +26,12 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
   }
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
-export async function fileBlob(asset: Pick<Asset, 'id'> & Partial<Asset>, signal?: AbortSignal): Promise<Blob> {
+export async function fileBlob(asset: Pick<Asset, 'id'> & Partial<Asset>, signal?: AbortSignal, thumbnail = false): Promise<Blob> {
   const headers = { Authorization: `Bearer ${getStoredAuthToken() ?? ''}` }
-  const response = await authFetch(`${base}/assets/${asset.id}/file`, { headers, signal })
+  const response = await authFetch(`${base}/assets/${asset.id}/${thumbnail ? 'thumbnail' : 'file'}`, { headers, signal })
   handleStudioUnauthorized(response.status, headers)
+  // SVG 等浏览器可展示、服务端不可缩图的格式仍保留原预览能力。
+  if (thumbnail && response.status === 422) return fileBlob(asset, signal)
   if (!response.ok) throw new Error('素材读取失败，请重试')
   return response.blob()
 }

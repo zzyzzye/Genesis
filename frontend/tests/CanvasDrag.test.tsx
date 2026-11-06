@@ -18,6 +18,22 @@ const node: Node = { id: 'moving', type: 'note', name: '调度便签', asset_id:
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); flow.props = null })
 
 describe('画布拖动同步', () => {
+  it('他人画布只读，允许缩放但不暴露编辑或生成入口，也不保存草稿', async () => {
+    const document: Document = { ...emptyDocument(), nodes: [node] }
+    const request = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document, read_only: true } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'readonly', name: '他人作品', version: 0 }))
+    render(<MemoryRouter><ProjectCanvas projectId="readonly" userId="viewer" /></MemoryRouter>)
+    await screen.findByText('只读画布 · 可平移和缩放')
+    expect(screen.queryByRole('textbox', { name: '便签内容' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('toolbar', { name: '创作工具' })).not.toBeInTheDocument()
+    expect(flow.props!.nodesDraggable).toBe(false)
+    expect(flow.props!.nodesConnectable).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: '放大画布' }))
+    expect(screen.getByLabelText('当前缩放比例')).toHaveTextContent('110%')
+    fireEvent.keyDown(window, { key: 'Delete' })
+    expect(screen.getByText('保留正文')).toBeInTheDocument()
+    expect(localStorage.getItem('genesis-media-draft:viewer:readonly')).toBeNull()
+    expect(request.mock.calls.every(([, method]) => method === undefined)).toBe(true)
+  })
   it('整组副本重映射成员、内部连线和引用，并保留外部上游', () => {
     const image: Node = { ...node, id: 'image', type: 'image' }
     const video: Node = { ...node, id: 'video', type: 'video', text: '@[图片](ref:image) @[图片](ref:outside)' }

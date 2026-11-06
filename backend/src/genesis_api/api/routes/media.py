@@ -5,7 +5,8 @@ from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from PIL import Image, UnidentifiedImageError
 from sqlalchemy import delete, func, select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
@@ -35,6 +36,7 @@ from genesis_api.media.schemas import (
     CanvasWrite,
     ProjectWrite,
 )
+from genesis_api.media.thumbnails import thumbnail
 
 router = APIRouter(prefix="/media", tags=["影音系统"])
 router.include_router(video_router)
@@ -152,20 +154,21 @@ def create_project(
 def get_project(
     project_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
-    """读取当前用户的作品摘要。
+    """读取作品摘要并标明当前登录用户是否仅可查看。
 
     Args:
         project_id: 要读取的作品 UUID。
-        user: 认证依赖提供的用户，用于限制作品归属。
+        user: 认证依赖提供的用户，用于判断写权限。
         session: 当前请求的查询会话。
 
     Returns:
         作品摘要，不包含完整画布。
 
     Raises:
-        HTTPException: 作品不存在或不属于当前用户，统一返回 404。
+        HTTPException: 作品不存在时返回 404。
     """
-    return service.project_data(service.project_for(session, user.id, project_id))
+    project = service.readable_project(session, project_id)
+    return {**service.project_data(project), "read_only": project.owner_id != user.id}
 
 
 @router.patch("/projects/{project_id}")
@@ -246,7 +249,7 @@ def delete_project(
 def canvas(
     project_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> dict[str, object]:
-    """读取已保存的完整画布及其版本。
+    """读取画布及版本；他人作品只读，且不触发迁移或保存。
 
     Args:
         project_id: 目标作品 UUID。
@@ -258,8 +261,11 @@ def canvas(
         客户端后续保存时需携带读到的版本。
 
     Raises:
-        HTTPException: 作品不存在或归属不符，返回 404。
+        HTTPException: 作品不存在时返回 404。
     """
+    project = service.readable_project(session, project_id)
+    if project.owner_id != user.id:
+        return {"version": project.version, "document": project.canvas, "read_only": True}
     project = service.project_for(session, user.id, project_id)
     previous = CanvasDocument.model_validate(project.canvas)
     document = detach_legacy_video_results(session, project, previous)
@@ -307,10 +313,10 @@ def assets(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 24,
 ) -> dict[str, object]:
-    """分页查询当前用户的作品素材或账户素材库。
+    """分页查询可浏览作品的关联素材，账户库查询仍仅限本人。
 
     Args:
-        user: 已认证用户，所有查询均限制素材归属。
+        user: 已认证用户，账户库查询限制素材归属。
         session: 当前请求会话。
         project_id: 有值时只查询该作品引用；None 时只查询账户库保留项。
         q: 素材名称查询片段，按普通文字处理 SQL 通配字符。
@@ -322,16 +328,14 @@ def assets(
         当前页素材展示数据及筛选后的总数。
 
     Raises:
-        HTTPException: 指定作品不存在或不属于用户，返回 404。
+        HTTPException: 指定作品不存在时返回 404。
     """
-    statement = select(MediaAsset).where(
-        MediaAsset.owner_id == user.id, MediaAsset.name.contains(q, autoescape=True)
-    )
+    statement = select(MediaAsset).where(MediaAsset.name.contains(q, autoescape=True))
     if project_id is not None:
-        service.project_for(session, user.id, project_id)
+        service.readable_project(session, project_id)
         statement = statement.join(ProjectAsset).where(ProjectAsset.project_id == project_id)
     else:
-        statement = statement.where(MediaAsset.in_library.is_(True))
+        statement = statement.where(MediaAsset.owner_id == user.id, MediaAsset.in_library.is_(True))
     if kind:
         statement = statement.where(MediaAsset.kind == kind)
     total = session.scalar(select(func.count()).select_from(statement.subquery()))
@@ -423,11 +427,31 @@ def get_asset(
     return service.asset_data(service.asset_for(session, user.id, asset_id))
 
 
+@router.get("/assets/{asset_id}/thumbnail")
+def asset_thumbnail(
+    asset_id: UUID, user: CurrentUserDependency, session: SessionDependency
+) -> Response:
+    """鉴权后返回图片缩略图；缓存命中也不能绕过当前素材权限。"""
+    asset = service.readable_asset(session, user.id, asset_id)
+    path = service.STORAGE_ROOT / str(asset.id)
+    if asset.kind != "image" or not path.is_file():
+        raise HTTPException(404, "图片素材不可用")
+    try:
+        content = thumbnail(path)
+    except (OSError, UnidentifiedImageError, Image.DecompressionBombError, ValueError):
+        raise HTTPException(422, "此图片无法生成缩略图") from None
+    return Response(
+        content,
+        media_type="image/webp",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
 @router.get("/assets/{asset_id}/file")
 def asset_file(
     asset_id: UUID, user: CurrentUserDependency, session: SessionDependency
 ) -> FileResponse:
-    """返回当前用户的素材文件，禁止共享缓存并关闭 MIME 嗅探。
+    """返回本人或作品关联的素材文件，禁止共享缓存并关闭 MIME 嗅探。
 
     Args:
         asset_id: 素材 UUID，文件路径仅按服务端标识构建。
@@ -440,7 +464,7 @@ def asset_file(
     Raises:
         HTTPException: 素材不属于用户、记录不存在或文件缺失，返回 404。
     """
-    asset = service.asset_for(session, user.id, asset_id)
+    asset = service.readable_asset(session, user.id, asset_id)
     path = service.STORAGE_ROOT / str(asset.id)
     if not path.is_file():
         raise HTTPException(404, "素材文件不可用")

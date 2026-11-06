@@ -8,8 +8,9 @@ import { connectReference, displayPrompt, imageMentionToken, imageReferenceNumbe
 import { defaultGenerationSettings, emptyDocument, type Node } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
 import { duplicateCanvasSelection } from '../src/pages/media/canvasOperations'
+import { clearImageCache } from '../src/pages/media/imagePreview'
 
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); clearImageCache(); vi.restoreAllMocks() })
 const source: Node = { id: '11111111-1111-4111-8111-111111111111', type: 'image', asset_id: 'asset', name: '生串上架', text: '', x: 0, y: 0, width: 360, height: 203 }
 const target: Node = { ...source, id: '22222222-2222-4222-8222-222222222222', type: 'video', asset_id: null, generation: defaultGenerationSettings() }
 
@@ -99,7 +100,7 @@ it('compositionend 之后到达的最终 DOM 输入仍以确认的中文提交',
   expect(textbox).toHaveTextContent('你')
 })
 
-it('候选显示真实缩略图，鼠标移动同步原生选中并提交对应节点，卸载释放预览', async () => {
+it('候选显示真实缩略图，鼠标移动同步原生选中并提交对应节点，卸载保留缓存', async () => {
   const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:reference-option')
   vi.spyOn(media, 'fileBlob').mockResolvedValue(new Blob(['image']))
@@ -122,7 +123,7 @@ it('候选显示真实缩略图，鼠标移动同步原生选中并提交对应�
     expect(change).toHaveBeenLastCalledWith(`${imageMentionToken('scene')} `)
   })
   unmount()
-  expect(revoke).toHaveBeenCalledWith('blob:reference-option')
+  expect(revoke).not.toHaveBeenCalled()
 })
 
 it('候选预览失败和素材未就绪仍保留名称及状态，不阻塞引用菜单', async () => {

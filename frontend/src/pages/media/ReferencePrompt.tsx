@@ -158,7 +158,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
           thumbnail.textContent = '图'
           thumbnail.title = state.error || '正在加载图片'
         }
-      }) : undefined
+      }, true) : undefined
       previews.set(entry.id, { dom, release })
       return dom
     }

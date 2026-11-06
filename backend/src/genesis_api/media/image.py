@@ -112,8 +112,8 @@ async def admit_task(
     Raises:
         HTTPException: 归属、版本、参考、模型或余额校验失败。
     """
-    headers(settings)
     project = service.project_for(session, user.id, project_id)
+    headers(settings)
     existing = session.get(ImageGeneration, data.request_id)
     if existing is not None:
         if (existing.owner_id, existing.project_id, existing.node_id) != (

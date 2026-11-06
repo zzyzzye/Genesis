@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { clearImageCache } from '../src/pages/media/imagePreview'
 import { useCanvas } from '../src/pages/media/useCanvas'
 import { ProjectCanvas } from '../src/pages/media/ProjectCanvas'
 import { MediaAssistant, type MediaCanvasPlan } from '../src/pages/media/MediaAssistant'
@@ -27,7 +28,7 @@ describe('作品画布', () => {
     vi.spyOn(ai, 'createAiConversation').mockResolvedValue({ id: 'media-conversation', title: '新对话', title_source: 'manual', created_at: '', updated_at: '' })
     vi.spyOn(ai, 'createAiChatRun').mockResolvedValue({ id: 'media-run', status: 'pending' })
   })
-  afterEach(() => { cleanup(); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks() })
+  afterEach(() => { cleanup(); clearImageCache(); localStorage.clear(); sessionStorage.clear(); vi.restoreAllMocks() })
   it.each(['image_generation', 'video'] as const)('%s 从独立素材页返回时创建参考，不覆盖生成节点', async type => {
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
     const asset = { id: 'reference-asset', name: '人物.png', kind: 'image' as const, mime_type: 'image/png', size: 4, in_library: true }
@@ -805,7 +806,7 @@ describe('作品画布', () => {
     expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveTextContent('frame.png')
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     expect(screen.queryByRole('combobox', { name: '生视频节点预览素材' })).not.toBeInTheDocument()
-    await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: assetId }), expect.any(AbortSignal)))
+    await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: assetId }), expect.any(AbortSignal), true))
     fireEvent.click(screen.getByRole('button', { name: '作品菜单' }))
     fireEvent.click(screen.getByRole('button', { name: '立即保存 / 重试' }))
     await waitFor(() => {
@@ -849,7 +850,7 @@ describe('作品画布', () => {
     }
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))
     expect(screen.queryByRole('combobox', { name: '生视频节点预览素材' })).not.toBeInTheDocument()
-    await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: asset.id }), expect.any(AbortSignal)))
+    await waitFor(() => expect(media.fileBlob).toHaveBeenCalledWith(expect.objectContaining({ id: asset.id }), expect.any(AbortSignal), true))
     expect(request).toHaveBeenCalledWith('/projects/project/assets/reference', 'POST', { asset_id: asset.id })
     fireEvent.click(screen.getByRole('button', { name: '作品素材' }))
     // 素材加载有防抖；并行回归下给真实异步渲染留出时间，不跳过结果断言。

@@ -13,6 +13,8 @@ function withoutNodeNames(document: Document): string {
 export function useCanvas(projectId: string, userId: string) {
   const [document, setDocument] = useState<Document>(emptyDocument)
   const [ready, setReady] = useState(false)
+  const [readOnly, setReadOnly] = useState(true)
+  const canWrite = useRef(false)
   const [status, setStatus] = useState('正在打开…')
   const [conflict, setConflict] = useState(false)
   const [dirty, setDirty] = useState(false)
@@ -26,6 +28,7 @@ export function useCanvas(projectId: string, userId: string) {
   const future = useRef<Document[]>([])
   const key = `genesis-media-draft:${userId}:${projectId}`
   const apply = useCallback((next: Document, record = true) => {
+    if (!canWrite.current) return
     if (record) { history.current.push(current.current); history.current = history.current.slice(-60); future.current = [] }
     current.current = next; setDocument(next); setDirty(true)
     if (!blocked.current) setStatus('有待保存修改')
@@ -33,12 +36,14 @@ export function useCanvas(projectId: string, userId: string) {
   }, [key])
   const load = useCallback(async (restoreDraft = false) => {
     const snapshot = await api<Snapshot>(`/projects/${projectId}/canvas`)
+    canWrite.current = snapshot.read_only !== true
+    setReadOnly(!canWrite.current)
     const serverDocument = completeDocument(snapshot.document)
     serverBase.current = serverDocument
     version.current = snapshot.version; saved.current = JSON.stringify(serverDocument)
     let next = serverDocument
     blocked.current = false; setConflict(false)
-    if (restoreDraft) {
+    if (restoreDraft && canWrite.current) {
       try {
         const raw = localStorage.getItem(key)
         const draft = raw ? JSON.parse(raw) as Snapshot : null
@@ -59,6 +64,7 @@ export function useCanvas(projectId: string, userId: string) {
   }, [key, projectId])
   useEffect(() => { let active = true; void Promise.resolve().then(async () => { if (active) await load(true) }).catch((reason: Error) => { if (active) setStatus(reason.message) }); return () => { active = false } }, [load])
   const save = useCallback(async (): Promise<void> => {
+    if (!canWrite.current) return
     while (pending.current) await pending.current
     if (blocked.current) throw new Error('请先处理保存冲突')
     const next = current.current
@@ -143,17 +149,22 @@ export function useCanvas(projectId: string, userId: string) {
     try { await operation } finally { pending.current = null }
   }, [key, projectId])
   useEffect(() => {
-    if (!ready || !dirty || conflict) return
+    if (!ready || readOnly || !dirty || conflict) return
     const timeout = window.setTimeout(() => { void save().catch(() => undefined) }, 700)
     return () => window.clearTimeout(timeout)
-  }, [document, ready, dirty, conflict, save])
+  }, [document, ready, readOnly, dirty, conflict, save])
   useEffect(() => {
-    const warn = (event: BeforeUnloadEvent) => { if (JSON.stringify(current.current) !== saved.current) event.preventDefault() }
+    const warn = (event: BeforeUnloadEvent) => { if (canWrite.current && JSON.stringify(current.current) !== saved.current) event.preventDefault() }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [])
   function checkpoint() { history.current.push(current.current); history.current = history.current.slice(-60); future.current = [] }
   function undo() { const previous = history.current.pop(); if (previous) { future.current.push(current.current); apply(previous, false) } }
   function redo() { const next = future.current.pop(); if (next) { history.current.push(current.current); apply(next, false) } }
-  return { document, current, ready, status, conflict, apply, save, load, syncNodeNames, syncCanvas, undo, redo, checkpoint }
+  function view(viewport: Document['viewport']) {
+    if (canWrite.current) { apply({ ...current.current, viewport }, false); return }
+    const next = { ...current.current, viewport }
+    current.current = next; setDocument(next)
+  }
+  return { document, current, ready, readOnly, view, status, conflict, apply, save, load, syncNodeNames, syncCanvas, undo, redo, checkpoint }
 }

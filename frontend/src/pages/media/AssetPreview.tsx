@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Download, ImageOff, ImagePlus, RotateCcw } from 'lucide-react'
 import { type Asset, playbackUrl } from './api'
 import { getStoredAuthToken } from '../../lib/auth'
-import { subscribeImage } from './imagePreview'
+import { invalidateImage, subscribeImage } from './imagePreview'
 
 const MediaPlayer = lazy(() => import('./MediaPlayer'))
 
@@ -17,9 +17,9 @@ function AssetPreviewContent({ asset, controls = false, thumbnail = false, passi
   const streaming = asset.kind === 'video' || asset.kind === 'audio'
   const assetId = asset.id
   const session = getStoredAuthToken()
-  const retry = () => { setUrl(''); setError(''); setAttempt((value) => value + 1) }
+  const retry = () => { if (!streaming) invalidateImage(assetId, session, thumbnail); setUrl(''); setError(''); setAttempt((value) => value + 1) }
   useEffect(() => {
-    if (!streaming) return subscribeImage(assetId, session, state => { setUrl(state.url); setError(state.error) })
+    if (!streaming) return subscribeImage(assetId, session, state => { setUrl(state.url); setError(state.error) }, thumbnail)
     let active = true
     const controller = new AbortController()
     const load = playbackUrl(assetId, controller.signal)
@@ -29,7 +29,7 @@ function AssetPreviewContent({ asset, controls = false, thumbnail = false, passi
     }).catch(() => { if (active) setError('素材加载失败') })
     return () => { active = false; controller.abort() }
     // 改名与目录刷新不应重新下载同一素材。
-  }, [assetId, streaming, attempt, session])
+  }, [assetId, streaming, attempt, session, thumbnail])
   return <div className={`media-preview${thumbnail ? ' is-thumbnail' : ''}`} onPointerDown={(event) => { if ((event.target as HTMLElement).closest('video,audio,a,button,.media-player-shell')) event.stopPropagation() }}>
     {thumbnail && (error || !url) ? <div className="media-thumbnail-placeholder">
       {error ? passive ? <ImageOff size={20} role="img" aria-label="预览暂不可用" /> : <button type="button" className="media-thumbnail-retry nodrag nopan" aria-label={`重试预览：${asset.name}`} title={`${error}，点击重试`} onClick={retry}><RotateCcw size={18} strokeWidth={1.6} aria-hidden="true" /></button> : <ImagePlus size={20} strokeWidth={1.6} role="img" aria-label={`正在加载预览：${asset.name}`} />}

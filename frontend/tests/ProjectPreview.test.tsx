@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectCover, ProjectMonitor } from '../src/pages/media/ProjectPreview'
 import * as media from '../src/pages/media/api'
+import { clearImageCache } from '../src/pages/media/imagePreview'
 
 const project = { id: 'one', name: '雨后的城市', version: 1, updated_at: '2026-10-01T08:00:00Z' }
 const first: media.Asset = { id: 'frame-one', name: '雨夜.png', kind: 'image', mime_type: 'image/png', size: 1024, in_library: false }
@@ -20,7 +21,7 @@ describe('项目画面监看', () => {
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(revoke)
     vi.spyOn(media, 'fileBlob').mockResolvedValue(new Blob(['image']))
   })
-  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
+  afterEach(() => { act(() => clearImageCache()); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 
   it('只读取项目图片，切换真实画面并保留画布和素材入口', async () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ items: [first, second], total: 2 })
@@ -33,11 +34,11 @@ describe('项目画面监看', () => {
     expect(screen.getByRole('button', { name: `预览画面：${second.name}` })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('link', { name: '进入画布' })).toHaveAttribute('href', '/media/projects/one/canvas')
     expect(screen.getByRole('link', { name: '2 张图片' })).toHaveAttribute('href', '/media/projects/one/assets')
-    // 缩略图仍订阅同一图片，切换大画面不能提前释放共享地址。
+    // 原图和缩略图独立缓存，关闭监看也不立即释放。
     expect(revoke).not.toHaveBeenCalled()
-    expect(media.fileBlob).toHaveBeenCalledTimes(2)
+    expect(media.fileBlob).toHaveBeenCalledTimes(4)
     unmount()
-    expect(revoke).toHaveBeenCalledTimes(2)
+    expect(revoke).not.toHaveBeenCalled()
   })
 
   it('预览读取失败可以重试，项目与入口仍然可用', async () => {

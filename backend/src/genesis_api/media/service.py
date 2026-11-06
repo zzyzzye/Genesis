@@ -123,6 +123,27 @@ def sync_asset_names(
     )
 
 
+def readable_project(session: Session, project_id: UUID) -> MediaProject:
+    """供已登录用户浏览作品；不授予修改权限，也不执行读取时迁移。"""
+    project = session.get(MediaProject, project_id)
+    if project is None:
+        raise HTTPException(404, "作品不存在")
+    return project
+
+
+def readable_asset(session: Session, viewer_id: UUID, asset_id: UUID) -> MediaAsset:
+    """允许读取自己的素材或作品已引用的素材，账户库未引用素材仍私有。"""
+    asset = session.get(MediaAsset, asset_id)
+    if asset is None:
+        raise HTTPException(404, "素材不存在")
+    linked = session.scalar(
+        select(ProjectAsset.asset_id).where(ProjectAsset.asset_id == asset_id).limit(1)
+    )
+    if asset.owner_id != viewer_id and linked is None:
+        raise HTTPException(404, "素材不存在")
+    return asset
+
+
 def project_for(session: Session, owner_id: UUID, project_id: UUID) -> MediaProject:
     """读取并锁定当前用户的作品，不暴露其他用户的记录是否存在。
 
