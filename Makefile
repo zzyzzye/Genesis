@@ -31,7 +31,7 @@ check: lint test build
 docker-up: docker-dev
 
 docker-dev:
-	$(DEV_COMPOSE) up -d --build
+	$(DEV_COMPOSE) up -d --no-build
 
 docker-down:
 	$(DEV_COMPOSE) down

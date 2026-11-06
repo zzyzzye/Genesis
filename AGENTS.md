@@ -7,6 +7,9 @@
 
 # 项目约定
 
+- 严禁在本地打包，包括 `npm run build`、`vite build`、`uv build`、`make build`、`make docker-prod`、`docker build`、`docker compose build` 和带 `--build` 的启动命令；不得以验证、测试或性能对比为由在本地执行，也不得在本地容器中绕过此限制。此规则优先于其他要求运行构建检查的约定。
+- 本地直接运行开发服务，复用已有 Docker Compose 开发容器及热更新；修改源码后直接验证，不重复构建镜像或另起服务。工程检查使用不产出发布包的 lint、类型检查和测试。
+- 生产打包仅在部署服务器或 CI 中执行。部署前先判断变更范围：未变化的服务复用已有镜像；仅重启不构建；配置变更优先重建相应容器，只有影响镜像内容的变更才构建对应服务，禁止无差别全量打包。
 - 本项目采用 Monorepo 结构：`frontend/` 为 React 前端，`backend/` 为 FastAPI 后端。
 - 默认使用 Docker Compose 运行开发环境；本地仅保留源码、配置和依赖锁文件。
 - 前后端服务必须通过 Docker Compose 启动、重启和验证，禁止直接在本机启动服务或使用本机进程替代容器服务。
