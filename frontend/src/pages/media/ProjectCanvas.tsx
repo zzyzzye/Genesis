@@ -22,7 +22,7 @@ import {
   type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { flushSync } from 'react-dom'
 import { AnimatePresence, motion, useIsPresent } from 'motion/react'
 import { canvasEditorTransition, useLiveReducedMotion } from '../../lib/motion'
@@ -43,6 +43,7 @@ import { ProjectDialog } from './MediaHome'
 import type { MediaAssistantNode, MediaCanvasActions, MediaCanvasPlan } from './MediaAssistant'
 import { useCanvas } from './useCanvas'
 import { arrangeCanvas } from './canvasLayout'
+import { createCanvasNodeReconciler, indexCanvasReferences } from './canvasGraph'
 import { applyCanvasNodeChanges, audioAssetNodeSize, defaultNodeName, duplicateCanvasSelection, generationNodeSize, groupSelection, isGenerationNode, nodeTypeLabel, removeSelection, resizedNodeDimensions, ungroupSelection } from './canvasOperations'
 
 type CanvasNodeData = {
@@ -381,7 +382,10 @@ function CanvasNodeView({ id, type, data, selected }: NodeProps<CanvasFlowNode>)
   </article>
 }
 
-const nodeTypes = { asset: CanvasNodeView, note: CanvasNodeView, text: CanvasNodeView, shape: CanvasNodeView, group: CanvasNodeView, video: GenerationNodeView, image_generation: GenerationNodeView, audio_generation: GenerationNodeView, video_asset: MediaAssetNodeView, image: MediaAssetNodeView, audio: MediaAssetNodeView }
+const MemoCanvasNode = memo(CanvasNodeView)
+const MemoGenerationNode = memo(GenerationNodeView)
+const MemoMediaAssetNode = memo(MediaAssetNodeView)
+const nodeTypes = { asset: MemoCanvasNode, note: MemoCanvasNode, text: MemoCanvasNode, shape: MemoCanvasNode, group: MemoCanvasNode, video: MemoGenerationNode, image_generation: MemoGenerationNode, audio_generation: MemoGenerationNode, video_asset: MemoMediaAssetNode, image: MemoMediaAssetNode, audio: MemoMediaAssetNode }
 
 function ReadOnlyNode({ data }: NodeProps<CanvasFlowNode>) {
   return <div className={`media-node media-readonly-node ${data.source.type === 'note' ? 'is-note' : ''}`}>
@@ -389,17 +393,20 @@ function ReadOnlyNode({ data }: NodeProps<CanvasFlowNode>) {
     {data.asset ? <AssetPreview asset={data.asset} controls /> : <p>{displayPrompt(data.source.text, data.references)}</p>}
   </div>
 }
-const readOnlyNodeTypes = Object.fromEntries(Object.keys(nodeTypes).map(type => [type, ReadOnlyNode]))
+const MemoReadOnlyNode = memo(ReadOnlyNode)
+const readOnlyNodeTypes = Object.fromEntries(Object.keys(nodeTypes).map(type => [type, MemoReadOnlyNode]))
 const edgeTypes = { reference: CanvasReferenceEdge }
 export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCanvasApplyChange, onAgentActionsChange }: { projectId: string; userId: string; onAgentNodeChange?: (node: MediaAssistantNode | null) => void; onAgentCanvasApplyChange?: (apply: ((plan: MediaCanvasPlan) => void) | null) => void; onAgentActionsChange?: (actions: MediaCanvasActions | null) => void }) {
   const navigate = useNavigate()
   const location = useLocation()
   const canvas = useCanvas(projectId, userId)
+  const { nodes: documentNodes, edges: documentEdges, frame: documentFrame, viewport: documentViewport } = canvas.document
+  const [reconcileNodes] = useState(() => createCanvasNodeReconciler<CanvasFlowNode>())
   const [project, setProject] = useState<Project | null>(null)
   const [assets, setAssets] = useState<Record<string, Asset>>({})
   const [error, setError] = useState('')
   const onGenerationTask = useGenerationResults(projectId, canvas, setAssets)
-  const { save: saveCanvas, current: canvasDocument, syncNodeNames, syncCanvas } = canvas
+  const { save: saveCanvas, current: canvasDocument, apply: applyDocument, checkpoint, flushDraft, view: viewCanvas, syncNodeNames, syncCanvas } = canvas
   useEffect(() => {
     if (!canvas.ready || canvas.readOnly) { onAgentActionsChange?.(null); return }
     onAgentActionsChange?.({save:saveCanvas,getDocument:() => canvasDocument.current,syncCanvas,syncNodeNames:async () => {
@@ -490,47 +497,48 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const beginInteraction = useCallback(() => {
     if (interactionActive.current) return
     interactionActive.current = true
-    canvas.checkpoint()
-  }, [canvas])
+    checkpoint()
+  }, [checkpoint])
 
   const endInteraction = useCallback(() => {
     interactionActive.current = false
-  }, [])
+    flushDraft()
+  }, [flushDraft])
 
   const updateText = useCallback((id: string, text: string) => {
-    const current = canvas.current.current
-    canvas.apply(syncReferenceModes({
+    const current = canvasDocument.current
+    applyDocument(syncReferenceModes({
       ...current,
       nodes: current.nodes.map((node) => node.id === id ? { ...node, text } : node),
     }), false)
-  }, [canvas])
+  }, [applyDocument, canvasDocument])
 
   const patchNode = useCallback((id: string, patch: Partial<Node>, record = true) => {
-    const current = canvas.current.current
+    const current = canvasDocument.current
     const target = current.nodes.find(node => node.id === id)
     const renameAsset = patch.name !== undefined && target?.asset_id && ['image', 'video_asset', 'audio', 'asset'].includes(target.type)
-    canvas.apply({ ...current, nodes: current.nodes.map((node) => node.id === id ? { ...node, ...patch } : renameAsset && node.asset_id === target.asset_id && ['image', 'video_asset', 'audio', 'asset'].includes(node.type) ? { ...node, name:patch.name } : node) }, record)
-  }, [canvas])
+    applyDocument({ ...current, nodes: current.nodes.map((node) => node.id === id ? { ...node, ...patch } : renameAsset && node.asset_id === target.asset_id && ['image', 'video_asset', 'audio', 'asset'].includes(node.type) ? { ...node, name:patch.name } : node) }, record)
+  }, [applyDocument, canvasDocument])
 
   const changeReference = useCallback((id: string, sourceId: string, connected: boolean) => {
-    const current = canvas.current.current
+    const current = canvasDocument.current
     if (id === sourceId || !current.nodes.some((node) => node.id === sourceId && node.type !== 'group')) return
     const existing = current.edges.some((edge) => edge.source === sourceId && edge.target === id)
     if (existing === connected) return
     const edges = connected ? [...current.edges, { id: crypto.randomUUID(), source: sourceId, target: id }] : current.edges.filter((edge) => edge.source !== sourceId || edge.target !== id)
-    canvas.apply(connected ? connectReference(current, sourceId, id) : syncReferenceModes({ ...current, edges }))
-  }, [canvas])
+    applyDocument(connected ? connectReference(current, sourceId, id) : syncReferenceModes({ ...current, edges }))
+  }, [applyDocument, canvasDocument])
 
   const openAssets = useCallback(() => {
-    void canvas.save().then(() => navigate(`/media/projects/${projectId}/assets`)).catch((reason: Error) => setError(reason.message))
-  }, [canvas, navigate, projectId])
+    void saveCanvas().then(() => navigate(`/media/projects/${projectId}/assets`)).catch((reason: Error) => setError(reason.message))
+  }, [saveCanvas, navigate, projectId])
 
   const openNodeAssets = useCallback((id: string, kind: 'image' | 'audio' | 'video') => {
-    void canvas.save().then(() => setAssetTarget({ id, kind, allowImageForVideo: canvas.current.current.nodes.some((node) => node.id === id && node.type === 'video') })).catch((reason: Error) => setError(reason.message))
-  }, [canvas])
+    void saveCanvas().then(() => setAssetTarget({ id, kind, allowImageForVideo: canvasDocument.current.nodes.some((node) => node.id === id && node.type === 'video') })).catch((reason: Error) => setError(reason.message))
+  }, [saveCanvas, canvasDocument])
 
   const assignNodeAsset = useCallback((id: string, asset: Asset) => {
-    const current = canvas.current.current
+    const current = canvasDocument.current
     const target = current.nodes.find((node) => node.id === id)
     if (!target) throw new Error('目标节点已移除，请重新选择。')
     const asReference = target.type === 'image_generation' && asset.kind === 'image' || target.type === 'video' && ['image', 'video'].includes(asset.kind)
@@ -543,8 +551,8 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     // 上传和素材选择都建立可见参考连线，结果预览继续独立保留。
     const reference: Node = {id:sourceId,type:asset.kind === 'video' ? 'video_asset' : 'image',name:asset.name.slice(0,120),asset_id:asset.id,text:'',x:Math.max(-1000000,target.x-480),y:Math.min(1000000,target.y+references*312),width:360,height:280}
     const document = connectReference({ ...current, nodes:[...current.nodes, reference] }, sourceId, id)
-    canvas.apply(document)
-  }, [canvas, patchNode])
+    applyDocument(document)
+  }, [applyDocument, canvasDocument, patchNode])
 
   const uploadNodeAsset = useCallback(async (id: string, kind: Asset['kind'], file: File) => {
     const label = kind === 'image' ? '图片' : kind === 'video' ? '视频' : '音频'
@@ -569,7 +577,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   }, [assignNodeAsset, projectId])
 
   useEffect(() => {
-    const selectedNode = selected.length === 1 ? canvas.document.nodes.find((node) => node.id === selected[0]) : undefined
+    const selectedNode = selected.length === 1 ? documentNodes.find((node) => node.id === selected[0]) : undefined
     onAgentNodeChange?.(selectedNode ? {
       id: selectedNode.id,
       type: selectedNode.type,
@@ -578,9 +586,9 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       assetId: selectedNode.asset_id,
       durationSeconds: selectedNode.duration_seconds,
       model: selectedNode.generation?.model,
-      mode: selectedNode.type === 'image_generation' ? imageReferences(incomingReferences(canvas.document, selectedNode.id, assets)).length ? 'reference' : 'text' : selectedNode.generation?.mode,
+      mode: selectedNode.type === 'image_generation' ? imageReferences(incomingReferences({ nodes: documentNodes, edges: documentEdges }, selectedNode.id, assets)).length ? 'reference' : 'text' : selectedNode.generation?.mode,
     } : null)
-  }, [assets, canvas.document, onAgentNodeChange, selected])
+  }, [assets, documentNodes, documentEdges, onAgentNodeChange, selected])
 
   useEffect(() => () => onAgentNodeChange?.(null), [onAgentNodeChange])
 
@@ -607,18 +615,21 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   }, [])
 
   const convertToVideo = useCallback((id: string) => {
-    const current = canvas.current.current
+    const current = canvasDocument.current
     const original = current.nodes.find((node) => node.id === id && node.type === 'shape' && !node.text.trim())
     if (!original) return
     const name = original.name && !/^形状 \d+$/.test(original.name) ? original.name : defaultNodeName('video', current.nodes)
     const converted: Node = { ...original, type: 'video', name, duration_seconds: 5, ...generationNodeSize }
     const next = { ...current, nodes: current.nodes.map((node) => node.id === id ? converted : node) }
-    canvas.apply(next)
+    applyDocument(next)
     setSelected([id])
     setSelectedEdges([])
-  }, [canvas])
+  }, [applyDocument, canvasDocument])
 
-  const flowNodes = useMemo<CanvasFlowNode[]>(() => canvas.document.nodes.map((node) => ({
+  const referenceIndex = useMemo(() => indexCanvasReferences(documentNodes, documentEdges, assets), [documentNodes, documentEdges, assets])
+  const selectedIds = useMemo(() => new Set(selected), [selected])
+  const closeEditor = useCallback(() => setSelected([]), [])
+  const flowNodes = useMemo<CanvasFlowNode[]>(() => reconcileNodes(documentNodes.map((node) => ({
     id: node.id,
     type: node.type,
     position: { x: node.x, y: node.y },
@@ -626,14 +637,14 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     height: node.height,
     // 节点外框严格使用文档尺寸，重建受控节点时也保留框架所需的尺寸信息。
     measured: { width: node.width, height: node.height },
-    dragging: draggingNode && selected.includes(node.id),
+    dragging: draggingNode && selectedIds.has(node.id),
     // 受控节点预设的命中坐标须与 CSS 圆点一致，避免连线仍吸附旧的 8px 位置。
     handles: node.type !== 'group' ? [
       { type: 'target', position: Position.Left, x: -16, y: node.height / 2 + (isGenerationNode(node) ? 21 : 0) - 16, width: 32, height: 32 },
       { type: 'source', position: Position.Right, x: node.width - 16, y: node.height / 2 + (isGenerationNode(node) ? 21 : 0) - 16, width: 32, height: 32 },
     ] : undefined,
-    selected: selected.includes(node.id),
-    zIndex: selected.includes(node.id) ? 2 : node.type === 'group' ? 0 : 1,
+    selected: selectedIds.has(node.id),
+    zIndex: selectedIds.has(node.id) ? 2 : node.type === 'group' ? 0 : 1,
     dragHandle: '.media-node-drag-handle, .media-node-drag-surface',
     ariaLabel: node.name || nodeTypeLabel(node.type),
     data: {
@@ -643,11 +654,11 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       source: node,
       asset: assets[node.asset_id ?? ''],
       assetsLoading,
-      references: incomingReferences(canvas.document, node.id, assets),
-      referenceCandidates: canvas.document.nodes.filter((source) => source.id !== node.id && source.type !== 'group' && !canvas.document.edges.some((edge) => edge.source === source.id && edge.target === node.id)),
+      references: referenceIndex.references.get(node.id) ?? [],
+      referenceCandidates: selected.length === 1 && selected[0] === node.id && !nodeMenu && !contextMenu ? documentNodes.filter(source => source.id !== node.id && source.type !== 'group' && !referenceIndex.incoming.get(node.id)?.has(source.id)) : [],
       onReferenceChange: changeReference,
-      frame: canvas.document.frame,
-      zoom: canvas.document.viewport.zoom,
+      frame: documentFrame,
+      zoom: documentViewport.zoom,
       onTextChange: updateText,
       onPatch: patchNode,
       onOpenAssets: openAssets,
@@ -657,9 +668,9 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       onInteractionStart: beginInteraction,
       onInteractionEnd: endInteraction,
       editorOpen: selected.length === 1 && selected[0] === node.id && !nodeMenu && !contextMenu,
-      onCloseEditor: () => setSelected([]),
+      onCloseEditor: closeEditor,
     },
-  })), [assets, assetsLoading, beginInteraction, canvas.document, canvas.save, changeReference, contextMenu, convertToVideo, draggingNode, endInteraction, nodeMenu, onGenerationTask, openAssets, openNodeAssets, patchNode, projectId, selected, updateText, uploadNodeAsset])
+  }))), [assets, assetsLoading, beginInteraction, documentNodes, documentFrame, documentViewport.zoom, referenceIndex, reconcileNodes, closeEditor, canvas.save, changeReference, contextMenu, convertToVideo, draggingNode, endInteraction, nodeMenu, onGenerationTask, openAssets, openNodeAssets, patchNode, projectId, selected, selectedIds, updateText, uploadNodeAsset])
 
   const flowEdges = useMemo<FlowEdge[]>(() => canvas.document.edges.map((edge) => ({
     ...edge,
@@ -847,25 +858,25 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     const positionChanged = changes.some((change) => change.type === 'position' && Boolean(change.position))
     if (!positionChanged && !changes.some((change) => change.type === 'remove' || change.type === 'dimensions' && Boolean(change.setAttributes))) return
     const apply = () => {
-      const current = canvas.current.current
+      const current = canvasDocument.current
       const next = applyCanvasNodeChanges(current, changes)
       if (next === current) return
-      if (!interactionActive.current) canvas.checkpoint()
-      canvas.apply(next, false)
+      if (!interactionActive.current) checkpoint()
+      applyDocument(next, false)
     }
     // 原生拖动事件在下一次鼠标移动前提交画面，避免受控节点用较早的坐标回绘。
     // 测量事件可能来自 React effect，不能同步刷新。
     if (changes.some((change) => change.type === 'position' && change.position && change.dragging !== undefined)) flushSync(apply)
     else apply()
-  }, [canvas])
+  }, [applyDocument, checkpoint, canvasDocument])
 
   const onEdgesChange = useCallback((changes: EdgeChange<FlowEdge>[]) => {
     const next = applyEdgeChanges(changes, flowEdges)
     if (changes.some((change) => change.type === 'select' || change.type === 'remove')) setSelectedEdges(next.filter((edge) => edge.selected).map((edge) => edge.id))
     if (!changes.some((change) => change.type === 'remove')) return
-    const current = canvas.current.current
-    canvas.apply(removeSelection(current, [], changes.flatMap(change => change.type === 'remove' ? [change.id] : [])))
-  }, [canvas, flowEdges])
+    const current = canvasDocument.current
+    applyDocument(removeSelection(current, [], changes.flatMap(change => change.type === 'remove' ? [change.id] : [])))
+  }, [applyDocument, canvasDocument, flowEdges])
 
   const onConnect = useCallback(({ source, target }: Connection) => {
     if (!source || !target || source === target) return
@@ -1035,11 +1046,11 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     finally { setUploadProgress(null) }
   }
 
-  function updateViewport(viewport: Viewport) {
-    const current = canvas.current.current
+  const updateViewport = useCallback((viewport: Viewport) => {
+    const current = canvasDocument.current
     if (current.viewport.x === viewport.x && current.viewport.y === viewport.y && current.viewport.zoom === viewport.zoom) return
-    canvas.view(viewport)
-  }
+    viewCanvas(viewport)
+  }, [canvasDocument, viewCanvas])
 
   function zoom(delta: number) {
     const current = canvas.current.current
@@ -1193,7 +1204,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         onSelectionDragStart={(event, nodes) => { if (nodes[0]) startNodeDrag(event, nodes[0], nodes) }}
         onSelectionDragStop={stopNodeDrag}
         onMoveStart={(event) => { if (event?.type === 'wheel') setWheelPanning(true) }}
-        onMoveEnd={() => setWheelPanning(false)}
+        onMoveEnd={() => { setWheelPanning(false); canvas.flushDraft() }}
         proOptions={{ hideAttribution: true }}
       >{canvas.document.background !== 'none' && <Background variant={canvas.document.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots} color="#383838" gap={24} size={1} />}{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#191919cc" nodeColor={(node) => node.selected ? '#c5c5c5' : '#686868'} />}</ReactFlow>}
       {draggingFile && <div className="media-canvas-drop" aria-hidden="true">松开鼠标，将素材放入画布</div>}

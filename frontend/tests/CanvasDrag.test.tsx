@@ -18,6 +18,19 @@ const node: Node = { id: 'moving', type: 'note', name: '调度便签', asset_id:
 afterEach(() => { cleanup(); localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); flow.props = null })
 
 describe('画布拖动同步', () => {
+  it('连续平移复用全部 Flow 节点，拖动只替换移动节点', async () => {
+    vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
+    const document: Document = { ...emptyDocument(), nodes: [node, { ...node, id: 'still', x: 500 }] }
+    vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'performance', name: '性能验收' }))
+    render(<MemoryRouter><ProjectCanvas projectId="performance" userId="user" /></MemoryRouter>)
+    await screen.findByTestId('rf__node-moving')
+    const before = flow.props!.nodes!
+    for (let index = 1; index <= 20; index++) act(() => { flow.props!.onViewportChange?.({ x: index, y: index, zoom: 1 }) })
+    expect(flow.props!.nodes).toBe(before)
+    act(() => { flow.props!.onNodesChange?.([{ type: 'position', id: 'moving', position: { x: 100, y: 200 }, dragging: true }]) })
+    expect(flow.props!.nodes![0]).not.toBe(before[0])
+    expect(flow.props!.nodes![1]).toBe(before[1])
+  })
   it('他人画布只读，允许缩放但不暴露编辑或生成入口，也不保存草稿', async () => {
     const document: Document = { ...emptyDocument(), nodes: [node] }
     const request = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document, read_only: true } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'readonly', name: '他人作品', version: 0 }))

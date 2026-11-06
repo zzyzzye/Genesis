@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
 import { api, MediaError, type Asset, type Node } from './api'
 import type { GenerationTask } from './VideoGeneration'
 import type { useCanvas } from './useCanvas'
@@ -52,10 +52,10 @@ export function useGenerationResults(projectId: string, canvas: ReturnType<typeo
     if (nodes.length !== document.nodes.length || nodes.some((node, index) => node !== document.nodes[index])) apply({ ...document,nodes,edges }, !existing.length)
   }, [documentRef, apply])
 
-  const pending = JSON.stringify(canvas.document.nodes.flatMap(node => {
+  const pending = useMemo(() => JSON.stringify(canvas.document.nodes.flatMap(node => {
     const result = node.video_result ?? node.image_result
     return result && !node.asset_id && !['failed', 'download_failed', 'acknowledged'].includes(result.status) ? [[node.id, result.task_id, result.status, node.video_result ? 'video' : 'image']] : []
-  }))
+  })), [canvas.document.nodes])
   useEffect(() => {
     if (canvas.readOnly) return
     const entries = JSON.parse(pending) as [string, string, string, 'image' | 'video'][]

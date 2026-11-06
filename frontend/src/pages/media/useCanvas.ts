@@ -27,15 +27,32 @@ export function useCanvas(projectId: string, userId: string) {
   const history = useRef<Document[]>([])
   const future = useRef<Document[]>([])
   const key = `genesis-media-draft:${userId}:${projectId}`
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const draftPending = useRef(false)
+  const flushDraft = useCallback(() => {
+    if (draftTimer.current !== null) clearTimeout(draftTimer.current)
+    draftTimer.current = null
+    if (!draftPending.current || !canWrite.current) return
+    try {
+      localStorage.setItem(key, JSON.stringify({ version: version.current, document: current.current }))
+      draftPending.current = false
+    } catch { setStatus('本地暂存不可用，请保持页面打开') }
+  }, [key])
   const apply = useCallback((next: Document, record = true) => {
-    if (!canWrite.current) return
+    if (!canWrite.current || next === current.current) return
     if (record) { history.current.push(current.current); history.current = history.current.slice(-60); future.current = [] }
     current.current = next; setDocument(next); setDirty(true)
     if (!blocked.current) setStatus('有待保存修改')
-    try { localStorage.setItem(key, JSON.stringify({ version: version.current, document: next })) } catch { setStatus('本地暂存不可用，请保持页面打开') }
-  }, [key])
+    draftPending.current = true
+    if (draftTimer.current !== null) clearTimeout(draftTimer.current)
+    // 拖动、平移与连续输入仅更新内存；停顿后合并一次序列化和同步写盘。
+    if (record) flushDraft()
+    else draftTimer.current = setTimeout(flushDraft, 250)
+  }, [flushDraft])
   const load = useCallback(async (restoreDraft = false) => {
     const snapshot = await api<Snapshot>(`/projects/${projectId}/canvas`)
+    if (draftTimer.current !== null) clearTimeout(draftTimer.current)
+    draftPending.current = false
     canWrite.current = snapshot.read_only !== true
     setReadOnly(!canWrite.current)
     const serverDocument = completeDocument(snapshot.document)
@@ -65,6 +82,7 @@ export function useCanvas(projectId: string, userId: string) {
   useEffect(() => { let active = true; void Promise.resolve().then(async () => { if (active) await load(true) }).catch((reason: Error) => { if (active) setStatus(reason.message) }); return () => { active = false } }, [load])
   const save = useCallback(async (): Promise<void> => {
     if (!canWrite.current) return
+    flushDraft()
     while (pending.current) await pending.current
     if (blocked.current) throw new Error('请先处理保存冲突')
     const next = current.current
@@ -85,7 +103,7 @@ export function useCanvas(projectId: string, userId: string) {
         if (clean && canonical.nodes.some((node, index) => node !== next.nodes[index])) { current.current = canonical; setDocument(canonical) }
         setDirty(!clean); setStatus(clean ? '已保存' : '有待保存修改')
         if (!clean) setDocument({ ...current.current })
-        if (clean) localStorage.removeItem(key)
+        if (clean) { draftPending.current = false; localStorage.removeItem(key) }
         else localStorage.setItem(key, JSON.stringify({ version: version.current, document: current.current }))
       } catch (reason) {
         if (reason instanceof MediaError && reason.status === 409) { blocked.current = true; setConflict(true) }
@@ -94,7 +112,7 @@ export function useCanvas(projectId: string, userId: string) {
     })()
     pending.current = operation
     try { await operation } finally { pending.current = null }
-  }, [key, projectId])
+  }, [flushDraft, key, projectId])
   const syncCanvas = useCallback(async (): Promise<void> => {
     while (pending.current) await pending.current.catch(() => undefined)
     const operation = (async () => {
@@ -110,6 +128,7 @@ export function useCanvas(projectId: string, userId: string) {
       }
       version.current = snapshot.version; serverBase.current = next; saved.current = JSON.stringify(next)
       current.current = next; setDocument(next); setDirty(false); blocked.current = false; setConflict(false)
+      draftPending.current = false
       localStorage.removeItem(key); setStatus('已同步助手修改')
     })()
     pending.current = operation
@@ -142,6 +161,7 @@ export function useCanvas(projectId: string, userId: string) {
       blocked.current = false; setConflict(false)
       const dirty = JSON.stringify(next) !== saved.current
       setDirty(dirty); setStatus(dirty ? '已同步改名，有待保存本地修改' : '已保存')
+      draftPending.current = false
       if (dirty) localStorage.setItem(key, JSON.stringify({ version: snapshot.version, document: next }))
       else localStorage.removeItem(key)
     })()
@@ -154,17 +174,26 @@ export function useCanvas(projectId: string, userId: string) {
     return () => window.clearTimeout(timeout)
   }, [document, ready, readOnly, dirty, conflict, save])
   useEffect(() => {
-    const warn = (event: BeforeUnloadEvent) => { if (canWrite.current && JSON.stringify(current.current) !== saved.current) event.preventDefault() }
+    const warn = (event: BeforeUnloadEvent) => { flushDraft(); if (canWrite.current && JSON.stringify(current.current) !== saved.current) event.preventDefault() }
+    const hide = () => flushDraft()
+    const visibility = () => { if (window.document.visibilityState === 'hidden') flushDraft() }
     window.addEventListener('beforeunload', warn)
-    return () => window.removeEventListener('beforeunload', warn)
-  }, [])
-  function checkpoint() { history.current.push(current.current); history.current = history.current.slice(-60); future.current = [] }
-  function undo() { const previous = history.current.pop(); if (previous) { future.current.push(current.current); apply(previous, false) } }
-  function redo() { const next = future.current.pop(); if (next) { history.current.push(current.current); apply(next, false) } }
-  function view(viewport: Document['viewport']) {
+    window.addEventListener('pagehide', hide)
+    window.document.addEventListener('visibilitychange', visibility)
+    return () => {
+      flushDraft()
+      window.removeEventListener('beforeunload', warn)
+      window.removeEventListener('pagehide', hide)
+      window.document.removeEventListener('visibilitychange', visibility)
+    }
+  }, [flushDraft])
+  const checkpoint = useCallback(() => { if (!canWrite.current) return; history.current.push(current.current); history.current = history.current.slice(-60); future.current = [] }, [])
+  const undo = useCallback(() => { if (!canWrite.current) return; const previous = history.current.pop(); if (previous) { future.current.push(current.current); apply(previous, false) } }, [apply])
+  const redo = useCallback(() => { if (!canWrite.current) return; const next = future.current.pop(); if (next) { history.current.push(current.current); apply(next, false) } }, [apply])
+  const view = useCallback((viewport: Document['viewport']) => {
     if (canWrite.current) { apply({ ...current.current, viewport }, false); return }
     const next = { ...current.current, viewport }
     current.current = next; setDocument(next)
-  }
-  return { document, current, ready, readOnly, view, status, conflict, apply, save, load, syncNodeNames, syncCanvas, undo, redo, checkpoint }
+  }, [apply])
+  return { document, current, ready, readOnly, view, status, conflict, apply, save, load, syncNodeNames, syncCanvas, undo, redo, checkpoint, flushDraft }
 }
