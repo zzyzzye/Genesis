@@ -120,8 +120,8 @@ describe('作品画布', () => {
     const editor = EditorView.findFromDOM(textbox)!
     fireEvent.focus(textbox)
     act(() => { editor.dispatch({ changes: { from: 0, insert: '@' }, selection: { anchor: 1 } }); startCompletion(editor) })
-    await screen.findByText('选择后连接')
-    fireEvent.mouseDown(screen.getByRole('option', { name: '画布人物.png选择后连接' }))
+    await screen.findByText('选择后连接', { selector:'.media-reference-option-detail' })
+    fireEvent.mouseDown(screen.getByRole('option', { name: /画布人物.png.*选择后连接/ }))
     expect(screen.getByRole('button', { name: '引用参考：画布人物.png' })).toBeEnabled()
     expect(textbox).toHaveTextContent('画布人物.png')
     fireEvent.click(screen.getByRole('button', { name: '引用参考：画布人物.png' }))

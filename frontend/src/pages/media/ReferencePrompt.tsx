@@ -1,9 +1,11 @@
-import { autocompletion, completionKeymap, type CompletionContext } from '@codemirror/autocomplete'
+import { autocompletion, completionKeymap, currentCompletions, selectedCompletionIndex, setSelectedCompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete'
 import { Annotation, Compartment, EditorState, Prec, Transaction } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, placeholder, tooltips } from '@codemirror/view'
 import { minimalSetup } from 'codemirror'
 import { useEffect, useEffectEvent, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { imageMentionPattern, imageMentionToken, type incomingReferences } from './canvasReferences'
+import { getStoredAuthToken } from '../../lib/auth'
+import { subscribeImage } from './imagePreview'
 
 type References = ReturnType<typeof incomingReferences>
 export type ReferencePromptHandle = { insertImage: (id: string) => void }
@@ -31,8 +33,9 @@ export function ReferencePrompt({ value, references, candidates = [], label, onC
   const view = useRef<EditorView | null>(null)
   const [initial] = useState(value)
   const [referenceConfig] = useState(() => new Compartment())
-  const referenceState = JSON.stringify(references.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', ready: Boolean(asset) })))
-  const candidateState = JSON.stringify(candidates.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', ready: Boolean(asset) })))
+  const session = getStoredAuthToken()
+  const referenceState = JSON.stringify(references.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', assetId: asset?.id })))
+  const candidateState = JSON.stringify(candidates.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', assetId: asset?.id })))
   const change = useEffectEvent(onChange)
   const focus = useEffectEvent(onFocus)
   const blur = useEffectEvent(onBlur)
@@ -75,9 +78,57 @@ export function ReferencePrompt({ value, references, candidates = [], label, onC
   }, [value])
 
   useEffect(() => {
-    const entries = JSON.parse(referenceState) as { id: string; name: string; ready: boolean }[]
+    const entries = JSON.parse(referenceState) as { id: string; name: string; assetId?: string }[]
     const available = JSON.parse(candidateState) as typeof entries
     const choices = [...entries.map(entry => ({ ...entry, connected: true })), ...available.filter(entry => !entries.some(item => item.id === entry.id)).map(entry => ({ ...entry, connected: false }))]
+    const previews = new Map<string, { dom: HTMLElement; release?: () => void }>()
+    const previewLifecycle = ViewPlugin.define(() => ({ destroy() {
+      previews.forEach(preview => preview.release?.())
+      previews.clear()
+    } }))
+    const renderOption = (completion: Completion, _state: EditorState, editor: EditorView) => {
+      const entry = choices.find(choice => choice.id === (completion as Completion & { referenceId: string }).referenceId)!
+      const existing = previews.get(entry.id)
+      const dom = existing?.dom ?? document.createElement('span')
+      dom.className = 'media-reference-option'
+      // 浮层挂在 body，字号按画布缩放后的实际文字尺寸设置。
+      const style = getComputedStyle(editor.contentDOM)
+      const scale = editor.contentDOM.getBoundingClientRect().width / editor.contentDOM.offsetWidth || 1
+      dom.style.fontSize = `${parseFloat(style.fontSize) * scale}px`
+      dom.style.fontFamily = style.fontFamily
+      if (existing) return dom
+      const thumbnail = document.createElement('span')
+      thumbnail.className = 'media-reference-option-image'
+      thumbnail.textContent = '图'
+      thumbnail.setAttribute('aria-hidden', 'true')
+      const name = document.createElement('span')
+      name.className = 'media-reference-option-name'
+      name.textContent = entry.name
+      const detail = document.createElement('span')
+      detail.className = 'media-reference-option-detail'
+      detail.textContent = completion.detail ?? ''
+      dom.append(thumbnail, name, detail)
+      dom.addEventListener('pointermove', () => {
+        const index = currentCompletions(editor.state).findIndex(option => (option as Completion & { referenceId: string }).referenceId === entry.id)
+        if (index >= 0 && selectedCompletionIndex(editor.state) !== index) editor.dispatch({ effects: setSelectedCompletion(index) })
+      })
+      const release = entry.assetId ? subscribeImage(entry.assetId, session, state => {
+        thumbnail.replaceChildren()
+        if (state.url) {
+          thumbnail.title = ''
+          const image = document.createElement('img')
+          image.alt = ''
+          image.src = state.url
+          image.addEventListener('error', () => { thumbnail.textContent = '图'; thumbnail.title = '图片预览暂不可用' })
+          thumbnail.append(image)
+        } else {
+          thumbnail.textContent = '图'
+          thumbnail.title = state.error || '正在加载图片'
+        }
+      }) : undefined
+      previews.set(entry.id, { dom, release })
+      return dom
+    }
     const decorations = (editor: EditorView) => Decoration.set([...editor.state.doc.toString().matchAll(imageMentionPattern)].map(match => {
       const index = entries.findIndex(item => item.id === match[1])
       const reference = entries[index]
@@ -91,12 +142,13 @@ export function ReferencePrompt({ value, references, candidates = [], label, onC
     }, { decorations: plugin => plugin.decorations, provide: plugin => EditorView.atomicRanges.of(editor => editor.plugin(plugin)?.decorations ?? Decoration.none) })
     view.current?.dispatch({ effects: referenceConfig.reconfigure([
       mentions,
-      autocompletion({ icons: false, tooltipClass: () => 'media-prompt-completions', override: [(context: CompletionContext) => {
+      previewLifecycle,
+      autocompletion({ icons: false, addToOptions: [{ position: 20, render: renderOption }], tooltipClass: () => 'media-prompt-completions', override: [(context: CompletionContext) => {
         const match = context.matchBefore(/@[^@\s[\]()]*$/u)
         if (!match || context.view?.composing) return null
         return { from: match.from, options: choices.map(entry => ({
-          label: `@${entry.name}`, displayLabel: entry.name,
-          detail: entry.connected ? entry.ready ? '已连接' : '图片未就绪' : '选择后连接', type: 'variable',
+          label: `@${entry.name}`, displayLabel: entry.name, referenceId: entry.id,
+          detail: !entry.assetId ? '图片未就绪' : entry.connected ? '已连接' : '选择后连接', type: 'variable',
           apply: (editor: EditorView, _completion: unknown, from: number, to: number) => {
             const token = `${imageMentionToken(entry.id)} `
             // 引用文本和连线由画布在同一次更新中保存，避免留下悬空引用。
@@ -105,7 +157,7 @@ export function ReferencePrompt({ value, references, candidates = [], label, onC
         })), validFor: /^@?[^@\s[\]()]*$/u }
       }], activateOnTyping: true }),
     ]) })
-  }, [referenceConfig, referenceState, candidateState])
+  }, [referenceConfig, referenceState, candidateState, session])
 
   return <div className="media-reference-prompt" ref={host} />
 }

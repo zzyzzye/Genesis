@@ -1,13 +1,55 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { acceptCompletion, startCompletion } from '@codemirror/autocomplete'
+import { EditorView } from '@codemirror/view'
 import { createRef } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ReferencePrompt, type ReferencePromptHandle } from '../src/pages/media/ReferencePrompt'
 import { connectReference, displayPrompt, imageMentionToken, imageReferenceNumbers, incomingReferences } from '../src/pages/media/canvasReferences'
 import { defaultGenerationSettings, emptyDocument, type Node } from '../src/pages/media/api'
+import * as media from '../src/pages/media/api'
 
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.restoreAllMocks() })
 const source: Node = { id: '11111111-1111-4111-8111-111111111111', type: 'image', asset_id: 'asset', name: '生串上架', text: '', x: 0, y: 0, width: 360, height: 203 }
 const target: Node = { ...source, id: '22222222-2222-4222-8222-222222222222', type: 'video', asset_id: null, generation: defaultGenerationSettings() }
+
+it('候选显示真实缩略图，鼠标移动同步原生选中并提交对应节点，卸载释放预览', async () => {
+  const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+  vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:reference-option')
+  vi.spyOn(media, 'fileBlob').mockResolvedValue(new Blob(['image']))
+  const asset: media.Asset = { id:'asset', name:'人物.png', kind:'image', mime_type:'image/png', size:5, in_library:false }
+  const change = vi.fn()
+  const { unmount } = render(<ReferencePrompt value="@" references={[{ node:source, asset }]} candidates={[{ node:{ ...source, id:'scene', name:'场景.png' }, asset }]} label="镜头描述" onChange={change} onFocus={() => {}} onBlur={() => {}} />)
+  const editor = EditorView.findFromDOM(screen.getByRole('textbox', { name:'镜头描述' }))!
+  act(() => { editor.focus(); editor.dispatch({ selection:{ anchor:1 } }); startCompletion(editor) })
+  const options = await screen.findAllByRole('option')
+  await waitFor(() => expect(options.every(option => option.querySelector('img')?.getAttribute('src') === 'blob:reference-option')).toBe(true))
+  expect(media.fileBlob).toHaveBeenCalledTimes(1)
+  const person = screen.getByText('生串上架', { selector:'.media-reference-option-name' })
+  fireEvent.pointerMove(person)
+  expect(person.closest('[role="option"]')).toHaveAttribute('aria-selected', 'true')
+  const scene = screen.getByText('场景.png', { selector:'.media-reference-option-name' })
+  fireEvent.pointerMove(scene)
+  expect(scene.closest('[role="option"]')).toHaveAttribute('aria-selected', 'true')
+  await waitFor(() => {
+    act(() => { acceptCompletion(editor) })
+    expect(change).toHaveBeenLastCalledWith(`${imageMentionToken('scene')} `, 'scene')
+  })
+  unmount()
+  expect(revoke).toHaveBeenCalledWith('blob:reference-option')
+})
+
+it('候选预览失败和素材未就绪仍保留名称及状态，不阻塞引用菜单', async () => {
+  vi.spyOn(media, 'fileBlob').mockRejectedValue(new Error('图片不可用'))
+  const asset: media.Asset = { id:'failed', name:'失败.png', kind:'image', mime_type:'image/png', size:5, in_library:false }
+  render(<ReferencePrompt value="@" references={[{ node:source, asset }]} candidates={[{ node:{ ...source, id:'pending', name:'等待生成' }, asset:undefined }]} label="图片提示词" onChange={() => {}} onFocus={() => {}} onBlur={() => {}} />)
+  const editor = EditorView.findFromDOM(screen.getByRole('textbox', { name:'图片提示词' }))!
+  act(() => { editor.focus(); editor.dispatch({ selection:{ anchor:1 } }); startCompletion(editor) })
+  await screen.findAllByRole('option')
+  expect(await screen.findByTitle('素材加载失败')).toHaveTextContent('图')
+  expect(screen.getByText('等待生成', { selector:'.media-reference-option-name' })).toBeInTheDocument()
+  expect(screen.getByText('图片未就绪', { selector:'.media-reference-option-detail' })).toBeInTheDocument()
+  expect(media.fileBlob).toHaveBeenCalledTimes(1)
+})
 
 it('连线幂等、不因候选连线进入参考模式并拒绝失效来源，引用绑定节点而非序号', () => {
   const doc = { ...emptyDocument(), nodes: [source, target] }

@@ -187,8 +187,14 @@
 .media-prompt-mention { display:inline-block; max-width:220px; overflow:hidden; vertical-align:bottom; text-overflow:ellipsis; white-space:nowrap; padding:0 5px; border-radius:4px; background:var(--media-node-highlight-surface); color:var(--media-node-highlight); }
 .media-prompt-mention.is-missing { color:#e2b7ad; background:#38302e; }
 .cm-tooltip.media-prompt-completions { max-width:min(340px,calc(100vw - 24px)); border:0; border-radius:var(--media-node-popover-radius); padding:4px; background:var(--media-node-popover); color:var(--media-node-ink); box-shadow:none; font:12px/1.65 Inter,"PingFang SC",sans-serif; z-index:100; }
-.cm-tooltip.media-prompt-completions ul { max-height:180px; }
-.cm-tooltip.media-prompt-completions ul li { padding:5px 8px; border-radius:4px; cursor:pointer; }
+body .cm-tooltip.cm-tooltip-autocomplete.media-prompt-completions>ul { min-width:0; max-width:100%; max-height:240px; font:inherit; }
+body .cm-tooltip.cm-tooltip-autocomplete.media-prompt-completions>ul>li { padding:0; border-radius:4px; cursor:pointer; }
+.cm-tooltip.media-prompt-completions .cm-completionLabel,.cm-tooltip.media-prompt-completions .cm-completionDetail { display:none; }
+.media-reference-option { display:grid; grid-template-columns:2.5em minmax(0,1fr) auto; align-items:center; gap:.65em; padding:.5em .65em; font-weight:400; line-height:1.5; }
+.media-reference-option-image { display:grid; place-items:center; width:2.5em; height:2.5em; overflow:hidden; border-radius:4px; background:#303030; color:#aaa; }
+.media-reference-option-image img { width:100%; height:100%; object-fit:cover; }
+.media-reference-option-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.media-reference-option-detail { font-size:.9em; color:var(--media-node-muted); white-space:nowrap; }
 .cm-tooltip.media-prompt-completions ul li[aria-selected=true] { background:var(--media-node-highlight-surface); color:var(--media-node-highlight); }
 .media-reference-thumbnail .media-preview.is-thumbnail { width:100%; height:100%; min-height:0; border-radius:0; background:transparent; }
 .media-reference-thumbnail .media-preview :is(img,video) { width:100%; height:100%; object-fit:cover; }
