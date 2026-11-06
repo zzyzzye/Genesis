@@ -18,7 +18,7 @@ it('候选显示真实缩略图，鼠标移动同步原生选中并提交对应�
   vi.spyOn(media, 'fileBlob').mockResolvedValue(new Blob(['image']))
   const asset: media.Asset = { id:'asset', name:'人物.png', kind:'image', mime_type:'image/png', size:5, in_library:false }
   const change = vi.fn()
-  const { unmount } = render(<ReferencePrompt value="@" references={[{ node:source, asset }]} candidates={[{ node:{ ...source, id:'scene', name:'场景.png' }, asset }]} label="镜头描述" onChange={change} onFocus={() => {}} onBlur={() => {}} />)
+  const { unmount } = render(<ReferencePrompt value="@" references={[{ node:source, asset }, { node:{ ...source, id:'scene', name:'场景.png' }, asset }]} label="镜头描述" onChange={change} onFocus={() => {}} onBlur={() => {}} />)
   const editor = EditorView.findFromDOM(screen.getByRole('textbox', { name:'镜头描述' }))!
   act(() => { editor.focus(); editor.dispatch({ selection:{ anchor:1 } }); startCompletion(editor) })
   const options = await screen.findAllByRole('option')
@@ -32,7 +32,7 @@ it('候选显示真实缩略图，鼠标移动同步原生选中并提交对应�
   expect(scene.closest('[role="option"]')).toHaveAttribute('aria-selected', 'true')
   await waitFor(() => {
     act(() => { acceptCompletion(editor) })
-    expect(change).toHaveBeenLastCalledWith(`${imageMentionToken('scene')} `, 'scene')
+    expect(change).toHaveBeenLastCalledWith(`${imageMentionToken('scene')} `)
   })
   unmount()
   expect(revoke).toHaveBeenCalledWith('blob:reference-option')
@@ -41,7 +41,7 @@ it('候选显示真实缩略图，鼠标移动同步原生选中并提交对应�
 it('候选预览失败和素材未就绪仍保留名称及状态，不阻塞引用菜单', async () => {
   vi.spyOn(media, 'fileBlob').mockRejectedValue(new Error('图片不可用'))
   const asset: media.Asset = { id:'failed', name:'失败.png', kind:'image', mime_type:'image/png', size:5, in_library:false }
-  render(<ReferencePrompt value="@" references={[{ node:source, asset }]} candidates={[{ node:{ ...source, id:'pending', name:'等待生成' }, asset:undefined }]} label="图片提示词" onChange={() => {}} onFocus={() => {}} onBlur={() => {}} />)
+  render(<ReferencePrompt value="@" references={[{ node:source, asset }, { node:{ ...source, id:'pending', name:'等待生成' }, asset:undefined }]} label="图片提示词" onChange={() => {}} onFocus={() => {}} onBlur={() => {}} />)
   const editor = EditorView.findFromDOM(screen.getByRole('textbox', { name:'图片提示词' }))!
   act(() => { editor.focus(); editor.dispatch({ selection:{ anchor:1 } }); startCompletion(editor) })
   await screen.findAllByRole('option')
@@ -77,6 +77,8 @@ it('在光标处插入图片标签；名称变化不改绑定，断线后显示�
   expect(change).not.toHaveBeenCalled()
   rerender(<ReferencePrompt {...props} value={value} references={[]} />)
   expect(screen.getByText('已断开图片')).toBeInTheDocument()
+  expect(change).not.toHaveBeenCalled()
+  act(() => ref.current?.insertImage(source.id))
   expect(change).not.toHaveBeenCalled()
 })
 

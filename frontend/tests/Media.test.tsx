@@ -104,24 +104,33 @@ describe('作品画布', () => {
       expect(saved.edges.some(edge => edge.source === copy.id)).toBe(false)
     })
   })
-  it.each(['image_generation', 'video'] as const)('%s 在 @ 中选择未连接图片，同步保存引用和连线且不重复连接', async type => {
+  it.each(['image_generation', 'video'] as const)('%s 先连线才能 @ 引用，未连接图片不出现，重复引用不改连线', async type => {
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
     const asset: media.Asset = { id: 'mention-image', name: '画布人物.png', kind: 'image', mime_type: 'image/png', size: 4, in_library: false }
     const source = { ...note, id: crypto.randomUUID(), type: 'image' as const, asset_id: asset.id, name: asset.name }
+    const unrelated = { ...source, id:crypto.randomUUID(), name:'未连入的图片' }
     const target = { ...note, id: crypto.randomUUID(), type, text: '', x: 500 }
-    const document: Document = { ...emptyDocument(), nodes: [source, target] }
+    const document: Document = { ...emptyDocument(), nodes: [source, unrelated, target] }
     const api = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path.endsWith('/canvas') ? { document, version: 1 } : path.includes('/assets') ? { items: [asset], total: 1 } : { id: 'project', name: '测试作品', version: 1 }))
     vi.spyOn(media, 'fileBlob').mockResolvedValue(new Blob(['image']))
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:reference')
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     render(<MemoryRouter><ProjectCanvas projectId="project" userId="user" /></MemoryRouter>)
     fireEvent.click(await screen.findByTestId(`rf__node-${target.id}`))
-    const textbox = screen.getByRole('textbox', { name: type === 'video' ? '镜头描述' : '图片提示词' })
+    const label = type === 'video' ? '镜头描述' : '图片提示词'
+    const plainInput = screen.getByRole('textbox', { name:label })
+    expect(plainInput.tagName).toBe('TEXTAREA')
+    fireEvent.change(plainInput, { target:{ value:'@' } })
+    expect(screen.queryByRole('option', { name:/画布人物.png/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name:'画布参考' }))
+    fireEvent.change(screen.getByRole('combobox', { name:'添加参考节点' }), { target:{ value:source.id } })
+    const textbox = screen.getByRole('textbox', { name:label })
     const editor = EditorView.findFromDOM(textbox)!
     fireEvent.focus(textbox)
-    act(() => { editor.dispatch({ changes: { from: 0, insert: '@' }, selection: { anchor: 1 } }); startCompletion(editor) })
-    await screen.findByText('选择后连接', { selector:'.media-reference-option-detail' })
-    fireEvent.mouseDown(screen.getByRole('option', { name: /画布人物.png.*选择后连接/ }))
+    act(() => { editor.dispatch({ selection: { anchor: 1 } }); startCompletion(editor) })
+    await screen.findByText('已连接', { selector:'.media-reference-option-detail' })
+    expect(screen.queryByText('未连入的图片', { selector:'.media-reference-option-name' })).not.toBeInTheDocument()
+    fireEvent.mouseDown(screen.getByRole('option', { name: /画布人物.png.*已连接/ }))
     expect(screen.getByRole('button', { name: '引用参考：画布人物.png' })).toBeEnabled()
     expect(textbox).toHaveTextContent('画布人物.png')
     fireEvent.click(screen.getByRole('button', { name: '引用参考：画布人物.png' }))

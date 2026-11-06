@@ -10,7 +10,6 @@ import { subscribeImage } from './imagePreview'
 type References = ReturnType<typeof incomingReferences>
 export type ReferencePromptHandle = { insertImage: (id: string) => void }
 const externalChange = Annotation.define<boolean>()
-const selectedReference = Annotation.define<string>()
 
 class ImageMention extends WidgetType {
   constructor(readonly label: string, readonly missing: boolean) { super() }
@@ -24,9 +23,9 @@ class ImageMention extends WidgetType {
   }
 }
 
-export function ReferencePrompt({ value, references, candidates = [], label, onChange, onFocus, onBlur, ref }: {
-  value: string; references: References; candidates?: References; label: string
-  onChange: (text: string, sourceId?: string) => void; onFocus: () => void; onBlur: () => void
+export function ReferencePrompt({ value, references, label, onChange, onFocus, onBlur, ref }: {
+  value: string; references: References; label: string
+  onChange: (text: string) => void; onFocus: () => void; onBlur: () => void
   ref?: Ref<ReferencePromptHandle>
 }) {
   const host = useRef<HTMLDivElement>(null)
@@ -35,23 +34,22 @@ export function ReferencePrompt({ value, references, candidates = [], label, onC
   const [referenceConfig] = useState(() => new Compartment())
   const session = getStoredAuthToken()
   const referenceState = JSON.stringify(references.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', assetId: asset?.id })))
-  const candidateState = JSON.stringify(candidates.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', assetId: asset?.id })))
   const change = useEffectEvent(onChange)
   const focus = useEffectEvent(onFocus)
   const blur = useEffectEvent(onBlur)
   useImperativeHandle(ref, () => ({ insertImage(id) {
     const editor = view.current
-    if (!editor) return
+    if (!editor || !references.some(({ node }) => node.id === id)) return
     editor.focus()
     const { from, to } = editor.state.selection.main
     const token = `${imageMentionToken(id)} `
     editor.dispatch({ changes: { from, to, insert: token }, selection: { anchor: from + token.length } })
-  } }), [])
+  } }), [references])
 
   useEffect(() => {
     if (!host.current) return
     const editor = new EditorView({ parent: host.current, doc: initial, extensions: [
-      minimalSetup, EditorView.lineWrapping, placeholder('描述想要生成的内容，输入 @ 选择画布图片并连接'),
+      minimalSetup, EditorView.lineWrapping, placeholder('描述想要生成的内容，输入 @ 引用已连入的图片'),
       EditorView.theme({
         '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'currentColor' },
         '.cm-content ::selection, .cm-content::selection': { backgroundColor: '#505050', color: '#ffffff' },
@@ -61,9 +59,7 @@ export function ReferencePrompt({ value, references, candidates = [], label, onC
       EditorState.phrases.of({ Completions: '图片参考', 'No completions found': '没有匹配的图片参考' }),
       EditorView.domEventHandlers({ focus: () => { focus() }, blur: () => { blur() } }),
       EditorView.updateListener.of(update => { if (update.docChanged && !update.transactions.some(transaction => transaction.annotation(externalChange))) {
-        const sourceId = update.transactions.map(transaction => transaction.annotation(selectedReference)).find(Boolean)
-        if (sourceId) change(update.state.doc.toString(), sourceId)
-        else change(update.state.doc.toString())
+        change(update.state.doc.toString())
       } }),
       EditorState.changeFilter.of(transaction => transaction.newDoc.length <= 20000),
       referenceConfig.of([]), Prec.highest(keymap.of(completionKeymap)), tooltips({ parent: document.body }),
@@ -79,8 +75,7 @@ export function ReferencePrompt({ value, references, candidates = [], label, onC
 
   useEffect(() => {
     const entries = JSON.parse(referenceState) as { id: string; name: string; assetId?: string }[]
-    const available = JSON.parse(candidateState) as typeof entries
-    const choices = [...entries.map(entry => ({ ...entry, connected: true })), ...available.filter(entry => !entries.some(item => item.id === entry.id)).map(entry => ({ ...entry, connected: false }))]
+    const choices = entries
     const previews = new Map<string, { dom: HTMLElement; release?: () => void }>()
     const previewLifecycle = ViewPlugin.define(() => ({ destroy() {
       previews.forEach(preview => preview.release?.())
@@ -148,16 +143,15 @@ export function ReferencePrompt({ value, references, candidates = [], label, onC
         if (!match || context.view?.composing) return null
         return { from: match.from, options: choices.map(entry => ({
           label: `@${entry.name}`, displayLabel: entry.name, referenceId: entry.id,
-          detail: !entry.assetId ? '图片未就绪' : entry.connected ? '已连接' : '选择后连接', type: 'variable',
+          detail: !entry.assetId ? '图片未就绪' : '已连接', type: 'variable',
           apply: (editor: EditorView, _completion: unknown, from: number, to: number) => {
             const token = `${imageMentionToken(entry.id)} `
-            // 引用文本和连线由画布在同一次更新中保存，避免留下悬空引用。
-            editor.dispatch({ changes: { from, to, insert: token }, selection: { anchor: from + token.length }, annotations: selectedReference.of(entry.id) })
+            editor.dispatch({ changes: { from, to, insert: token }, selection: { anchor: from + token.length } })
           },
         })), validFor: /^@?[^@\s[\]()]*$/u }
       }], activateOnTyping: true }),
     ]) })
-  }, [referenceConfig, referenceState, candidateState, session])
+  }, [referenceConfig, referenceState, session])
 
   return <div className="media-reference-prompt" ref={host} />
 }

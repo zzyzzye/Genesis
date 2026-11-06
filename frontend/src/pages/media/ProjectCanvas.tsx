@@ -54,11 +54,10 @@ type CanvasNodeData = {
   assetsLoading: boolean
   references: ReturnType<typeof incomingReferences>
   referenceCandidates: Node[]
-  imageCandidates: ReturnType<typeof incomingReferences>
   onReferenceChange: (id: string, sourceId: string, connected: boolean) => void
   frame: VideoFrame
   zoom: number
-  onTextChange: (id: string, text: string, sourceId?: string) => void
+  onTextChange: (id: string, text: string) => void
   onPatch: (id: string, patch: Partial<Node>, record?: boolean) => void
   onOpenAssets: () => void
   onOpenNodeAssets: (id: string, kind: 'image' | 'audio' | 'video') => void
@@ -311,7 +310,7 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
         </div>)}</div> : <p>选择上游节点，或从它的连接点拖线到当前节点。</p>}
       </div>}
       <input ref={fileInput} className="media-video-file-input" type="file" accept={isImage ? 'image/jpeg,image/png,image/webp,image/gif,image/avif' : isAudio ? 'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/webm,audio/aac' : 'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska'} aria-label={`导入${nodeTypeLabel(node.type)}${isImage || isVideo ? '参考' : '预览'}素材`} onChange={(event) => { const file = event.target.files?.[0]; if (file) void data.onUploadNodeAsset(id, isAudio ? 'audio' : isVideo && file.type.startsWith('video/') ? 'video' : 'image', file); event.target.value = '' }} />
-      {(isVideo || isImage) && (imageRefs.length > 0 || data.imageCandidates.length > 0 || node.text.includes('](ref:')) ? <ReferencePrompt ref={referencePrompt} value={node.text} references={imageRefs} candidates={data.imageCandidates} label={isImage ? "图片提示词" : "镜头描述"} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(text, sourceId) => data.onTextChange(id, text, sourceId)} /> : <textarea className="resize-none" aria-label={isImage ? '图片提示词' : isAudio ? '音频提示词' : '镜头描述'} value={node.text} placeholder={isImage ? '描述想要生成的图片内容，可引用画布素材' : isAudio ? '描述声音、音乐风格或环境氛围，可引用画布素材' : '描述画面、人物动作与声音，可引用连入节点的文字'} maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />}
+      {(isVideo || isImage) && (imageRefs.length > 0 || node.text.includes('](ref:')) ? <ReferencePrompt ref={referencePrompt} value={node.text} references={imageRefs} label={isImage ? "图片提示词" : "镜头描述"} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(text) => data.onTextChange(id, text)} /> : <textarea className="resize-none" aria-label={isImage ? '图片提示词' : isAudio ? '音频提示词' : '镜头描述'} value={node.text} placeholder={isImage ? '描述想要生成的图片内容，连入图片后可用 @ 引用' : isAudio ? '描述声音、音乐风格或环境氛围，可引用画布素材' : '描述画面、人物动作与声音，连入图片后可用 @ 引用'} maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />}
       {isVideo ? <VideoGeneration projectId={data.projectId} node={{ ...node, generation: { ...settings, mode: videoMode } }} controls={<>{modeControl}{parameterControl}</>} referenceCount={usedReferences.filter((item) => item.asset).length} referencesPending={usedReferences.some(item => !item.asset && (Boolean(item.node.asset_id) || ["image", "image_generation", "video", "video_asset", "audio", "audio_generation"].includes(item.node.type)))} referenceError={missingMention ? "提示词中的图片引用已断开，请重新连线或删除该引用。" : undefined} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onGenerationTask} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={parameterControl} referenceCount={usedImages.length} referencesPending={usedImages.some(({ asset }) => !asset)} referenceError={missingMention ? "提示词中的图片引用已断开，请重新连线或删除该引用。" : undefined} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onGenerationTask} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
     </section>
 }
@@ -488,8 +487,8 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
     interactionActive.current = false
   }, [])
 
-  const updateText = useCallback((id: string, text: string, sourceId?: string) => {
-    const current = sourceId ? connectReference(canvas.current.current, sourceId, id) : canvas.current.current
+  const updateText = useCallback((id: string, text: string) => {
+    const current = canvas.current.current
     canvas.apply(syncReferenceModes({
       ...current,
       nodes: current.nodes.map((node) => node.id === id ? { ...node, text } : node),
@@ -636,7 +635,6 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       assetsLoading,
       references: incomingReferences(canvas.document, node.id, assets),
       referenceCandidates: canvas.document.nodes.filter((source) => source.id !== node.id && source.type !== 'group' && !canvas.document.edges.some((edge) => edge.source === source.id && edge.target === node.id)),
-      imageCandidates: imageReferences(canvas.document.nodes.filter(source => source.id !== node.id && source.type !== 'group' && !canvas.document.edges.some(edge => edge.source === source.id && edge.target === node.id)).map(source => ({ node: source, asset: assets[source.asset_id ?? ''] }))),
       onReferenceChange: changeReference,
       frame: canvas.document.frame,
       zoom: canvas.document.viewport.zoom,
