@@ -15,6 +15,7 @@ import httpx
 import jwt
 import pytest
 from fastapi import FastAPI, HTTPException
+from langchain_core.runnables import RunnableConfig
 from pydantic import SecretStr
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -56,20 +57,23 @@ class VideoFixture:
 
 @pytest.mark.anyio
 async def test_agent_video_submission_is_versioned_idempotent_and_queryable(
-    fixture: VideoFixture, monkeypatch: pytest.MonkeyPatch,
+    fixture: VideoFixture,
 ) -> None:
     """助手与页面共享准入和提交，重放不再创建上游任务。"""
-    monkeypatch.setattr(media_tools, "SessionLocal", video.SessionLocal)
     tools = {entry.name: entry for entry in media_tools.build_media_tools(fixture.settings)}
     user = fixture.session.scalar(select(User))
     assert user is not None
     version = (await fixture.client.get(f"projects/{fixture.project_id}/canvas")).json()["version"]
-    args = {"project_id": fixture.project_id, "node_id": fixture.node_id,
-            "expected_version": version}
-    config = {"configurable": {"genesis_run_id": str(uuid4())}}
+    args = {
+        "project_id": fixture.project_id,
+        "node_id": fixture.node_id,
+        "expected_version": version,
+    }
+    config: RunnableConfig = {"configurable": {"genesis_run_id": str(uuid4())}}
     with agent_invocation_context(user.id, "owner", "media"):
         stale = await tools["submit_video_generation"].ainvoke(
-            {**args, "expected_version": version - 1}, config=config,
+            {**args, "expected_version": version - 1},
+            config=config,
         )
         assert "画布已更新" in stale
         created = await tools["submit_video_generation"].ainvoke(args, config=config)
@@ -164,7 +168,9 @@ async def fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncGener
             monkeypatch.setattr(media_video, "get_settings", lambda: settings)
             monkeypatch.setattr(video, "get_settings", lambda: settings)
             model_catalog.entries.clear()
-            monkeypatch.setattr(video, "SessionLocal", sessionmaker(engine, expire_on_commit=False))
+            sessions = sessionmaker(engine, expire_on_commit=False)
+            monkeypatch.setattr(video, "SessionLocal", sessions)
+            monkeypatch.setattr(media_tools, "SessionLocal", sessions)
             monkeypatch.setattr(httpx, "AsyncClient", upstream_client)
             project = await client.post("projects", json={"name": "视频测试"})
             state.project_id = project.json()["id"]
@@ -393,16 +399,12 @@ async def test_video_result_link_survives_canvas_reload(fixture: VideoFixture) -
     task = state.session.get(VideoGeneration, UUID(task_id))
     assert task is not None
     await video.refresh_task(task, state.session, state.settings)
-    completed = await state.client.get(
-        f"projects/{state.project_id}/video-generations/{task_id}"
-    )
+    completed = await state.client.get(f"projects/{state.project_id}/video-generations/{task_id}")
     assert completed.json()["status"] == "completed"
     asset_id = completed.json()["asset_id"]
     assert (await state.client.get(f"assets/{asset_id}/file")).content == state.content
     assert sum(request.method == "POST" for request in state.requests) == before
-    missing = await state.client.get(
-        f"projects/{state.project_id}/video-generations/{uuid4()}"
-    )
+    missing = await state.client.get(f"projects/{state.project_id}/video-generations/{uuid4()}")
     assert missing.status_code == 404
     wrong_project = await state.client.get(f"projects/{uuid4()}/video-generations/{task_id}")
     assert wrong_project.status_code == 404
@@ -532,10 +534,15 @@ async def test_image_mentions_follow_uploaded_order_and_deduplicate_assets(
     fixture: VideoFixture,
 ) -> None:
     state = fixture
-    assets = [(await state.client.post(
-        f"projects/{state.project_id}/assets",
-        files={"file": (f"reference-{index}.png", b"reference", "image/png")},
-    )).json() for index in range(2)]
+    assets = [
+        (
+            await state.client.post(
+                f"projects/{state.project_id}/assets",
+                files={"file": (f"reference-{index}.png", b"reference", "image/png")},
+            )
+        ).json()
+        for index in range(2)
+    ]
     snapshot = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
     doc = snapshot["document"]
     sources = [str(uuid4()) for _ in range(3)]
@@ -549,17 +556,34 @@ async def test_image_mentions_follow_uploaded_order_and_deduplicate_assets(
     )
     # 保留旧文生视频 mode，参考仍以真实连线为准，不能悄悄丢图。
     doc["nodes"][0]["generation"]["mode"] = "text"
-    doc["nodes"] += [{
-        "id": source, "type": "image", "asset_id": assets[index % 2]["id"],
-        "x": 0, "y": 0, "width": 360, "height": 280,
-    } for index, source in enumerate(sources)]
-    doc["edges"] = [{
-        "id": str(uuid4()), "source": sources[index], "target": state.node_id,
-    } for index in (1, 0, 2)]
+    doc["nodes"] += [
+        {
+            "id": source,
+            "type": "image",
+            "asset_id": assets[index % 2]["id"],
+            "x": 0,
+            "y": 0,
+            "width": 360,
+            "height": 280,
+        }
+        for index, source in enumerate(sources)
+    ]
+    doc["edges"] = [
+        {
+            "id": str(uuid4()),
+            "source": sources[index],
+            "target": state.node_id,
+        }
+        for index in (1, 0, 2)
+    ]
     doc["edges"].append({"id": str(uuid4()), "source": unused, "target": state.node_id})
-    await state.client.put(f"projects/{state.project_id}/canvas", json={
-        "version": snapshot["version"], "document": doc,
-    })
+    await state.client.put(
+        f"projects/{state.project_id}/canvas",
+        json={
+            "version": snapshot["version"],
+            "document": doc,
+        },
+    )
     assert (await submit(state)).status_code == 202
     payload = json.loads(next(r for r in state.requests if r.method == "POST").content)
     assert len(payload["image_urls"]) == 2
@@ -572,7 +596,8 @@ async def test_image_mentions_follow_uploaded_order_and_deduplicate_assets(
 @pytest.mark.anyio
 @pytest.mark.parametrize("pending", [False, True])
 async def test_missing_or_unready_image_mention_never_submits(
-    fixture: VideoFixture, pending: bool,
+    fixture: VideoFixture,
+    pending: bool,
 ) -> None:
     state = fixture
     snapshot = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
@@ -580,14 +605,25 @@ async def test_missing_or_unready_image_mention_never_submits(
     source = str(uuid4())
     doc["nodes"][0]["text"] = f"以@[图片](ref:{source})为参考"
     if pending:
-        doc["nodes"].append({
-            "id": source, "type": "image", "asset_id": None,
-            "x": 0, "y": 0, "width": 360, "height": 280,
-        })
+        doc["nodes"].append(
+            {
+                "id": source,
+                "type": "image",
+                "asset_id": None,
+                "x": 0,
+                "y": 0,
+                "width": 360,
+                "height": 280,
+            }
+        )
         doc["edges"] = [{"id": str(uuid4()), "source": source, "target": state.node_id}]
-    await state.client.put(f"projects/{state.project_id}/canvas", json={
-        "version": snapshot["version"], "document": doc,
-    })
+    await state.client.put(
+        f"projects/{state.project_id}/canvas",
+        json={
+            "version": snapshot["version"],
+            "document": doc,
+        },
+    )
     response = await submit(state)
     assert response.status_code == 422
     assert not any(request.method == "POST" for request in state.requests)

@@ -21,6 +21,11 @@ def test_media_package_preserves_prompt_and_public_entry() -> None:
         "submit_image_generation",
         "get_image_generation_task",
         "rename_node",
+        "edit_media_canvas",
+        "get_media_assets",
+        "reference_media_asset",
+        "submit_video_generation",
+        "get_video_generation_task",
     ]
 
 
