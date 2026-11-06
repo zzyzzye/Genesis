@@ -338,14 +338,14 @@ describe('作品画布', () => {
     expect(result.current.document.edges).toEqual([])
     expect(result.current.document.frame).toEqual({ width: 1920, height: 1080 })
   })
-  it.each([false, true])('打开画布原样恢复用户保存的位置、缩放和内容（本地草稿：%s）', async (restoreDraft) => {
+  it.each([false, true])('打开画布固定100%并恢复用户保存的位置和内容（本地草稿：%s）', async (restoreDraft) => {
     const document: Document = { ...emptyDocument(), nodes: [note], viewport: { x: 30, y: 40, zoom: .5 } }
     if (restoreDraft) localStorage.setItem('genesis-media-draft:user:zoom-default', JSON.stringify({ version: 1, document }))
     vi.spyOn(media, 'api').mockResolvedValue({ version: 1, document: restoreDraft ? emptyDocument() : document })
     const { result } = renderHook(() => useCanvas('zoom-default', 'user'))
     await waitFor(() => expect(result.current.ready).toBe(true))
     expect(result.current.document.nodes).toEqual([{ ...note, name: '便签 1' }])
-    expect(result.current.document.viewport).toEqual(document.viewport)
+    expect(result.current.document.viewport).toEqual({ ...document.viewport, zoom: 1 })
   })
   it('更新旧生成节点预设时保持中心、内容和视口，自定义尺寸不变且可撤销', async () => {
     const video = { ...note, type: 'video' as const, name: '视频节点 1', width: 820, height: 670 }
@@ -388,7 +388,7 @@ describe('作品画布', () => {
     const saved = JSON.parse(localStorage.getItem('genesis-media-draft:user:project')!) as { document: Document }
     expect(saved.document.nodes.find((node) => node.id === shape.id)).toMatchObject({ type: 'video', x: shape.x, y: shape.y, width: 600, height: 378 })
     expect(saved.document.edges).toEqual([edge])
-    expect(saved.document.viewport).toEqual(document.viewport)
+    expect(saved.document.viewport).toEqual({ ...document.viewport, zoom: 1 })
   })
   it('窗口变窄和新增节点都保留当前视口，不自动适应或居中', async () => {
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
@@ -411,7 +411,7 @@ describe('作品画布', () => {
     fireEvent.click(screen.getByRole('button', { name: '便签' }))
     expect(screen.getAllByRole('textbox', { name: '便签名称' })).toHaveLength(2)
     const saved = JSON.parse(localStorage.getItem('genesis-media-draft:user:project')!) as { document: Document }
-    expect(saved.document.viewport).toEqual(document.viewport)
+    expect(saved.document.viewport).toEqual({ ...document.viewport, zoom: 1 })
   })
   it('保存布局与视口，并支持撤销重做', async () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ version: 0, document: emptyDocument() })
@@ -742,7 +742,7 @@ describe('作品画布', () => {
     fireEvent.change(screen.getByRole('textbox', { name: '生视频节点名称' }), { target: { value: '开场镜头' } })
     fireEvent.blur(screen.getByRole('textbox', { name: '生视频节点名称' }))
     fireEvent.change(screen.getByRole('textbox', { name: '镜头描述' }), { target: { value: '雨夜街道，缓慢推进' } })
-    fireEvent.click(screen.getByRole('button', { name: '运镜' }))
+    fireEvent.click(screen.getByRole('button', { name: '镜头提示词' }))
     fireEvent.click(screen.getByRole('button', { name: '缓慢推近' }))
     expect(screen.getByRole('textbox', { name: '镜头描述' })).toHaveValue('雨夜街道，缓慢推进 运镜：缓慢推近。')
     fireEvent.click(screen.getByRole('button', { name: '生成参数' }))

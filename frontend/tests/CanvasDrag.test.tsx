@@ -71,11 +71,12 @@ describe('画布拖动同步', () => {
   })
   it('双指平移经过节点和输入区不断开；新手势在聚焦便签内滚动，失焦后恢复平移', async () => {
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
-    const document: Document = { ...emptyDocument(), nodes: [node, { ...node, id: 'image', type: 'image', name: '参考图', x: 500 }] }
+    const document: Document = { ...emptyDocument(), viewport: { x: 0, y: 0, zoom: .53 }, nodes: [node, { ...node, id: 'image', type: 'image', name: '参考图', x: 500 }] }
     vi.spyOn(media, 'api').mockImplementation((path) => Promise.resolve(path.endsWith('/canvas') ? { version: 0, document } : path.includes('/assets') ? { items: [], total: 0 } : { id: 'wheel', name: '平移验收', version: 0 }))
     let actions: MediaCanvasActions | null = null
     render(<MemoryRouter><ProjectCanvas projectId="wheel" userId="wheel-user" onAgentActionsChange={(value) => { actions = value }} /></MemoryRouter>)
     const image = await screen.findByTestId('rf__node-image')
+    expect(actions!.getDocument().viewport.zoom).toBe(1)
     const positions = document.nodes.map(({ x, y }) => [x, y])
     const preview = image.querySelector('.media-node-media-empty')!
     fireEvent.wheel(preview, { deltaX: 40, deltaY: 80, bubbles: true, cancelable: true })
@@ -93,6 +94,9 @@ describe('画布拖动同步', () => {
     fireEvent.blur(textarea)
     fireEvent.wheel(textarea, { deltaY: 80, bubbles: true, cancelable: true })
     await waitFor(() => expect(actions!.getDocument().viewport.y).toBe(-160))
+    // 延迟结束事件只结束手势，不能把旧坐标写回受控视口。
+    act(() => flow.props!.onMoveEnd?.(null, { x: 0, y: 0, zoom: 1 }))
+    expect(actions!.getDocument().viewport.y).toBe(-160)
     expect(actions!.getDocument().nodes.map(({ x, y }) => [x, y])).toEqual(positions)
     await waitFor(() => expect(flow.props!.nodesDraggable).toBe(true))
   })

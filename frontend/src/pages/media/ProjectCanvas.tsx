@@ -287,9 +287,9 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
         <button type="button" onClick={() => fileInput.current?.click()}><Upload size={14} />上传</button>
         <button type="button" onClick={() => data.onOpenNodeAssets(id, isImage ? 'image' : isAudio ? 'audio' : 'video')}>作品素材</button>
         <button type="button" aria-expanded={referencesOpen} onClick={() => { setReferencesOpen(!referencesOpen); setCameraOpen(false) }}>画布参考{data.references.length ? ` · ${data.references.length}` : ''}</button>
-        {isVideo && <button type="button" aria-expanded={cameraOpen} onClick={() => { setCameraOpen(!cameraOpen); setReferencesOpen(false) }}>运镜</button>}
+        {isVideo && <button type="button" aria-expanded={cameraOpen} onClick={() => { setCameraOpen(!cameraOpen); setReferencesOpen(false) }}>镜头提示词</button>}
       </div>
-      {cameraOpen && <div className="media-node-camera-options" aria-label="选择运镜">{['固定镜头', '缓慢推近', '拉远镜头', '跟随拍摄', '镜头上摇', '镜头下摇', '环绕拍摄', '手持拍摄'].map((camera) => <button key={camera} type="button" onClick={() => { appendPromptToken(`运镜：${camera}。`); setCameraOpen(false) }}>{camera}</button>)}</div>}
+      {cameraOpen && <div className="media-node-camera-options" aria-label="镜头提示词"><p>将描述插入提示词，实际效果取决于视频模型。</p>{['固定镜头', '缓慢推近', '拉远镜头', '跟随拍摄', '镜头上摇', '镜头下摇', '环绕拍摄', '手持拍摄'].map((camera) => <button key={camera} type="button" onClick={() => { appendPromptToken(`运镜：${camera}。`); setCameraOpen(false) }}>{camera}</button>)}</div>}
       {data.references.length > 0 && <div className="media-node-references" aria-label="连入参考">{data.references.map(({ node: source, asset }, index) => {
         const name = source.name || asset?.name || source.text.slice(0, 40) || '空节点'
         return <div key={source.id} className="media-reference-item" role="group" aria-label={`参考 ${index + 1}：${name}`}>
@@ -1108,6 +1108,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         viewport={viewport}
+        onViewportChange={updateViewport}
         minZoom={.02}
         maxZoom={4}
         nodesConnectable
@@ -1178,9 +1179,8 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         onNodeDragStop={stopNodeDrag}
         onSelectionDragStart={(event, nodes) => { if (nodes[0]) startNodeDrag(event, nodes[0], nodes) }}
         onSelectionDragStop={stopNodeDrag}
-        onMoveStart={(event, next) => { if (event?.type === 'wheel') setWheelPanning(true); updateViewport(next) }}
-        onMove={(_, next) => updateViewport(next)}
-        onMoveEnd={(_, next) => { setWheelPanning(false); updateViewport(next) }}
+        onMoveStart={(event) => { if (event?.type === 'wheel') setWheelPanning(true) }}
+        onMoveEnd={() => setWheelPanning(false)}
         proOptions={{ hideAttribution: true }}
       >{canvas.document.background !== 'none' && <Background variant={canvas.document.background === 'lines' ? BackgroundVariant.Lines : BackgroundVariant.Dots} color="#383838" gap={24} size={1} />}{showMiniMap && !nodeMenu && <MiniMap pannable zoomable position="bottom-right" maskColor="#191919cc" nodeColor={(node) => node.selected ? '#c5c5c5' : '#686868'} />}</ReactFlow>}
       {draggingFile && <div className="media-canvas-drop" aria-hidden="true">松开鼠标，将素材放入画布</div>}

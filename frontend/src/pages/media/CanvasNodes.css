@@ -287,6 +287,24 @@ body .cm-tooltip.cm-tooltip-autocomplete.media-prompt-completions>ul>li { paddin
 .media-video-generation p { margin:0; color:#aaa; line-height:1.6; overflow-wrap:anywhere; }
 .media-video-generation .media-video-unknown { display:flex; align-items:flex-start; gap:6px; color:#bbb; line-height:1.5; }
 .media-video-generation .media-video-unknown input { width:14px; height:14px; flex:none; margin:2px 0; }
+
+/* 素材选择采用紧凑网格，选择任务不展示下载和管理操作。 */
+.media-canvas-asset-picker { width:min(760px,calc(100vw - 32px)); padding:24px; }
+.media-canvas-asset-picker .media-library-grid { grid-template-columns:repeat(auto-fill,minmax(min(100%,160px),1fr)); gap:20px 16px; margin-top:20px; }
+.media-canvas-asset-picker .media-preview { height:128px; border-radius:8px; background:#202020; }
+.media-canvas-asset-picker .media-library-grid strong { display:block; margin-top:10px; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.media-canvas-asset-picker .media-library-grid small { color:#929292; font-size:11px; }
+.media-canvas-asset-picker .media-muted { margin:10px 0 16px; font-size:12px; }
+.media-editor .media-canvas-asset-picker :is(.media-scope,.media-assets-types) button { min-height:30px; padding:5px 10px; background:transparent; font-size:12px; }
+.media-canvas-asset-picker .media-assets-types { margin-top:10px; }
+.media-editor .media-canvas-asset-picker :is(.media-scope,.media-assets-types) button[aria-pressed=true] { background:#363636; color:#fff; }
+.media-canvas-asset-picker .media-pagination { margin-top:20px; font-size:12px; }
+.media-editor .media-canvas-asset-picker .media-asset-actions button { width:100%; min-height:30px; margin-top:6px; font-size:12px; border-radius:6px; }
+.media-editor .media-video-composer textarea,.media-reference-prompt,.media-reference-prompt .cm-scroller { min-height:96px; }
+.media-node-camera-options { gap:4px; padding:8px 0; }
+.media-node-camera-options p { flex-basis:100%; margin:0 0 4px; font-size:11px; color:var(--media-node-muted); }
+.media-editor .media-node-editor .media-node-camera-options button { background:transparent; border-radius:6px; padding:4px 8px; font-size:12px; }
+@media(max-width:600px) { .media-canvas-asset-picker { padding:16px; }.media-canvas-asset-picker .media-library-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.media-canvas-asset-picker .media-preview { height:100px; } }
 .media-video-generation .is-spinning { animation:media-video-spin 1s linear infinite; }
 @keyframes media-video-spin { to { transform:rotate(360deg); } }
 @media(prefers-reduced-motion:reduce) { .media-video-generation .is-spinning { animation:none; } }

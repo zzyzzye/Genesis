@@ -52,8 +52,8 @@ export function AssetLibrary({ projectId, onClose, onAdd, onRemoved, beforeRemov
     {progress !== null && <div role="status"><progress max={100} value={progress} /> {progress === 100 ? '正在保存文件…' : `${progress}%`}</div>}
     {error && <div role="alert" className="media-error">{error} {retryFile && <button disabled={busy} onClick={() => void importFile(retryFile)}>重试上传</button>}<button disabled={busy} onClick={() => setRefresh(refresh + 1)}>重新加载</button></div>}
     {loading ? <p role="status">加载素材…</p> : items.length === 0 ? <div className="media-library-empty">{query || kind ? '没有匹配的素材' : '素材库还是空的'}<p>导入图片、视频或音频开始创作。</p></div> : <div className="media-library-grid">{items.map((asset) => <article key={asset.id}>
-      <AssetPreview asset={asset} controls />
-      <strong title={asset.name}>{asset.name}</strong><small>{(asset.size / 1024 / 1024).toFixed(1)} MiB · {asset.kind}</small>
+      <AssetPreview asset={asset} controls={!selectionOnly} thumbnail={selectionOnly} passive={selectionOnly} />
+      <strong title={asset.name}>{asset.name}</strong><small>{asset.size < 1024 * 1024 ? `${Math.max(1, Math.round(asset.size / 1024))} KB` : `${(asset.size / 1024 / 1024).toFixed(1)} MB`} · {{ image: '图片', video: '视频', audio: '音频' }[asset.kind]}</small>
       <div className="media-asset-actions">{onAdd && <button disabled={busy || (targetKind === 'video' && allowImageForVideo ? asset.kind === 'audio' : Boolean(targetKind && asset.kind !== targetKind))} onClick={() => void run(() => onAdd(asset))}>{targetKind ? '用于当前节点' : '放入画布'}</button>}{!selectionOnly && <>{!asset.in_library && <button disabled={busy} onClick={() => void run(() => api(`/assets/${asset.id}/library`, 'POST'))}>加入账户库</button>}
         <button disabled={busy} onClick={() => { if (window.confirm(scope === 'project' ? '移除该作品素材及其画布节点？账户素材会保留。' : '删除此账户素材？正在被作品引用的素材无法删除。')) void run(async () => { if (scope === 'project') await beforeRemove?.(); await api(`${path}/${asset.id}`, 'DELETE'); if (scope === 'project') await onRemoved?.() }) }}>{scope === 'project' ? '移出作品' : '删除'}</button></>}</div>
     </article>)}</div>}

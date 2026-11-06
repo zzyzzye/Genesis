@@ -51,6 +51,8 @@ export function useCanvas(projectId: string, userId: string) {
     const original = next
     next = normalizeCanvasNodePresets(original)
     const compacted = next !== original
+    // 每次进入以原尺寸展示，保留已保存的平移位置。
+    next = { ...next, viewport: { ...next.viewport, zoom: 1 } }
     current.current = next; setDocument(next); history.current = compacted ? [{ ...original, viewport: next.viewport }] : []; future.current = []
     setDirty(JSON.stringify(next) !== saved.current); setReady(true)
     setStatus(blocked.current ? '检测到冲突，已保留本地草稿' : compacted ? '已更新节点，可撤销' : JSON.stringify(next) === saved.current ? '已保存' : original !== serverDocument ? '已恢复本地草稿' : '已打开')
