@@ -32,6 +32,7 @@
   --media-node-highlight:#a1e8cb; --media-node-highlight-surface:#1d4135;
   --media-node-action:#a1e8cb; --media-node-action-hover:#b9f4dc; --media-node-action-ink:#10291f;
   --media-node-popover-radius:16px;
+  --media-node-shadow:0 2px 6px #0005,0 10px 24px #0006;
 }
 .media-editor { --media-ink:#e8e8e8; --media-muted:#aaa; --media-accent:#c5c5c5; --media-line:#414141; background:#191919; user-select:none; }
 .media-editor :is(input,textarea) { user-select:text; }
@@ -55,6 +56,8 @@
 .media-canvas-view-tools output { min-width:38px; text-align:center; color:#bbb; font-size:12px; }
 .media-editor .media-node { border:0; background:#252525; }
 .media-editor .media-node.is-note { background:#2c2c2c; }
+/* 实体表面投影区分重叠节点，透明标题和输入控件不参与投影。 */
+.media-editor :is(.media-node,.media-video-screen) { box-shadow:var(--media-node-shadow); }
 .media-node.is-selected::before,.media-video-card.is-selected::before,.media-node.is-selected::after,.media-video-card.is-selected::after { display:none; content:none; }
 .media-editor { --media-selection-marker:#c5c5c5; }
 .media-editor :is(.media-node,.media-video-card).is-selected::after {
