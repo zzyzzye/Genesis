@@ -617,14 +617,15 @@ async def test_nano_banana_uses_native_protocol_and_existing_task_lifecycle(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("mentioned", [False, True])
-async def test_nano_banana_only_sends_connected_and_mentioned_local_images(
-    fixture: ImageFixture, mentioned: bool
+@pytest.mark.parametrize("model", ["[AS专线] nano-banana-2.1", "grok-imagine-image-2.0"])
+async def test_native_protocol_only_sends_connected_and_mentioned_local_images(
+    fixture: ImageFixture, mentioned: bool, model: str
 ) -> None:
     """原生图生图也必须同时连线和艾特，未引用节点不会被自动发送。"""
     state = fixture
-    model = "[AS专线] nano-banana-2.1"
     state.models.append(model)
-    state.result = native_result()
+    if "nano-banana" in model:
+        state.result = native_result()
     await save_node(state, generation={"model": model})
     asset = (
         await state.client.post(
@@ -657,6 +658,18 @@ async def test_nano_banana_only_sends_connected_and_mentioned_local_images(
     ).status_code == 200
     assert (await submit(state)).status_code == 202
     post = next(req for req in state.requests if req.method == "POST")
+    if model.startswith("grok"):
+        assert post.url.path == f"/v1/images/{'edits' if mentioned else 'generations'}"
+        assert post.headers["content-type"] == "application/json"
+        payload = json.loads(post.content)
+        assert "images" not in payload
+        assert payload.get("image") == (
+            {"type": "image_url", "url": f"data:image/png;base64,{base64.b64encode(PNG).decode()}"}
+            if mentioned
+            else None
+        )
+        assert (await latest(state))["status"] == "completed"
+        return
     assert post.url.path.endswith(":generateContent")
     assert post.headers["content-type"] == "application/json"
     parts = json.loads(post.content)["contents"][0]["parts"]
@@ -673,13 +686,14 @@ async def test_nano_banana_only_sends_connected_and_mentioned_local_images(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("status", [400, 500])
-async def test_nano_banana_never_falls_back_to_another_paid_request(
-    fixture: ImageFixture, status: int
+@pytest.mark.parametrize("model", ["[AS专线] nano-banana-2.1", "grok-imagine-image-2.0"])
+async def test_native_protocol_never_falls_back_to_another_paid_request(
+    fixture: ImageFixture, status: int, model: str
 ) -> None:
     """原生接口被拒绝或结果未知时，不切换协议再次生成或重复记账。"""
-    fixture.models.append("[AS专线] nano-banana-2.1")
+    fixture.models.append(model)
     fixture.status = status
-    await save_node(fixture, generation={"model": "[AS专线] nano-banana-2.1"})
+    await save_node(fixture, generation={"model": model})
     assert (await submit(fixture)).status_code == 202
     task = await latest(fixture)
     assert task["status"] == ("failed" if status == 400 else "unknown")
@@ -687,6 +701,152 @@ async def test_nano_banana_never_falls_back_to_another_paid_request(
     if status == 500:
         assert (await submit(fixture)).status_code == 409
         assert sum(req.method == "POST" for req in fixture.requests) == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("count", [2, 5, 6])
+async def test_grok_multiple_references_deduplicate_and_validate_before_billing(
+    fixture: ImageFixture, count: int
+) -> None:
+    """多图走 JSON；重复素材只上传一次，未连线节点不发送，超限不计费。"""
+    state = fixture
+    model = "grok-imagine-image-2.0"
+    state.models.append(model)
+    await save_node(state, generation={"model": model})
+    current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    document = current["document"]
+    source_ids = []
+    for index in range(count):
+        asset = (
+            await state.client.post(
+                f"projects/{state.project_id}/assets",
+                files={"file": (f"参考{index}.png", PNG, "image/png")},
+            )
+        ).json()
+        source_id = str(uuid4())
+        source_ids.append(source_id)
+        document["nodes"].append(
+            {
+                "id": source_id,
+                "type": "image",
+                "asset_id": asset["id"],
+                "x": -400,
+                "y": index * 300,
+                "width": 360,
+                "height": 280,
+            }
+        )
+    duplicate_id, disconnected_id = str(uuid4()), str(uuid4())
+    document["nodes"].extend(
+        [
+            {**document["nodes"][1], "id": duplicate_id},
+            {**document["nodes"][1], "id": disconnected_id, "asset_id": None},
+        ]
+    )
+    source_ids.append(duplicate_id)
+    document["edges"] = [
+        {"id": str(uuid4()), "source": source_id, "target": state.node_id}
+        for source_id in source_ids
+    ]
+    document["nodes"][0]["text"] = "组合" + " ".join(
+        f"@[图片](ref:{source_id})" for source_id in source_ids
+    )
+    assert (
+        await state.client.put(f"projects/{state.project_id}/canvas", json=current)
+    ).status_code == 200
+    request_id = uuid4()
+    response = await submit(state, request_id)
+    if count > 5:
+        assert response.status_code == 422
+        assert "5 张" in response.json()["detail"]
+        assert not any(req.method == "POST" for req in state.requests)
+        assert not state.session.scalars(select(BillingOperation)).all()
+        return
+    assert response.status_code == 202
+    task = await latest(state)
+    assert task["status"] == "completed"
+    assert (service.STORAGE_ROOT / task["asset_id"]).read_bytes() == PNG
+    post = next(req for req in state.requests if req.method == "POST")
+    assert post.url.path == "/v1/images/edits"
+    assert post.headers["content-type"] == "application/json"
+    payload = json.loads(post.content)
+    assert "image" not in payload
+    assert (
+        payload["images"]
+        == [{"type": "image_url", "url": f"data:image/png;base64,{base64.b64encode(PNG).decode()}"}]
+        * count
+    )
+    assert "ref:" not in payload["prompt"]
+    assert f"图片{count}" in payload["prompt"]
+    assert (await submit(state, request_id)).json() == task
+    assert sum(req.method == "POST" for req in state.requests) == 1
+    operation = state.session.scalar(select(BillingOperation))
+    assert operation is not None and operation.call_count == 1
+    assert len(state.session.scalars(select(UpstreamCharge)).all()) == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("settings", "expected"),
+    [
+        ({}, {}),
+        ({"image_size": "auto"}, {}),
+        ({"image_size": "1536x1024"}, {"aspect_ratio": "3:2", "resolution": "2k"}),
+        ({"image_size": "1024x576"}, {"aspect_ratio": "16:9", "resolution": "1k"}),
+        (
+            {"image_ratio": "16:9", "image_resolution": "2K", "image_size": "2048x1152"},
+            {"aspect_ratio": "16:9", "resolution": "2k"},
+        ),
+    ],
+)
+async def test_grok_generation_maps_parameters_and_keeps_alias(
+    fixture: ImageFixture, settings: dict[str, str], expected: dict[str, str]
+) -> None:
+    """保留渠道别名，尺寸转为原生字段，不把 GPT 背景、画质和 size 透传给 Grok。"""
+    model = "[专线] grok-imagine-image-2.0"
+    fixture.models.append(model)
+    await save_node(
+        fixture,
+        generation={
+            "model": model,
+            "count": 2,
+            "image_background": "opaque",
+            "image_quality": "high",
+            **settings,
+        },
+    )
+    assert (await submit(fixture)).status_code == 202
+    post = next(req for req in fixture.requests if req.method == "POST")
+    assert post.url.path == "/v1/images/generations"
+    assert json.loads(post.content) == {
+        "model": model,
+        "prompt": "雨夜街道，电影感光影",
+        "n": 2,
+        "response_format": "b64_json",
+        **expected,
+    }
+    assert (await latest(fixture))["status"] == "completed"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"image_resolution": "4K"},
+        {"image_background": "transparent"},
+        {"image_ratio": "5:4"},
+        {"image_size": "1250x1000"},
+        {"image_size": "4096x4096"},
+    ],
+)
+async def test_grok_invalid_parameters_do_not_start_paid_request(
+    fixture: ImageFixture, settings: dict[str, str]
+) -> None:
+    """不支持的参数在计费和上游请求之前返回可操作的错误。"""
+    await save_node(fixture, generation={"model": "grok-imagine-image-2.0", **settings})
+    assert (await submit(fixture)).status_code == 422
+    assert not any(req.method == "POST" for req in fixture.requests)
+    assert not fixture.session.scalars(select(BillingOperation)).all()
 
 
 @pytest.mark.anyio

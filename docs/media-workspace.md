@@ -45,16 +45,19 @@
 
 ## 图片模型协议
 
-图片渠道共用模型目录与计费配置，提交时区分两种协议：
+图片渠道共用模型目录与计费配置，提交时按模型区分协议：
 
 - GPT Image、Imagen 等模型沿用 OpenAI Images 接口：文生图走 `/v1/images/generations`，有显式图片引用时走 `/v1/images/edits`。
+- Grok Imagine Image 系列使用 JSON Images 协议：无参考时走 `/v1/images/generations`；单图编辑使用 `/v1/images/edits` 的 `image` 对象，多图使用 `images` 数组，不发送 multipart。参考图片使用本地文件的 base64 data URI，去重后最多 5 张，仍须连线且在提示词中 `@` 引用。尺寸映射到 `aspect_ratio`、小写 `resolution`（1k/2k）；4K、透明背景及不支持的比例在计费前拒绝，不静默降级。完整渠道别名保持原样。
 - Nano Banana 和 Gemini Image 系列走 `/v1beta/models/{完整公开模型名}:generateContent`。例如 `[AS专线] nano-banana-2.1`，保留渠道前缀并进行 URL 编码，不自行改写成另一个上游型号。参考图以本地图片的 `inlineData` 发送，仍必须同时连线且在提示词中 `@` 引用。
 - 原生请求使用 `generationConfig.responseModalities`，比例和清晰度映射到 `imageConfig.aspectRatio`、`imageSize`；数量映射到 `candidateCount`，是否支持多候选由上游模型决定，不拆分为多次生成请求。原生接口没有透明背景字段，选择透明背景时在提交前提示调整。
 - 原生响应只提取最终图片，忽略文字和思考图片，随后复用私有素材入库、结果缓存与恢复流程。失败或结果未知时不自动切换协议重发，保持每个任务一次上游调用与既有账务归属。
 
 协议依据：[云影 Images 文档](https://ai-document.yyapi.cloud/zh/image-api)、[Google generateContent 参考](https://ai.google.dev/api/generate-content)、[New API Gemini 适配器](https://github.com/QuantumNous/new-api/blob/main/relay/channel/gemini/adaptor.go)。2026-11-06 经 7897 代理查询[服务商公开模型目录](https://www.yyapi.cloud/api/pricing)，`[AS专线] nano-banana-2.1` 声明支持 `gemini`、`openai`（聊天），未声明 `image-generation`。文档中的 Images 模型名单不作为全渠道生图模型白名单；具体专线别名的在线生成仍需上线后验证。
 
-本次复用 Compose 后端完成 639 项全量测试，覆盖率 91.31%；相关文件 Ruff、格式检查及 `src/tests` 全库 mypy 通过。原生协议回归覆盖专线别名编码、默认与指定尺寸、连线且艾特的本地参考、最终图片入库、幂等和单次账务记录、失败不切换协议重发。响应均为合成数据，未使用真实 Key 或发起付费生成。
+本次复用 Compose 后端完成 656 项全量测试，覆盖率 91.40%；相关文件 Ruff、格式检查及 `src/tests` 全库 mypy 通过。图片协议回归覆盖专线别名、默认与指定尺寸、连线且艾特的本地参考、Grok 单图/多图 JSON 与参考去重、超限参数在计费前拒绝、最终图片入库、幂等和单次账务记录、失败不切换协议重发。响应均为合成数据，未使用真实 Key 或发起付费生成。
+
+Grok 协议依据：[xAI 图片生成](https://docs.x.ai/developers/model-capabilities/images/generation)、[单图编辑示例](https://docs.x.ai/developers/model-capabilities/images/prompting-guide)、[多图编辑](https://docs.x.ai/developers/model-capabilities/images/multi-image-editing)。云影公开目录目前仅为 `grok-imagine-image-2.0` 标记聊天/Responses 能力；本地协议适配与合成响应回归不能证明其网关已完整透传图片编辑字段，部署后仍需验证实际渠道。不会在失败后自动改走聊天协议重复提交付费请求。
 
 ## 本轮验证记录
 

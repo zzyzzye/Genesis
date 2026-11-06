@@ -26,7 +26,7 @@ from genesis_api.core.uploads import media_filename
 from genesis_api.database.session import SessionLocal
 from genesis_api.identity.models import User
 from genesis_api.llm.catalog import model_catalog
-from genesis_api.media import gemini_image, service
+from genesis_api.media import gemini_image, service, xai_image
 from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset
 from genesis_api.media.prompt_references import mentioned_image_nodes, resolve_image_mentions
 from genesis_api.media.schemas import CanvasDocument, CanvasNode, GenerationSubmit
@@ -211,6 +211,8 @@ def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -
     )
     if node is None or not node.text.strip() or not node.generation.model:
         raise HTTPException(422, "请先保存生图节点，并填写提示词和选择模型")
+    if xai_image.uses_json_edits(node.generation.model):
+        xai_image.request_data(node)
     if (
         gemini_image.uses_generate_content(node.generation.model)
         and node.generation.image_background == "transparent"
@@ -238,6 +240,8 @@ def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -
             raise HTTPException(422, "参考图片文件不可用，请重新导入")
         ids.append(str(asset.id))
         image_numbers[source.id] = len(ids)
+    if xai_image.uses_json_edits(node.generation.model) and len(ids) > 5:
+        raise HTTPException(422, "Grok 生图最多支持 5 张参考图片，请减少提示词中的图片引用")
     # 生图模式由当前参考决定，旧草稿中的手动 mode 不再控制上游接口。
     node = node.model_copy(
         update={
@@ -277,25 +281,35 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
     if node.generation.image_background:
         payload["background"] = node.generation.image_background
     native = gemini_image.uses_generate_content(node.generation.model)
+    xai = xai_image.uses_json_edits(node.generation.model)
     endpoint = settings.image_api_base_url.rstrip("/") + "/v1/images/generations"
-    if native:
-        endpoint, payload = gemini_image.request_data(node, settings.image_api_base_url)
     sent = False
     try:
+        if native:
+            endpoint, payload = gemini_image.request_data(node, settings.image_api_base_url)
+        elif xai:
+            payload = xai_image.request_data(node)
         with ExitStack() as files:
             uploads = []
+            json_images = []
             for asset_id in task.reference_ids:
                 asset = service.asset_for(session, task.owner_id, UUID(asset_id))
                 source = files.enter_context((service.STORAGE_ROOT / asset_id).open("rb"))
-                if native:
+                if native or xai:
                     content = source.read(MAX_IMAGE_BYTES + 1)
                     if len(content) > MAX_IMAGE_BYTES:
                         raise ValueError("参考图片过大")
+                    encoded = base64.b64encode(content).decode("ascii")
+                    if xai:
+                        json_images.append(
+                            {"type": "image_url", "url": f"data:{asset.mime_type};base64,{encoded}"}
+                        )
+                        continue
                     payload["contents"][0]["parts"].append(
                         {
                             "inlineData": {
                                 "mimeType": asset.mime_type,
-                                "data": base64.b64encode(content).decode("ascii"),
+                                "data": encoded,
                             }
                         }
                     )
@@ -310,6 +324,12 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
                         ),
                     )
                 )
+            if json_images:
+                if len(json_images) == 1:
+                    payload["image"] = json_images[0]
+                else:
+                    payload["images"] = json_images
+                endpoint = settings.image_api_base_url.rstrip("/") + "/v1/images/edits"
             task.status = "processing"
             session.commit()
             # 公布生成状态后重新加锁，恢复进程通过 skip_locked 避免同时处理。
