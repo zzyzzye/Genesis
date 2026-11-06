@@ -106,7 +106,9 @@ make docker-up     # docker-dev 的兼容别名
 make docker-down   # 停止 Docker 开发环境
 make docker-logs   # 查看开发环境日志
 make docker-check  # 在容器中运行全部检查和测试
-make docker-prod   # 读取 .env.production，后台启动生产环境（8090）
+make docker-prod   # 构建并部署生产环境（8090），健康检查通过后自动清理
+make docker-prod-clean # 磁盘不足时先清理构建缓存和本项目带标记的悬空镜像
+make docker-prod-restart # 仅重启后端和前端，不构建、不运行迁移
 make docker-prod-status # 查看生产容器状态
 make docker-prod-logs   # 查看生产环境日志
 make docker-prod-down   # 停止生产环境，保留数据卷
@@ -175,6 +177,12 @@ make docker-dev
 开发示例使用明确标注的本地签名值和示例账号密码，不用于公网部署。数据库连接使用开发 Compose 默认配置。
 
 ### 生产部署（1Panel / 云服务器）
+
+`make docker-prod` 会等待服务健康检查通过（最多 180 秒），再自动执行 `make docker-prod-clean`；构建或健康检查失败时不会进入自动清理。清理删除当前 Docker 构建器全部未使用缓存，以及带有 `cn.genesis.production=true` 标记、未被容器使用的悬空镜像，不删除容器、数据库卷、素材卷或有标签的版本镜像。构建缓存由同一构建器的项目共享，清理后其他项目及下次部署也可能需要重新下载依赖、重新编译。
+
+如果服务器已经因 `ENOSPC` 无法构建，更新部署文件后先执行 `make docker-prod-clean`，再执行 `make docker-prod`。旧版未带标记的镜像不会自动删除；本机制也不清理业务数据或日志，不能保证磁盘永远充足，单次构建仍需足够的临时空间。需要回滚的镜像应提前打版本标签并保留相应部署配置。
+
+只需重启现有前后端服务时使用 `make docker-prod-restart`。它不应用代码或环境配置变更；更新代码和配置仍使用 `make docker-prod`。
 
 ```bash
 cp -n .env.production.example .env.production

@@ -26,6 +26,8 @@ services:
     build:
       context: ./backend
       target: production
+      labels:
+        cn.genesis.production: "true"
     command: ["alembic", "upgrade", "head"]
     environment:
       GENESIS_ENVIRONMENT: production
@@ -49,6 +51,8 @@ services:
     build:
       context: ./backend
       target: production
+      labels:
+        cn.genesis.production: "true"
     environment:
       GENESIS_ENVIRONMENT: production
       GENESIS_DEBUG: "false"
@@ -116,6 +120,8 @@ services:
     build:
       context: ./frontend
       target: production
+      labels:
+        cn.genesis.production: "true"
     ports:
       - "8090:80"
     restart: unless-stopped

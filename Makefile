@@ -1,4 +1,4 @@
-.PHONY: install dev-frontend dev-backend lint test build check clean docker-dev docker-up docker-down docker-logs docker-check docker-prod docker-prod-down docker-prod-logs docker-prod-status
+.PHONY: install dev-frontend dev-backend lint test build check clean docker-dev docker-up docker-down docker-logs docker-check docker-prod docker-prod-clean docker-prod-restart docker-prod-down docker-prod-logs docker-prod-status
 
 DEV_COMPOSE = docker compose --env-file .env.development -f compose.yml
 PROD_COMPOSE = docker compose --env-file .env.production -f compose.prod.yml
@@ -48,7 +48,16 @@ docker-check:
 	$(DEV_COMPOSE) exec -T backend uv run pytest
 
 docker-prod:
-	$(PROD_COMPOSE) up -d --build
+	$(PROD_COMPOSE) up -d --build --wait --wait-timeout 180
+	$(MAKE) docker-prod-clean
+
+# 构建缓存属于当前构建器；镜像仅清理本项目带标记且未被容器使用的悬空镜像。
+docker-prod-clean:
+	docker builder prune --all --force
+	docker image prune --force --filter 'label=cn.genesis.production=true'
+
+docker-prod-restart:
+	$(PROD_COMPOSE) restart backend frontend
 
 docker-prod-down:
 	$(PROD_COMPOSE) down
