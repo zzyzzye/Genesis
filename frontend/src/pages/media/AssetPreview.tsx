@@ -1,8 +1,43 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { Download, ImageOff, ImagePlus, RotateCcw } from 'lucide-react'
 import { type Asset, fileBlob, playbackUrl } from './api'
+import { getStoredAuthToken } from '../../lib/auth'
 
 const MediaPlayer = lazy(() => import('./MediaPlayer'))
+
+type ImageState = { url: string; error: string }
+type ImageEntry = ImageState & { controller: AbortController; listeners: Set<(state: ImageState) => void> }
+const images = new Map<string, ImageEntry>()
+
+function subscribeImage(id: string, session: string | null, listener: (state: ImageState) => void) {
+  // 同一会话中的成品与参考缩略图共用一次读取；不跨登录会话复用私有图片。
+  const key = JSON.stringify([session, id])
+  let entry = images.get(key)
+  if (!entry || entry.error) {
+    entry = { url: '', error: '', controller: new AbortController(), listeners: new Set() }
+    images.set(key, entry)
+    const loading = entry
+    void fileBlob({ id }, loading.controller.signal).then(blob => {
+      if (loading.controller.signal.aborted) return
+      loading.url = URL.createObjectURL(blob)
+      loading.listeners.forEach(notify => notify(loading))
+    }).catch(() => {
+      if (loading.controller.signal.aborted) return
+      loading.error = '素材加载失败'
+      loading.listeners.forEach(notify => notify(loading))
+    })
+  }
+  const shared = entry
+  shared.listeners.add(listener)
+  listener(shared)
+  return () => {
+    shared.listeners.delete(listener)
+    if (shared.listeners.size) return
+    shared.controller.abort()
+    if (shared.url) URL.revokeObjectURL(shared.url)
+    if (images.get(key) === shared) images.delete(key)
+  }
+}
 
 export function AssetPreview(props: { asset: Asset; controls?: boolean; thumbnail?: boolean; passive?: boolean; onImageDimensions?: (width: number, height: number) => void }) {
   return <AssetPreviewContent key={`${props.asset.id}:${props.asset.kind}`} {...props} />
@@ -14,20 +49,20 @@ function AssetPreviewContent({ asset, controls = false, thumbnail = false, passi
   const [attempt, setAttempt] = useState(0)
   const streaming = asset.kind === 'video' || asset.kind === 'audio'
   const assetId = asset.id
+  const session = getStoredAuthToken()
   const retry = () => { setUrl(''); setError(''); setAttempt((value) => value + 1) }
   useEffect(() => {
+    if (!streaming) return subscribeImage(assetId, session, state => { setUrl(state.url); setError(state.error) })
     let active = true
-    let objectUrl = ''
     const controller = new AbortController()
-    const load = streaming ? playbackUrl(assetId, controller.signal) : fileBlob({ id: assetId }, controller.signal)
+    const load = playbackUrl(assetId, controller.signal)
     void load.then((result) => {
       if (!active) return
-      if (typeof result === 'string') setUrl(result)
-      else { objectUrl = URL.createObjectURL(result); setUrl(objectUrl) }
+      setUrl(result)
     }).catch(() => { if (active) setError('素材加载失败') })
-    return () => { active = false; controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl) }
+    return () => { active = false; controller.abort() }
     // 改名与目录刷新不应重新下载同一素材。
-  }, [assetId, streaming, attempt])
+  }, [assetId, streaming, attempt, session])
   return <div className={`media-preview${thumbnail ? ' is-thumbnail' : ''}`} onPointerDown={(event) => { if ((event.target as HTMLElement).closest('video,audio,a,button,.media-player-shell')) event.stopPropagation() }}>
     {thumbnail && (error || !url) ? <div className="media-thumbnail-placeholder">
       {error ? passive ? <ImageOff size={20} role="img" aria-label="预览暂不可用" /> : <button type="button" className="media-thumbnail-retry nodrag nopan" aria-label={`重试预览：${asset.name}`} title={`${error}，点击重试`} onClick={retry}><RotateCcw size={18} strokeWidth={1.6} aria-hidden="true" /></button> : <ImagePlus size={20} strokeWidth={1.6} role="img" aria-label={`正在加载预览：${asset.name}`} />}
