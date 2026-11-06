@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { acceptCompletion, startCompletion } from '@codemirror/autocomplete'
 import { EditorView } from '@codemirror/view'
-import { createRef } from 'react'
+import { createRef, useState } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ReferencePrompt, type ReferencePromptHandle } from '../src/pages/media/ReferencePrompt'
 import { connectReference, displayPrompt, imageMentionToken, imageReferenceNumbers, incomingReferences } from '../src/pages/media/canvasReferences'
@@ -11,6 +11,56 @@ import * as media from '../src/pages/media/api'
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 const source: Node = { id: '11111111-1111-4111-8111-111111111111', type: 'image', asset_id: 'asset', name: '生串上架', text: '', x: 0, y: 0, width: 360, height: 203 }
 const target: Node = { ...source, id: '22222222-2222-4222-8222-222222222222', type: 'video', asset_id: null, generation: defaultGenerationSettings() }
+
+it('拼音组字期间不回写画布或重配引用，确认中文后一次提交并保留后续输入', async () => {
+  const change = vi.fn()
+  function ControlledPrompt({ references }: { references: Parameters<typeof ReferencePrompt>[0]['references'] }) {
+    const [value, setValue] = useState('')
+    return <ReferencePrompt value={value} references={references} label="镜头描述" onChange={text => { change(text); setValue(text) }} onFocus={() => {}} onBlur={() => {}} />
+  }
+  const { rerender } = render(<ControlledPrompt references={[{ node:source, asset:undefined }]} />)
+  const textbox = screen.getByRole('textbox', { name:'镜头描述' })
+  const editor = EditorView.findFromDOM(textbox)!
+  act(() => editor.focus())
+  fireEvent.compositionStart(textbox)
+  act(() => editor.dispatch({ changes:{ from:0, insert:'n' } }))
+  expect(change).not.toHaveBeenCalled()
+  // 素材刷新不能在输入法组字中途重建引用插件。
+  rerender(<ControlledPrompt references={[{ node:{ ...source, name:'新名称' }, asset:undefined }]} />)
+  act(() => editor.dispatch({ changes:{ from:0, to:1, insert:'ni' } }))
+  expect(change).not.toHaveBeenCalled()
+  act(() => editor.dispatch({ changes:{ from:0, to:2, insert:'你' } }))
+  fireEvent.compositionEnd(textbox, { data:'你' })
+  await waitFor(() => expect(change).toHaveBeenLastCalledWith('你'))
+  expect(change).toHaveBeenCalledTimes(1)
+  expect(EditorView.findFromDOM(textbox)).toBe(editor)
+  expect(textbox).toHaveFocus()
+  act(() => editor.dispatch({ changes:{ from:1, insert:'好' } }))
+  expect(change).toHaveBeenLastCalledWith('你好')
+})
+
+it('compositionend 之后到达的最终 DOM 输入仍以确认的中文提交', async () => {
+  const change = vi.fn()
+  function ControlledPrompt() {
+    const [value, setValue] = useState('')
+    return <ReferencePrompt value={value} references={[]} label="图片提示词" onChange={text => { change(text); setValue(text) }} onFocus={() => {}} onBlur={() => {}} />
+  }
+  render(<ControlledPrompt />)
+  const textbox = screen.getByRole('textbox', { name:'图片提示词' })
+  const editor = EditorView.findFromDOM(textbox)!
+  act(() => editor.focus())
+  fireEvent.compositionStart(textbox)
+  act(() => editor.dispatch({ changes:{ from:0, insert:'ni' } }))
+  fireEvent.compositionEnd(textbox, { data:'你' })
+  // 浏览器可以先结束 composition，再派发最后一次 input/DOM 变更。
+  act(() => {
+    textbox.querySelector('.cm-line')!.textContent = '你'
+    fireEvent.input(textbox, { inputType:'insertText', data:'你' })
+  })
+  await waitFor(() => expect(change).toHaveBeenLastCalledWith('你'))
+  expect(change).toHaveBeenCalledTimes(1)
+  expect(textbox).toHaveTextContent('你')
+})
 
 it('候选显示真实缩略图，鼠标移动同步原生选中并提交对应节点，卸载释放预览', async () => {
   const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})

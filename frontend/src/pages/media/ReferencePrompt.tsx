@@ -1,6 +1,6 @@
 import { autocompletion, completionKeymap, currentCompletions, selectedCompletionIndex, setSelectedCompletion, type Completion, type CompletionContext } from '@codemirror/autocomplete'
 import { Annotation, Compartment, EditorState, Prec, Transaction } from '@codemirror/state'
-import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, placeholder, tooltips } from '@codemirror/view'
+import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, placeholder, tooltips, type ViewUpdate } from '@codemirror/view'
 import { minimalSetup } from 'codemirror'
 import { useEffect, useEffectEvent, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { imageMentionPattern, imageMentionToken, type incomingReferences } from './canvasReferences'
@@ -32,6 +32,10 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
   const view = useRef<EditorView | null>(null)
   const [initial] = useState(value)
   const [referenceConfig] = useState(() => new Compartment())
+  const composing = useRef(false)
+  const compositionFrame = useRef<number | null>(null)
+  const reported = useRef(value)
+  const [compositionVersion, setCompositionVersion] = useState(0)
   const session = getStoredAuthToken()
   const referenceState = JSON.stringify(references.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', assetId: asset?.id })))
   const change = useEffectEvent(onChange)
@@ -39,7 +43,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
   const blur = useEffectEvent(onBlur)
   useImperativeHandle(ref, () => ({ insertImage(id) {
     const editor = view.current
-    if (!editor || !references.some(({ node }) => node.id === id)) return
+    if (!editor || composing.current || editor.compositionStarted || !references.some(({ node }) => node.id === id)) return
     editor.focus()
     const { from, to } = editor.state.selection.main
     const token = `${imageMentionToken(id)} `
@@ -48,6 +52,12 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
 
   useEffect(() => {
     if (!host.current) return
+    const report = (editor: EditorView) => {
+      const text = editor.state.doc.toString()
+      if (text === reported.current) return
+      reported.current = text
+      change(text)
+    }
     const editor = new EditorView({ parent: host.current, doc: initial, extensions: [
       minimalSetup, EditorView.lineWrapping, placeholder('描述想要生成的内容，输入 @ 引用已连入的图片'),
       EditorView.theme({
@@ -57,23 +67,47 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
       }),
       EditorView.contentAttributes.of({ 'aria-label': label, 'aria-multiline': 'true', role: 'textbox' }),
       EditorState.phrases.of({ Completions: '图片参考', 'No completions found': '没有匹配的图片参考' }),
-      EditorView.domEventHandlers({ focus: () => { focus() }, blur: () => { blur() } }),
+      EditorView.domEventHandlers({
+        focus: () => { focus() }, blur: () => { blur() },
+        compositionstart: () => {
+          composing.current = true
+          if (compositionFrame.current !== null) cancelAnimationFrame(compositionFrame.current)
+          compositionFrame.current = null
+        },
+        compositionend: (_event, editor) => {
+          composing.current = false
+          // 等 CodeMirror 读取最终 DOM 后再回写，拼音中间态不触发画布重绘或保存。
+          compositionFrame.current = requestAnimationFrame(() => {
+            compositionFrame.current = null
+            if (view.current !== editor || composing.current) return
+            report(editor)
+            setCompositionVersion(version => version + 1)
+          })
+        },
+      }),
       EditorView.updateListener.of(update => { if (update.docChanged && !update.transactions.some(transaction => transaction.annotation(externalChange))) {
-        change(update.state.doc.toString())
+        if (!composing.current && !update.view.compositionStarted && compositionFrame.current === null) report(update.view)
       } }),
       EditorState.changeFilter.of(transaction => transaction.newDoc.length <= 20000),
       referenceConfig.of([]), Prec.highest(keymap.of(completionKeymap)), tooltips({ parent: document.body }),
     ] })
     view.current = editor
-    return () => { view.current = null; editor.destroy() }
+    return () => {
+      if (compositionFrame.current !== null) cancelAnimationFrame(compositionFrame.current)
+      compositionFrame.current = null; composing.current = false
+      view.current = null; editor.destroy()
+    }
   }, [initial, label, referenceConfig])
 
   useEffect(() => {
     const editor = view.current
+    if (!editor || composing.current || editor.compositionStarted || compositionFrame.current !== null) return
+    reported.current = value
     if (editor && editor.state.doc.toString() !== value) editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value }, annotations: [externalChange.of(true), Transaction.addToHistory.of(false)] })
-  }, [value])
+  }, [value, compositionVersion])
 
   useEffect(() => {
+    if (composing.current || view.current?.compositionStarted || compositionFrame.current !== null) return
     const entries = JSON.parse(referenceState) as { id: string; name: string; assetId?: string }[]
     const choices = entries
     const previews = new Map<string, { dom: HTMLElement; release?: () => void }>()
@@ -133,14 +167,18 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
     const mentions = ViewPlugin.fromClass(class {
       decorations
       constructor(editor: EditorView) { this.decorations = decorations(editor) }
-      update(update: { view: EditorView }) { this.decorations = decorations(update.view) }
+      update(update: ViewUpdate) {
+        if (!update.docChanged) return
+        this.decorations = composing.current || update.view.compositionStarted
+          ? this.decorations.map(update.changes) : decorations(update.view)
+      }
     }, { decorations: plugin => plugin.decorations, provide: plugin => EditorView.atomicRanges.of(editor => editor.plugin(plugin)?.decorations ?? Decoration.none) })
     view.current?.dispatch({ effects: referenceConfig.reconfigure([
       mentions,
       previewLifecycle,
       autocompletion({ icons: false, addToOptions: [{ position: 20, render: renderOption }], tooltipClass: () => 'media-prompt-completions', override: [(context: CompletionContext) => {
         const match = context.matchBefore(/@[^@\s[\]()]*$/u)
-        if (!match || context.view?.composing) return null
+        if (!match || composing.current || context.view?.compositionStarted) return null
         return { from: match.from, options: choices.map(entry => ({
           label: `@${entry.name}`, displayLabel: entry.name, referenceId: entry.id,
           detail: !entry.assetId ? '图片未就绪' : '已连接', type: 'variable',
@@ -151,7 +189,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
         })), validFor: /^@?[^@\s[\]()]*$/u }
       }], activateOnTyping: true }),
     ]) })
-  }, [referenceConfig, referenceState, session])
+  }, [referenceConfig, referenceState, session, compositionVersion])
 
   return <div className="media-reference-prompt" ref={host} />
 }
