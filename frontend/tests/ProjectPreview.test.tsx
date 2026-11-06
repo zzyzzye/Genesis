@@ -24,7 +24,7 @@ describe('项目画面监看', () => {
 
   it('只读取项目图片，切换真实画面并保留画布和素材入口', async () => {
     const request = vi.spyOn(media, 'api').mockResolvedValue({ items: [first, second], total: 2 })
-    const { container } = monitor()
+    const { container, unmount } = monitor()
     await waitFor(() => expect(container.querySelector('.media-home-monitor-screen img')).toHaveAttribute('alt', first.name))
     expect(request).toHaveBeenCalledWith('/projects/one/assets?kind=image&page_size=4')
     expect(screen.getByRole('button', { name: `预览画面：${first.name}` })).toHaveAttribute('aria-pressed', 'true')
@@ -33,7 +33,11 @@ describe('项目画面监看', () => {
     expect(screen.getByRole('button', { name: `预览画面：${second.name}` })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('link', { name: '进入画布' })).toHaveAttribute('href', '/media/projects/one/canvas')
     expect(screen.getByRole('link', { name: '2 张图片' })).toHaveAttribute('href', '/media/projects/one/assets')
-    expect(revoke).toHaveBeenCalled()
+    // 缩略图仍订阅同一图片，切换大画面不能提前释放共享地址。
+    expect(revoke).not.toHaveBeenCalled()
+    expect(media.fileBlob).toHaveBeenCalledTimes(2)
+    unmount()
+    expect(revoke).toHaveBeenCalledTimes(2)
   })
 
   it('预览读取失败可以重试，项目与入口仍然可用', async () => {

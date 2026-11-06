@@ -19,6 +19,8 @@ export default defineConfig({
     },
   },
   test: {
+    // 容器内限制并发，避免多个 jsdom 实例争抢资源导致交互用例超时。
+    maxWorkers: 2,
     environment: 'jsdom',
     globals: true,
     setupFiles: './tests/setup.ts',
