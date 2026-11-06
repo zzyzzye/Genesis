@@ -9,10 +9,10 @@ afterEach(cleanup)
 const source: Node = { id: '11111111-1111-4111-8111-111111111111', type: 'image', asset_id: 'asset', name: '生串上架', text: '', x: 0, y: 0, width: 360, height: 203 }
 const target: Node = { ...source, id: '22222222-2222-4222-8222-222222222222', type: 'video', asset_id: null, generation: defaultGenerationSettings() }
 
-it('连线幂等、进入参考模式并拒绝失效来源，引用绑定节点而非序号', () => {
+it('连线幂等、不因候选连线进入参考模式并拒绝失效来源，引用绑定节点而非序号', () => {
   const doc = { ...emptyDocument(), nodes: [source, target] }
   const connected = connectReference(doc, source.id, target.id)
-  expect(connected.nodes[1]?.generation?.mode).toBe('reference')
+  expect(connected.nodes[1]?.generation?.mode).toBe('text')
   expect(connectReference(connected, source.id, target.id)).toBe(connected)
   expect(() => connectReference(doc, 'missing', target.id)).toThrow('已失效')
   expect(() => connectReference(doc, source.id, source.id)).toThrow('已失效')
