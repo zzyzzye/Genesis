@@ -4,13 +4,50 @@ import { EditorView } from '@codemirror/view'
 import { createRef, useState } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ReferencePrompt, type ReferencePromptHandle } from '../src/pages/media/ReferencePrompt'
-import { connectReference, displayPrompt, imageMentionToken, imageReferenceNumbers, incomingReferences } from '../src/pages/media/canvasReferences'
+import { connectReference, displayPrompt, imageMentionToken, imageReferenceNumbers, incomingReferences, promptReferences, textMentionToken } from '../src/pages/media/canvasReferences'
 import { defaultGenerationSettings, emptyDocument, type Node } from '../src/pages/media/api'
 import * as media from '../src/pages/media/api'
+import { duplicateCanvasSelection } from '../src/pages/media/canvasOperations'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 const source: Node = { id: '11111111-1111-4111-8111-111111111111', type: 'image', asset_id: 'asset', name: '生串上架', text: '', x: 0, y: 0, width: 360, height: 203 }
 const target: Node = { ...source, id: '22222222-2222-4222-8222-222222222222', type: 'video', asset_id: null, generation: defaultGenerationSettings() }
+
+it.each(['镜头描述', '图片提示词'])('文字引用在%s保留稳定标签，改名更新且断线显示失效', async label => {
+  const text = { ...source, type:'text' as const, asset_id:null, name:'人物设定', text:'白色衬衫' }
+  const change = vi.fn()
+  const props = { value:'@', label, onChange:change, onFocus:() => {}, onBlur:() => {} }
+  const { rerender } = render(<ReferencePrompt {...props} references={[{ node:text, asset:undefined }]} />)
+  const editor = EditorView.findFromDOM(screen.getByRole('textbox', { name:label }))!
+  act(() => { editor.focus(); editor.dispatch({ selection:{ anchor:1 } }); startCompletion(editor) })
+  const option = await screen.findByRole('option')
+  expect(option).toHaveTextContent('人物设定')
+  expect(option).toHaveTextContent('最新文字')
+  fireEvent.pointerMove(option.querySelector('.media-reference-option')!)
+  await waitFor(() => { act(() => { acceptCompletion(editor) }); expect(change).toHaveBeenLastCalledWith(`${textMentionToken(text.id)} `) })
+  const value = `${textMentionToken(text.id)} `
+  rerender(<ReferencePrompt {...props} value={value} references={[{ node:{ ...text, name:'新人物设定', text:'黑色外套' }, asset:undefined }]} />)
+  expect(screen.getByText('新人物设定', { selector:'.media-prompt-mention' })).toBeInTheDocument()
+  expect(editor.state.doc.toString()).toBe(value)
+  rerender(<ReferencePrompt {...props} value={value} references={[]} />)
+  expect(screen.getByText('已断开文字', { selector:'.is-missing' })).toBeInTheDocument()
+})
+
+it('仅直接连接的文字和图片进入候选，文字连接不会变成图生图模式', () => {
+  const text: Node = { ...source, id:'text', type:'text', asset_id:null, name:'人物设定', text:'白衬衫' }
+  const disconnected: Node = { ...text, id:'unconnected' }
+  const doc = connectReference({ ...emptyDocument(), nodes:[source, text, disconnected, target] }, text.id, target.id)
+  const refs = promptReferences(incomingReferences(doc, target.id, {}))
+  expect(refs.map(entry => entry.node.id)).toEqual(['text'])
+  expect(doc.nodes.find(node => node.id === target.id)?.generation?.mode).toBe('text')
+  expect(displayPrompt(textMentionToken(text.id), refs)).toBe('人物设定')
+  expect(displayPrompt(textMentionToken(disconnected.id), refs)).toBe('已断开文字')
+  const withMention = { ...doc, nodes:doc.nodes.map(node => node.id === target.id ? { ...node, text:textMentionToken(text.id) } : node) }
+  const copy = duplicateCanvasSelection(withMention, [text.id, target.id])
+  expect(copy.document.nodes.find(node => node.id === copy.idMap.get(target.id))?.text).toBe(textMentionToken(copy.idMap.get(text.id)!))
+  const targetOnly = duplicateCanvasSelection(withMention, [target.id])
+  expect(targetOnly.document.nodes.at(-1)?.text).toBe(textMentionToken(text.id))
+})
 
 it('拼音组字期间不回写画布或重配引用，确认中文后一次提交并保留后续输入', async () => {
   const change = vi.fn()

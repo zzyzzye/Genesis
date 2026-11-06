@@ -180,6 +180,48 @@ async def fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncGener
     engine.dispose()
 
 
+@pytest.mark.anyio
+async def test_text_reference_submission_freezes_latest_source(fixture: VideoFixture) -> None:
+    """真实保存和提交入口展开最新源文字，保留画布标签与任务快照。"""
+    state = fixture
+    snapshot = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    doc = snapshot["document"]
+    source = str(uuid4())
+    token = f"@[文字](ref:{source})"
+    doc["nodes"][0]["text"] = f"开场：{token}"
+    doc["nodes"].append({
+        "id": source, "type": "text", "text": "旧设定", "name": "人物设定",
+        "x": 0, "y": 0, "width": 300, "height": 180,
+    })
+    doc["edges"] = [{"id": str(uuid4()), "source": source, "target": state.node_id}]
+    for content in ("旧设定", "最新设定"):
+        doc["nodes"][-1]["text"] = content
+        saved = await state.client.put(
+            f"projects/{state.project_id}/canvas",
+            json={"version": snapshot["version"], "document": doc},
+        )
+        assert saved.status_code == 200
+        snapshot = saved.json()
+    response = await submit(state)
+    assert response.status_code == 202
+    task = state.session.get(VideoGeneration, UUID(response.json()["id"]))
+    assert task is not None
+    frozen = task.snapshot["node"]
+    assert frozen["text"] == "开场：最新设定"
+    post = next(request for request in state.requests if request.method == "POST")
+    assert json.loads(post.content)["prompt"] == "开场：最新设定"
+    current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    assert current["document"]["nodes"][0]["text"] == f"开场：{token}"
+    next(node for node in current["document"]["nodes"] if node["id"] == source)[
+        "text"
+    ] = "提交后继续修改"
+    assert (await state.client.put(
+        f"projects/{state.project_id}/canvas", json=current,
+    )).status_code == 200
+    state.session.refresh(task)
+    assert task.snapshot["node"]["text"] == "开场：最新设定"
+
+
 async def save_node(state: VideoFixture, **patch: object) -> None:
     """保存实际画布，提交始终读取这一份服务端快照。"""
     node: dict[str, object] = {

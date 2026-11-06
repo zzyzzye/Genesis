@@ -1,6 +1,6 @@
 import { applyNodeChanges, type NodeChange, type Node as FlowNode } from '@xyflow/react'
 import type { Document, Node } from './api'
-import { imageMentionPattern, imageMentionToken, syncReferenceModes } from './canvasReferences'
+import { promptMentionPattern, syncReferenceModes } from './canvasReferences'
 
 export const generationNodeSize = { width: 600, height: 378 }
 
@@ -15,7 +15,7 @@ export function duplicateCanvasSelection(document: Document, selected: string[],
   const originals = document.nodes.filter(node => ids.has(node.id))
   const idMap = new Map(originals.map(node => [node.id, crypto.randomUUID()]))
   const nodes = originals.map(node => ({ ...node, id: idMap.get(node.id)!, name: `${node.name || nodeTypeLabel(node.type)} - 副本`.slice(0, 120),
-    text: node.text.replace(imageMentionPattern, (token, id: string) => idMap.has(id) ? imageMentionToken(idMap.get(id)!) : token),
+    text: node.text.replace(promptMentionPattern, (token, kind: string, id: string) => idMap.has(id) ? `@[${kind}](ref:${idMap.get(id)!})` : token),
     member_ids: node.member_ids?.flatMap(id => idMap.has(id) ? [idMap.get(id)!] : []), x: node.x + offset.x, y: node.y + offset.y }))
   // 上游参考沿用原节点；内部关系改接副本，不向原有下游新增输出线。
   const edges = document.edges.filter(edge => idMap.has(edge.target)).map(edge => ({ id: crypto.randomUUID(), source: idMap.get(edge.source) ?? edge.source, target: idMap.get(edge.target)! }))

@@ -30,6 +30,7 @@ from genesis_api.identity.models import User
 from genesis_api.media import image
 from genesis_api.media import service as media_service
 from genesis_api.media.models import ImageGeneration
+from genesis_api.media.prompt_references import resolve_text_mentions
 from genesis_api.media.schemas import CanvasDocument
 
 router = APIRouter(tags=["账务"])
@@ -173,6 +174,10 @@ def quote(
                 CanvasDocument.model_validate(project.canvas),
                 session,
             )
+        else:
+            node = node.model_copy(update={"text": resolve_text_mentions(
+                node.text, CanvasDocument.model_validate(project.canvas), node.id,
+            )})
         model = node.generation.model
         provider = data.kind  # type: ignore[assignment]
         parameters = media_parameters(node)

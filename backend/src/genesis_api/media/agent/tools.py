@@ -106,6 +106,11 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
                 ],
                 "image_mention_token": f"@[图片](ref:{node.id})"
                 if source_kinds[node.id] == "image" else None,
+                "text_reference_node_ids": [
+                    str(source.id) for source in references[node.id] if source.type == "text"
+                ],
+                "text_mention_token": f"@[文字](ref:{node.id})"
+                if node.type == "text" else None,
             } for node in document.nodes],
             "edges": [edge.model_dump(mode="json") for edge in document.edges],
             "image_generation_with_references_node_ids": [

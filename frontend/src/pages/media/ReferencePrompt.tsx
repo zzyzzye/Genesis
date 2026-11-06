@@ -3,12 +3,12 @@ import { Annotation, Compartment, EditorState, Prec, Transaction } from '@codemi
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, placeholder, tooltips, type ViewUpdate } from '@codemirror/view'
 import { minimalSetup } from 'codemirror'
 import { useEffect, useEffectEvent, useImperativeHandle, useRef, useState, type Ref } from 'react'
-import { imageMentionPattern, imageMentionToken, type incomingReferences } from './canvasReferences'
+import { promptMentionPattern, imageMentionToken, textMentionToken, type incomingReferences } from './canvasReferences'
 import { getStoredAuthToken } from '../../lib/auth'
 import { subscribeImage } from './imagePreview'
 
 type References = ReturnType<typeof incomingReferences>
-export type ReferencePromptHandle = { insertImage: (id: string) => void }
+export type ReferencePromptHandle = { insertImage: (id: string) => void; insertReference: (id: string) => void }
 const externalChange = Annotation.define<boolean>()
 
 class ImageMention extends WidgetType {
@@ -18,7 +18,7 @@ class ImageMention extends WidgetType {
     const element = document.createElement('span')
     element.className = `media-prompt-mention${this.missing ? ' is-missing' : ''}`
     element.textContent = this.label
-    element.title = this.missing ? '图片参考已断开，请重新连线或删除此引用' : this.label
+    element.title = this.missing ? '参考已断开，请重新连线或删除此引用' : this.label
     return element
   }
 }
@@ -37,18 +37,22 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
   const reported = useRef(value)
   const [compositionVersion, setCompositionVersion] = useState(0)
   const session = getStoredAuthToken()
-  const referenceState = JSON.stringify(references.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名图片', assetId: asset?.id })))
+  const referenceState = JSON.stringify(references.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名参考', assetId: asset?.id, text: node.type === 'text', empty: !node.text.trim() })))
   const change = useEffectEvent(onChange)
   const focus = useEffectEvent(onFocus)
   const blur = useEffectEvent(onBlur)
-  useImperativeHandle(ref, () => ({ insertImage(id) {
-    const editor = view.current
-    if (!editor || composing.current || editor.compositionStarted || !references.some(({ node }) => node.id === id)) return
-    editor.focus()
-    const { from, to } = editor.state.selection.main
-    const token = `${imageMentionToken(id)} `
-    editor.dispatch({ changes: { from, to, insert: token }, selection: { anchor: from + token.length } })
-  } }), [references])
+  useImperativeHandle(ref, () => {
+    const insertReference = (id: string) => {
+      const editor = view.current
+      const source = references.find(({ node }) => node.id === id)
+      if (!editor || composing.current || editor.compositionStarted || !source) return
+      editor.focus()
+      const { from, to } = editor.state.selection.main
+      const token = `${source.node.type === 'text' ? textMentionToken(id) : imageMentionToken(id)} `
+      editor.dispatch({ changes: { from, to, insert: token }, selection: { anchor: from + token.length } })
+    }
+    return { insertImage: insertReference, insertReference }
+  }, [references])
 
   useEffect(() => {
     if (!host.current) return
@@ -59,14 +63,14 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
       change(text)
     }
     const editor = new EditorView({ parent: host.current, doc: initial, extensions: [
-      minimalSetup, EditorView.lineWrapping, placeholder('描述想要生成的内容，输入 @ 引用已连入的图片'),
+      minimalSetup, EditorView.lineWrapping, placeholder('描述想要生成的内容，输入 @ 引用已连入的图片或文字'),
       EditorView.theme({
         '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'currentColor' },
         '.cm-content ::selection, .cm-content::selection': { backgroundColor: '#505050', color: '#ffffff' },
         '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: '#505050' },
       }),
       EditorView.contentAttributes.of({ 'aria-label': label, 'aria-multiline': 'true', role: 'textbox' }),
-      EditorState.phrases.of({ Completions: '图片参考', 'No completions found': '没有匹配的图片参考' }),
+      EditorState.phrases.of({ Completions: '画布参考', 'No completions found': '没有匹配的已连入参考' }),
       EditorView.domEventHandlers({
         focus: () => { focus() }, blur: () => { blur() },
         compositionstart: () => {
@@ -108,7 +112,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
 
   useEffect(() => {
     if (composing.current || view.current?.compositionStarted || compositionFrame.current !== null) return
-    const entries = JSON.parse(referenceState) as { id: string; name: string; assetId?: string }[]
+    const entries = JSON.parse(referenceState) as { id: string; name: string; assetId?: string; text: boolean; empty: boolean }[]
     const choices = entries
     const previews = new Map<string, { dom: HTMLElement; release?: () => void }>()
     const previewLifecycle = ViewPlugin.define(() => ({ destroy() {
@@ -128,7 +132,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
       if (existing) return dom
       const thumbnail = document.createElement('span')
       thumbnail.className = 'media-reference-option-image'
-      thumbnail.textContent = '图'
+      thumbnail.textContent = entry.text ? '文' : '图'
       thumbnail.setAttribute('aria-hidden', 'true')
       const name = document.createElement('span')
       name.className = 'media-reference-option-name'
@@ -141,7 +145,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
         const index = currentCompletions(editor.state).findIndex(option => (option as Completion & { referenceId: string }).referenceId === entry.id)
         if (index >= 0 && selectedCompletionIndex(editor.state) !== index) editor.dispatch({ effects: setSelectedCompletion(index) })
       })
-      const release = entry.assetId ? subscribeImage(entry.assetId, session, state => {
+      const release = !entry.text && entry.assetId ? subscribeImage(entry.assetId, session, state => {
         thumbnail.replaceChildren()
         if (state.url) {
           thumbnail.title = ''
@@ -158,10 +162,10 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
       previews.set(entry.id, { dom, release })
       return dom
     }
-    const decorations = (editor: EditorView) => Decoration.set([...editor.state.doc.toString().matchAll(imageMentionPattern)].map(match => {
-      const index = entries.findIndex(item => item.id === match[1])
+    const decorations = (editor: EditorView) => Decoration.set([...editor.state.doc.toString().matchAll(promptMentionPattern)].map(match => {
+      const index = entries.findIndex(item => item.id === match[2] && item.text === (match[1] === '文字'))
       const reference = entries[index]
-      const label = reference?.name ?? '已断开图片'
+      const label = reference?.name ?? `已断开${match[1]}`
       return Decoration.replace({ widget: new ImageMention(label, !reference) }).range(match.index, match.index + match[0].length)
     }))
     const mentions = ViewPlugin.fromClass(class {
@@ -181,9 +185,9 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
         if (!match || composing.current || context.view?.compositionStarted) return null
         return { from: match.from, options: choices.map(entry => ({
           label: `@${entry.name}`, displayLabel: entry.name, referenceId: entry.id,
-          detail: !entry.assetId ? '图片未就绪' : '已连接', type: 'variable',
+          detail: entry.text ? entry.empty ? '文字为空' : '最新文字' : !entry.assetId ? '图片未就绪' : '已连接', type: 'variable',
           apply: (editor: EditorView, _completion: unknown, from: number, to: number) => {
-            const token = `${imageMentionToken(entry.id)} `
+            const token = `${entry.text ? textMentionToken(entry.id) : imageMentionToken(entry.id)} `
             editor.dispatch({ changes: { from, to, insert: token }, selection: { anchor: from + token.length } })
           },
         })), validFor: /^@?[^@\s[\]()]*$/u }

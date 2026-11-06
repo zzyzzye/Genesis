@@ -22,7 +22,11 @@ from genesis_api.identity.models import User
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service
 from genesis_api.media.models import MediaAsset, ProjectAsset, VideoGeneration
-from genesis_api.media.prompt_references import mentioned_image_nodes, resolve_image_mentions
+from genesis_api.media.prompt_references import (
+    mentioned_image_nodes,
+    resolve_image_mentions,
+    resolve_text_mentions,
+)
 from genesis_api.media.schemas import CanvasDocument
 
 logger = logging.getLogger(__name__)
@@ -205,7 +209,9 @@ def build_payload(
     task.reference_ids = ids
     payload: dict[str, object] = {
         "model": node.generation.model,
-        "prompt": resolve_image_mentions(node.text.strip(), image_numbers),
+        "prompt": resolve_text_mentions(
+            resolve_image_mentions(node.text.strip(), image_numbers), document, node.id
+        ),
         "duration": node.duration_seconds,
         "aspect_ratio": node.generation.ratio,
         "resolution": node.generation.resolution.lower(),
@@ -531,6 +537,9 @@ async def admit_task(
     )
     payload = build_payload(task, document, session, settings)
     node = next(n for n in document.nodes if n.id == data.node_id)
+    node = node.model_copy(update={
+        "text": resolve_text_mentions(node.text, document, node.id),
+    })
     billing.admit(
         session,
         user,
@@ -543,9 +552,7 @@ async def admit_task(
         parameters=billing.media_parameters(node),
     )
     task.snapshot = {
-        "node": next(
-            node.model_dump(mode="json") for node in document.nodes if node.id == data.node_id
-        ),
+        "node": node.model_dump(mode="json"),
         "reference_ids": task.reference_ids,
     }
     if payload["model"] not in await available_models(settings):

@@ -493,7 +493,7 @@ describe('作品画布', () => {
     expect(await screen.findByText('服务器暂不可用')).toBeInTheDocument()
     expect(localStorage.getItem(key)).toContain('本地未保存正文')
     fail = false
-    fireEvent.click(reload)
+    fireEvent.click(screen.getByRole('button', { name: '重新加载' }))
     fireEvent.click(screen.getByRole('button', { name: '放弃本地修改并加载' }))
     await waitFor(() => expect(screen.queryByRole('button', { name: '重新加载' })).not.toBeInTheDocument())
     expect(screen.getByRole('textbox', { name: '便签内容' })).toHaveValue('服务器正文')

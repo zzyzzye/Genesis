@@ -28,7 +28,11 @@ from genesis_api.identity.models import User
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import gemini_image, image_protocols, service, xai_image
 from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset
-from genesis_api.media.prompt_references import mentioned_image_nodes, resolve_image_mentions
+from genesis_api.media.prompt_references import (
+    mentioned_image_nodes,
+    resolve_image_mentions,
+    resolve_text_mentions,
+)
 from genesis_api.media.schemas import CanvasDocument, CanvasNode, GenerationSubmit
 
 logger = logging.getLogger(__name__)
@@ -244,7 +248,9 @@ def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -
     # 生图模式由当前参考决定，旧草稿中的手动 mode 不再控制上游接口。
     node = node.model_copy(
         update={
-            "text": resolve_image_mentions(node.text, image_numbers),
+            "text": resolve_text_mentions(
+                resolve_image_mentions(node.text, image_numbers), document, node.id
+            ),
             "generation": node.generation.model_copy(
                 update={"mode": "reference" if ids else "text"}
             ),

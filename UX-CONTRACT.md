@@ -108,6 +108,8 @@ React Flow 的原生 `onMoveStart` / `onMoveEnd` 拥有滚轮平移手势的起�
 
 ## 视频图片引用
 
+生图和生视频共享文字引用：仅直接连入的 `text` 节点可通过 @ 菜单、参考条或“引用文字”插入 `@[文字](ref:真实节点ID)`。编辑器保留可读名称标签，生成时从服务端当前保存画布展开最新文字，已提交任务保持快照。仅连线不传入内容；断开、删除、空文字、嵌套引用和展开超过 20000 字符均在调用模型前报错。文字引用不改变生成模式，不计入图片数量，也不间接授权文字中的图片标记。Agent 读取同一画布返回的 `text_reference_node_ids` 与 `text_mention_token`，使用相同提交路径。
+
 视频图片引用复用 `canvasReferences.ts`、`ReferencePrompt.tsx` 与现有保存、撤销和素材权限检查。`connect_nodes` 来源和目标必须来自当前画布，重复连线幂等，整批失败不产生部分修改；`add_video.connect_from_ids` 按声明顺序建立参考。手动连线、助手应用、断开与删除使用同一模式同步规则，连入后自动进入素材参考。
 
 引用保存为 `@[图片](ref:真实节点ID)`，以真实节点绑定，正文预览和编辑器显示可读标签。候选仅包含已连接图片；缩略图插入、名称搜索、键盘操作、IME 和菜单关闭沿用 CodeMirror 原生能力。`get_media_canvas.nodes` 逐节点返回实际 `reference_node_ids`、`image_reference_node_ids` 与引用标记；生图目标汇总改名为 `image_generation_with_references_node_ids`，不得将其当作视频来源列表。

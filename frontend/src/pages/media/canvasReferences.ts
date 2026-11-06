@@ -43,6 +43,13 @@ export function syncReferenceModes(document: Document): Document {
 // 引用绑定节点标识，显示名称和图片序号均可随画布更新，不把序号当作永久身份。
 export const imageMentionToken = (nodeId: string) => `@[图片](ref:${nodeId})`
 export const imageMentionPattern = /@\[图片\]\(ref:([a-zA-Z0-9_-]+)\)/g
+export const textMentionToken = (nodeId: string) => `@[文字](ref:${nodeId})`
+export const promptMentionPattern = /@\[(图片|文字)\]\(ref:([a-zA-Z0-9_-]+)\)/g
+
+export function promptReferences(references: ReturnType<typeof incomingReferences>) {
+  const images = imageReferences(references)
+  return references.filter(reference => reference.node.type === 'text' || images.includes(reference))
+}
 
 export function imageReferenceNumbers(references: ReturnType<typeof incomingReferences>) {
   const images: string[] = []
@@ -54,8 +61,8 @@ export function imageReferenceNumbers(references: ReturnType<typeof incomingRefe
 }
 
 export function displayPrompt(text: string, references: ReturnType<typeof incomingReferences>) {
-  const names = new Map(imageReferences(references).map(({ node, asset }) => [node.id, node.name || asset?.name || '未命名图片']))
-  return text.replace(imageMentionPattern, (_token, id: string) => {
-    return names.get(id) ?? '已断开图片'
+  const names = new Map(promptReferences(references).map(({ node, asset }) => [`${node.type === 'text' ? '文字' : '图片'}:${node.id}`, node.name || asset?.name || '未命名参考']))
+  return text.replace(promptMentionPattern, (_token, kind: string, id: string) => {
+    return names.get(`${kind}:${id}`) ?? `已断开${kind}`
   })
 }
