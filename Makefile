@@ -1,7 +1,8 @@
-.PHONY: install dev-frontend dev-backend lint test build check clean docker-dev docker-up docker-down docker-logs docker-check docker-prod docker-prod-clean docker-prod-restart docker-prod-down docker-prod-logs docker-prod-status
+.PHONY: install dev-frontend dev-backend lint test build check clean docker-dev docker-up docker-down docker-logs docker-check docker-prod docker-prod-trim docker-prod-clean docker-prod-restart docker-prod-down docker-prod-logs docker-prod-status
 
 DEV_COMPOSE = docker compose --env-file .env.development -f compose.yml
 PROD_COMPOSE = docker compose --env-file .env.production -f compose.prod.yml
+PROD_BUILD_CACHE_SIZE ?= 2GB
 
 install:
 	cd frontend && npm ci
@@ -49,7 +50,17 @@ docker-check:
 
 docker-prod:
 	$(PROD_COMPOSE) up -d --build --wait --wait-timeout 180
-	$(MAKE) docker-prod-clean
+	$(MAKE) docker-prod-trim
+
+# 日常部署保留有限缓存，兼容新版 Buildx 和旧版 builder 参数。
+docker-prod-trim:
+	@prune_help=$$(docker builder prune --help) || exit $$?; \
+	case "$$prune_help" in \
+	  *--max-used-space*) docker builder prune --all --force --max-used-space "$(PROD_BUILD_CACHE_SIZE)" ;; \
+	  *--keep-storage*) docker builder prune --all --force --keep-storage "$(PROD_BUILD_CACHE_SIZE)" ;; \
+	  *) printf '%s\n' '当前 Docker 不支持按容量清理缓存，请升级 Docker；未执行全量清理。' >&2; exit 1 ;; \
+	esac
+	docker image prune --force --filter 'label=cn.genesis.production=true'
 
 # 构建缓存属于当前构建器；镜像仅清理本项目带标记且未被容器使用的悬空镜像。
 docker-prod-clean:
