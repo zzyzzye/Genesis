@@ -8,15 +8,21 @@ from fastapi import HTTPException
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import BaseTool, ToolException, tool
 from pydantic import Field, ValidationError
+from sqlalchemy import select
 
 from genesis_api.agent.context import require_actor
 from genesis_api.agent.tool_inputs import ToolArray, tool_validation_error
 from genesis_api.core.config import Settings
 from genesis_api.database.session import SessionLocal
 from genesis_api.identity.models import User
-from genesis_api.media import catalog, image, service
-from genesis_api.media.models import ImageGeneration
-from genesis_api.media.schemas import CanvasDocument, GenerationSettings, GenerationSubmit
+from genesis_api.media import catalog, image, service, video
+from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset, VideoGeneration
+from genesis_api.media.schemas import (
+    CanvasDocument,
+    CanvasWrite,
+    GenerationSettings,
+    GenerationSubmit,
+)
 
 
 def build_media_tools(settings: Settings) -> list[BaseTool]:
@@ -365,6 +371,144 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
 
         return await asyncio.to_thread(read_task)
 
+    @tool(response_format="content_and_artifact")
+    async def edit_media_canvas(
+        project_id: UUID, expected_version: int, document: CanvasDocument,
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        """按用户要求直接保存完整画布，支持节点新建/删除/副本/编组/取消编组/排版/移动缩放/参数及引用编辑。
+
+        Args:
+            project_id: 当前作品，先调用 get_media_canvas。
+            expected_version: 刚读取的版本，过期必须重读，不能强行覆盖。
+            document: 完整目标画布，保留无关节点、视口和设置。新节点/线使用新 UUID。
+                副本重映射内部线与图片标签，保留外部上游、不复制到原下游的线。
+                分组使用 member_ids，取消编组只移除组框；删除成员须维护分组和连线。
+                断开引用只删线，保留素材；图片实际使用还须在 text 写入 @[图片](ref:节点UUID)。
+                上传/已有素材使用 image、video_asset、audio 节点，asset_id 必须已关联作品。
+                排版按引用从左到右布置，生成结果放右侧；移动分组须同步移动成员。
+
+        Returns:
+            已保存版本、完整文档与前端同步回执。没有启动付费生成。
+        """
+        def write() -> tuple[dict[str, object], dict[str, object]]:
+            try:
+                actor = require_actor(module="media")
+                with SessionLocal() as session:
+                    project = service.project_for(session, actor, project_id)
+                    if CanvasDocument.model_validate(project.canvas) == document:
+                        result = {"version": project.version, "document": project.canvas}
+                    else:
+                        result = service.save_canvas(
+                            session, actor, project_id,
+                            CanvasWrite(version=expected_version, document=document),
+                        )
+                receipt = uuid5(NAMESPACE_URL, f"canvas:{project_id}:{result['version']}")
+                return result, {"resource": {
+                    "module": "media", "kind": "canvas_edit", "id": str(receipt),
+                    "scope_id": str(project_id), "parent_id": str(project_id),
+                }}
+            except (HTTPException, RuntimeError) as exc:
+                raise ToolException(
+                    str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+                ) from None
+        return await asyncio.to_thread(write)
+
+    @tool
+    async def get_media_assets(project_id: UUID, page: int = 1) -> dict[str, object]:
+        """读取当前用户作品及账户库素材的真实 ID、名称与类型，每页50项，不返回文件授权地址。"""
+        def read() -> dict[str, object]:
+            actor = require_actor(module="media")
+            with SessionLocal() as session:
+                service.project_for(session, actor, project_id)
+                linked = set(session.scalars(select(ProjectAsset.asset_id).where(
+                    ProjectAsset.project_id == project_id
+                )))
+                rows = session.scalars(select(MediaAsset).where(
+                    MediaAsset.owner_id == actor,
+                    (MediaAsset.id.in_(linked)) | MediaAsset.in_library,
+                ).order_by(MediaAsset.id).offset((max(1, page) - 1) * 50).limit(51)).all()
+                return {"items": [{"id": str(row.id), "name": row.name, "kind": row.kind,
+                                   "linked": row.id in linked} for row in rows[:50]],
+                        "has_more": len(rows) > 50}
+        try:
+            return await asyncio.to_thread(read)
+        except (HTTPException, RuntimeError) as exc:
+            raise ToolException(
+                str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+            ) from None
+
+    @tool
+    async def reference_media_asset(project_id: UUID, asset_id: UUID) -> dict[str, object]:
+        """关联本人账户素材，随后用 edit_media_canvas 创建素材节点及连线。"""
+        def attach() -> dict[str, object]:
+            actor = require_actor(module="media")
+            with SessionLocal() as session:
+                service.project_for(session, actor, project_id)
+                asset = service.asset_for(session, actor, asset_id)
+                linked = session.get(ProjectAsset, (project_id, asset_id))
+                if not asset.in_library and linked is None:
+                    raise ToolException("素材不在账户素材库中")
+                if session.get(ProjectAsset, (project_id, asset_id)) is None:
+                    session.add(ProjectAsset(project_id=project_id, asset_id=asset_id))
+                    session.commit()
+                return {"id": str(asset.id), "name": asset.name, "kind": asset.kind}
+        try:
+            return await asyncio.to_thread(attach)
+        except (HTTPException, RuntimeError) as exc:
+            raise ToolException(
+                str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+            ) from None
+
+    @tool(response_format="content_and_artifact")
+    async def submit_video_generation(
+        project_id: UUID, node_id: UUID, expected_version: int, config: RunnableConfig,
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        """提交已保存的视频节点，可能收费；同轮同节点及已有运行任务复用，不重复生成。"""
+        try:
+            actor = require_actor(module="media")
+            run_id = UUID(str(config.get("configurable", {}).get("genesis_run_id", "")))
+            request_id = uuid5(
+                NAMESPACE_URL, f"genesis:video:{actor}:{run_id}:{project_id}:{node_id}"
+            )
+            with SessionLocal() as session:
+                user = session.get(User, actor)
+                if user is None:
+                    raise ToolException("账户不存在")
+                task, payload = await video.admit_task(
+                    session, user, project_id,
+                    video.VideoSubmit(request_id=request_id, node_id=node_id), settings,
+                    expected_version=expected_version, reuse_active=True,
+                )
+                result = {"project_id": str(project_id), **video.task_data(task),
+                          "reused": payload is None}
+                resource = {"module": "media", "kind": "video_generation", "id": str(task.id),
+                            "scope_id": str(project_id), "parent_id": str(node_id)}
+                if payload is not None:
+                    video.start_agent_task(task.id, payload, settings)
+                return result, {"resource": resource}
+        except HTTPException as exc:
+            raise ToolException(str(exc.detail)) from None
+        except (RuntimeError, ValueError):
+            raise ToolException("缺少有效的影音执行上下文，请重新发送生成请求") from None
+
+    @tool
+    async def get_video_generation_task(project_id: UUID, task_id: UUID) -> dict[str, object]:
+        """查询已提交视频任务的当前状态与结果素材，不重新生成。"""
+        def read() -> dict[str, object]:
+            actor = require_actor(module="media")
+            with SessionLocal() as session:
+                service.project_for(session, actor, project_id)
+                task = session.get(VideoGeneration, task_id)
+                if task is None or task.owner_id != actor or task.project_id != project_id:
+                    raise ToolException("视频任务不存在")
+                return video.task_data(task)
+        try:
+            return await asyncio.to_thread(read)
+        except (HTTPException, RuntimeError) as exc:
+            raise ToolException(
+                str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+            ) from None
+
     result = [
         get_video_generation_models,
         get_media_canvas,
@@ -373,6 +517,8 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
         submit_image_generation,
         get_image_generation_task,
         rename_node,
+        edit_media_canvas, get_media_assets, reference_media_asset,
+        submit_video_generation, get_video_generation_task,
     ]
     for entry in result:
         entry.handle_tool_error = True

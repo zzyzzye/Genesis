@@ -20,10 +20,69 @@ from genesis_api.database.base import Base
 from genesis_api.identity.models import User, UserRole
 from genesis_api.media import image
 from genesis_api.media.agent import tools as media_tools
-from genesis_api.media.models import MediaProject
+from genesis_api.media.models import MediaAsset, MediaProject, ProjectAsset
 from genesis_api.media.schemas import CanvasDocument
 
 type CanvasTools = tuple[UUID, UUID, list[UUID], sessionmaker[Session]]
+
+
+def test_asset_tools_link_only_owned_library_assets(canvas_tools: CanvasTools) -> None:
+    """账户素材可幂等关联；其他作品私有素材及无身份调用均被拒绝。"""
+    actor, project_id, _, sessions = canvas_tools
+    ids = [uuid4(), uuid4()]
+    with sessions() as session:
+        for index, asset_id in enumerate(ids):
+            session.add(MediaAsset(id=asset_id, owner_id=actor, name=f"参考{index}.png",
+                                   kind="image", mime_type="image/png", size=4,
+                                   in_library=index == 0))
+        session.commit()
+    tools = {entry.name: entry for entry in media_tools.build_media_tools(Settings())}
+    args = {"project_id": str(project_id), "asset_id": str(ids[0])}
+    with agent_invocation_context(actor, "member", "media"):
+        listed = asyncio.run(tools["get_media_assets"].ainvoke({"project_id": str(project_id)}))
+        assert [item["id"] for item in listed["items"]] == [str(ids[0])]
+        for _ in range(2):
+            assert asyncio.run(tools["reference_media_asset"].ainvoke(args))["id"] == str(ids[0])
+        assert "不在账户素材库" in asyncio.run(tools["reference_media_asset"].ainvoke(
+            {**args, "asset_id": str(ids[1])},
+        ))
+    with sessions() as session:
+        assert session.get(ProjectAsset, (project_id, ids[0])) is not None
+        assert session.get(ProjectAsset, (project_id, ids[1])) is None
+    assert "有效的业务用户身份" in asyncio.run(tools["reference_media_asset"].ainvoke(args))
+
+
+def test_edit_canvas_validates_graph_version_and_supports_replay(canvas_tools: CanvasTools) -> None:
+    """原生写入复用页面校验，覆盖副本、编组、布局、连线与引用的批量保存。"""
+    actor, project_id, ids, sessions = canvas_tools
+    tools = {entry.name: entry for entry in media_tools.build_media_tools(Settings())}
+    with agent_invocation_context(actor, "member", "media"):
+        snapshot = asyncio.run(tools["get_media_canvas"].ainvoke({"project_id": str(project_id)}))
+        document = CanvasDocument.model_validate(snapshot).model_dump(mode="json")
+        copy = deepcopy(document["nodes"][0])
+        copy["id"] = str(uuid4())
+        copy["name"] = "副本"
+        copy["x"] = 200
+        document["nodes"].append(copy)
+        document["nodes"].append({
+            "id": str(uuid4()), "type": "group", "x": 0, "y": 0,
+            "width": 1200, "height": 600, "member_ids": [str(ids[0]), copy["id"]],
+        })
+        document["edges"] = [{"id": str(uuid4()), "source": str(ids[0]), "target": copy["id"]}]
+        args = {"project_id": str(project_id), "expected_version": snapshot["version"],
+                "document": document}
+        result = asyncio.run(tools["edit_media_canvas"].ainvoke(args))
+        assert result["version"] == snapshot["version"] + 1
+        assert asyncio.run(tools["edit_media_canvas"].ainvoke(args))["version"] == result["version"]
+        document["nodes"][0]["x"] = 999
+        assert "其他窗口修改" in asyncio.run(tools["edit_media_canvas"].ainvoke(args))
+        args["expected_version"] = result["version"]
+        document["edges"][0]["source"] = str(uuid4())
+        assert "连线必须连接" in asyncio.run(tools["edit_media_canvas"].ainvoke(args))
+    with sessions() as session:
+        project = session.get(MediaProject, project_id)
+        assert project is not None and project.version == result["version"]
+    assert "有效的业务用户身份" in asyncio.run(tools["edit_media_canvas"].ainvoke(args))
 
 
 @pytest.mark.parametrize(

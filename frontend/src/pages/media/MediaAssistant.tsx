@@ -10,7 +10,7 @@ import { imageRatios, imageResolutions, imageSizePatch } from './imageSettings'
 
 type MediaAssistantPage = 'projects' | 'project' | 'canvas' | 'assets'
 export type MediaGenerationResource = NonNullable<AiToolCall['resource']>
-export type MediaCanvasActions = { save: () => Promise<void>; getDocument: () => Document; attachImageTask: (resource: MediaGenerationResource) => Promise<void>; syncNodeNames?: () => Promise<void> }
+export type MediaCanvasActions = { save: () => Promise<void>; getDocument: () => Document; attachImageTask: (resource: MediaGenerationResource) => Promise<void>; syncNodeNames?: () => Promise<void>; syncCanvas?: () => Promise<void> }
 export type MediaAssistantNode = { id: string; type: string; name: string; text: string; assetId: string | null; durationSeconds?: number; model?: string; mode?: string }
 type MediaCanvasOperation =
   | { action: 'add_image_generation'; name: string; text: string }
@@ -107,7 +107,10 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
       for (const resource of Object.values(canvasResources)) {
         if (!active || resource.scope_id !== projectId || attachedResources.current.has(resource.id)) continue
         try {
-          if (resource.kind === 'canvas_node_rename') {
+          if (resource.kind === 'canvas_edit') {
+            if (!canvasActions.syncCanvas) throw new Error('画布尚未就绪')
+            await canvasActions.syncCanvas()
+          } else if (resource.kind === 'canvas_node_rename') {
             if (!canvasActions.syncNodeNames) throw new Error('画布尚未就绪')
             await canvasActions.syncNodeNames()
           } else await canvasActions.attachImageTask(resource)
@@ -191,7 +194,7 @@ export function MediaAssistant({ userId, attachmentsAllowed, page, projectId, se
       await canvasActions.save()
     } : undefined,
     onToolCalls: calls => {
-      const resources = calls.flatMap(call => call.status === 'succeeded' && call.resource?.module === 'media' && call.resource.parent_id && (call.name === 'submit_image_generation' && call.resource.kind === 'image_generation' || call.name === 'rename_node' && call.resource.kind === 'canvas_node_rename') ? [call.resource] : [])
+      const resources = calls.flatMap(call => call.status === 'succeeded' && call.resource?.module === 'media' && call.resource.parent_id && (call.name === 'submit_image_generation' && call.resource.kind === 'image_generation' || call.name === 'submit_video_generation' && call.resource.kind === 'video_generation' || call.name === 'edit_media_canvas' && call.resource.kind === 'canvas_edit' || call.name === 'rename_node' && call.resource.kind === 'canvas_node_rename') ? [call.resource] : [])
       if (resources.length) setCanvasResources(current => resources.every(resource => current[resource.id]) ? current : {...current,...Object.fromEntries(resources.map(resource=>[resource.id,resource]))})
     },
     contextLabel: discussionNode ? <><span>正在讨论 · {nodeLabel(discussionNode)}</span><button className="media-assistant__dismiss-node" type="button" aria-label="移除当前讨论节点" onClick={() => setDismissedNodeId(discussionNode.id)}><X aria-hidden="true" /></button></> : `当前页面：${pageLabels[page]}`,

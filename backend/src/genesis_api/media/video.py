@@ -18,6 +18,7 @@ from genesis_api.billing.transport import after_response, before_request, execut
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.core.uploads import media_suffix
 from genesis_api.database.session import SessionLocal
+from genesis_api.identity.models import User
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service
 from genesis_api.media.models import MediaAsset, ProjectAsset, VideoGeneration
@@ -26,6 +27,20 @@ from genesis_api.media.schemas import CanvasDocument
 
 logger = logging.getLogger(__name__)
 ACTIVE = ("submitting", "queued", "processing", "downloading")
+_agent_tasks: set[asyncio.Task[None]] = set()
+
+
+def start_agent_task(task_id: UUID, payload: dict[str, object], settings: Settings) -> None:
+    """保留后台提交任务，助手收起后继续执行。"""
+    task = asyncio.create_task(submit_saved_task(task_id, payload, settings))
+    _agent_tasks.add(task)
+    task.add_done_callback(_agent_tasks.discard)
+
+
+async def shutdown_agent_tasks() -> None:
+    """退出前等待已接受的视频提交完成。"""
+    if _agent_tasks:
+        await asyncio.gather(*list(_agent_tasks), return_exceptions=True)
 
 
 class VideoSubmit(BaseModel):
@@ -456,3 +471,85 @@ async def refresh_videos() -> None:
         except Exception:
             logger.warning("视频任务轮询暂不可用，将于下一轮重试")
         await asyncio.sleep(15)
+
+
+async def admit_task(
+    session: Session, user: User, project_id: UUID, data: VideoSubmit, settings: Settings,
+    *, expected_version: int | None = None, reuse_active: bool = False,
+) -> tuple[VideoGeneration, dict[str, object] | None]:
+    """复用页面的视频准入、计费和幂等校验。
+
+    Args:
+        session: 准入事务会话，新任务提交后才返回。
+        user: 已认证用户，用于归属和余额校验。
+        project_id: 目标作品。
+        data: 本次生成意图及目标节点。
+        settings: 模型渠道与结算配置。
+        expected_version: Agent 读取的画布版本；页面调用可省略。
+        reuse_active: Agent 是否沿用节点已有任务，默认保持页面的冲突提示。
+
+    Returns:
+        持久任务及新任务的待提交负载，复用任务时负载为 None。
+
+    Raises:
+        HTTPException: 归属、版本、生成参数、模型或计费准入校验失败。
+    """
+    headers(settings)
+    project = service.project_for(session, user.id, project_id)
+    existing = session.get(VideoGeneration, data.request_id)
+    if existing is not None:
+        if (
+            existing.owner_id != user.id
+            or existing.project_id != project_id
+            or existing.node_id != data.node_id
+        ):
+            raise HTTPException(409, "请求标识已被使用")
+        return existing, None
+    active = session.scalar(
+        select(VideoGeneration).where(
+            VideoGeneration.project_id == project_id,
+            VideoGeneration.node_id == data.node_id,
+            VideoGeneration.status.in_((*ACTIVE, "unknown")),
+        )
+    )
+    if active is not None:
+        if reuse_active:
+            return active, None
+        if active.status == "unknown" and data.acknowledge_unknown:
+            active.status = "acknowledged"
+        else:
+            raise HTTPException(409, "该节点已有任务，请查看任务状态后再提交")
+    if expected_version is not None and project.version != expected_version:
+        raise HTTPException(409, "画布已更新，请重新读取画布")
+    document = CanvasDocument.model_validate(project.canvas)
+    task = VideoGeneration(
+        id=data.request_id,
+        owner_id=user.id,
+        project_id=project_id,
+        node_id=data.node_id,
+        snapshot=document.model_dump(mode="json"),
+    )
+    payload = build_payload(task, document, session, settings)
+    node = next(n for n in document.nodes if n.id == data.node_id)
+    billing.admit(
+        session,
+        user,
+        source_id=task.id,
+        kind="video",
+        provider="video",
+        model=node.generation.model,
+        quote_id=data.quote_id,
+        settings=settings,
+        parameters=billing.media_parameters(node),
+    )
+    task.snapshot = {
+        "node": next(
+            node.model_dump(mode="json") for node in document.nodes if node.id == data.node_id
+        ),
+        "reference_ids": task.reference_ids,
+    }
+    if payload["model"] not in await available_models(settings):
+        raise HTTPException(422, "该视频模型当前不可用，请刷新模型目录")
+    session.add(task)
+    session.commit()
+    return task, payload

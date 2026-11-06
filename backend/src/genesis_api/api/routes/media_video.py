@@ -8,12 +8,10 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 
 from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
-from genesis_api.billing import service as billing
 from genesis_api.core.config import get_settings
 from genesis_api.core.uploads import media_filename, media_suffix
 from genesis_api.media import catalog, service, video
 from genesis_api.media.models import VideoGeneration
-from genesis_api.media.schemas import CanvasDocument
 
 router = APIRouter()
 
@@ -94,62 +92,9 @@ async def create_video_task(
         HTTPException: 归属不符返回 404，重复任务返回 409，参数错误返回 422，
             视频服务未配置或不可用时返回 503 或 502。
     """
-    settings = get_settings()
-    video.headers(settings)
-    project = service.project_for(session, user.id, project_id)
-    existing = session.get(VideoGeneration, data.request_id)
-    if existing is not None:
-        if (
-            existing.owner_id != user.id
-            or existing.project_id != project_id
-            or existing.node_id != data.node_id
-        ):
-            raise HTTPException(409, "请求标识已被使用")
-        return video.task_data(existing)
-    active = session.scalar(
-        select(VideoGeneration).where(
-            VideoGeneration.project_id == project_id,
-            VideoGeneration.node_id == data.node_id,
-            VideoGeneration.status.in_((*video.ACTIVE, "unknown")),
-        )
-    )
-    if active is not None:
-        if active.status == "unknown" and data.acknowledge_unknown:
-            active.status = "acknowledged"
-        else:
-            raise HTTPException(409, "该节点已有任务，请查看任务状态后再提交")
-    document = CanvasDocument.model_validate(project.canvas)
-    task = VideoGeneration(
-        id=data.request_id,
-        owner_id=user.id,
-        project_id=project_id,
-        node_id=data.node_id,
-        snapshot=document.model_dump(mode="json"),
-    )
-    payload = video.build_payload(task, document, session, settings)
-    node = next(n for n in document.nodes if n.id == data.node_id)
-    billing.admit(
-        session,
-        user,
-        source_id=task.id,
-        kind="video",
-        provider="video",
-        model=node.generation.model,
-        quote_id=data.quote_id,
-        settings=settings,
-        parameters=billing.media_parameters(node),
-    )
-    task.snapshot = {
-        "node": next(
-            node.model_dump(mode="json") for node in document.nodes if node.id == data.node_id
-        ),
-        "reference_ids": task.reference_ids,
-    }
-    if payload["model"] not in await video.available_models(settings):
-        raise HTTPException(422, "该视频模型当前不可用，请刷新模型目录")
-    session.add(task)
-    session.commit()
-    background_tasks.add_task(video.submit_saved_task, task.id, payload, settings)
+    task, payload = await video.admit_task(session, user, project_id, data, get_settings())
+    if payload is not None:
+        background_tasks.add_task(video.submit_saved_task, task.id, payload, get_settings())
     return video.task_data(task)
 
 

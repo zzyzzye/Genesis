@@ -293,66 +293,7 @@ def save_canvas(
         HTTPException: 归属不符返回 404，客户端版本过期返回 409，
             节点、连线、分组或素材引用关系无效返回 422。
     """
-    project = service.project_for(session, user.id, project_id)
-    if project.version != data.version:
-        # 行锁保证版本检查与保存处于同一事务；客户端须先核对最新版本再重试。
-        raise HTTPException(409, "作品已在其他窗口修改，请重新加载或另存为作品")
-    ids = set(
-        session.scalars(select(ProjectAsset.asset_id).where(ProjectAsset.project_id == project.id))
-    )
-    node_ids = [node.id for node in data.document.nodes]
-    if len(set(node_ids)) != len(node_ids):
-        raise HTTPException(422, "节点标识不能重复")
-    edge_ids = [edge.id for edge in data.document.edges]
-    if len(set(edge_ids)) != len(edge_ids):
-        raise HTTPException(422, "连线标识不能重复")
-    for edge in data.document.edges:
-        if edge.source not in node_ids or edge.target not in node_ids or edge.source == edge.target:
-            raise HTTPException(422, "连线必须连接作品内两个不同节点")
-    grouped_ids: set[UUID] = set()
-    # Pydantic 负责节点字段范围，此处再检查节点之间的关系与数据库素材关联。
-    node_by_id = {node.id: node for node in data.document.nodes}
-    if any(
-        node_by_id[edge.source].type == "group" or node_by_id[edge.target].type == "group"
-        for edge in data.document.edges
-    ):
-        raise HTTPException(422, "分组边框不能作为连线端点")
-    for node in data.document.nodes:
-        if node.type == "asset" and node.asset_id not in ids:
-            raise HTTPException(422, "画布包含未关联到作品的素材")
-        if (
-            node.type
-            in ("video", "image_generation", "audio_generation", "video_asset", "image", "audio")
-            and node.asset_id is not None
-        ):
-            if node.asset_id not in ids:
-                raise HTTPException(422, "节点包含未关联到作品的素材")
-            asset = session.get(MediaAsset, node.asset_id)
-            expected_kind = {
-                "image_generation": "image",
-                "audio_generation": "audio",
-                "video_asset": "video",
-            }.get(node.type, node.type)
-            if asset is None or (
-                asset.kind == "audio" if node.type == "video" else asset.kind != expected_kind
-            ):
-                raise HTTPException(422, "素材类型与节点不匹配")
-        if node.type == "group":
-            if len(node.member_ids) < 2 or len(set(node.member_ids)) != len(node.member_ids):
-                raise HTTPException(422, "分组至少需要两个不同节点")
-            for member_id in node.member_ids:
-                member = node_by_id.get(member_id)
-                if member is None or member.type == "group" or member_id in grouped_ids:
-                    raise HTTPException(422, "分组成员无效或已属于其他分组")
-                grouped_ids.add(member_id)
-        elif node.member_ids:
-            raise HTTPException(422, "只有分组节点可以包含成员")
-    document = service.sync_asset_names(session, project, data.document, rename=True)
-    project.canvas = document.model_dump(mode="json")
-    project.version += 1
-    project.updated_at = datetime.now(UTC)
-    session.commit()
-    return {"version": project.version, "document": project.canvas}
+    return service.save_canvas(session, user.id, project_id, data)
 
 
 @router.get("/assets")

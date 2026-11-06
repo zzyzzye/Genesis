@@ -390,10 +390,10 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const [assets, setAssets] = useState<Record<string, Asset>>({})
   const [error, setError] = useState('')
   const onGenerationTask = useGenerationResults(projectId, canvas, setAssets)
-  const { save: saveCanvas, current: canvasDocument, syncNodeNames } = canvas
+  const { save: saveCanvas, current: canvasDocument, syncNodeNames, syncCanvas } = canvas
   useEffect(() => {
     if (!canvas.ready) { onAgentActionsChange?.(null); return }
-    onAgentActionsChange?.({save:saveCanvas,getDocument:() => canvasDocument.current,syncNodeNames:async () => {
+    onAgentActionsChange?.({save:saveCanvas,getDocument:() => canvasDocument.current,syncCanvas,syncNodeNames:async () => {
       try {
         await syncNodeNames()
         setError(current => current.startsWith('节点已改名，但画布同步失败') ? '' : current)
@@ -402,19 +402,21 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         throw new Error('节点改名同步失败')
       }
     },attachImageTask:async resource => {
-      if (resource.scope_id !== projectId || !canvasDocument.current.nodes.some(node=>node.id === resource.parent_id && node.type === 'image_generation')) return
+      const video = resource.kind === 'video_generation'
+      const noun = video ? '视频' : '图片'
+      if (resource.scope_id !== projectId || !canvasDocument.current.nodes.some(node=>node.id === resource.parent_id && node.type === (video ? 'video' : 'image_generation'))) return
       try {
-        const task = await api<GenerationTask>(`/projects/${projectId}/image-generations/${resource.id}`)
+        const task = await api<GenerationTask>(`/projects/${projectId}/${video ? 'video' : 'image'}-generations/${resource.id}`)
         if (task.node_id !== resource.parent_id) throw new Error('生成任务与画布节点不匹配')
         onGenerationTask(task)
-        setError(current=>current.startsWith('图片任务已提交，但结果同步失败') ? '' : current)
+        setError(current=>current.startsWith(`${noun}任务已提交，但结果同步失败`) ? '' : current)
       } catch {
-        setError('图片任务已提交，但结果同步失败，正在重新读取任务；不会重复生成。')
-        throw new Error('图片任务同步失败')
+        setError(`${noun}任务已提交，但结果同步失败，正在重新读取任务；不会重复生成。`)
+        throw new Error(`${noun}任务同步失败`)
       }
     }})
     return () => onAgentActionsChange?.(null)
-  }, [canvas.ready, canvasDocument, onAgentActionsChange, onGenerationTask, projectId, saveCanvas, syncNodeNames])
+  }, [canvas.ready, canvasDocument, onAgentActionsChange, onGenerationTask, projectId, saveCanvas, syncNodeNames, syncCanvas])
   const [assetsLoading, setAssetsLoading] = useState(true)
   const [renameOpen, setRenameOpen] = useState(false)
   const [assetTarget, setAssetTarget] = useState<{ id: string; kind: Asset['kind']; allowImageForVideo: boolean } | null>(null)

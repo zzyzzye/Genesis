@@ -20,6 +20,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from genesis_api.agent.context import agent_invocation_context
 from genesis_api.api.dependencies import get_current_user
 from genesis_api.api.routes import media_video
 from genesis_api.api.routes.media import router
@@ -30,6 +31,7 @@ from genesis_api.database.session import get_session
 from genesis_api.identity.models import User, UserRole
 from genesis_api.llm.catalog import model_catalog
 from genesis_api.media import service, video
+from genesis_api.media.agent import tools as media_tools
 from genesis_api.media.models import MediaAsset, VideoGeneration
 
 
@@ -50,6 +52,35 @@ class VideoFixture:
     mime: str = "video/mp4"
     content: bytes = b"test-video-content"
     reference_ok: bool = True
+
+
+@pytest.mark.anyio
+async def test_agent_video_submission_is_versioned_idempotent_and_queryable(
+    fixture: VideoFixture, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """助手与页面共享准入和提交，重放不再创建上游任务。"""
+    monkeypatch.setattr(media_tools, "SessionLocal", video.SessionLocal)
+    tools = {entry.name: entry for entry in media_tools.build_media_tools(fixture.settings)}
+    user = fixture.session.scalar(select(User))
+    assert user is not None
+    version = (await fixture.client.get(f"projects/{fixture.project_id}/canvas")).json()["version"]
+    args = {"project_id": fixture.project_id, "node_id": fixture.node_id,
+            "expected_version": version}
+    config = {"configurable": {"genesis_run_id": str(uuid4())}}
+    with agent_invocation_context(user.id, "owner", "media"):
+        stale = await tools["submit_video_generation"].ainvoke(
+            {**args, "expected_version": version - 1}, config=config,
+        )
+        assert "画布已更新" in stale
+        created = await tools["submit_video_generation"].ainvoke(args, config=config)
+        await asyncio.gather(*list(video._agent_tasks))
+        replay = await tools["submit_video_generation"].ainvoke(args, config=config)
+        assert created["id"] == replay["id"] and replay["reused"] is True
+        task = await tools["get_video_generation_task"].ainvoke(
+            {"project_id": fixture.project_id, "task_id": created["id"]},
+        )
+        assert task["id"] == created["id"]
+    assert sum(request.method == "POST" for request in fixture.requests) == 1
 
 
 @pytest.fixture

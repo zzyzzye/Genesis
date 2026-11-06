@@ -87,6 +87,26 @@ export function useCanvas(projectId: string, userId: string) {
     pending.current = operation
     try { await operation } finally { pending.current = null }
   }, [key, projectId])
+  const syncCanvas = useCallback(async (): Promise<void> => {
+    while (pending.current) await pending.current.catch(() => undefined)
+    const operation = (async () => {
+      const snapshot = await api<Snapshot>(`/projects/${projectId}/canvas`)
+      const next = completeDocument(snapshot.document)
+      if (snapshot.version < version.current) throw new Error('画布同步版本过期，请重试')
+      if (JSON.stringify(current.current) !== saved.current) {
+        blocked.current = true; setConflict(true); setStatus('助手已修改画布，已保留本地草稿，请处理冲突')
+        throw new Error('画布有未保存修改，未覆盖本地编辑')
+      }
+      if (JSON.stringify(next) !== saved.current) {
+        history.current.push(current.current); history.current = history.current.slice(-60); future.current = []
+      }
+      version.current = snapshot.version; serverBase.current = next; saved.current = JSON.stringify(next)
+      current.current = next; setDocument(next); setDirty(false); blocked.current = false; setConflict(false)
+      localStorage.removeItem(key); setStatus('已同步助手修改')
+    })()
+    pending.current = operation
+    try { await operation } finally { if (pending.current === operation) pending.current = null }
+  }, [key, projectId])
   const syncNodeNames = useCallback(async (): Promise<void> => {
     // 与已有保存队列串行；409 后仍可核对工具改名，不能自动覆盖其他远端修改。
     while (pending.current) await pending.current.catch(() => undefined)
@@ -133,5 +153,5 @@ export function useCanvas(projectId: string, userId: string) {
   function checkpoint() { history.current.push(current.current); history.current = history.current.slice(-60); future.current = [] }
   function undo() { const previous = history.current.pop(); if (previous) { future.current.push(current.current); apply(previous, false) } }
   function redo() { const next = future.current.pop(); if (next) { history.current.push(current.current); apply(next, false) } }
-  return { document, current, ready, status, conflict, apply, save, load, syncNodeNames, undo, redo, checkpoint }
+  return { document, current, ready, status, conflict, apply, save, load, syncNodeNames, syncCanvas, undo, redo, checkpoint }
 }

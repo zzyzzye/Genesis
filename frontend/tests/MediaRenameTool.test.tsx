@@ -29,6 +29,19 @@ function mockCanvas() {
 }
 
 describe('Agent 直接改名同步', () => {
+  it('同步整张画布并可撤销；本地有新编辑时拒绝覆盖', async () => {
+    const server = mockCanvas()
+    const { result } = renderHook(() => useCanvas('project', 'canvas-tool-user'))
+    await waitFor(() => expect(result.current.ready).toBe(true))
+    server.changeLayout()
+    await act(async () => { await result.current.syncCanvas() })
+    expect(result.current.document.nodes[0]?.x).toBe(999)
+    act(() => result.current.undo())
+    expect(result.current.document.nodes[0]?.x).toBe(40)
+    await act(async () => { await expect(result.current.syncCanvas()).rejects.toThrow('未覆盖本地编辑') })
+    expect(result.current.conflict).toBe(true)
+    expect(result.current.document.nodes[0]?.x).toBe(40)
+  })
   it('合并改名并保留本地正文和位置，更新保存版本，重放不增加撤销步骤', async () => {
     const server = mockCanvas()
     const { result } = renderHook(() => useCanvas('project', 'rename-user'))
@@ -86,7 +99,7 @@ describe('Agent 直接改名同步', () => {
     expect(result.current.document.nodes[0]).toMatchObject({ name: '开场空镜', text: '本地正文' })
   })
 
-  it('原生工具回执自动刷新标题，无需应用按钮，未修改的标题输入不会覆盖新名', async () => {
+  it.each(['rename_node', 'edit_media_canvas'] as const)('%s 原生回执自动刷新画布，无需应用按钮', async name => {
     const server = mockCanvas()
     vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1 })
     localStorage.setItem(accountAuthTokenKey, 'synthetic-session')
@@ -105,7 +118,7 @@ describe('Agent 直接改名同步', () => {
     const input = screen.getByRole('textbox', { name: '便签名称' })
     fireEvent.focus(input)
     server.rename()
-    const call: ai.AiToolCall = { id: 'rename-call', name: 'rename_node', label: '改名节点', status: 'succeeded', started_at: '', parameter_names: [], input_summary: '', duration_ms: 1, result_summary: '工具执行完成', proposal_id: null, resource: { module: 'media', kind: 'canvas_node_rename', id: 'rename-receipt', scope_id: 'project', parent_id: 'first' } }
+    const call: ai.AiToolCall = { id: 'rename-call', name, label: '修改画布', status: 'succeeded', started_at: '', parameter_names: [], input_summary: '', duration_ms: 1, result_summary: '工具执行完成', proposal_id: null, resource: { module: 'media', kind: name === 'rename_node' ? 'canvas_node_rename' : 'canvas_edit', id: 'rename-receipt', scope_id: 'project', parent_id: 'first' } }
     await act(async () => { handlers.onToolCalls?.([call]); await Promise.resolve() })
     await waitFor(() => expect(element).toHaveAttribute('aria-label', '开场空镜'))
     fireEvent.blur(input)
