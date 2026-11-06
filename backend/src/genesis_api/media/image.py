@@ -1,4 +1,4 @@
-"""云影 Images 适配：本地参考上传、幂等提交与私有图片入库。"""
+"""云影图片适配：Images / Gemini 原生请求、幂等提交与私有图片入库。"""
 
 import asyncio
 import base64
@@ -26,7 +26,7 @@ from genesis_api.core.uploads import media_filename
 from genesis_api.database.session import SessionLocal
 from genesis_api.identity.models import User
 from genesis_api.llm.catalog import model_catalog
-from genesis_api.media import service
+from genesis_api.media import gemini_image, service
 from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset
 from genesis_api.media.prompt_references import mentioned_image_nodes, resolve_image_mentions
 from genesis_api.media.schemas import CanvasDocument, CanvasNode, GenerationSubmit
@@ -211,6 +211,11 @@ def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -
     )
     if node is None or not node.text.strip() or not node.generation.model:
         raise HTTPException(422, "请先保存生图节点，并填写提示词和选择模型")
+    if (
+        gemini_image.uses_generate_content(node.generation.model)
+        and node.generation.image_background == "transparent"
+    ):
+        raise HTTPException(422, "该图片接口不支持透明背景参数，请选择自动或保留背景")
     ids: list[str] = []
     image_numbers: dict[UUID, int] = {}
     mentioned = mentioned_image_nodes(node.text)
@@ -239,7 +244,7 @@ def prepare(task: ImageGeneration, document: CanvasDocument, session: Session) -
             "text": resolve_image_mentions(node.text, image_numbers),
             "generation": node.generation.model_copy(
                 update={"mode": "reference" if ids else "text"}
-            )
+            ),
         }
     )
     task.reference_ids = ids
@@ -271,6 +276,10 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
     # 尚未确认逐模型画质档位，旧草稿字段仅保留兼容，不提交到上游。
     if node.generation.image_background:
         payload["background"] = node.generation.image_background
+    native = gemini_image.uses_generate_content(node.generation.model)
+    endpoint = settings.image_api_base_url.rstrip("/") + "/v1/images/generations"
+    if native:
+        endpoint, payload = gemini_image.request_data(node, settings.image_api_base_url)
     sent = False
     try:
         with ExitStack() as files:
@@ -278,6 +287,19 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
             for asset_id in task.reference_ids:
                 asset = service.asset_for(session, task.owner_id, UUID(asset_id))
                 source = files.enter_context((service.STORAGE_ROOT / asset_id).open("rb"))
+                if native:
+                    content = source.read(MAX_IMAGE_BYTES + 1)
+                    if len(content) > MAX_IMAGE_BYTES:
+                        raise ValueError("参考图片过大")
+                    payload["contents"][0]["parts"].append(
+                        {
+                            "inlineData": {
+                                "mimeType": asset.mime_type,
+                                "data": base64.b64encode(content).decode("ascii"),
+                            }
+                        }
+                    )
+                    continue
                 uploads.append(
                     (
                         "image",
@@ -298,6 +320,8 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
                 if uploads
                 else {"json": payload}
             )
+            if uploads:
+                endpoint = settings.image_api_base_url.rstrip("/") + "/v1/images/edits"
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(930, connect=10),
                 trust_env=False,
@@ -306,8 +330,7 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
                 sent = True
                 async with client.stream(
                     "POST",
-                    settings.image_api_base_url.rstrip("/")
-                    + ("/v1/images/edits" if uploads else "/v1/images/generations"),
+                    endpoint,
                     headers=auth,
                     **kwargs,
                 ) as response:
@@ -330,6 +353,8 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
                             raise ValueError("图片响应过大")
             data = json.loads(body)
             rows = data.get("data") if isinstance(data, dict) else None
+            if native:
+                rows = gemini_image.result_images(data)
             if (
                 not isinstance(rows, list)
                 or not 1 <= len(rows) <= 4

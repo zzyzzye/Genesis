@@ -43,6 +43,19 @@
 - `projects/{id}/assets/reference`：引用账户素材；`projects/{id}/assets/{assetId}`：移出作品。
 - `projects/{id}/copy-assets/{targetId}`：同一账户作品间复制指定素材引用，供冲突另存使用。
 
+## 图片模型协议
+
+图片渠道共用模型目录与计费配置，提交时区分两种协议：
+
+- GPT Image、Imagen 等模型沿用 OpenAI Images 接口：文生图走 `/v1/images/generations`，有显式图片引用时走 `/v1/images/edits`。
+- Nano Banana 和 Gemini Image 系列走 `/v1beta/models/{完整公开模型名}:generateContent`。例如 `[AS专线] nano-banana-2.1`，保留渠道前缀并进行 URL 编码，不自行改写成另一个上游型号。参考图以本地图片的 `inlineData` 发送，仍必须同时连线且在提示词中 `@` 引用。
+- 原生请求使用 `generationConfig.responseModalities`，比例和清晰度映射到 `imageConfig.aspectRatio`、`imageSize`；数量映射到 `candidateCount`，是否支持多候选由上游模型决定，不拆分为多次生成请求。原生接口没有透明背景字段，选择透明背景时在提交前提示调整。
+- 原生响应只提取最终图片，忽略文字和思考图片，随后复用私有素材入库、结果缓存与恢复流程。失败或结果未知时不自动切换协议重发，保持每个任务一次上游调用与既有账务归属。
+
+协议依据：[云影 Images 文档](https://ai-document.yyapi.cloud/zh/image-api)、[Google generateContent 参考](https://ai.google.dev/api/generate-content)、[New API Gemini 适配器](https://github.com/QuantumNous/new-api/blob/main/relay/channel/gemini/adaptor.go)。2026-11-06 经 7897 代理查询[服务商公开模型目录](https://www.yyapi.cloud/api/pricing)，`[AS专线] nano-banana-2.1` 声明支持 `gemini`、`openai`（聊天），未声明 `image-generation`。文档中的 Images 模型名单不作为全渠道生图模型白名单；具体专线别名的在线生成仍需上线后验证。
+
+本次复用 Compose 后端完成 639 项全量测试，覆盖率 91.31%；相关文件 Ruff、格式检查及 `src/tests` 全库 mypy 通过。原生协议回归覆盖专线别名编码、默认与指定尺寸、连线且艾特的本地参考、最终图片入库、幂等和单次账务记录、失败不切换协议重发。响应均为合成数据，未使用真实 Key 或发起付费生成。
+
 ## 本轮验证记录
 
 - 前端 ESLint、TypeScript、26 项测试及生产构建通过；构建仍有大包体积警告。

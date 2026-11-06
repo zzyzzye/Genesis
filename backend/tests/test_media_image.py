@@ -23,12 +23,13 @@ from genesis_api.agent.context import agent_invocation_context
 from genesis_api.api.dependencies import get_current_user
 from genesis_api.api.routes import media_image
 from genesis_api.api.routes.media import router
+from genesis_api.billing.models import BillingOperation, UpstreamCharge
 from genesis_api.core.config import Settings
 from genesis_api.database.base import Base
 from genesis_api.database.session import get_session
 from genesis_api.identity.models import User, UserRole
 from genesis_api.llm.catalog import model_catalog
-from genesis_api.media import image, service
+from genesis_api.media import gemini_image, image, service
 from genesis_api.media.agent import tools as media_tools
 from genesis_api.media.models import ImageGeneration, MediaAsset, MediaProject, ProjectAsset
 
@@ -48,6 +49,7 @@ class ImageFixture:
     project_id: str = ""
     node_id: str = ""
     requests: list[httpx.Request] = field(default_factory=list)
+    models: list[str] = field(default_factory=lambda: ["gpt-image-2", "new-image-model"])
     status: int = 200
     timeout: bool = False
     cancel: bool = False
@@ -87,7 +89,7 @@ async def fixture(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncGenera
                 state.requests.append(request)
                 if request.url.path == "/v1/models":
                     return httpx.Response(
-                        200, json={"data": [{"id": "gpt-image-2"}, {"id": "new-image-model"}]}
+                        200, json={"data": [{"id": name} for name in state.models]}
                     )
                 if state.timeout:
                     raise httpx.ReadTimeout("测试超时")
@@ -514,6 +516,235 @@ async def test_multi_image_and_explicit_size(fixture: ImageFixture) -> None:
     assert payload["size"] == "1536x1024" and payload["n"] == 4
     assert "quality" not in payload and payload["background"] == "transparent"
     assert "resolution" not in payload and "aspect_ratio" not in payload
+
+
+@pytest.mark.parametrize(
+    ("model", "native"),
+    [
+        ("[AS专线] nano-banana-2.1", True),
+        ("gemini-nano-banana-2.1", True),
+        ("[专线] gemini-3.1-flash-image", True),
+        ("[原生] gpt-image-2", False),
+        ("imagen-4.0-generate-001", False),
+        ("gemini-3.1-pro", False),
+    ],
+)
+def test_image_protocol_routes_known_families(model: str, native: bool) -> None:
+    """仅识别原生图片协议，不将 Gemini 文本模型或 Imagen 错送原生生图。"""
+    assert gemini_image.uses_generate_content(model) is native
+
+
+def native_result(parts: list[dict[str, object]] | None = None) -> dict[str, object]:
+    """提供合成原生响应，不依赖真实服务或付费图片。"""
+    return {
+        "candidates": [
+            {
+                "content": {
+                    "parts": parts
+                    if parts is not None
+                    else [
+                        {"text": "已生成"},
+                        {
+                            "thought": True,
+                            "inlineData": {"mimeType": "image/png", "data": "不得保存思考图"},
+                        },
+                        {
+                            "inlineData": {
+                                "mimeType": "image/png",
+                                "data": base64.b64encode(PNG).decode(),
+                            }
+                        },
+                    ]
+                }
+            }
+        ]
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("settings", "expected_config"),
+    [
+        ({}, {}),
+        (
+            {"image_ratio": "16:9", "image_resolution": "2K", "image_size": "2048x1152"},
+            {"aspectRatio": "16:9", "imageSize": "2K"},
+        ),
+        ({"image_size": "1536x1024"}, {"aspectRatio": "3:2", "imageSize": "2K"}),
+    ],
+)
+async def test_nano_banana_uses_native_protocol_and_existing_task_lifecycle(
+    fixture: ImageFixture, settings: dict[str, str], expected_config: dict[str, str]
+) -> None:
+    """完整专线别名走原生接口，最终图片入库，幂等和账务调用次数仍只有一次。"""
+    state = fixture
+    model = "[AS专线] nano-banana-2.1"
+    state.models.append(model)
+    state.result = native_result()
+    await save_node(state, generation={"model": model, **settings})
+    request_id = uuid4()
+    assert (await submit(state, request_id)).status_code == 202
+    task = await latest(state)
+    assert task["status"] == "completed"
+    assert len(task["asset_ids"]) == 1
+    assert (service.STORAGE_ROOT / task["asset_id"]).read_bytes() == PNG
+    posts = [req for req in state.requests if req.method == "POST"]
+    assert len(posts) == 1
+    post = posts[0]
+    assert post.url.path == f"/v1beta/models/{model}:generateContent"
+    assert b"%5BAS%E4%B8%93%E7%BA%BF%5D%20nano-banana-2.1" in post.url.raw_path
+    assert post.headers["idempotency-key"] == str(request_id)
+    payload = json.loads(post.content)
+    assert payload["contents"] == [{"role": "user", "parts": [{"text": "雨夜街道，电影感光影"}]}]
+    assert payload["generationConfig"] == {
+        "responseModalities": ["TEXT", "IMAGE"],
+        "candidateCount": 1,
+        **({"imageConfig": expected_config} if expected_config else {}),
+    }
+    assert "model" not in payload and "size" not in payload and "n" not in payload
+    assert (await submit(state, request_id)).json() == task
+    assert sum(req.method == "POST" for req in state.requests) == 1
+    operation = state.session.scalar(
+        select(BillingOperation).where(BillingOperation.source_id == request_id)
+    )
+    assert operation is not None and operation.call_count == 1
+    assert operation.model == model
+    charges = state.session.scalars(
+        select(UpstreamCharge).where(UpstreamCharge.operation_id == operation.id)
+    ).all()
+    assert len(charges) == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("mentioned", [False, True])
+async def test_nano_banana_only_sends_connected_and_mentioned_local_images(
+    fixture: ImageFixture, mentioned: bool
+) -> None:
+    """原生图生图也必须同时连线和艾特，未引用节点不会被自动发送。"""
+    state = fixture
+    model = "[AS专线] nano-banana-2.1"
+    state.models.append(model)
+    state.result = native_result()
+    await save_node(state, generation={"model": model})
+    asset = (
+        await state.client.post(
+            f"projects/{state.project_id}/assets",
+            files={"file": ("人物参考.png", PNG, "image/png")},
+        )
+    ).json()
+    current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
+    source_id, unused_id = str(uuid4()), str(uuid4())
+    for node_id in (source_id, unused_id):
+        current["document"]["nodes"].append(
+            {
+                "id": node_id,
+                "type": "image",
+                **({"asset_id": asset["id"]} if node_id == source_id else {}),
+                "x": -400,
+                "y": 0,
+                "width": 360,
+                "height": 280,
+            }
+        )
+    current["document"]["edges"] = [
+        {"id": str(uuid4()), "source": node_id, "target": state.node_id}
+        for node_id in (source_id, unused_id)
+    ]
+    if mentioned:
+        current["document"]["nodes"][0]["text"] = f"保留@[图片](ref:{source_id})的服装"
+    assert (
+        await state.client.put(f"projects/{state.project_id}/canvas", json=current)
+    ).status_code == 200
+    assert (await submit(state)).status_code == 202
+    post = next(req for req in state.requests if req.method == "POST")
+    assert post.url.path.endswith(":generateContent")
+    assert post.headers["content-type"] == "application/json"
+    parts = json.loads(post.content)["contents"][0]["parts"]
+    if mentioned:
+        assert parts == [
+            {"text": "参考图片按实际上传顺序编号，图片1对应第一张，依次类推。\n保留图片1的服装"},
+            {"inlineData": {"mimeType": "image/png", "data": base64.b64encode(PNG).decode()}},
+        ]
+    else:
+        assert parts == [{"text": "雨夜街道，电影感光影"}]
+    assert b"ref:" not in post.content and source_id.encode() not in post.content
+    assert (await latest(state))["status"] == "completed"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("status", [400, 500])
+async def test_nano_banana_never_falls_back_to_another_paid_request(
+    fixture: ImageFixture, status: int
+) -> None:
+    """原生接口被拒绝或结果未知时，不切换协议再次生成或重复记账。"""
+    fixture.models.append("[AS专线] nano-banana-2.1")
+    fixture.status = status
+    await save_node(fixture, generation={"model": "[AS专线] nano-banana-2.1"})
+    assert (await submit(fixture)).status_code == 202
+    task = await latest(fixture)
+    assert task["status"] == ("failed" if status == 400 else "unknown")
+    assert sum(req.method == "POST" for req in fixture.requests) == 1
+    if status == 500:
+        assert (await submit(fixture)).status_code == 409
+        assert sum(req.method == "POST" for req in fixture.requests) == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "parts",
+    [
+        [],
+        [{"text": "没有生成图片"}],
+        [{"thought": True, "inlineData": {"mimeType": "image/png", "data": "不能作为成品"}}],
+        [{"inlineData": {"mimeType": "audio/wav", "data": "不是图片"}}],
+    ],
+)
+async def test_native_response_without_final_image_is_not_completed(
+    fixture: ImageFixture, parts: list[dict[str, object]]
+) -> None:
+    """没有最终图片不能误报完成，沿用未知结果保护，不自动重放。"""
+    fixture.models.append("[AS专线] nano-banana-2.1")
+    fixture.result = native_result(parts)
+    await save_node(fixture, generation={"model": "[AS专线] nano-banana-2.1"})
+    assert (await submit(fixture)).status_code == 202
+    assert (await latest(fixture))["status"] == "unknown"
+    assert not fixture.session.scalars(select(MediaAsset)).all()
+    assert sum(req.method == "POST" for req in fixture.requests) == 1
+
+
+@pytest.mark.anyio
+async def test_native_transparent_background_is_rejected_before_billing(
+    fixture: ImageFixture,
+) -> None:
+    """原生协议没有透明背景字段，不能静默忽略用户选项并发起计费。"""
+    await save_node(
+        fixture,
+        generation={"model": "[AS专线] nano-banana-2.1", "image_background": "transparent"},
+    )
+    response = await submit(fixture)
+    assert response.status_code == 422
+    assert "透明背景" in response.json()["detail"]
+    assert not any(req.method == "POST" for req in fixture.requests)
+    assert not fixture.session.scalars(select(BillingOperation)).all()
+
+
+@pytest.mark.anyio
+async def test_native_multiple_candidates_stay_in_one_request(fixture: ImageFixture) -> None:
+    """数量传为原生候选数，不能拆成多次计费请求或把同一成品复制凑数。"""
+    model = "gemini-nano-banana-2.1"
+    fixture.models.append(model)
+    fixture.result = native_result(
+        [{"inlineData": {"mimeType": "image/png", "data": base64.b64encode(PNG).decode()}}] * 2
+    )
+    await save_node(fixture, generation={"model": model, "count": 2})
+    assert (await submit(fixture)).status_code == 202
+    posts = [req for req in fixture.requests if req.method == "POST"]
+    assert len(posts) == 1
+    assert json.loads(posts[0].content)["generationConfig"]["candidateCount"] == 2
+    task = await latest(fixture)
+    assert task["status"] == "completed"
+    assert len(task["asset_ids"]) == 2
+    assert len(set(task["asset_ids"])) == 2
 
 
 @pytest.mark.anyio
