@@ -48,7 +48,7 @@
 图片渠道共用模型目录与计费配置，提交时按模型区分协议：
 
 - GPT Image 2、2-pro、2.5/2.6 Sunburst/Flare 及带渠道前缀的同型号使用 OpenAI Images 接口：文生图走 `/v1/images/generations`，有显式图片引用时走 `/v1/images/edits`。尺寸按 16 像素对齐，最长边不超过 3840，比例不超过 3:1，总像素为 655360–8294400。画布比例/清晰度转换为最接近目标长边的合法尺寸，例如 4K 16:9 → 3840×2160，4K 方图 → 2880×2880；仅指定像素尺寸的旧草稿不静默缩放，非法尺寸在计费前提示调整。报价、任务快照与请求使用同一份转换后的参数，不改写画布草稿。
-- Grok Imagine Image 系列使用 JSON Images 协议：无参考时走 `/v1/images/generations`；单图编辑使用 `/v1/images/edits` 的 `image` 对象，多图使用 `images` 数组，不发送 multipart。参考图片使用本地文件的 base64 data URI，去重后最多 5 张，仍须连线且在提示词中 `@` 引用。尺寸映射到 `aspect_ratio`、小写 `resolution`（1k/2k）；4K、透明背景及不支持的比例在计费前拒绝，不静默降级。完整渠道别名保持原样。
+- Grok Imagine Image 系列无参考时使用 JSON `/v1/images/generations`。编辑走 `/v1/images/edits`：直连 xAI 时单图使用 `image` 对象、多图使用 `images` 数组，图片为本地文件的 base64 data URI；云影域名（`yyapi.cloud` 及其子域）按其公开编辑接口要求使用 multipart 文件表单，多图重复 `image` 字段。其他渠道保留原生 JSON 协议，不在失败后自动切换协议重试。参考图去重后最多 5 张，仍须连线且在提示词中 `@` 引用。尺寸映射到 `aspect_ratio`、小写 `resolution`（1k/2k）；4K、透明背景及不支持的比例在计费前拒绝，不静默降级。完整渠道别名保持原样。
 - Nano Banana 和 Gemini Image 系列走 `/v1beta/models/{完整公开模型名}:generateContent`。例如 `[AS专线] nano-banana-2.1`，保留渠道前缀并进行 URL 编码，不自行改写成另一个上游型号。参考图以本地图片的 `inlineData` 发送，仍必须同时连线且在提示词中 `@` 引用。
 - 原生请求使用 `generationConfig.responseModalities`，比例和清晰度映射到 `imageConfig.aspectRatio`、`imageSize`；`candidateCount` 固定为 1，用户选择多张时在计费前提示改为 1，不拆分付费请求。Gemini 3.1 Flash Image、3 Pro Image 和 Nano Banana 2.1 接入参考上限为 14；旧 Gemini 2.5 Flash Image 接入参考上限为 3，仅接受默认/1K，且不发送其不支持的 `imageSize` 字段。根据已核对的比例集合校验，旧像素尺寸允许 8 像素取整造成的 1% 比例误差。透明背景在提交前提示调整。
 - 原生响应只提取最终图片，忽略文字和思考图片，随后复用私有素材入库、结果缓存与恢复流程。失败或结果未知时不自动切换协议重发，保持每个任务一次上游调用与既有账务归属。

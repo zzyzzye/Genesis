@@ -287,6 +287,7 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
         payload["background"] = node.generation.image_background
     native = gemini_image.uses_generate_content(node.generation.model)
     xai = xai_image.uses_json_edits(node.generation.model)
+    xai_multipart = xai and xai_image.uses_multipart_edits(settings.image_api_base_url)
     endpoint = settings.image_api_base_url.rstrip("/") + "/v1/images/generations"
     sent = False
     try:
@@ -300,7 +301,7 @@ async def request_image(task: ImageGeneration, session: Session, settings: Setti
             for asset_id in task.reference_ids:
                 asset = service.asset_for(session, task.owner_id, UUID(asset_id))
                 source = files.enter_context((service.STORAGE_ROOT / asset_id).open("rb"))
-                if native or xai:
+                if native or (xai and not xai_multipart):
                     content = source.read(MAX_IMAGE_BYTES + 1)
                     if len(content) > MAX_IMAGE_BYTES:
                         raise ValueError("参考图片过大")

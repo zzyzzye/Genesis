@@ -9,6 +9,22 @@ from genesis_api.media import gemini_image, image_protocols, xai_image
 from genesis_api.media.schemas import CanvasNode, GenerationSettings
 
 
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://zl.yyapi.cloud", True),
+        ("https://www.yyapi.cloud/v1", True),
+        ("https://yyapi.cloud", True),
+        ("https://api.x.ai", False),
+        ("https://yyapi.cloud.example.org", False),
+        ("https://example.org/yyapi.cloud", False),
+    ],
+)
+def test_xai_gateway_transport_is_scoped_to_hostname(url: str, expected: bool) -> None:
+    """仅已确认的网关域名使用文件表单，不影响直连及其他服务商。"""
+    assert xai_image.uses_multipart_edits(url) is expected
+
+
 def node(model: str, **settings: object) -> CanvasNode:
     """构造包含合成提示词的最小节点。"""
     return CanvasNode(

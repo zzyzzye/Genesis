@@ -799,12 +799,14 @@ async def test_nano_banana_uses_native_protocol_and_existing_task_lifecycle(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("mentioned", [False, True])
+@pytest.mark.parametrize("gateway", [False, True])
 @pytest.mark.parametrize("model", ["[AS专线] nano-banana-2.1", "grok-imagine-image-2.0"])
 async def test_native_protocol_only_sends_connected_and_mentioned_local_images(
-    fixture: ImageFixture, mentioned: bool, model: str
+    fixture: ImageFixture, mentioned: bool, gateway: bool, model: str
 ) -> None:
     """原生图生图也必须同时连线和艾特，未引用节点不会被自动发送。"""
     state = fixture
+    state.settings.image_api_base_url = "https://zl.yyapi.cloud" if gateway else "https://api.x.ai"
     state.models.append(model)
     if "nano-banana" in model:
         state.result = native_result()
@@ -842,6 +844,13 @@ async def test_native_protocol_only_sends_connected_and_mentioned_local_images(
     post = next(req for req in state.requests if req.method == "POST")
     if model.startswith("grok"):
         assert post.url.path == f"/v1/images/{'edits' if mentioned else 'generations'}"
+        if gateway and mentioned:
+            assert post.headers["content-type"].startswith("multipart/form-data")
+            assert post.content.count(b'name="image";') == 1
+            assert PNG in post.content
+            assert model.encode() in post.content
+            assert (await latest(state))["status"] == "completed"
+            return
         assert post.headers["content-type"] == "application/json"
         payload = json.loads(post.content)
         assert "images" not in payload
@@ -905,6 +914,7 @@ async def test_multiple_references_deduplicate_and_validate_before_billing(
 ) -> None:
     """各协议只上传已引用的去重素材；超限在计费前拒绝。"""
     state = fixture
+    state.settings.image_api_base_url = "https://api.x.ai"
     state.models.append(model)
     if model.startswith("gemini"):
         state.result = native_result()

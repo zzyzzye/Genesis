@@ -2,6 +2,7 @@
 
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException
 
@@ -24,6 +25,12 @@ ASPECT_RATIOS = (
     "21:9",
     "5:2",
 )
+
+
+def uses_multipart_edits(base_url: str) -> bool:
+    """云影编辑入口要求文件表单，直连及其他渠道保留 xAI 原生协议。"""
+    host = (urlsplit(base_url).hostname or "").lower()
+    return host == "yyapi.cloud" or host.endswith(".yyapi.cloud")
 
 
 def uses_json_edits(model: str) -> bool:
