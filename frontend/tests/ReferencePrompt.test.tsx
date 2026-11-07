@@ -100,6 +100,40 @@ it('compositionend 之后到达的最终 DOM 输入仍以确认的中文提交',
   expect(textbox).toHaveTextContent('你')
 })
 
+it('画布尚未回传输入值时，组字结束不使用旧值覆盖正文或重置光标', async () => {
+  const change = vi.fn()
+  const props = { value:'前后', references:[], label:'图片提示词', onChange:change, onFocus:() => {}, onBlur:() => {} }
+  const { rerender } = render(<ReferencePrompt {...props} />)
+  const textbox = screen.getByRole('textbox', { name:'图片提示词' })
+  const editor = EditorView.findFromDOM(textbox)!
+  act(() => { editor.focus(); editor.dispatch({ selection:{ anchor:1 } }) })
+  fireEvent.compositionStart(textbox)
+  act(() => editor.dispatch({ changes:{ from:1, insert:'你好' }, selection:{ anchor:3 } }))
+  fireEvent.compositionEnd(textbox, { data:'你好' })
+  await waitFor(() => expect(change).toHaveBeenLastCalledWith('前你好后'))
+  expect(editor.state.doc.toString()).toBe('前你好后')
+  expect(editor.state.selection.main.head).toBe(3)
+  rerender(<ReferencePrompt {...props} value="前你好后" />)
+  expect(editor.state.selection.main.head).toBe(3)
+  act(() => editor.dispatch({ changes:{ from:3, insert:'！' }, selection:{ anchor:4 } }))
+  expect(change).toHaveBeenLastCalledWith('前你好！后')
+  // 真正的外部修改仍需同步，例如撤销或助手更新。
+  rerender(<ReferencePrompt {...props} value="外部修改" />)
+  expect(editor.state.doc.toString()).toBe('外部修改')
+})
+
+it('组字期间收到的外部内容在组字结束后仍会同步', async () => {
+  const props = { references:[], label:'图片提示词', onChange:vi.fn(), onFocus:() => {}, onBlur:() => {} }
+  const { rerender } = render(<ReferencePrompt {...props} value="原文" />)
+  const textbox = screen.getByRole('textbox', { name:'图片提示词' })
+  const editor = EditorView.findFromDOM(textbox)!
+  fireEvent.compositionStart(textbox)
+  rerender(<ReferencePrompt {...props} value="外部修改" />)
+  expect(editor.state.doc.toString()).toBe('原文')
+  fireEvent.compositionEnd(textbox)
+  await waitFor(() => expect(editor.state.doc.toString()).toBe('外部修改'))
+})
+
 it('候选显示真实缩略图，鼠标移动同步原生选中并提交对应节点，卸载保留缓存', async () => {
   const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:reference-option')

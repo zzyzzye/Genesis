@@ -35,6 +35,7 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
   const composing = useRef(false)
   const compositionFrame = useRef<number | null>(null)
   const reported = useRef(value)
+  const appliedValue = useRef(value)
   const [compositionVersion, setCompositionVersion] = useState(0)
   const session = getStoredAuthToken()
   const referenceState = JSON.stringify(references.map(({ node, asset }) => ({ id: node.id, name: node.name || asset?.name || '未命名参考', assetId: asset?.id, text: node.type === 'text', empty: !node.text.trim() })))
@@ -106,6 +107,9 @@ export function ReferencePrompt({ value, references, label, onChange, onFocus, o
   useEffect(() => {
     const editor = view.current
     if (!editor || composing.current || editor.compositionStarted || compositionFrame.current !== null) return
+    // 组字结束也会触发此 effect；画布尚未回传时不能把未变化的旧值写回编辑器。
+    if (value === appliedValue.current) return
+    appliedValue.current = value
     reported.current = value
     if (editor && editor.state.doc.toString() !== value) editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value }, annotations: [externalChange.of(true), Transaction.addToHistory.of(false)] })
   }, [value, compositionVersion])
