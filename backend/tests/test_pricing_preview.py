@@ -85,6 +85,16 @@ def test_luna_tiers_apply_group_ratio_without_rounding_token_rates() -> None:
             "0.11",
         ),
         ({"quota_type": 1, "model_price": "0"}, "request", "0"),
+        (
+            {
+                "model_name": "[原生] gpt-image-2.6-flare",
+                "quota_type": 0,
+                "billing_mode": "tiered_expr",
+                "billing_expr": 'tier("image", fixed(0.9)) * image_count',
+            },
+            "image",
+            "0.99",
+        ),
     ],
 )
 def test_media_prices_preserve_dynamic_units(

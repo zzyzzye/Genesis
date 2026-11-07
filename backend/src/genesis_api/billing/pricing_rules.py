@@ -202,7 +202,17 @@ def media_price_preview(
     Returns:
         包含精确十进制金额与单位的价格预览；规则不完整时返回未知。
     """
-    if row.get("quota_type") == 0:
+    # 表达式计费的 quota_type 也可能为 0，先识别明确的媒体单价，避免误入 Token 分支。
+    media_expression = (
+        re.fullmatch(
+            rf'\s*tier\(\s*"[^"\\]{{1,60}}"\s*,\s*fixed\(\s*({_NUMBER})\s*\)\s*\)'
+            r"\s*\*\s*(image_count|seconds)\s*",
+            str(row.get("billing_expr", "")),
+        )
+        if row.get("billing_mode") == "tiered_expr"
+        else None
+    )
+    if row.get("quota_type") == 0 and media_expression is None:
         return token_price_preview(
             row,
             group=group,
@@ -230,11 +240,7 @@ def media_price_preview(
         elif mode in (None, "", "per_request") and row.get("quota_type") == 1:
             unit, amount = "request", decimal_value(row.get("model_price"))
         elif mode == "tiered_expr" and isinstance(row.get("billing_expr"), str):
-            match = re.fullmatch(
-                rf'\s*tier\(\s*"[^"\\]{{1,60}}"\s*,\s*fixed\(\s*({_NUMBER})\s*\)\s*\)'
-                r"\s*\*\s*(image_count|seconds)\s*",
-                str(row["billing_expr"]),
-            )
+            match = media_expression
             if match is None:
                 raise UnsupportedPricing
             unit = "image" if match[2] == "image_count" else "second"
