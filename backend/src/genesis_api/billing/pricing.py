@@ -90,12 +90,12 @@ class YyapiPricingService:
         self._lock = asyncio.Lock()
         self._descriptions = ModelCatalog()
 
-    async def catalog(self, settings: Settings) -> PricingCatalog:
+    async def catalog(self, settings: Settings, *, refresh: bool = False) -> PricingCatalog:
         """读取用于管理员审核的完整目录，缺少凭据时不发送请求。"""
         secret = settings.yyapi_access_token
         if secret is None or not secret.get_secret_value().strip():
             raise PricingLookupError("价格服务尚未配置，暂无法预览。")
-        return await self._catalog(settings, secret.get_secret_value())
+        return await self._catalog(settings, secret.get_secret_value(), refresh=refresh)
 
     async def descriptions(
         self,
@@ -156,6 +156,7 @@ class YyapiPricingService:
         models: list[str],
         *,
         kind: str = "agent",
+        refresh: bool = False,
     ) -> dict[str, ModelPricePreview]:
         """生成当前渠道每个模型的分组价格，失败时保留模型并明确未知。
 
@@ -164,6 +165,7 @@ class YyapiPricingService:
             provider: 当前文本供应商或媒体渠道标识。
             models: 本轮已发现的模型 ID，不从价格表扩展可调用目录。
             kind: agent、image 或 video，按对应渠道的调用凭据匹配分组。
+            refresh: 用户主动同步时绕过价格目录缓存，重新核对当前渠道。
 
         Returns:
             仅含价格与固定错误说明的模型映射，不包含 Key 或控制台令牌。
@@ -181,7 +183,7 @@ class YyapiPricingService:
             base, key = connection(settings, kind, provider)
             if not is_yyapi(base):
                 raise PricingLookupError("此渠道暂未接入价格预览。")
-            catalog = await self.catalog(settings)
+            catalog = await self.catalog(settings, refresh=refresh)
             group = match_group(catalog.tokens, key)
             ratio = decimal_value(catalog.group_ratios.get(group))
             previews = {}
@@ -244,11 +246,13 @@ class YyapiPricingService:
             headers["New-Api-User"] = str(settings.yyapi_user_id)
         return base, headers, identity
 
-    async def _catalog(self, settings: Settings, token: str) -> PricingCatalog:
+    async def _catalog(
+        self, settings: Settings, token: str, *, refresh: bool = False
+    ) -> PricingCatalog:
         base, headers, identity = self._control_request(settings, token)
         async with self._lock:
             cached = self._cache.get(identity)
-            if cached and time.monotonic() - cached[0] < 60:
+            if not refresh and cached and time.monotonic() - cached[0] < 60:
                 return cached[1]
             if self.client is not None:
                 result = await self._load(self.client, base, headers)

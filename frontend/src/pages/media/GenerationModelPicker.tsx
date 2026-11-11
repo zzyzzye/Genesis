@@ -83,10 +83,10 @@ export function GenerationModelPicker({ models, value, disabled, label, placehol
         <Search size={14} aria-hidden="true" />
         <input ref={search} aria-label="搜索生成模型" placeholder="搜索模型…" value={query} onChange={event => { closePreview(); setQuery(event.target.value) }} />
         {query && <button type="button" aria-label="清空模型搜索" onClick={() => { closePreview(); setQuery(''); search.current?.focus() }}><X size={14} aria-hidden="true" /></button>}
-        {onRefresh && <button type="button" aria-label="刷新模型与价格" title="刷新模型与价格" disabled={disabled || loading} onClick={() => { closePreview(); onRefresh() }}><RefreshCw size={14} className={loading ? 'is-spinning' : undefined} aria-hidden="true" /></button>}
+        {onRefresh && <button type="button" aria-label="同步上游模型、介绍与价格" title="同步上游模型、介绍与价格" disabled={disabled || loading} onClick={() => { closePreview(); onRefresh() }}><RefreshCw size={14} className={loading ? 'is-spinning' : undefined} aria-hidden="true" /><span>同步上游</span></button>}
       </div>
       {selected && <button className="media-generation-model-info" type="button" onClick={event => show(selected, event.currentTarget)}>查看当前模型说明与价格</button>}
-      {loading && <p role="status">{models.length ? '正在刷新模型…' : '正在加载模型…'}</p>}
+      {loading && <p role="status">{models.length ? '正在同步上游…' : '正在加载模型…'}</p>}
       <div id={`${id}-list`} role="listbox" aria-label={label} aria-busy={loading}>
         {filtered.map(model => <button type="button" role="option" aria-selected={value === model.id} aria-describedby={preview?.model.id === model.id ? `${id}-preview` : undefined} key={model.id} onPointerEnter={event => { if (event.pointerType !== 'touch') show(model, event.currentTarget) }} onPointerLeave={leave} onFocus={event => show(model, event.currentTarget)} onBlur={closePreview} onClick={() => { onChange(model.id); close(true) }}><span>{model.id}</span>{value === model.id && <Check size={13} aria-hidden="true" />}</button>)}
       </div>

@@ -27,6 +27,7 @@ async def list_provider_models(
     session: SessionDependency,
     include_pricing: bool = True,
     refresh: bool = False,
+    refresh_pricing: bool = False,
 ) -> ProviderModels:
     """查询供应商模型目录及可选思考档位。
 
@@ -37,6 +38,7 @@ async def list_provider_models(
         session: 当前请求的数据库会话，保留既有调用接口。
         include_pricing: 是否附带价格；前端先关闭此项读取目录，再独立加载价格。
         refresh: 是否绕过目录缓存有效期，不绕过同渠道请求合并。
+        refresh_pricing: 分步同步价格时绕过价格缓存，不重复刷新模型目录。
 
     Returns:
         可选模型与能力字段，可能包含服务层生成的默认模型回退记录。
@@ -47,7 +49,8 @@ async def list_provider_models(
     try:
         result = await ModelDiscoveryService(settings).list_models(provider, refresh=refresh)
         prices = await yyapi_pricing_service.for_models(
-            settings, provider, [model.id for model in result.models]
+            settings, provider, [model.id for model in result.models],
+            refresh=refresh or refresh_pricing,
         ) if include_pricing else {}
         paid_channel = False
         if provider != "mimo" and user.role.value != "owner":

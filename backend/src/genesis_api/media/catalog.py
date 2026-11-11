@@ -35,10 +35,12 @@ async def generation_models(
     if is_yyapi(base):
         descriptions, prices = await asyncio.gather(
             yyapi_pricing_service.descriptions(settings, ids, refresh=refresh),
-            yyapi_pricing_service.for_models(settings, kind, ids, kind=kind),
+            yyapi_pricing_service.for_models(settings, kind, ids, kind=kind, refresh=refresh),
         )
     else:
-        prices = await yyapi_pricing_service.for_models(settings, kind, ids, kind=kind)
+        prices = await yyapi_pricing_service.for_models(
+            settings, kind, ids, kind=kind, refresh=refresh
+        )
     return [
         {
             "id": name,

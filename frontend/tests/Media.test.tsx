@@ -293,7 +293,7 @@ describe('作品画布', () => {
     expect(screen.getByRole('button', { name: '导入音频' })).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: '音频提示词' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '＋ 添加节点' }))
-    fireEvent.click(screen.getByRole('button', { name: '生音频节点' }))
+    fireEvent.click(screen.getByRole('button', { name: '音频草稿 · 未接入生成' }))
     fireEvent.change(screen.getByRole('textbox', { name: '音频提示词' }), { target: { value: '细雨、远处车流与低沉钢琴' } })
     expect(screen.queryByRole('button', { name: '运镜' })).not.toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: '参考模式' })).toHaveTextContent('文生音频')

@@ -13,6 +13,7 @@ const assets: Asset[] = ['a','b'].map(id => ({id,name:`${id}.png`,kind:'image',m
 afterEach(() => { cleanup();localStorage.clear();vi.useRealTimers();vi.restoreAllMocks() })
 
 function setup(document: Document = {...emptyDocument(),nodes:[source]}, availableAssets = assets) {
+  const notice = vi.fn()
   let currentTask = task
   const api = vi.spyOn(media,'api').mockImplementation((path,method,body) => {
     if (path.endsWith('/canvas')) return Promise.resolve(method === 'PUT' ? {version:1,document:(body as {document:Document}).document} : {version:0,document})
@@ -22,13 +23,30 @@ function setup(document: Document = {...emptyDocument(),nodes:[source]}, availab
   const view = renderHook(() => {
     const canvas = useCanvas('project','user')
     const [loaded,setAssets] = useState<Record<string,Asset>>({})
-    const onTask = useGenerationResults('project',canvas,setAssets)
+    const onTask = useGenerationResults('project',canvas,setAssets,notice)
     return {canvas,onTask,loaded}
   })
-  return {view,api,setTask:(next:GenerationTask) => {currentTask=next}}
+  return {view,api,notice,setTask:(next:GenerationTask) => {currentTask=next}}
 }
 
 describe('画布图片生成结果',() => {
+  it('提交和失败各提醒一次，打开旧任务不重播提醒', async () => {
+    const {view,notice} = setup()
+    await waitFor(() => expect(view.result.current.canvas.ready).toBe(true))
+    act(() => {
+      view.result.current.onTask(task)
+      view.result.current.onTask({...task,status:'queued'})
+    })
+    expect(notice).toHaveBeenCalledTimes(1)
+    expect(notice).toHaveBeenLastCalledWith('图片生成已提交')
+    act(() => {
+      view.result.current.onTask({...task,status:'failed',error:'上游拒绝'})
+      view.result.current.onTask({...task,status:'failed',error:'上游拒绝'},false)
+      view.result.current.onTask({...task,id:'old-task',status:'failed',error:'旧任务'},false)
+    })
+    expect(notice).toHaveBeenCalledTimes(2)
+    expect(notice).toHaveBeenLastCalledWith('图片生成失败：上游拒绝')
+  })
   it('Agent 回执按任务保存的参数建结果，不受提交后编辑的张数和画幅影响',async()=>{
     const {view}=setup()
     await waitFor(()=>expect(view.result.current.canvas.ready).toBe(true))
@@ -90,7 +108,7 @@ describe('画布图片生成结果',() => {
   })
 
   it('多图响应少于请求数量时，其余节点显示失败而不永久加载',async() => {
-    const {view,setTask} = setup()
+    const {view,setTask,notice} = setup()
     setTask({...task,status:'completed',asset_ids:['a']})
     await waitFor(() => expect(view.result.current.canvas.ready).toBe(true))
     act(() => view.result.current.onTask(task))
@@ -98,6 +116,8 @@ describe('画布图片生成结果',() => {
     const missing = view.result.current.canvas.document.nodes.find(node=>node.image_result?.index===1)?.image_result
     expect(missing?.status).toBe('failed')
     expect(missing?.error).toContain('未返回')
+    expect(notice).toHaveBeenCalledWith(expect.stringContaining('未返回全部结果'))
+    expect(notice).not.toHaveBeenCalledWith('图片生成完成，结果已放入画布')
   })
 
   it('图片读取失败与任务不存在分别提示，读取失败不再发起生成',async() => {

@@ -1,6 +1,23 @@
 import { expect, it, vi } from 'vitest'
 import { createModelCatalogCache } from '../src/lib/modelCatalogCache'
 
+it('手动同步目录跨天复用，支持同步读取，失败后保留旧目录', async () => {
+  const cache = createModelCatalogCache<string[]>()
+  const load = vi.fn().mockResolvedValue(['old-model'])
+  await cache('account', 'images', load)
+  const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 7 * 86400_000)
+  try {
+    expect(cache.peek('account', 'images')).toEqual(['old-model'])
+    expect(cache.peek('other', 'images')).toBeUndefined()
+    await cache('account', 'images', load)
+    expect(load).toHaveBeenCalledTimes(1)
+    await expect(cache('account', 'images', () => Promise.reject(new Error('同步失败')), true)).rejects.toThrow('同步失败')
+    expect(cache.peek('account', 'images')).toEqual(['old-model'])
+    await cache('account', 'images', () => Promise.resolve(['new-model']), true)
+    expect(cache.peek('account', 'images')).toEqual(['new-model'])
+  } finally { now.mockRestore() }
+})
+
 it('多个节点共享目录与在途请求，换用户隔离，主动刷新绕过缓存', async () => {
   const cache = createModelCatalogCache<string[]>()
   let finish!: (value: string[]) => void

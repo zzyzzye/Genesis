@@ -26,7 +26,8 @@ describe('视频节点生成', () => {
     expect(await screen.findByText('视频服务尚未配置，请先在服务端配置视频 API Key。')).toBeInTheDocument()
     expect(screen.getByRole('button',{name:'生成视频'})).toBeDisabled()
     api.mockImplementation((path) => path.startsWith('/video-models') ? Promise.reject(new Error('模型目录暂不可用')) : Promise.resolve([]))
-    fireEvent.click(screen.getByRole('button',{name:'刷新视频模型与任务'}))
+    fireEvent.click(screen.getByRole('button',{name:'视频生成模型'}))
+    fireEvent.click(screen.getByRole('button',{name:'同步上游模型、介绍与价格'}))
     expect(await screen.findByRole('alert')).toHaveTextContent('模型目录暂不可用')
   })
 
@@ -83,7 +84,7 @@ describe('视频节点生成', () => {
     expect(state.onTask).toHaveBeenCalledWith(expect.objectContaining({id:requests[1]?.request_id,status:'completed'}))
   })
 
-  it('未知结果必须明确核实；断网重试复用同一请求标识', async () => {
+  it('未知结果直接重新生成，不要求勾选；断网重试复用同一请求标识', async () => {
     const requests: unknown[]=[]
     const api=vi.spyOn(media,'api').mockImplementation((path,method,body) => {
       if(method==='POST'){requests.push(body);return Promise.reject(new Error('网络中断'))}
@@ -98,17 +99,16 @@ describe('视频节点生成', () => {
     await waitFor(() => expect(requests).toHaveLength(2))
     expect(requests[0]).toEqual(requests[1])
     api.mockImplementation((path) => Promise.resolve(path.startsWith('/video-models')?{configured:true,references_ready:true,models:[model]}:[{id:'unknown-task',status:'unknown',error:'创建结果未知',progress:0,asset_id:null}]))
-    fireEvent.click(screen.getByRole('button',{name:'刷新视频模型与任务'}))
-    await screen.findByRole('checkbox')
-    expect(screen.getByRole('button',{name:'生成视频'})).toBeDisabled()
-    fireEvent.click(screen.getByRole('checkbox'))
-    expect(screen.getByRole('button',{name:'生成视频'})).toBeEnabled()
+    fireEvent.click(screen.getByRole('button',{name:'刷新视频任务状态'}))
+    await screen.findByRole('button',{name:'重新生成视频'})
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.getByRole('button',{name:'重新生成视频'})).toBeEnabled()
     api.mockImplementation((path,method,body) => {
       const next={id:'new-task',status:'queued',progress:0,error:'',asset_id:null}
       if(method==='POST'){requests.push(body);return Promise.resolve(next)}
       return Promise.resolve(path==='/video-models'?{configured:true,references_ready:true,models:[model]}:[next])
     })
-    fireEvent.click(screen.getByRole('button',{name:'生成视频'}))
+    fireEvent.click(screen.getByRole('button',{name:'重新生成视频'}))
     await waitFor(() => expect(requests).toHaveLength(3))
     expect((requests[2] as {request_id:string}).request_id).not.toBe((requests[0] as {request_id:string}).request_id)
     expect(requests[2]).toMatchObject({acknowledge_unknown:true})

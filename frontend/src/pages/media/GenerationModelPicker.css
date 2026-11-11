@@ -15,6 +15,7 @@
 .media-generation-model-menu button[aria-selected=true] { background:var(--media-node-highlight-surface,#1d4135); color:var(--media-node-highlight,#a1e8cb); font-weight:500; }
 .media-generation-model-search>input::placeholder { color:#999; }
 .media-generation-model-search>button { flex:none; justify-content:center; width:32px; height:32px; min-height:32px; padding:0; border:0; }
+.media-generation-model-search>button:has(span) { width:auto; padding:0 8px; white-space:nowrap; }
 .media-generation-model-search>button:disabled { opacity:.45; cursor:default; background:transparent; }
 .media-generation-model-search .is-spinning { animation:media-video-spin 1s linear infinite; }
 @media(prefers-reduced-motion:reduce) { .media-generation-model-search .is-spinning { animation:none; } }

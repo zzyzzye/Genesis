@@ -9,7 +9,7 @@ import { GenerationModelPicker } from './GenerationModelPicker'
 
 export type VideoModel = { id: string; description?: string; pricing?: ModelPricePreview | null }
 type ModelList = { configured: boolean; references_ready: boolean; models: VideoModel[]; billing_required?: boolean }
-const generationCatalog = createModelCatalogCache<ModelList>()
+const generationCatalog = createModelCatalogCache<ModelList>(Infinity)
 export type GenerationTask = { id: string; node_id: string; status: string; progress: number; error: string; asset_id: string | null; asset_ids?: string[]; generation?: GenerationSettings | null; billing?: BillingOperation | null }
 type Task = GenerationTask
 const running = (status: string) => ['submitting', 'queued', 'processing', 'downloading'].includes(status)
@@ -37,17 +37,17 @@ function GenerationControls({ projectId, node, onPatch, onSave, onTask, onModelC
   const noun = isImage ? '图片' : '视频'
   const modelsPath = `/${kind}-models`
   const tasksPath = `/projects/${projectId}/${kind}-generations`
-  const [catalog, setCatalog] = useState<ModelList | null>(null)
+  const [catalog, setCatalog] = useState<ModelList | null>(() => generationCatalog.peek(getStoredAuthToken() ?? '', modelsPath) ?? null)
   const [catalogError, setCatalogError] = useState('')
-  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogLoading, setCatalogLoading] = useState(!catalog)
   const [task, setTask] = useState<Task | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [acknowledged, setAcknowledged] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const [catalogRevision, setCatalogRevision] = useState(0)
   const forceCatalogRefresh = useRef(false)
   const requestId = useRef<string | null>(null)
+  const retriedUnknownTask = useRef<string | null>(null)
   const active = useRef(false)
   const model = catalog?.models.find((item) => item.id === node.generation?.model)
   useEffect(() => { onModelChange?.(model ?? null) }, [model, onModelChange])
@@ -103,13 +103,16 @@ function GenerationControls({ projectId, node, onPatch, onSave, onTask, onModelC
     active.current = true; setBusy(true); setError('')
     try {
       await onSave()
-      // 主动核实后的重新提交是新意图；普通断网重试继续复用原标识。
-      if (acknowledged) requestId.current = null
+      // 用户主动重新生成才放行未知任务；断网重试继续复用同一标识。
+      if (task?.status === 'unknown' && retriedUnknownTask.current !== task.id) {
+        requestId.current = null
+        retriedUnknownTask.current = task.id
+      }
       requestId.current ??= crypto.randomUUID()
       onTask?.({ id:requestId.current,node_id:node.id,status:'requesting',progress:0,error:'',asset_id:null })
-      const created = await api<Task>(tasksPath, 'POST', { request_id:requestId.current, node_id:node.id, acknowledge_unknown:acknowledged })
+      const created = await api<Task>(tasksPath, 'POST', { request_id:requestId.current, node_id:node.id, acknowledge_unknown:task?.status === 'unknown' })
       onTask?.(created)
-      setTask(created); requestId.current = null; setAcknowledged(false); setAttempt((value) => value + 1)
+      setTask(created); requestId.current = null; setAttempt((value) => value + 1)
     } catch (reason) {
       if (requestId.current) onTask?.({ id:requestId.current,node_id:node.id,status:reason instanceof MediaError && (reason.status < 500 || reason.status === 503) ? 'failed' : 'unknown',progress:0,error:(reason as Error).message,asset_id:null })
       if (reason instanceof MediaError && reason.status >= 400 && reason.status < 500) {
@@ -119,16 +122,16 @@ function GenerationControls({ projectId, node, onPatch, onSave, onTask, onModelC
         setError(reason.message)
       } else setError(`${(reason as Error).message}。请先刷新任务状态；再次点击会使用同一请求标识。`)
     } finally { active.current = false; setBusy(false) }
-  }, [onSave, tasksPath, node.id, acknowledged, onTask])
-  const blocked = busy || Boolean(task && running(task.status)) || task?.status === 'unknown' && !acknowledged
+  }, [onSave, tasksPath, node.id, task, onTask])
+  const blocked = busy || Boolean(task && running(task.status))
   const referenceBlocked = referencesPending || Boolean(referenceError) || (!isImage && (node.generation?.mode ?? 'text') !== 'text' && catalog && !catalog.references_ready)
   return <div className="media-video-generation">
     <div className="media-video-generation-actions">
       <GenerationModelPicker models={catalog?.models ?? []} value={model?.id ?? ''} label={`${noun}生成模型`} placeholder={catalog ? catalog.configured ? `选择${noun}模型` : `尚未配置${noun}服务` : `加载${noun}模型…`} disabled={busy} loading={catalogLoading} onChange={chooseModel} onRefresh={refreshModels} />
       {isImage && <span className="media-video-spec" aria-label="图片生成模式" title="根据提示词中 @ 引用的图片确定">{referenceCount ? '图生图' : '文生图'}</span>}
       {controls}
-      <button type="button" aria-label={`刷新${noun}模型与任务`} title="刷新模型与任务" disabled={busy || catalogLoading} onClick={() => { refreshModels(); setAttempt(value => value + 1) }}><RefreshCw size={14} /></button>
-      <button type="button" className="media-video-submit" aria-label={`生成${noun}`} title={`生成${noun}`} disabled={Boolean(blocked || referenceBlocked || !model || !node.text.trim())} onClick={() => void submit()}>{busy || task && running(task.status) ? <LoaderCircle size={15} className="is-spinning" /> : <ArrowUp size={16} />}</button>
+      <button type="button" aria-label={`刷新${noun}任务状态`} title="刷新任务状态" disabled={busy} onClick={() => setAttempt(value => value + 1)}><RefreshCw size={14} /></button>
+      <button type="button" className="media-video-submit" aria-label={`${task?.status === 'unknown' ? '重新生成' : '生成'}${noun}`} title={`${task?.status === 'unknown' ? '重新生成' : '生成'}${noun}`} disabled={Boolean(blocked || referenceBlocked || !model || !node.text.trim())} onClick={() => void submit()}>{busy || task && running(task.status) ? <LoaderCircle size={15} className="is-spinning" /> : <ArrowUp size={16} />}</button>
     </div>
     {catalog && !catalog.configured && <p>{noun}服务尚未配置，请先在服务端配置{noun} API Key。</p>}
     {catalog?.configured && !catalog.models.length && <p>暂无可用{noun}模型，可刷新重试。</p>}
@@ -139,7 +142,7 @@ function GenerationControls({ projectId, node, onPatch, onSave, onTask, onModelC
       setBusy(true)
       void api<Task>(`${tasksPath}/${task.id}/retry-download`, 'POST').then((next) => { onTask?.(next); setTask(next); setAttempt((value) => value + 1) }).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(false))
     }}>重试保存{noun}</button>}
-    {task?.status === 'unknown' && <label className="media-video-unknown"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} />已核实上次任务，确认重新提交可能产生新的费用</label>}
+    {task?.status === 'unknown' && <p role="status">上次生成结果未知。可刷新任务状态，或重新生成（单独计费）。</p>}
     {(catalogError || error) && <p role="alert">{catalogError || error}</p>}
   </div>
 }

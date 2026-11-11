@@ -168,6 +168,25 @@ async def test_catalog_response_does_not_wait_for_pricing(monkeypatch: pytest.Mo
     prices.assert_not_called()
 
 
+@pytest.mark.anyio
+async def test_manual_price_sync_does_not_repeat_model_discovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """文本价格同步绕过价格缓存，但复用刚同步的模型目录。"""
+    discovery = AsyncMock(return_value=ProviderModels(
+        provider="openai", models=[AvailableModel(id="test-model")],
+    ))
+    prices = AsyncMock(return_value={})
+    monkeypatch.setattr(ModelDiscoveryService, "list_models", discovery)
+    monkeypatch.setattr(yyapi_pricing_service, "for_models", prices)
+    user = User(id=uuid4(), handle="test", display_name="测试", role=UserRole.OWNER)
+    await llm.list_provider_models(
+        "openai", user, Settings(), MagicMock(), refresh_pricing=True,
+    )
+    discovery.assert_awaited_once_with("openai", refresh=False)
+    assert prices.await_args.kwargs["refresh"] is True
+
+
 @pytest.mark.parametrize(("adapter", "model"), [
     ("openai", "gpt-5"), ("anthropic", "claude-sonnet-4-5"),
     ("google_genai", "gemini-2.5-flash"), ("xai", "grok-4"),

@@ -10,6 +10,8 @@ if (!import.meta.env.DEV || !['127.0.0.1', 'localhost'].includes(location.hostna
 // 与真实路由一致，先加载工作区基础样式，再加载画布专用覆盖样式。
 const { ProjectCanvas } = await import('../../src/pages/media/ProjectCanvas')
 const state = new URLSearchParams(location.search).get('state')
+const taskReview = state?.startsWith('tasks-') ?? false
+let reviewTask = { id:'review-task', node_id:'review-node-image_generation', status:state?.slice(6) ?? 'unknown', progress:0, error:'合成任务状态', asset_id:null as string | null }
 const wheelAssets = [
   { id: 'wheel-image', name: '合成参考画面.svg', kind: 'image', mime_type: 'image/svg+xml', size: 1024, in_library: false },
   { id: 'wheel-audio', name: '合成静音.wav', kind: 'audio', mime_type: 'audio/wav', size: 8044, in_library: false },
@@ -24,6 +26,11 @@ const nodes: Node[] = types.map((type, index) => ({
   height: type === 'audio' ? 88 : ['drag', 'toolbar'].includes(state ?? '') && ['video', 'image_generation', 'audio_generation'].includes(type) ? 402 : 220,
 }))
 nodes.unshift({ id: 'review-node-group', type: 'group', asset_id: null, text: '开场分镜', member_ids: nodes.slice(0, 3).map((node) => node.id), x: 50, y: 106, width: state === 'drag' ? 2210 : 1210, height: 294 })
+if (taskReview) {
+  const source = nodes.find(node => node.type === 'image_generation')!
+  Object.assign(source, {x:60,y:90,width:600,height:378,text:'合成生成验收',generation:{model:'合成模型',count:1}})
+  nodes.splice(0,nodes.length,source,{id:'review-result',type:'image',asset_id:null,text:'',name:'合成结果',x:850,y:90,width:360,height:240,image_result:{task_id:reviewTask.id,index:0,status:reviewTask.status,error:reviewTask.error}})
+}
 if (state === 'references') {
   const image = nodes.find(node => node.type === 'image')!
   const video = nodes.find(node => node.type === 'video')!
@@ -44,6 +51,20 @@ window.fetch = async (input, init) => {
   if (!url.pathname.startsWith('/api/')) return originalFetch(input, init)
   if (!url.pathname.startsWith('/api/v1/media/')) return json({ detail: '验收页面不访问真实 API。' }, 503)
   const path = url.pathname.replace('/api/v1/media', '')
+  if (taskReview && path.includes('/image-generations')) {
+    if (init?.method === 'POST') {
+      if (path.endsWith('/retry-download')) reviewTask = {...reviewTask,status:'completed',error:'',asset_id:'review-image'}
+      else {
+        const body = JSON.parse(typeof init.body === 'string' ? init.body : '{}') as {request_id:string}
+        reviewTask = {...reviewTask,id:body.request_id,status:'processing',error:'',asset_id:null}
+      }
+      return json(reviewTask)
+    }
+    return json(path.endsWith('/image-generations') ? [reviewTask] : reviewTask)
+  }
+  if (taskReview && path === '/image-models') return json({configured:true,references_ready:true,models:[{id:'合成模型',description:'合成模型介绍'}]})
+  if (taskReview && path === '/assets/review-image') return json({id:'review-image',name:'找回的图片.svg',kind:'image',mime_type:'image/svg+xml',size:128,in_library:false})
+  if (taskReview && path.startsWith('/assets/review-image/')) return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240"><rect width="360" height="240" fill="#54766b"/><text x="40" y="120" fill="white">已找回生成结果</text></svg>', {headers:{'Content-Type':'image/svg+xml'}})
   if (state === 'readonly' && init?.method && init.method !== 'GET') return json({ detail: '只读画布禁止写入。' }, 403)
   if (path.endsWith('/canvas') && init?.method === 'PUT') {
     document = (JSON.parse(typeof init.body === 'string' ? init.body : '{}') as { document: Document }).document

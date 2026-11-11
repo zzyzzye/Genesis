@@ -315,6 +315,8 @@ async def test_full_pagination_and_cache_keep_key_group_correlated() -> None:
             ["gpt-5.6-luna"],
         )
         assert len(requests) == 8
+        await service.for_models(settings(), "openai", ["gpt-5.6-luna"], refresh=True)
+        assert len(requests) == 12
     for request in requests:
         assert request.url.params.get("token") is None
         if request.url.path != "/api/status":

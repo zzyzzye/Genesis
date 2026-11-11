@@ -315,10 +315,13 @@ function GenerationNodeComposer({ id, data }: { id: string; data: CanvasNodeData
       <input ref={fileInput} className="media-video-file-input" type="file" accept={isImage ? 'image/jpeg,image/png,image/webp,image/gif,image/avif' : isAudio ? 'audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/flac,audio/webm,audio/aac' : 'image/jpeg,image/png,image/webp,image/gif,image/avif,video/mp4,video/webm,video/quicktime,video/x-matroska'} aria-label={`导入${nodeTypeLabel(node.type)}${isImage || isVideo ? '参考' : '预览'}素材`} onChange={(event) => { const file = event.target.files?.[0]; if (file) void data.onUploadNodeAsset(id, isAudio ? 'audio' : isVideo && file.type.startsWith('video/') ? 'video' : 'image', file); event.target.value = '' }} />
       {(isVideo || isImage) && (promptRefs.length > 0 || node.text.includes('](ref:')) ? <ReferencePrompt ref={referencePrompt} value={node.text} references={promptRefs} label={isImage ? "图片提示词" : "镜头描述"} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(text) => data.onTextChange(id, text)} /> : <textarea className="resize-none" aria-label={isImage ? '图片提示词' : isAudio ? '音频提示词' : '镜头描述'} value={node.text} placeholder={isImage ? '描述想要生成的图片内容，连入图片或文字后可用 @ 引用' : isAudio ? '描述声音、音乐风格或环境氛围，可引用画布素材' : '描述画面、人物动作与声音，连入图片或文字后可用 @ 引用'} maxLength={20000} onFocus={data.onInteractionStart} onBlur={data.onInteractionEnd} onChange={(event) => data.onTextChange(id, event.target.value)} />}
       {isVideo ? <VideoGeneration projectId={data.projectId} node={{ ...node, generation: { ...settings, mode: videoMode } }} controls={<>{modeControl}{parameterControl}</>} referenceCount={usedReferences.filter((item) => item.asset).length} referencesPending={usedReferences.some(item => !item.asset && (Boolean(item.node.asset_id) || ["image", "image_generation", "video", "video_asset", "audio", "audio_generation"].includes(item.node.type)))} referenceError={missingMention ? "提示词中的参考引用已断开，请重新连线或删除该引用。" : undefined} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onGenerationTask} /> : isImage ? <ImageGeneration projectId={data.projectId} node={node} controls={parameterControl} referenceCount={usedImages.length} referencesPending={usedImages.some(({ asset }) => !asset)} referenceError={missingMention ? "提示词中的参考引用已断开，请重新连线或删除该引用。" : undefined} onPatch={(patch) => data.onPatch(id, patch)} onSave={data.onSave} onTask={data.onGenerationTask} /> : <div className="media-video-composer-footer">{modeControl}{parameterControl}</div>}
+      {isAudio && <p className="media-generation-unavailable" role="status">音频生成尚未接入。此节点仅保存提示词、参数与参考素材。</p>}
     </section>
 }
 
 function MediaAssetNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
+  const [recovering, setRecovering] = useState(false)
+  const [recoveryError, setRecoveryError] = useState('')
   const node = data.source
   const kind = node.type === 'image' ? 'image' : node.type === 'video_asset' ? 'video' : 'audio'
   const isImage = kind === 'image'
@@ -328,6 +331,18 @@ function MediaAssetNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
   const label = nodeTypeLabel(node.type)
   const Icon = isImage ? ImagePlus : kind === 'video' ? Film : Music2
   const result = node.video_result ?? node.image_result
+  const recoverResult = async (retrySave: boolean) => {
+    if (!result || recovering) return
+    setRecovering(true)
+    setRecoveryError('')
+    const path = `/projects/${data.projectId}/${kind}-generations/${result.task_id}`
+    try {
+      const task = await api<GenerationTask>(retrySave ? `${path}/retry-download` : path, retrySave ? 'POST' : 'GET')
+      data.onGenerationTask(task, false)
+    } catch (reason) {
+      setRecoveryError((reason as Error).message)
+    } finally { setRecovering(false) }
+  }
   const generating = Boolean(result && ['requesting', 'submitting', 'queued', 'processing', 'downloading', 'completed'].includes(result.status))
   const resultLabel = result && ['requesting', 'submitting'].includes(result.status) ? `正在提交${kindLabel}…` : result?.status === 'downloading' ? `正在保存${kindLabel}…` : result?.status === 'completed' ? `正在加载${kindLabel}…` : generating ? `正在生成${kindLabel}…` : result?.status === 'download_failed' ? `${kindLabel}保存失败` : result?.status === 'failed' ? `${kindLabel}生成失败` : `${kindLabel}任务待核实`
   return <article className={`media-node media-node--media media-node--material ${kind === 'audio' ? 'is-audio-material' : ''} ${selected ? 'is-selected' : ''}`} aria-label={node.name || label}>
@@ -343,6 +358,8 @@ function MediaAssetNodeView({ id, data, selected }: NodeProps<CanvasFlowNode>) {
       : result ? <div className="media-node-drag-surface nopan media-node-media-empty media-image-result" role="status" aria-busy={generating}>
         {generating ? <LoaderCircle size={28} className="is-spinning" aria-hidden="true" /> : <Icon size={28} aria-hidden="true" />}
         <strong>{resultLabel}</strong>{result.error && <span>{result.error}</span>}
+        {!generating && <div className="nodrag nopan"><button type="button" disabled={recovering} onClick={() => void recoverResult(false)}>刷新结果</button>{result.status === 'download_failed' && <button type="button" disabled={recovering} onClick={() => void recoverResult(true)}>重试保存</button>}</div>}
+        {recoveryError && <span role="alert">{recoveryError}</span>}
       </div> : <div className="media-node-drag-surface nopan media-node-media-empty"><Icon size={24} aria-hidden="true" /><div className="nodrag"><button type="button" onClick={() => fileInput.current?.click()}>导入{kindLabel}</button><button type="button" onClick={() => data.onOpenNodeAssets(id, kind)}>选择作品素材</button></div></div>}
     {asset && <div className="media-node-media-actions nodrag nopan"><button type="button" aria-label="导入替换" title="导入替换" onClick={() => fileInput.current?.click()}><Upload size={15} aria-hidden="true" /></button><button type="button" aria-label="选择作品素材" title="选择作品素材" onClick={() => data.onOpenNodeAssets(id, kind)}><FolderOpen size={15} aria-hidden="true" /></button><button type="button" aria-label="清空节点素材" title="清空节点素材" onClick={() => data.onPatch(id, { asset_id: null, image_result:null, video_result:null })}><X size={15} aria-hidden="true" /></button></div>}
     <Handle type="source" position={Position.Right} aria-label="输出连接点" />
@@ -405,7 +422,16 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const [project, setProject] = useState<Project | null>(null)
   const [assets, setAssets] = useState<Record<string, Asset>>({})
   const [error, setError] = useState('')
-  const onGenerationTask = useGenerationResults(projectId, canvas, setAssets)
+  const [generationNotices, setGenerationNotices] = useState<{ id: string; message: string }[]>([])
+  const showGenerationNotice = useCallback((message: string) => {
+    setGenerationNotices(previous => [...previous.slice(-2), { id: crypto.randomUUID(), message }])
+  }, [])
+  useEffect(() => {
+    if (!generationNotices.length) return
+    const timer = setTimeout(() => setGenerationNotices(previous => previous.slice(1)), 5000)
+    return () => clearTimeout(timer)
+  }, [generationNotices])
+  const onGenerationTask = useGenerationResults(projectId, canvas, setAssets, showGenerationNotice)
   const { save: saveCanvas, current: canvasDocument, apply: applyDocument, checkpoint, flushDraft, view: viewCanvas, syncNodeNames, syncCanvas } = canvas
   useEffect(() => {
     if (!canvas.ready || canvas.readOnly) { onAgentActionsChange?.(null); return }
@@ -1100,6 +1126,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const viewport = canvas.document.viewport
   return <main className={`media-editor${canvas.readOnly ? ' is-readonly' : ''}`} onDropCapture={event => { if (canvas.readOnly) { event.preventDefault(); event.stopPropagation() } }}>
     {canvas.ready && canvas.readOnly && <div className="media-readonly-badge" role="status">只读画布 · 可平移和缩放</div>}
+    {!error && !canvas.conflict && !canvas.status.startsWith('保存失败') && <div className="media-generation-notices" aria-live="polite">{generationNotices.map(notice => <div key={notice.id} className="media-editor-notice"><span>{notice.message}</span><button type="button" aria-label="关闭生成提醒" onClick={() => setGenerationNotices(previous => previous.filter(item => item.id !== notice.id))}><X size={14} /></button></div>)}</div>}
     <div className="media-project-menu"><div className="media-project-controls"><button className="media-project-back" aria-label="返回作品页" title="返回作品页" onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}`) })}><ArrowLeft size={17} /></button><button className="media-project-trigger" aria-expanded={menu} disabled={canvas.readOnly} aria-label="作品菜单" onClick={() => { setMenu(!menu); setNodeMenu(false) }}><span className="media-project-name">{project?.name ?? '作品'}</span><ChevronDown size={15} /></button><FpsStatusSlot /></div>{menu && !canvas.readOnly && <div className="media-menu-content"><p role="status">{canvas.status}</p><label className="media-background-setting">画布背景<select aria-label="画布背景" value={canvas.document.background} onChange={(event) => canvas.apply({ ...canvas.current.current, background: event.target.value as Document['background'] })}><option value="dots">点阵</option><option value="lines">网格</option><option value="none">纯色</option></select></label><button onClick={() => void action(async () => { await canvas.save(); void navigate(`/media/projects/${projectId}/assets`) })}>作品素材库</button><button disabled={!project} onClick={() => setRenameOpen(true)}>重命名作品</button><button onClick={() => void action(canvas.save)}>立即保存 / 重试</button></div>}</div>
     {(error || canvas.status.startsWith('保存失败') || canvas.conflict || !canvas.ready) && <div key={error || canvas.status} className="media-editor-notice" role="status">{error || canvas.status}{previewRetry ? <button onClick={() => void uploadNodeAsset(previewRetry.id, previewRetry.kind, previewRetry.file)}>重试上传</button> : !canvas.conflict && <button onClick={() => void action(canvas.ready ? canvas.save : () => canvas.load(true))}>重试</button>}{canvas.conflict && <><button aria-haspopup="dialog" onClick={() => { if (reloadDialog.current && !reloadDialog.current.open) reloadDialog.current.showModal() }}>重新加载</button><button onClick={() => void action(fork)}>保留为新作品</button></>}<button onClick={() => void navigate(`/media/projects/${projectId}`)}>作品页</button>{error && <button aria-label="关闭提示" onClick={() => setError('')}><X size={14} /></button>}</div>}
     {renameOpen && project && <ProjectDialog action={{ kind: 'rename', project }} onClose={() => setRenameOpen(false)} onSaved={(updated) => { if (updated) setProject(updated); setRenameOpen(false) }} />}
@@ -1217,7 +1244,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
       <div className="media-node-palette-grid">
         <button type="button" onClick={() => addNode('image_generation')}><ImagePlus /><span>生图节点</span></button>
         <button type="button" onClick={() => addNode('video')}><Film /><span>生视频节点</span></button>
-        <button type="button" onClick={() => addNode('audio_generation')}><Music2 /><span>生音频节点</span></button>
+        <button type="button" onClick={() => addNode('audio_generation')}><Music2 /><span>音频草稿 · 未接入生成</span></button>
       </div>
       <div className="media-node-palette-separator">素材与内容</div>
       <div className="media-node-palette-grid">

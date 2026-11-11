@@ -510,6 +510,7 @@ export function getProviderModels(token: string, provider: AiProvider, options: 
   const path = `/llm/providers/${provider}/models`
   const query = new URLSearchParams({ include_pricing: String(includePricing) })
   if (options.refresh) query.set('refresh', 'true')
+  if (includePricing && (options.refresh || options.reload)) query.set('refresh_pricing', 'true')
   return providerCatalog(token, `${path}:${includePricing}`, () => request<ProviderModels>(`${path}?${query}`, { headers: authHeaders(token) }), options.refresh || options.reload)
 }
 

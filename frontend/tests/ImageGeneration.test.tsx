@@ -60,10 +60,11 @@ describe('生图节点',()=>{
     await screen.findByText('图片服务尚未配置，请先在服务端配置图片 API Key。')
     expect(screen.getByRole('button',{name:'生成图片'})).toBeDisabled()
     api.mockImplementation(path=>Promise.resolve(path.startsWith('/image-models')?{...catalog,models:[]}:[]))
-    fireEvent.click(screen.getByRole('button',{name:'刷新图片模型与任务'}))
+    fireEvent.click(screen.getByRole('button',{name:'图片生成模型'}))
+    fireEvent.click(screen.getByRole('button',{name:'同步上游模型、介绍与价格'}))
     await screen.findByText('暂无可用图片模型，可刷新重试。')
     api.mockImplementation(path=>path.startsWith('/image-models')?Promise.reject(new Error('图片模型目录暂不可用')):Promise.resolve([]))
-    fireEvent.click(screen.getByRole('button',{name:'刷新图片模型与任务'}))
+    fireEvent.click(screen.getByRole('button',{name:'同步上游模型、介绍与价格'}))
     expect(await screen.findByRole('alert')).toHaveTextContent('图片模型目录暂不可用')
   })
 

@@ -6,16 +6,34 @@ import type { useCanvas } from './useCanvas'
 const running = new Set(['submitting', 'queued', 'processing', 'downloading'])
 
 /** 结果随画布保存；任务查询独立于节点编辑框，恢复时只读取已有任务。 */
-export function useGenerationResults(projectId: string, canvas: ReturnType<typeof useCanvas>, setAssets: Dispatch<SetStateAction<Record<string, Asset>>>) {
+export function useGenerationResults(projectId: string, canvas: ReturnType<typeof useCanvas>, setAssets: Dispatch<SetStateAction<Record<string, Asset>>>, onNotice?: (message: string) => void) {
   const { current: documentRef, apply } = canvas
   const created = useRef(new Set<string>())
   const submitting = useRef(new Set<string>())
+  const announced = useRef(new Set<string>())
+  const notify = useCallback((task: GenerationTask, kind: string, announce: boolean) => {
+    const phase = running.has(task.status) ? 'submitted' : task.status
+    if (!['submitted', 'completed', 'failed', 'download_failed', 'unknown'].includes(phase)) return
+    const key = `${projectId}:${task.id}:${phase}`
+    if (announced.current.has(key)) return
+    announced.current.add(key)
+    if (!announce) return
+    const noun = kind === 'video' ? '视频' : '图片'
+    const message = phase === 'submitted' ? `${noun}生成已提交`
+      : phase === 'completed' ? `${noun}生成完成，结果已放入画布`
+      : phase === 'download_failed' ? `${noun}已生成，但保存失败，请重试保存`
+      : phase === 'unknown' ? `${noun}生成状态暂未确认，可刷新任务状态`
+      : `${noun}生成失败${task.error ? `：${task.error.slice(0, 160)}` : ''}`
+    onNotice?.(message)
+  }, [onNotice, projectId])
   const onTask = useCallback((task: GenerationTask, createResults = true) => {
     const document = documentRef.current
     const source = document.nodes.find(node => node.id === task.node_id)
     const kind = source?.type === 'video' || document.nodes.some(node => node.video_result?.task_id === task.id) ? 'video' : 'image'
     const field = kind === 'video' ? 'video_result' : 'image_result'
     const identity = `${kind}:${task.id}`
+    // 完成提醒等素材读取并落入画布后再发，避免把保存失败提示成成功。
+    if (task.status !== 'completed') notify(task, kind, createResults || submitting.current.has(identity))
     // 本次 POST 未返回时不查询不存在的任务；刷新后仍可按持久标识恢复。
     if (task.status === 'requesting') submitting.current.add(identity)
     else submitting.current.delete(identity)
@@ -50,7 +68,7 @@ export function useGenerationResults(projectId: string, canvas: ReturnType<typeo
     }
     created.current.add(identity)
     if (nodes.length !== document.nodes.length || nodes.some((node, index) => node !== document.nodes[index])) apply({ ...document,nodes,edges }, !existing.length)
-  }, [documentRef, apply])
+  }, [documentRef, apply, notify])
 
   const pending = useMemo(() => JSON.stringify(canvas.document.nodes.flatMap(node => {
     const result = node.video_result ?? node.image_result
@@ -65,9 +83,17 @@ export function useGenerationResults(projectId: string, canvas: ReturnType<typeo
     const update = (kind: 'image' | 'video', id: string, task: GenerationTask, assets: Asset[]) => {
       const field = kind === 'video' ? 'video_result' : 'image_result'
       if (!active) return
-      if (assets.length) setAssets(previous => ({ ...previous,...Object.fromEntries(assets.map(asset => [asset.id, asset])) }))
       const document = documentRef.current
       const ids = task.asset_ids ?? (task.asset_id ? [task.asset_id] : [])
+      const missingResults = task.status === 'completed' && document.nodes.some(node => {
+        const result = node[field]
+        return result?.task_id === id && !node.asset_id && !ids[result.index]
+      })
+      notify(missingResults ? {...task,status:'failed',error:'上游未返回全部结果，已保留可用素材，请刷新结果核对。'} : task, kind, document.nodes.some(node => {
+        const result = node[field]
+        return result?.task_id === id && (result.status !== task.status || task.status === 'completed' && !node.asset_id)
+      }))
+      if (assets.length) setAssets(previous => ({ ...previous,...Object.fromEntries(assets.map(asset => [asset.id, asset])) }))
       const nodes = document.nodes.map(node => {
         const result = node[field]
         if (!result || result.task_id !== id || node.asset_id) return node
@@ -114,7 +140,7 @@ export function useGenerationResults(projectId: string, canvas: ReturnType<typeo
       else void poll(kind, id)
     }
     return () => { active = false; timers.forEach(clearTimeout) }
-  }, [pending, projectId, documentRef, apply, setAssets, canvas.readOnly])
+  }, [pending, projectId, documentRef, apply, setAssets, canvas.readOnly, notify])
 
   return onTask
 }

@@ -6,6 +6,24 @@ import * as media from '../src/pages/media/api'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
+it('生成节点隔天重开立即显示缓存模型，刷新任务不触发目录同步', async () => {
+  const token = vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('catalog-reopen-test')
+  const node: Node = { id:'cached', type:'image_generation', asset_id:null, text:'合成提示词', x:0, y:0, width:600, height:378, generation:{ ...defaultGenerationSettings(), model:'cached-model' } }
+  const api = vi.spyOn(media, 'api').mockImplementation(path => Promise.resolve(path === '/image-models' ? { configured:true, references_ready:true, models:[{ id:'cached-model' }] } : []))
+  const props = { projectId:'project', node, onPatch:vi.fn(), onSave:vi.fn() }
+  const first = render(<ImageGeneration {...props} />)
+  await waitFor(() => expect(screen.getByRole('button', { name:'图片生成模型' })).toHaveTextContent('cached-model'))
+  first.unmount()
+  const now = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 86400_000)
+  render(<ImageGeneration {...props} />)
+  expect(screen.getByRole('button', { name:'图片生成模型' })).toHaveTextContent('cached-model')
+  fireEvent.click(screen.getByRole('button', { name:'刷新图片任务状态' }))
+  await act(async () => {})
+  expect(api.mock.calls.filter(([path]) => path.includes('image-models'))).toHaveLength(1)
+  now.mockRestore()
+  token.mockRestore()
+})
+
 it.each(['image', 'video'] as const)('%s 菜单主动刷新目录，保留选择和搜索，不刷新任务或提交生成', async kind => {
   const noun = kind === 'image' ? '图片' : '视频'
   const Component = kind === 'image' ? ImageGeneration : VideoGeneration
@@ -21,10 +39,10 @@ it.each(['image', 'video'] as const)('%s 菜单主动刷新目录，保留选择
   fireEvent.click(screen.getByRole('button', { name:`${noun}生成模型` }))
   const search = screen.getByRole('textbox', { name:'搜索生成模型' })
   fireEvent.change(search, { target:{ value:'model' } })
-  const refresh = screen.getByRole('button', { name:'刷新模型与价格' })
+  const refresh = screen.getByRole('button', { name:'同步上游模型、介绍与价格' })
   const taskCalls = api.mock.calls.filter(([path]) => path.includes('-generations')).length
   fireEvent.click(refresh)
-  expect(await screen.findByText('正在刷新模型…')).toBeInTheDocument()
+  expect(await screen.findByText('正在同步上游…')).toBeInTheDocument()
   expect(refresh).toBeDisabled()
   expect(screen.getByRole('option', { name:'current-model' })).toHaveAttribute('aria-selected', 'true')
   fireEvent.click(refresh)
@@ -56,7 +74,7 @@ it.each(['image', 'video'] as const)('%s 空目录可在菜单重试，刷新失
   await screen.findByText(`暂无可用${noun}模型，可刷新重试。`)
   fireEvent.click(screen.getByRole('button', { name:`${noun}生成模型` }))
   expect(screen.getByText('暂无可用模型，可刷新重试。')).toBeInTheDocument()
-  const refresh = screen.getByRole('button', { name:'刷新模型与价格' })
+  const refresh = screen.getByRole('button', { name:'同步上游模型、介绍与价格' })
   fireEvent.click(refresh)
   expect(await screen.findByRole('option', { name:'recovered-model' })).toBeInTheDocument()
   await waitFor(() => expect(refresh).toBeEnabled())
