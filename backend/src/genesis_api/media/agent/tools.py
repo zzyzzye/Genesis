@@ -1,7 +1,7 @@
 """影音规划、节点改名与生图工具，复用现有画布、归属、生成和计费服务。"""
 
 import asyncio
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from fastapi import HTTPException
@@ -13,7 +13,7 @@ from sqlalchemy import select
 from genesis_api.agent.context import require_actor
 from genesis_api.agent.tool_inputs import ToolArray, tool_validation_error
 from genesis_api.core.config import Settings
-from genesis_api.database.session import SessionLocal
+from genesis_api.database.session import SessionLocal as SessionLocal
 from genesis_api.identity.models import User
 from genesis_api.media import catalog, image, service, video
 from genesis_api.media.models import ImageGeneration, MediaAsset, ProjectAsset, VideoGeneration
@@ -25,11 +25,12 @@ from genesis_api.media.schemas import (
 )
 
 
-def build_media_tools(settings: Settings) -> list[BaseTool]:
+def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTool]:
     """装配画布、模型、参数方案、节点改名与图片任务工具。
 
     Args:
         settings: 供现有视频服务读取实时目录，不向模型返回连接配置。
+        review: 默认接入审阅/自动执行协议；仅确认分派与底层测试关闭包装。
 
     Returns:
         规划、节点改名与复用现有生图服务的提交、查询工具。
@@ -66,10 +67,10 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
         try:
             actor_id = require_actor(module="media")
             with SessionLocal() as session:
-                project = service.project_for(session, actor_id, project_id)
+                project = service.readable_project(session, project_id)
                 document = CanvasDocument.model_validate(project.canvas)
                 source_kinds = {
-                    node.id: service.asset_for(session, actor_id, node.asset_id).kind
+                    node.id: service.readable_asset(session, actor_id, node.asset_id).kind
                     if node.asset_id is not None else
                     "image" if node.type in ("image", "image_generation") else node.type
                     for node in document.nodes
@@ -226,6 +227,13 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
         Raises:
             ToolException: 模型不可用、节点越权或缺失、类型错误、参数无效。
         """
+        try:
+            with SessionLocal() as session:
+                service.project_for(session, require_actor(module="media"), project_id)
+        except (HTTPException, RuntimeError) as exc:
+            raise ToolException(
+                str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+            ) from None
         version, document, _image_targets = await asyncio.to_thread(read_canvas, project_id)
         try:
             GenerationSettings.model_validate(
@@ -293,6 +301,7 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
         node_id: UUID,
         expected_version: int,
         config: RunnableConfig,
+        acknowledge_unknown: bool = False,
     ) -> tuple[dict[str, object], dict[str, object]]:
         """提交用户明确要求生成的一个生图节点，使用已保存参数并可能产生实际费用。
 
@@ -300,6 +309,8 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
             project_id: 当前作品 ID，先读取 get_media_canvas 确认归属与目标。
             node_id: 真实生图节点 ID；“第一张”按节点名称和画布内容确定，不猜 ID。
             expected_version: get_media_canvas 返回的最新版本；过期时重读，不强行覆盖。
+            config: 运行时注入的任务标识，用于生成请求幂等。
+            acknowledge_unknown: 仅用户明确要求重新生成未知任务时启用，默认复用原任务。
 
         Returns:
             真实任务 ID、状态及是否复用已有任务；画布自动展示结果节点和加载状态。
@@ -323,7 +334,8 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
                     session,
                     user,
                     project_id,
-                    GenerationSubmit(request_id=request_id, node_id=node_id),
+                    GenerationSubmit(request_id=request_id, node_id=node_id,
+                                     acknowledge_unknown=acknowledge_unknown),
                     settings,
                     expected_version=expected_version,
                     reuse_active=True,
@@ -467,6 +479,7 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
     @tool(response_format="content_and_artifact")
     async def submit_video_generation(
         project_id: UUID, node_id: UUID, expected_version: int, config: RunnableConfig,
+        acknowledge_unknown: bool = False,
     ) -> tuple[dict[str, object], dict[str, object]]:
         """提交已保存的视频节点，可能收费；同轮同节点及已有运行任务复用，不重复生成。"""
         try:
@@ -481,7 +494,8 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
                     raise ToolException("账户不存在")
                 task, payload = await video.admit_task(
                     session, user, project_id,
-                    video.VideoSubmit(request_id=request_id, node_id=node_id), settings,
+                    video.VideoSubmit(request_id=request_id, node_id=node_id,
+                                      acknowledge_unknown=acknowledge_unknown), settings,
                     expected_version=expected_version, reuse_active=True,
                 )
                 result = {"project_id": str(project_id), **video.task_data(task),
@@ -514,6 +528,49 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
                 str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
             ) from None
 
+    @tool(response_format="content_and_artifact")
+    async def retry_generation_save(
+        project_id: UUID, task_id: UUID, kind: Literal["image", "video"],
+    ) -> tuple[dict[str, object], dict[str, object]]:
+        """重试保存已有图片或视频结果，不发起新的付费生成。
+
+        Args:
+            project_id: 当前作品 ID。
+            task_id: 查询工具返回的真实任务 ID。
+            kind: 图片 image 或视频 video。
+        """
+        from fastapi import BackgroundTasks
+
+        from genesis_api.api.routes.media_image import retry_image_save
+        from genesis_api.api.routes.media_video import retry_video_download
+
+        actor = require_actor(module="media")
+        background = BackgroundTasks()
+        try:
+            with SessionLocal() as session:
+                service.project_for(session, actor, project_id)
+                user = session.get(User, actor)
+                task = (session.get(ImageGeneration, task_id) if kind == "image"
+                        else session.get(VideoGeneration, task_id))
+                if (user is None or task is None or task.owner_id != actor
+                        or task.project_id != project_id):
+                    raise ToolException("生成任务不存在")
+                if task.status in ("downloading", "completed"):
+                    result = (image.task_data(task) if isinstance(task, ImageGeneration)
+                              else video.task_data(task))
+                elif kind == "image":
+                    result = retry_image_save(project_id, task_id, user, session, background)
+                else:
+                    result = retry_video_download(project_id, task_id, user, session)
+                node_id = str(task.node_id)
+            await background()
+            return result, {"resource": {
+                "module": "media", "kind": f"{kind}_generation", "id": str(task_id),
+                "scope_id": str(project_id), "parent_id": node_id,
+            }}
+        except HTTPException as exc:
+            raise ToolException(str(exc.detail)) from None
+
     result = [
         get_video_generation_models,
         get_media_canvas,
@@ -523,9 +580,14 @@ def build_media_tools(settings: Settings) -> list[BaseTool]:
         get_image_generation_task,
         rename_node,
         edit_media_canvas, get_media_assets, reference_media_asset,
-        submit_video_generation, get_video_generation_task,
+        submit_video_generation, get_video_generation_task, retry_generation_save,
     ]
     for entry in result:
         entry.handle_tool_error = True
         entry.handle_validation_error = tool_validation_error
+    if review:
+        from genesis_api.media.agent.actions import MEDIA_ACTIONS, reviewed_tool
+
+        return [reviewed_tool(entry, settings) if entry.name in MEDIA_ACTIONS else entry
+                for entry in result]
     return result

@@ -36,7 +36,7 @@ function proposalLabels(action: AiActionProposal, changes: Record<string, unknow
       if (changes.scheduled_at === null) return { name: '取消定时发布', button: '确认取消计划', done: '发布计划已取消', hint: '取消原定发布计划，其他设置按本次修改保存', icon: CalendarX2 }
     }
   }
-  return actionLabels[action.action] ?? { name: '确认操作', button: '确认执行', done: '操作已完成', hint: action.summary, icon: FilePenLine }
+  return actionLabels[action.action as keyof typeof actionLabels] ?? { name: '确认操作', button: '确认执行', done: '操作已完成', hint: action.summary, icon: FilePenLine }
 }
 
 function ProposalMetadata({ action, changes }: { action: AiActionProposal; changes: Record<string, unknown> }) {

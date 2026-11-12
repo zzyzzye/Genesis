@@ -26,6 +26,7 @@ def test_media_package_preserves_prompt_and_public_entry() -> None:
         "reference_media_asset",
         "submit_video_generation",
         "get_video_generation_task",
+        "retry_generation_save",
     ]
 
 

@@ -646,7 +646,7 @@ export function renameAiConversation(token: string, id: string, title: string, s
   })
 }
 
-export type AiAction = 'create_draft' | 'create_and_publish' | 'update_post' | 'delete_post' | 'publish_post'
+export type AiAction = 'create_draft' | 'create_and_publish' | 'update_post' | 'delete_post' | 'publish_post' | 'edit_media_canvas' | 'rename_node' | 'reference_media_asset' | 'submit_image_generation' | 'submit_video_generation' | 'retry_generation_save'
 
 export interface AiActionProposal {
   executed?: boolean
@@ -663,9 +663,10 @@ export interface AiActionProposal {
 }
 
 export interface AiActionConfirmationResult {
+  resource?: AiToolCall['resource']
   action: AiAction
   post_id?: string
-  status: string
+  status?: string
 }
 
 export function confirmAiAction(token: string, proposalToken: string): Promise<AiActionConfirmationResult> {

@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { MediaAssistant } from '../src/pages/media/MediaAssistant'
+import { emptyDocument } from '../src/pages/media/api'
+import { confirmAiAction, type AiActionProposal } from '../src/lib/api'
 import { cancelAiChatRun, createAiChatRun, createAiConversation, getAiConversation, listAiConversations, renameAiConversation, streamAiChatRun } from '../src/lib/api'
 import { accountAuthTokenKey, studioAuthTokenKey } from '../src/lib/auth'
 import { uploadAttachment } from '../src/lib/attachments'
@@ -15,9 +17,65 @@ vi.mock('../src/lib/api', async original => ({
   createAiConversation: vi.fn(), createAiChatRun: vi.fn(), streamAiChatRun: vi.fn(),
   getAiConversation: vi.fn(), listAiConversations: vi.fn(), renameAiConversation: vi.fn(),
   cancelAiChatRun: vi.fn().mockResolvedValue(undefined),
+  confirmAiAction: vi.fn(),
 }))
 const saved = { id: 'media-history', title: '雨夜分镜', title_source: 'manual' as const, created_at: '', updated_at: '' }
 const props = { userId: 'creator', attachmentsAllowed: true, page: 'projects' as const, selectedNode: null }
+
+const proposal: AiActionProposal = { type: 'pending_action', module: 'media', action: 'edit_media_canvas', proposal_id: 'canvas-proposal', proposal_token: 'synthetic-proposal', summary: '保存画布修改', requires_confirmation: true, expires_at: '2099-01-01', payload: { document: { nodes: [{ id: 'node', name: '雨夜镜头', text: '雨夜街景' }] } } }
+const resource = { module: 'media', kind: 'canvas_edit', id: 'receipt', scope_id: 'project', parent_id: 'project' }
+
+it('媒体审阅确认后才同步，失败保留回执并可重试同步，不重复执行', async () => {
+  const syncCanvas = vi.fn().mockRejectedValueOnce(new Error('断网')).mockResolvedValue(undefined)
+  vi.mocked(confirmAiAction).mockResolvedValue({ action: 'edit_media_canvas', status: 'completed', resource })
+  vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
+    callbacks.onProposals?.([proposal]); return Promise.resolve('completed')
+  })
+  render(<MediaAssistant {...props} page="canvas" projectId="project" canvasActions={{ save: vi.fn().mockResolvedValue(undefined), getDocument: emptyDocument, attachImageTask: vi.fn(), syncCanvas }} />)
+  fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
+  fireEvent.change(screen.getByRole('textbox', { name: '向镜头搭档提问' }), { target: { value: '增加雨夜镜头' } })
+  fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
+  const confirm = await screen.findByRole('button', { name: '确认执行' })
+  await waitFor(() => expect(confirm).toBeEnabled())
+  expect(syncCanvas).not.toHaveBeenCalled()
+  fireEvent.click(confirm)
+  await screen.findByText(/操作已执行，但画布同步失败/)
+  expect(screen.getByRole('button', { name: '已完成' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: '重试同步' }))
+  await waitFor(() => expect(screen.queryByRole('button', { name: '重试同步' })).not.toBeInTheDocument())
+  expect(confirmAiAction).toHaveBeenCalledTimes(1)
+  expect(syncCanvas).toHaveBeenCalledTimes(2)
+})
+
+it('媒体自动模式传到服务端，只读画布仍能发送讨论', async () => {
+  vi.mocked(streamAiChatRun).mockImplementation((_token, _id, callbacks) => {
+    callbacks.onSnapshot('可以讨论镜头', 1); return Promise.resolve('completed')
+  })
+  const view = render(<MediaAssistant {...props} />)
+  fireEvent.click(screen.getByRole('button', { name: '镜头搭档' }))
+  fireEvent.change(screen.getByLabelText('Agent 执行方式'), { target: { value: 'automatic' } })
+  fireEvent.change(screen.getByRole('textbox', { name: '向镜头搭档提问' }), { target: { value: '讨论镜头' } })
+  fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
+  await screen.findByText('可以讨论镜头')
+  expect(createAiChatRun).toHaveBeenLastCalledWith('media-test-session', expect.objectContaining({ execution_mode: 'automatic' }))
+  view.rerender(<MediaAssistant {...props} page="canvas" projectId="project" canvasActions={{ readOnly: true, save: async () => {}, getDocument: emptyDocument, attachImageTask: vi.fn() }} />)
+  expect(screen.queryByLabelText('Agent 执行方式')).not.toBeInTheDocument()
+  fireEvent.change(screen.getByRole('textbox', { name: '向镜头搭档提问' }), { target: { value: '这个只读镜头怎么样' } })
+  fireEvent.click(screen.getByRole('button', { name: '发送给镜头搭档' }))
+  await waitFor(() => expect(createAiChatRun).toHaveBeenCalledTimes(2))
+  expect(createAiChatRun).toHaveBeenLastCalledWith('media-test-session', expect.objectContaining({ execution_mode: 'approval_required' }))
+})
+
+it('历史执行回执恢复同步，旧 canvas-plan 不再提供重复应用按钮', async () => {
+  sessionStorage.setItem('genesis-media-ai-conversation:creator', JSON.stringify({ isOpen: true, conversationId: saved.id }))
+  vi.mocked(getAiConversation).mockResolvedValue({ ...saved, messages: [{ role: 'assistant', content: '```canvas-plan\n{}\n```', run_id: 'past-run', status: 'completed', error: null, proposals: [{ ...proposal, executed: true, execution_result: { resource } }] }] })
+  const syncCanvas = vi.fn().mockResolvedValue(undefined)
+  render(<MediaAssistant {...props} page="canvas" projectId="project" canvasActions={{ save: async () => {}, getDocument: emptyDocument, attachImageTask: vi.fn(), syncCanvas }} />)
+  await waitFor(() => expect(syncCanvas).toHaveBeenCalledTimes(1))
+  expect(screen.queryByRole('button', { name: '应用到画布' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '已完成' })).toBeDisabled()
+  expect(confirmAiAction).not.toHaveBeenCalled()
+})
 
 beforeEach(() => {
   localStorage.setItem(accountAuthTokenKey, 'media-test-session')

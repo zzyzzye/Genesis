@@ -352,7 +352,7 @@ async def test_agent_submits_once_and_native_artifact_links_real_task(
     state = fixture
     tool = next(
         t
-        for t in media_tools.build_media_tools(state.settings)
+        for t in media_tools.build_media_tools(state.settings, review=False)
         if t.name == "submit_image_generation"
     )
     user = state.session.scalar(select(User))
@@ -402,7 +402,7 @@ async def test_agent_rejects_stale_canvas_and_unready_reference(
     state = fixture
     tool = next(
         t
-        for t in media_tools.build_media_tools(state.settings)
+        for t in media_tools.build_media_tools(state.settings, review=False)
         if t.name == "submit_image_generation"
     )
     user = state.session.scalar(select(User))
@@ -454,7 +454,7 @@ async def test_agent_reuses_active_and_unknown_tasks_in_new_turns(
     monkeypatch.setattr(image, "start_agent_task", lambda task_id, _: queued.append(task_id))
     tool = next(
         t
-        for t in media_tools.build_media_tools(state.settings)
+        for t in media_tools.build_media_tools(state.settings, review=False)
         if t.name == "submit_image_generation"
     )
     actor_id = state.session.scalar(select(User.id))

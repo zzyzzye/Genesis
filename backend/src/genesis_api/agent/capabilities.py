@@ -94,10 +94,11 @@ class AgentCapabilityRegistry:
         *,
         current_user: User,
         session: Session,
+        settings: Settings | None = None,
     ) -> object:
         """将用户确认的写操作分派给对应业务模块。
 
-        调用前由公共 API 完成所有者权限与提议令牌校验；此处仅分派业务操作。
+        调用前由公共 API 完成身份、模块权限与提议令牌校验；此处仅分派业务操作。
 
         Args:
             module: 提供该操作的业务模块标识。
@@ -105,6 +106,7 @@ class AgentCapabilityRegistry:
             payload: 操作参数，由业务模块进一步校验。
             current_user: 公共 API 已认证并校验权限的当前用户。
             session: 当前请求的数据库会话。
+            settings: 影音业务工具所需配置，仅从服务端注入。
 
         Returns:
             业务模块执行操作后返回的结果。
@@ -113,7 +115,16 @@ class AgentCapabilityRegistry:
             ValueError: 模块不提供该操作。
             HTTPException: 业务参数无效、目标不存在或业务校验失败。
         """
-        # 仅博客提供服务端确认写入；影音画布方案由前端确认，工具箱尚无写工具。
+        if module == self._media.module and settings is not None:
+            from functools import partial
+
+            from anyio import from_thread
+
+            from genesis_api.media.agent.actions import confirm_media_action
+
+            return from_thread.run(
+                partial(confirm_media_action, action, payload, current_user, settings)
+            )
         if module == self._blog.module and self._blog.handles_action(action):
             return self._blog.confirm_action(
                 action, payload, current_user=current_user, session=session

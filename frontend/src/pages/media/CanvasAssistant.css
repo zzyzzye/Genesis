@@ -60,6 +60,9 @@
 .media-assistant .agent-picker button[aria-pressed=true]:not(:disabled) { background:var(--assistant-selected); color:var(--assistant-accent); }
 .media-assistant .studio-assistant__conversation-heading { background:var(--assistant-paper); }
 .media-assistant .studio-assistant__request-error { color:var(--assistant-error); }
+.media-assistant.studio-assistant .studio-assistant__action-card button:not(:disabled) { background:var(--assistant-accent); color:var(--assistant-accent-ink); }
+.media-assistant.studio-assistant .studio-assistant__action-card button:is(:hover,:focus-visible):not(:disabled) { background:var(--assistant-accent-hover); }
+.media-assistant .studio-assistant__request-error button { margin-left:8px; color:var(--assistant-ink); background:transparent; }
 .media-assistant .studio-assistant__identity { gap:7px; }
 .media-assistant .studio-assistant__identity div>span { font-size:10px; }
 .media-assistant .studio-assistant__avatar { color:var(--assistant-accent); }

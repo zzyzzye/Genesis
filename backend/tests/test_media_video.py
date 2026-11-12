@@ -60,7 +60,10 @@ async def test_agent_video_submission_is_versioned_idempotent_and_queryable(
     fixture: VideoFixture,
 ) -> None:
     """助手与页面共享准入和提交，重放不再创建上游任务。"""
-    tools = {entry.name: entry for entry in media_tools.build_media_tools(fixture.settings)}
+    tools = {
+        entry.name: entry
+        for entry in media_tools.build_media_tools(fixture.settings, review=False)
+    }
     user = fixture.session.scalar(select(User))
     assert user is not None
     version = (await fixture.client.get(f"projects/{fixture.project_id}/canvas")).json()["version"]
@@ -84,6 +87,26 @@ async def test_agent_video_submission_is_versioned_idempotent_and_queryable(
             {"project_id": fixture.project_id, "task_id": created["id"]},
         )
         assert task["id"] == created["id"]
+        stored = fixture.session.get(VideoGeneration, UUID(str(created["id"])))
+        assert stored is not None
+        stored.status = "download_failed"
+        fixture.session.commit()
+        retry_args = {
+            "project_id": fixture.project_id, "task_id": created["id"], "kind": "video",
+        }
+        reviewed = next(
+            tool for tool in media_tools.build_media_tools(fixture.settings)
+            if tool.name == "retry_generation_save"
+        )
+        pending = json.loads(await reviewed.ainvoke(retry_args))
+        fixture.session.refresh(stored)
+        assert pending["executed"] is False and stored.status == "download_failed"
+        recovered = await tools["retry_generation_save"].ainvoke(retry_args)
+        repeated = await tools["retry_generation_save"].ainvoke(retry_args)
+        assert recovered["id"] == repeated["id"] == created["id"]
+        assert recovered["status"] == repeated["status"] == "downloading"
+    with agent_invocation_context(uuid4(), "member", "media"):
+        assert await tools["retry_generation_save"].ainvoke(retry_args) == "作品不存在"
     assert sum(request.method == "POST" for request in fixture.requests) == 1
 
 

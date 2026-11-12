@@ -58,6 +58,7 @@ import type { AiToolCall } from '../../lib/api'
 import { BlogConversationHistory } from '../blog/agent/BlogConversationHistory'
 import { BlogAgentAttachments, BlogMessageAttachments } from '../blog/agent/BlogAgentAttachments'
 import { agentAttachmentAccept, useBlogAttachments } from '../blog/agent/useBlogAttachments'
+import { MediaActionProposal } from './MediaActionProposal'
 import { BlogActionProposal } from '../blog/agent/BlogActionProposal'
 import { AgentQuestion } from './AgentQuestion'
 import { questionAnswers, splitAgentQuestion } from './questionProtocol'
@@ -215,7 +216,7 @@ const MarkdownMessage = memo(function MarkdownMessage({ content, status, error, 
     {!streaming && !error && status === 'completed' && !content.trim() && !actions.length && !tool_calls?.length && <p className="studio-assistant__message-status">本轮未返回正文，请重试或切换模型。</p>}
     {!streaming && !error && !content.trim() && actions.length > 0 && <p className="studio-assistant__stream-text">{actions.every(action => action.executed || executedProposals?.includes(action.proposal_id)) ? '操作已执行，结果如下。' : '操作提议已准备，请核对后确认。'}</p>}
     {question.request && <AgentQuestion key={question.request.id} request={question.request} disabled={questionDisabled} answered={questionAnswer !== undefined} answerContent={questionAnswer} onAnswer={onAnswer} />}
-    {actions.map((action) => <BlogActionProposal key={action.proposal_id} action={action} targetPost={targetPost} executed={Boolean(action.executed || executedProposals?.includes(action.proposal_id))} busy={confirming} disabled={streaming} onConfirm={() => { void onConfirm(index, action) }} />)}
+    {actions.map((action) => action.module === 'media' ? <MediaActionProposal key={action.proposal_id} action={action} executed={Boolean(action.executed || executedProposals?.includes(action.proposal_id))} busy={confirming} disabled={streaming} onConfirm={() => { void onConfirm(index, action) }} /> : <BlogActionProposal key={action.proposal_id} action={action} targetPost={targetPost} executed={Boolean(action.executed || executedProposals?.includes(action.proposal_id))} busy={confirming} disabled={streaming} onConfirm={() => { void onConfirm(index, action) }} />)}
     {response}
     <ResponseTiming timing={timing} metrics={metrics} streaming={streaming} showMetrics={index > 0} operationOnly={operationOnly} />
   </div>
@@ -245,6 +246,9 @@ export type MediaAssistantVariant = {
   renderResponse: (content: string, key: string, disabled: boolean) => ReactNode
   beforeSubmit?: () => Promise<void>
   onToolCalls?: (calls: AiToolCall[]) => void
+  onResources?: (resources: NonNullable<AiToolCall['resource']>[]) => void
+  readOnly?: boolean
+  status?: ReactNode
 }
 
 export function AgentAssistant({ page, editor, userId, onExecuted, media }: { page: AssistantPageContext; editor: AssistantEditorContext | null; userId?: string; onExecuted?: () => void; media?: MediaAssistantVariant }) {
@@ -617,6 +621,16 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   }, [modelMenuOpen, isOpen])
 
   const notifyAutomaticExecution = useEffectEvent(() => onExecuted?.())
+  const notifyResources = useEffectEvent((resources: NonNullable<AiToolCall['resource']>[]) => media?.onResources?.(resources))
+  useEffect(() => {
+    const resources = messages.flatMap(message => (message.proposals ?? []).flatMap(proposal => {
+      const resource = proposal.executed ? proposal.execution_result?.resource : null
+      if (!resource || typeof resource !== 'object') return []
+      const value = resource as NonNullable<AiToolCall['resource']>
+      return value.module === 'media' && typeof value.id === 'string' && typeof value.scope_id === 'string' ? [value] : []
+    }))
+    if (resources.length) notifyResources(resources)
+  }, [messages])
   const notifyToolCalls = useEffectEvent((calls: AiToolCall[]) => media?.onToolCalls?.(calls))
   useEffect(() => {
     if (!activeRun || !isOpen && !isMedia) return
@@ -803,7 +817,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
         model: model || undefined,
         reasoning_effort: reasoning.effort,
         thinking_mode: reasoning.thinkingMode,
-        execution_mode: media ? 'approval_required' : executionMode,
+        execution_mode: media?.readOnly ? 'approval_required' : executionMode,
         context: media?.context ?? {
           module: 'blog',
           route: page.route,
@@ -922,6 +936,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
               {renameError && <p role="alert">{renameError}</p>}
             </form> : <><strong title={conversation?.title}>{conversation?.title ?? '新对话'}</strong><button type="button" disabled={!conversationId || conversationLoading || historyDeleting} onClick={() => { setTitleDraft(conversation?.title ?? '新对话'); setRenameError(null); setRenaming(true) }}>重命名</button></>}
           </div>
+          {media?.status}
           {conversationLoading && <p className="studio-assistant__loading" role="status">正在读取对话…</p>}
           {historyError && !historyOpen && <p className="studio-assistant__request-error" role="alert">{historyError}<button type="button" onClick={() => { if (conversationId) void loadConversation(conversationId) }}>重试</button></p>}
           <div
@@ -985,7 +1000,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             <div className="studio-assistant__composer-tools">
               <button type="button" className="studio-assistant__tool-button" aria-label="添加附件" title={attachmentsAllowed ? '添加文件、图片或视频' : '附件输入仅限站点所有者使用'} disabled={!attachmentsAllowed || isBusy || attachments.items.length >= 8} onClick={() => fileInput.current?.click()}><StudioIcon name="attachment" /></button>
               <input ref={fileInput} type="file" hidden multiple accept={agentAttachmentAccept} aria-label="选择 Agent 附件" onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ''; if (!isBusy && attachmentsAllowed) attachments.add(files) }} />
-              {!media && <div className="studio-assistant__mode-switch">
+              {!media?.readOnly && <div className="studio-assistant__mode-switch">
                 <select
                   aria-label="Agent 执行方式"
                   value={executionMode}

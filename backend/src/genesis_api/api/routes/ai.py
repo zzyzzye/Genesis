@@ -50,7 +50,7 @@ from genesis_api.ai.schemas import (
     AiConversationRename,
     AiConversationSummary,
 )
-from genesis_api.api.dependencies import CurrentUserDependency, OwnerDependency, SessionDependency
+from genesis_api.api.dependencies import CurrentUserDependency, SessionDependency
 from genesis_api.blog.agent.context import build_blog_agent_context
 from genesis_api.core.config import Settings, get_settings
 from genesis_api.database.session import SessionLocal
@@ -540,7 +540,7 @@ async def stream_chat(
 @router.post("/actions/confirm", response_model=object)
 def confirm_agent_action(
     confirmation: AgentActionConfirmation,
-    current_user: OwnerDependency,
+    current_user: CurrentUserDependency,
     session: SessionDependency,
     settings: SettingsDependency,
 ) -> object:
@@ -548,7 +548,7 @@ def confirm_agent_action(
 
     Args:
         confirmation: 用户确认的提议令牌，不接受另外提交的可替换载荷。
-        current_user: 所有者权限依赖校验的当前用户。
+        current_user: 已登录用户；博客另校验所有者角色，影音逐项校验作品归属。
         session: 业务写操作使用的数据库会话。
         settings: 提议验签所需配置，不得输出相关凭据。
 
@@ -560,7 +560,7 @@ def confirm_agent_action(
             提议不属于当前用户返回 403；业务层的 HTTP 错误原样传播。
         ValidationError: 业务载荷不符合对应写入契约。
     """
-    # 使用验签后的操作载荷，并绑定当前 Owner；显示文本不是执行依据。
+    # 使用验签后的操作载荷，并绑定当前用户；显示文本不是执行依据。
     try:
         proposal = decode(
             confirmation.proposal_token,
@@ -572,6 +572,8 @@ def confirm_agent_action(
     if proposal.get("actor_id") != str(current_user.id):
         raise HTTPException(status_code=403, detail="操作提议不属于当前用户")
     module = proposal.get("module", "blog")
+    if module != "media" and current_user.role != UserRole.OWNER:
+        raise HTTPException(403, "博客操作仅限站点所有者执行")
     action = proposal.get("action")
     payload = proposal.get("payload")
     if not isinstance(module, str) or not isinstance(action, str):
@@ -585,7 +587,7 @@ def confirm_agent_action(
         select(AiChatRun).where(
             AiChatRun.user_id == current_user.id,
             AiChatRun.proposals.is_not(None),
-        )
+        ).with_for_update()
     ):
         matching = next(
             (item for item in run.proposals or [] if item.get("proposal_id") == proposal_id), None
@@ -595,9 +597,11 @@ def confirm_agent_action(
                 raise HTTPException(status_code=409, detail="此操作已经执行，请刷新对话查看结果")
             stored_run = run
             break
+    if module == "media" and stored_run is None:
+        raise HTTPException(409, "操作提议尚未保存，请刷新对话后确认")
     try:
         result = agent_capabilities.confirm_action(
-            module, action, payload, current_user=current_user, session=session
+            module, action, payload, current_user=current_user, session=session, settings=settings
         )
         if stored_run is not None:
             stored_run.proposals = [

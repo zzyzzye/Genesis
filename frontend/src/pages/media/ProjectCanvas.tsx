@@ -434,13 +434,13 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
   const onGenerationTask = useGenerationResults(projectId, canvas, setAssets, showGenerationNotice)
   const { save: saveCanvas, current: canvasDocument, apply: applyDocument, checkpoint, flushDraft, view: viewCanvas, syncNodeNames, syncCanvas } = canvas
   useEffect(() => {
-    if (!canvas.ready || canvas.readOnly) { onAgentActionsChange?.(null); return }
-    onAgentActionsChange?.({save:saveCanvas,getDocument:() => canvasDocument.current,syncCanvas,syncNodeNames:async () => {
+    if (!canvas.ready) { onAgentActionsChange?.(null); return }
+    onAgentActionsChange?.({readOnly:canvas.readOnly,save:canvas.readOnly ? async () => {} : saveCanvas,getDocument:() => canvasDocument.current,syncCanvas,syncNodeNames:async () => {
       try {
         await syncNodeNames()
         setError(current => current.startsWith('节点已改名，但画布同步失败') ? '' : current)
       } catch {
-        setError('节点已改名，但画布同步失败；已保留本地编辑，正在重新读取。')
+        setError('节点已改名，但画布同步失败；已保留本地编辑，请在助手中重试同步。')
         throw new Error('节点改名同步失败')
       }
     },attachImageTask:async resource => {
@@ -453,7 +453,7 @@ export function ProjectCanvas({ projectId, userId, onAgentNodeChange, onAgentCan
         onGenerationTask(task)
         setError(current=>current.startsWith(`${noun}任务已提交，但结果同步失败`) ? '' : current)
       } catch {
-        setError(`${noun}任务已提交，但结果同步失败，正在重新读取任务；不会重复生成。`)
+        setError(`${noun}任务已提交，但结果同步失败，请在助手中重试同步；不会重复生成。`)
         throw new Error(`${noun}任务同步失败`)
       }
     }})
