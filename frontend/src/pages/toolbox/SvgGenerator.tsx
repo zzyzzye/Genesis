@@ -4,6 +4,7 @@ import { ApiError, cancelAiChatRun, createAiChatRun, getAiChatRun, getCurrentUse
 import { getStoredAuthToken } from '../../lib/auth'
 import { downloadBlob } from '../../lib/download'
 import { safeSvg } from './svgSafety'
+import { ToolboxLayout } from './ToolboxLayout'
 import './SvgGenerator.css'
 
 function SvgPreview({ source }: { source: string }) {
@@ -102,10 +103,9 @@ export function SvgGenerator() {
     try { await navigator.clipboard.writeText(safe); setFeedback('安全 SVG 源码已复制') }
     catch { setFeedback('复制失败，请使用源码区手动选择复制。') }
   }
-  return <main className="svg-page">
-    <header><Link to="/toolbox">← 工具箱</Link><Link to="/account/wallet">账户与钱包</Link></header>
+  return <ToolboxLayout detail><div className="svg-page">
     <div className="svg-heading"><span>MiMo · 免费</span><h1>把想法画成 SVG。</h1><p>描述图标、插画或小图表，生成可预览、复制和下载的矢量图。登录后免费使用，不消耗钱包余额。</p></div>
-    {!token ? <p><Link to="/account">登录后开始生成</Link></p> : <form onSubmit={event => void submit(event)} noValidate>
+    {!token ? <p><Link className="svg-login" to="/account?returnTo=%2Ftoolbox%2Fsvg">登录后开始生成 →</Link></p> : <form onSubmit={event => void submit(event)} noValidate>
       <label htmlFor="svg-description">画面描述</label><textarea className="resize-none" id="svg-description" rows={3} maxLength={6000} value={prompt} readOnly={running} onChange={e => { setPrompt(e.target.value); if (!error) intent.current = null }} placeholder="例如：画一只趴在月亮上的猫，深蓝与暖黄色，适合作为网站插画。" />
       <div className="svg-actions"><span>不限每日次数 · 每次最多 4,096 token · 同时一个 MiMo 任务</span>{running ? <button type="button" onClick={() => void stop()} disabled={starting}>停止生成</button> : <button type="submit" disabled={!userId || !prompt.trim() || starting}>{snapshot ? '重新生成 SVG' : '免费生成 SVG'}</button>}</div>
     </form>}
@@ -114,5 +114,5 @@ export function SvgGenerator() {
       <div className="svg-preview"><h2>预览</h2>{safe ? <SvgPreview source={safe} /> : <p>{running ? '生成完整 SVG 后显示预览' : '你的矢量图会显示在这里'}</p>}</div>
       <div className="svg-source"><div className="svg-actions"><h2>{safe ? '安全源码' : '生成源码'}</h2><div><button type="button" disabled={!safe} onClick={() => void copy()}>复制 SVG</button><button type="button" disabled={!safe} onClick={() => downloadBlob(new Blob([safe], { type:'image/svg+xml' }), 'genesis.svg')}>下载 SVG</button></div></div><pre tabIndex={0} aria-label="SVG 源码"><code>{safe || source || '<svg>…</svg>'}</code></pre></div>
     </section>
-  </main>
+  </div></ToolboxLayout>
 }

@@ -216,8 +216,8 @@ describe('App', () => {
   })
 
   it.each([
-    ['/toolbox', '把重复工作，压缩成一次点击。', '工具箱标识'],
-  ])('为 %s 使用独立系统界面且不显示跨系统导航', (path, heading, landmark) => {
+    ['/toolbox', '工具箱', '工具箱侧栏'],
+  ])('为 %s 使用独立工作区而非总首页导航', (path, heading, landmark) => {
     window.history.pushState({}, '', path)
 
     render(<App />)
@@ -236,7 +236,7 @@ describe('App', () => {
       expect(window.location.search).toBe('?q=hello')
       expect(window.location.hash).toBe('#input')
     })
-    expect(await screen.findByRole('complementary', { name: '工具箱标识' })).toBeInTheDocument()
+    expect(await screen.findByRole('complementary', { name: '工具箱侧栏' })).toBeInTheDocument()
   })
 
   it('影音创作在开发环境自动登录后进入作品列表', async () => {
