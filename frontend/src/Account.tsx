@@ -250,7 +250,7 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
         else clearStoredAuthToken(studioAuthTokenKey)
         setState({ status: 'ready', user, feedback: null })
         if (onAuthenticated) { onAuthenticated(user); return }
-        if (returnTo && (/^\/media(?:\/|$)/.test(returnTo) || /^\/blog\/studio(?:\/|$)/.test(returnTo) || /^\/articles\/[a-z0-9-]+(?:#comments)?$/.test(returnTo))) void navigate(returnTo, { replace: true })
+        if (returnTo && (/^\/media(?:\/|$)/.test(returnTo) || /^\/admin(?:[/?]|$)/.test(returnTo) || /^\/blog\/studio(?:\/|$)/.test(returnTo) || /^\/articles\/[a-z0-9-]+(?:#comments)?$/.test(returnTo))) void navigate(returnTo, { replace: true })
       })
       .catch((error: unknown) => {
         if (!active) return

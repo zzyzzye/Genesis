@@ -1,0 +1,66 @@
+# 与 compose.yml 或 compose.prod.yml 合并使用；不发布监控端口。
+services:
+  prometheus:
+    image: ghcr.io/prometheus/prometheus:v3.13.5
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=2GB
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    mem_limit: 512m
+    cpus: 0.5
+    security_opt: [no-new-privileges:true]
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.10.2
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --collector.disable-defaults
+      - --collector.cpu
+      - --collector.meminfo
+      - --collector.loadavg
+      - --collector.filesystem
+      - --collector.diskstats
+    volumes:
+      - /:/host:ro
+    mem_limit: 128m
+    cpus: 0.25
+    security_opt: [no-new-privileges:true]
+  node-network:
+    image: quay.io/prometheus/node-exporter:v1.10.2
+    restart: unless-stopped
+    # 从宿主 PID 1 的网络命名空间读计数，避免误报 exporter 容器流量。
+    command:
+      - --path.procfs=/host/proc/1
+      - --collector.disable-defaults
+      - --collector.netdev
+      - --no-collector.netdev.netlink
+    volumes:
+      - /proc:/host/proc:ro
+    mem_limit: 64m
+    cpus: 0.25
+    security_opt: [no-new-privileges:true]
+  cadvisor:
+    image: ghcr.io/google/cadvisor:0.55.1
+    restart: unless-stopped
+    cgroup: host
+    command:
+      - --docker_only=true
+      - --containerd=/rootfs/run/containerd/containerd.sock
+      - --housekeeping_interval=30s
+      - --store_container_labels=false
+      - --disable_metrics=percpu,sched,tcp,udp,hugetlb,referenced_memory,resctrl
+    volumes:
+      - /:/rootfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+    mem_limit: 256m
+    cpus: 0.5
+    security_opt: [no-new-privileges:true]
+volumes:
+  prometheus_data:

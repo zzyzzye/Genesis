@@ -11,6 +11,7 @@ import { ToolboxPage } from './pages/toolbox/ToolboxPage'
 import { SvgGenerator } from './pages/toolbox/SvgGenerator'
 import { ImageTool } from './pages/toolbox/ImageTool'
 import { WalletPage } from './features/billing/WalletPage'
+import { AdminPage } from './pages/admin/AdminPage'
 import { motionCssVariables, pageTransition } from './lib/motion'
 import { SessionRecovery } from './SessionRecovery'
 import { CursorEffects } from './features/cursor/CursorEffects'
@@ -31,12 +32,18 @@ function LegacyToolboxRedirect() {
   return <Navigate replace to={`${pathname}${location.search}${location.hash}`} />
 }
 
+function LegacyBillingRedirect() {
+  const location = useLocation()
+  return <Navigate replace to={`/admin/billing${location.search}${location.hash}`} />
+}
+
 function getRouteMotionKey(pathname: string) {
   if (pathname.startsWith('/media')) return 'media'
   if (pathname.startsWith('/studio') || pathname.startsWith('/blog/studio')) return 'studio'
   if (pathname.startsWith('/blog') || pathname.startsWith('/articles')) return 'blog'
   if (pathname.startsWith('/toolbox')) return 'toolbox'
   if (pathname.startsWith('/account')) return 'account'
+  if (pathname.startsWith('/admin')) return 'admin'
   return 'home'
 }
 
@@ -75,7 +82,8 @@ function PageRoutes({ location }: { location: Location }) {
         <Route path="/studio" element={<LegacyStudioRedirect />} />
         <Route path="/account" element={<Account />} />
         <Route path="/account/wallet" element={<WalletPage />} />
-        <Route path="/account/billing" element={<WalletPage admin />} />
+        <Route path="/account/billing" element={<LegacyBillingRedirect />} />
+        <Route path="/admin/*" element={<AdminPage />} />
       </Routes>
     </motion.div>
   </AnimatePresence>

@@ -243,6 +243,13 @@ describe('账户登录与注册', () => {
     expect(router.state.location.hash).toBe('#comments')
   })
 
+  it('登录后恢复全站管理路径与筛选参数', async () => {
+    const { router } = setup('/account?returnTo=%2Fadmin%2Ftasks%3Fstatus%3Dfailed')
+    fillLogin(); submit()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/admin/tasks'))
+    expect(router.state.location.search).toBe('?status=failed')
+  })
+
   it('不跳转外部 returnTo，网络错误提供恢复方向', async () => {
     vi.mocked(login).mockRejectedValueOnce(new TypeError('测试网络失败'))
     const { router } = setup('/account?returnTo=https%3A%2F%2Fexample.com')

@@ -16,7 +16,7 @@ export function AccountWorkspace({ user, active, children, onLogout, logoutDisab
   const items = [
     { id:'profile',name:'个人资料',path:'/account',icon:UserRound },
     { id:'wallet',name:'我的钱包',path:'/account/wallet',icon:Wallet },
-    ...(user?.role === 'owner' ? [{ id:'billing',name:'账务管理',path:'/account/billing',icon:ShieldCheck }] : []),
+    ...(user?.role === 'owner' ? [{ id:'billing',name:'全站管理',path:'/admin',icon:ShieldCheck }] : []),
   ]
   return <div className={`account-shell account-workspace account-workspace--${active}`}>
     <aside className="account-workspace-sidebar">
