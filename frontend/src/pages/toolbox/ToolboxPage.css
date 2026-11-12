@@ -19,13 +19,6 @@
 .toolbox-feature-copy p { margin: 0; color: var(--toolbox-muted); font-size: 13px; line-height: 1.9; }
 .toolbox-feature-action { display: inline-flex; align-items: center; gap: 22px; margin-top: 28px; padding: 12px 16px; border-radius: 8px; background: var(--toolbox-ink); color: var(--toolbox-paper); font-size: 13px; }
 .toolbox-feature-copy small { display: block; margin-top: 14px; color: var(--toolbox-muted); font-size: 11px; }
-.toolbox-planned { margin-top: 42px; }
-.toolbox-planned-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
-.toolbox-planned-grid article { padding: 18px 0; }
-.toolbox-planned-grid article > svg { color: var(--toolbox-muted); width: 24px; height: 24px; }
-.toolbox-planned-grid h3 { margin: 18px 0 10px; font-size: 15px; font-weight: 550; }
-.toolbox-planned-grid p { margin: 0 0 16px; color: var(--toolbox-muted); font-size: 12px; line-height: 1.8; }
-.toolbox-planned-grid article > span { color: var(--toolbox-muted); font-size: 11px; }
 .toolbox-empty { padding: 64px 20px; text-align: center; background: var(--toolbox-soft); border-radius: 16px; }
 .toolbox-empty h3 { font-size: 18px; font-weight: 550; }
 .toolbox-empty p { color: var(--toolbox-muted); line-height: 1.8; }
@@ -40,10 +33,5 @@
   .toolbox-feature-art > span { display: none; }
   .toolbox-feature-copy { padding: 12px 24px 28px; }
   .toolbox-feature-copy h3 { margin-top: 16px; }
-  .toolbox-planned-grid { grid-template-columns: 1fr; gap: 8px; }
-  .toolbox-planned-grid article { display: grid; grid-template-columns: 24px 1fr auto; gap: 8px 14px; align-items: center; }
-  .toolbox-planned-grid h3 { margin: 0; }
-  .toolbox-planned-grid p { grid-column: 2 / -1; margin: 0; }
-  .toolbox-planned-grid article > span { grid-column: 3; grid-row: 1; }
   .toolbox-search { width: 58%; }
 }

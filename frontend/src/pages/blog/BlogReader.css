@@ -21,6 +21,11 @@
 .blog-page--article .reader-shell { box-sizing: border-box; width: min(calc(100% - 64px), 1280px); max-width: 1280px; padding: 28px 0 64px; }
 .blog-page--article .back-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin: 0 0 26px -10px; padding: 8px 10px; border: 0; border-radius: 10px; outline: 0; box-shadow: none; background: transparent; color: var(--blog-muted); font: inherit; font-size: 13px; cursor: pointer; }
 .blog-page--article .back-button:is(:hover, :focus-visible) { background: var(--blog-hover); color: var(--blog-ink); }
+.reader-navigation { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 26px; }
+.blog-page--article .reader-navigation .back-button { margin-bottom: 0; }
+.reader-navigation nav { display: flex; gap: 8px; }
+.reader-navigation nav a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 10px; border-radius: 10px; color: var(--blog-muted); font-size: 13px; }
+.reader-navigation nav a:is(:hover, :focus-visible) { background: var(--blog-hover); color: var(--blog-ink); }
 .reader-document { display: grid; grid-template-columns: minmax(0, 1fr) 288px; column-gap: clamp(48px, 6vw, 88px); align-items: start; }
 .reader-document > .article-document__toc { position: sticky; top: 100px; grid-column: 2; grid-row: 1 / span 4; min-width: 0; max-height: calc(100dvh - 124px); margin: 0; padding-right: 4px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #c8c8c8 transparent; }
 .reader-document > .reader-intro { grid-column: 1; grid-row: 1; min-width: 0; }

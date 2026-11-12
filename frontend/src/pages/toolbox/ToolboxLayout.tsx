@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, BookOpen, ChevronRight, Clapperboard, CodeXml, LayoutGrid, Menu, PanelLeftClose, PanelLeftOpen, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ChevronRight, CodeXml, LayoutGrid, Menu, PanelLeftClose, PanelLeftOpen, UserRound, X } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 import { GenesisLogo } from '../../components/GenesisLogo'
+import { SpaceLinks } from '../../components/SpaceLinks'
 import { FpsStatusSlot } from '../../features/performance/FpsMonitor'
 import { useModalDialog } from '../../studio/useModalDialog'
 import './ToolboxLayout.css'
@@ -12,8 +13,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
     <NavLink to="/toolbox" end title="全部工具"><LayoutGrid /><span>全部工具</span></NavLink>
     <NavLink to="/toolbox/svg" title="SVG 生成器"><CodeXml /><span>SVG 生成器</span></NavLink>
     <span className="toolbox-nav-label">其他空间</span>
-    <Link to="/media" title="媒体创作"><Clapperboard /><span>媒体创作</span></Link>
-    <Link to="/blog" title="博客阅读"><BookOpen /><span>博客阅读</span></Link>
+    <SpaceLinks current="toolbox" />
     <Link to="/account" title="我的账户"><UserRound /><span>我的账户</span></Link>
   </nav>
 }

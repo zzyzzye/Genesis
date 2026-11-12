@@ -9,6 +9,7 @@ import { useModalDialog } from '../../studio/useModalDialog'
 import { BlogLinks } from './BlogLinks'
 import { BlogSearch } from './BlogSearch'
 import { GenesisLogo } from '../../components/GenesisLogo'
+import { SpaceLinks } from '../../components/SpaceLinks'
 import { TagCloud } from '../../components/TagCloud'
 import { FpsStatusSlot } from '../performance/FpsMonitor'
 import { motionTiming, useLiveReducedMotion } from '../../lib/motion'
@@ -39,6 +40,7 @@ function Navigation({ tags, activeTag, error, onTag, onRetry, onNavigate }: { ta
     <nav className="portal-navigation" aria-label="博客导航">
       <Link to="/blog" className="is-active" aria-label="博客首页" onClick={onNavigate}><Home size={19} /><span>首页</span></Link>
       <a href="#articles" aria-label="文章" title="文章" onClick={onNavigate}><BookOpen size={19} /><span>文章</span></a>
+      <SpaceLinks current="blog" onNavigate={onNavigate} />
       <Link to="/account" aria-label="我的账户" title="我的账户" onClick={onNavigate}><UserRound size={19} /><span>我的账户</span></Link>
       <Link to="/" aria-label="返回 Genesis" title="返回 Genesis" onClick={onNavigate}><CornerUpLeft size={19} /><span>返回 Genesis</span></Link>
     </nav>

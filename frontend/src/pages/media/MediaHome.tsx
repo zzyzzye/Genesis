@@ -1,10 +1,11 @@
 import './MediaHome.css'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowUpRight, AudioLines, BookOpen, Check, ChevronRight, Clapperboard, Film, FolderOpen, House, Image, Layers3, LayoutGrid, Menu, Pencil, Plus, Search, Sparkles, StickyNote, Trash2, UserRound, WandSparkles, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, AudioLines, Check, ChevronRight, Clapperboard, Film, FolderOpen, House, Image, Layers3, Menu, Pencil, Plus, Search, Sparkles, StickyNote, Trash2, UserRound, WandSparkles, X } from 'lucide-react'
 import { api, type Project } from './api'
 import { PanelsTopLeft, LibraryBig } from 'lucide-react'
 import { GenesisLogo } from '../../components/GenesisLogo'
+import { SpaceLinks } from '../../components/SpaceLinks'
 import { FpsStatusSlot } from '../../features/performance/FpsMonitor'
 import { ProjectCover, ProjectMonitor } from './ProjectPreview'
 import { useModalDialog } from '../../studio/useModalDialog'
@@ -59,9 +60,8 @@ export function MediaHome() {
         <button aria-current={!allProjects ? 'page' : undefined} onClick={() => changeView(false)}><House />工作台</button>
         <button aria-current={allProjects ? 'page' : undefined} onClick={() => changeView(true)}><PanelsTopLeft />项目库</button>
         <Link to="/media/assets"><LibraryBig />素材库</Link>
-        <span className="media-home-nav-label">创作资源</span>
-        <Link to="/toolbox"><LayoutGrid />工具箱<ChevronRight className="media-home-nav-arrow" /></Link>
-        <Link to="/blog"><BookOpen />创作阅读</Link>
+        <span className="media-home-nav-label">其他空间</span>
+        <SpaceLinks current="media" onNavigate={() => setMobileNav(false)} />
       </nav>
       <div className="media-home-sidebar-bottom">
         <button className="media-home-sidebar-assistant" onClick={() => { setMobileNav(false); window.dispatchEvent(new Event('genesis:open-media-assistant')) }}><Sparkles />镜头搭档<span className="media-home-tag">AI</span></button>

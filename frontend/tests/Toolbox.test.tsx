@@ -16,8 +16,10 @@ describe('工具箱导航与目录', () => {
     fireEvent.click(within(screen.getByRole('status')).getByRole('button', { name: '清空搜索' }))
     expect(screen.getByRole('textbox', { name: '搜索工具' })).toHaveFocus()
     expect(screen.getByRole('heading', { name: 'SVG 生成器' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '接下来' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: '文本工作台' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '接下来' })).not.toBeInTheDocument()
+    for (const name of ['文本工作台', '开发工具箱', '网页收藏夹']) expect(screen.queryByText(name)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '前往博客' })).toHaveAttribute('href', '/blog')
+    expect(screen.getByRole('link', { name: '前往媒体' })).toHaveAttribute('href', '/media')
   })
   it('可折叠侧栏，进入生成器并保留登录返回路径', () => {
     setup()

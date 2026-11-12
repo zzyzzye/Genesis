@@ -25,6 +25,8 @@ describe('公开博客目录', () => {
     expect(screen.getByRole('button', { name: '筛选标签 工程' })).toHaveTextContent('14')
     fireEvent.click(screen.getByRole('button', { name: '收起博客侧栏' }))
     expect(screen.getByRole('link', { name: '我的账户' })).toHaveAttribute('href', '/account')
+    expect(screen.getByRole('link', { name: '前往工具箱' })).toHaveAttribute('href', '/toolbox')
+    expect(screen.getByRole('link', { name: '前往媒体' })).toHaveAttribute('href', '/media')
     expect(screen.queryByRole('link', { name: '页面' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '工程' }))
     await waitFor(() => expect(getBlogPosts).toHaveBeenLastCalledWith(expect.any(AbortSignal), undefined, { q: '', tag: 'engineering', offset: undefined }))
