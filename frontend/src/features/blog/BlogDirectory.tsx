@@ -38,13 +38,19 @@ function Author({ post }: { post: BlogPostPreview }) {
 function Navigation({ tags, activeTag, error, onTag, onRetry, onNavigate }: { tags: PublicBlogTag[]; activeTag: string; error: boolean; onTag: (slug: string) => void; onRetry: () => void; onNavigate?: () => void }) {
   return <>
     <nav className="portal-navigation" aria-label="博客导航">
-      <Link to="/blog" className="is-active" aria-label="博客首页" onClick={onNavigate}><Home size={19} /><span>首页</span></Link>
+      <span className="portal-nav-label">阅读空间</span>
+      <Link to="/blog" className="is-active" aria-current="page" aria-label="博客首页" title="博客首页" onClick={onNavigate}><Home size={19} /><span>首页</span></Link>
       <a href="#articles" aria-label="文章" title="文章" onClick={onNavigate}><BookOpen size={19} /><span>文章</span></a>
+    </nav>
+    <nav className="portal-navigation portal-space-navigation" aria-label="其他空间">
+      <span className="portal-nav-label">其他空间</span>
       <SpaceLinks current="blog" onNavigate={onNavigate} />
+    </nav>
+    <div className="portal-sidebar-tags"><h2><Tag size={15} />探索标签</h2><TagCloud compact label="标签词云" items={tags.map(tag => ({ id: tag.slug, name: tag.name, count: tag.post_count }))} selectedId={activeTag} itemLabel={tag => `筛选标签 ${tag.name}`} onSelect={slug => { onTag(slug); onNavigate?.() }} />{error && <button className="portal-tags-retry" type="button" onClick={onRetry}>重新加载标签</button>}</div>
+    <nav className="portal-navigation portal-account-navigation" aria-label="账户与返回">
       <Link to="/account" aria-label="我的账户" title="我的账户" onClick={onNavigate}><UserRound size={19} /><span>我的账户</span></Link>
       <Link to="/" aria-label="返回 Genesis" title="返回 Genesis" onClick={onNavigate}><CornerUpLeft size={19} /><span>返回 Genesis</span></Link>
     </nav>
-    <div className="portal-sidebar-tags"><h2><Tag size={15} />标签</h2><TagCloud compact label="标签词云" items={tags.map(tag => ({ id: tag.slug, name: tag.name, count: tag.post_count }))} selectedId={activeTag} itemLabel={tag => `筛选标签 ${tag.name}`} onSelect={slug => { onTag(slug); onNavigate?.() }} />{error && <button className="portal-tags-retry" type="button" onClick={onRetry}>重新加载标签</button>}</div>
   </>
 }
 
@@ -152,7 +158,7 @@ export function BlogDirectory() {
     </header>
     <aside className="portal-sidebar" aria-label="博客侧栏">{navigation()}</aside>
     <main className="portal-main">
-      <h1 className="sr-only">Genesis 博客</h1>
+      <div className="portal-intro"><h1>Genesis 博客</h1><p>记录想法，分享实践。</p></div>
       <nav className="portal-topics" aria-label="按标签筛选文章"><button type="button" aria-pressed={!activeTag} onClick={() => filter('')}>全部文章</button>{topics.map(tag => <button key={tag.id} type="button" aria-pressed={activeTag === tag.slug} onClick={() => filter(tag.slug)}>{tag.name}</button>)}</nav>
       {feature && <section key={feature.id} className="portal-featured" aria-label="精选文章">
         <div className="portal-featured-copy"><Author post={feature} /><div className="portal-featured-topics">{feature.tags.map(tag => tag.name).join(' · ') || (feature.categories ?? (feature.category ? [feature.category] : [])).map(category => category.name).join(' · ') || '精选文章'}</div><h2>{feature.title}</h2>{feature.excerpt && <p>{feature.excerpt}</p>}<div className="portal-featured-actions"><Link to={`/articles/${encodeURIComponent(feature.slug)}`} state={{ blogReturnTo: returnTo }} aria-label={`阅读全文 ${feature.title}`}>阅读全文 <ArrowRight size={19} /></Link>{featured.length > 1 && <div className="portal-featured-pages"><button type="button" aria-label="精选文章：上一篇" disabled={featuredIndex === 0} onClick={() => setFeaturedIndex(value => Math.max(0, value - 1))}><ArrowLeft size={20} /></button><button type="button" aria-label="精选文章：下一篇" disabled={featuredIndex >= featured.length - 1} onClick={() => setFeaturedIndex(value => Math.min(featured.length - 1, value + 1))}><ArrowRight size={20} /></button></div>}</div></div>
