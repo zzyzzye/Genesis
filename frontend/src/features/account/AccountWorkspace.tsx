@@ -16,7 +16,7 @@ export function AccountWorkspace({ user, active, children }: {
     { id:'wallet',name:'我的钱包',path:'/account/wallet',icon:Wallet },
     ...(user?.role === 'owner' ? [{ id:'billing',name:'账务管理',path:'/account/billing',icon:ShieldCheck }] : []),
   ]
-  return <div className="account-shell account-workspace">
+  return <div className={`account-shell account-workspace account-workspace--${active}`}>
     <aside className="account-workspace-sidebar">
       <Link className="account-workspace-brand" to="/" aria-label="Genesis 首页"><GenesisLogo /></Link>
       <div className="account-workspace-navigation"><p>个人空间</p><nav aria-label="账户服务">
