@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ChevronRight, CodeXml, LayoutGrid, Menu, PanelLeftClose, PanelLeftOpen, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ChevronRight, CodeXml, Image, LayoutGrid, Menu, PanelLeftClose, PanelLeftOpen, UserRound, X } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 import { GenesisLogo } from '../../components/GenesisLogo'
 import { SpaceLinks } from '../../components/SpaceLinks'
@@ -12,6 +12,7 @@ function Navigation({ onNavigate }: { onNavigate?: () => void }) {
     <span className="toolbox-nav-label">实用工具</span>
     <NavLink to="/toolbox" end title="全部工具"><LayoutGrid /><span>全部工具</span></NavLink>
     <NavLink to="/toolbox/svg" title="SVG 生成器"><CodeXml /><span>SVG 生成器</span></NavLink>
+    <NavLink to="/toolbox/image" title="图片转换与压缩"><Image /><span>图片转换与压缩</span></NavLink>
     <span className="toolbox-nav-label">其他空间</span>
     <SpaceLinks current="toolbox" />
     <Link to="/account" title="我的账户"><UserRound /><span>我的账户</span></Link>
@@ -26,7 +27,8 @@ function MobileNavigation({ onClose }: { onClose: () => void }) {
   </dialog>
 }
 
-export function ToolboxLayout({ children, detail = false }: { children: ReactNode; detail?: boolean }) {
+export function ToolboxLayout({ children, detail = false, pageTitle }: { children: ReactNode; detail?: boolean; pageTitle?: string }) {
+  const title = pageTitle ?? (detail ? 'SVG 生成器' : '全部工具')
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   useEffect(() => {
@@ -36,10 +38,10 @@ export function ToolboxLayout({ children, detail = false }: { children: ReactNod
     media.addEventListener('change', update)
     return () => media.removeEventListener('change', update)
   }, [])
-  useEffect(() => { document.title = `${detail ? 'SVG 生成器' : '工具箱'} · Genesis` }, [detail])
+  useEffect(() => { document.title = `${pageTitle ?? (detail ? 'SVG 生成器' : '工具箱')} · Genesis` }, [detail, pageTitle])
   return <div className={`toolbox-layout${collapsed ? ' toolbox-layout--collapsed' : ''}`}>
     <aside className="toolbox-sidebar" aria-label="工具箱侧栏"><Link className="toolbox-brand" to="/" aria-label="Genesis 首页"><GenesisLogo markOnly={collapsed} />{!collapsed && <span>工具箱</span>}</Link><Navigation /><div className="toolbox-sidebar-bottom"><Link className="toolbox-back" to="/" title="返回 Genesis"><ArrowLeft /><span>返回 Genesis</span></Link><button className="toolbox-collapse" aria-label={collapsed ? '展开侧栏' : '收起侧栏'} aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}>{collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}{!collapsed && <span>收起侧栏</span>}</button></div></aside>
-    <div className="toolbox-body"><header className="toolbox-topbar"><button className="toolbox-mobile-toggle" aria-label="展开导航" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu /></button><div className="toolbox-breadcrumb"><Link to="/toolbox">工具箱</Link><ChevronRight /><span>{detail ? 'SVG 生成器' : '全部工具'}</span></div><div className="toolbox-topbar-actions"><FpsStatusSlot /><Link to="/account" aria-label="账户设置"><UserRound /></Link></div></header><main className="toolbox-content">{children}</main></div>
+    <div className="toolbox-body"><header className="toolbox-topbar"><button className="toolbox-mobile-toggle" aria-label="展开导航" aria-expanded={mobileOpen} onClick={() => setMobileOpen(true)}><Menu /></button><div className="toolbox-breadcrumb"><Link to="/toolbox">工具箱</Link><ChevronRight /><span>{title}</span></div><div className="toolbox-topbar-actions"><FpsStatusSlot /><Link to="/account" aria-label="账户设置"><UserRound /></Link></div></header><main className="toolbox-content">{children}</main></div>
     {mobileOpen && <MobileNavigation onClose={() => setMobileOpen(false)} />}
   </div>
 }

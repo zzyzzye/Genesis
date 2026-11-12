@@ -9,6 +9,7 @@ import { PublicBlog } from './pages/blog/BlogPage'
 import { MediaPage } from './pages/media/MediaPage'
 import { ToolboxPage } from './pages/toolbox/ToolboxPage'
 import { SvgGenerator } from './pages/toolbox/SvgGenerator'
+import { ImageTool } from './pages/toolbox/ImageTool'
 import { WalletPage } from './features/billing/WalletPage'
 import { motionCssVariables, pageTransition } from './lib/motion'
 import { SessionRecovery } from './SessionRecovery'
@@ -64,6 +65,7 @@ function PageRoutes({ location }: { location: Location }) {
         <Route path="/articles/:slug" element={<PublicBlog />} />
         <Route path="/toolbox/*" element={<ToolboxPage />} />
         <Route path="/toolbox/svg" element={<SvgGenerator />} />
+        <Route path="/toolbox/image" element={<ImageTool />} />
         <Route path="/tools/*" element={<LegacyToolboxRedirect />} />
         <Route path="/media/*" element={<MediaPage />} />
         <Route path="/media/projects/:projectId" element={<MediaPage />} />
