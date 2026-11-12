@@ -22,6 +22,7 @@ services:
       start_period: 10s
 
   migrate:
+    image: genesis-production-backend
     platform: linux/amd64
     build:
       context: ./backend
@@ -32,6 +33,7 @@ services:
     environment:
       GENESIS_ENVIRONMENT: production
       GENESIS_DEBUG: "false"
+      PYTHONPATH: /app/src
       GENESIS_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${GENESIS_JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
       GENESIS_JWT_REFRESH_TOKEN_EXPIRE_MINUTES: ${GENESIS_JWT_REFRESH_TOKEN_EXPIRE_MINUTES:-1440}
       GENESIS_CORS_ORIGINS: "[]"
@@ -42,11 +44,16 @@ services:
       GENESIS_JWT_SECRET: ${GENESIS_JWT_SECRET:?请先设置 GENESIS_JWT_SECRET}
       GENESIS_AGENT_ACTION_SECRET: ${GENESIS_AGENT_ACTION_SECRET:?请先设置 GENESIS_AGENT_ACTION_SECRET}
     init: true
+    volumes:
+      - ./backend/src:/app/src:ro
+      - ./backend/alembic:/app/alembic:ro
+      - ./backend/alembic.ini:/app/alembic.ini:ro
     depends_on:
       postgres:
         condition: service_healthy
 
   backend:
+    image: genesis-production-backend
     platform: linux/amd64
     build:
       context: ./backend
@@ -56,6 +63,7 @@ services:
     environment:
       GENESIS_ENVIRONMENT: production
       GENESIS_DEBUG: "false"
+      PYTHONPATH: /app/src
       GENESIS_JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${GENESIS_JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
       GENESIS_JWT_REFRESH_TOKEN_EXPIRE_MINUTES: ${GENESIS_JWT_REFRESH_TOKEN_EXPIRE_MINUTES:-1440}
       GENESIS_CORS_ORIGINS: "[]"
@@ -104,6 +112,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - media_data:/data/media
+      - ./backend/src:/app/src:ro
     healthcheck:
       test:
         - CMD
@@ -117,11 +126,10 @@ services:
 
   frontend:
     platform: linux/amd64
-    build:
-      context: ./frontend
-      target: production
-      labels:
-        cn.genesis.production: "true"
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/nginx:alpine
+    volumes:
+      - frontend_releases:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "8090:80"
     restart: unless-stopped
@@ -135,6 +143,20 @@ services:
       retries: 5
       start_period: 5s
 
+  frontend-build:
+    profiles: [deploy]
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/node:22-alpine
+    platform: linux/amd64
+    working_dir: /work
+    volumes:
+      - ./frontend:/source:ro
+      - ./scripts/production-frontend.sh:/deploy/frontend.sh:ro
+      - frontend_dependencies:/work/node_modules
+      - frontend_releases:/artifacts
+    entrypoint: [sh, /deploy/frontend.sh]
+
 volumes:
   media_data:
   postgres_data:
+  frontend_dependencies:
+  frontend_releases:

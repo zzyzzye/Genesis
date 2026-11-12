@@ -53,3 +53,4 @@ output/
 
 # 临时产物
 premium-audit.json
+.genesis-deploy/

@@ -106,7 +106,9 @@ make docker-up     # docker-dev 的兼容别名
 make docker-down   # 停止 Docker 开发环境
 make docker-logs   # 查看开发环境日志
 make docker-check  # 在容器中运行全部检查和测试
-make docker-prod   # 构建并部署生产环境（8090），健康检查通过后自动清理
+make docker-prod   # 服务器增量发布（8090）：挂载后端源码、编译变化的前端静态文件
+make docker-prod-plan # 查看更新范围，不构建、不启动容器
+make docker-prod-rebuild-backend # 强制更新后端运行镜像（平时无需使用）
 make docker-prod-clean # 磁盘不足时先清理构建缓存和本项目带标记的悬空镜像
 make docker-prod-restart # 仅重启后端和前端，不构建、不运行迁移
 make docker-prod-status # 查看生产容器状态
@@ -180,13 +182,19 @@ make docker-dev
 
 以下生产打包命令仅在部署服务器或 CI 执行，严禁在本地执行。本地使用已有开发镜像和热更新；`make docker-dev` 明确禁用构建，缺少镜像时应先取得已有开发镜像，不在本地打包。
 
-`make docker-prod` 会等待服务健康检查通过（最多 180 秒），再自动执行 `make docker-prod-trim`；构建或健康检查失败时不会进入自动清理。日常清理以 2GB 为构建缓存保留目标，优先淘汰较久未使用的超额缓存，避免每次部署都清空依赖缓存。磁盘空间充足时可使用 `make docker-prod PROD_BUILD_CACHE_SIZE=4GB` 增加保留容量；目标过小仍可能淘汰依赖层，具体容量需结合服务器磁盘及实际缓存大小调整。这是部署结束后的清理目标，不是构建期间的磁盘硬上限，在用缓存也不能强制删除。
+`make docker-prod` 现在运行 `scripts/deploy-production.py`，用 `.genesis-deploy/state.json` 记录上一次成功发布的非敏感文件指纹。只改后端源码时复用镜像，源码以只读方式挂载，并重建后端容器加载；`pyproject.toml`、`uv.lock` 或后端 Dockerfile 变化时才构建后端镜像，迁移与后端共用它。缺失镜像时也会重建。每次部署先运行迁移，再等后端健康，最后启动 Nginx；配置变化由 Compose 识别并应用。不要在发布过程中编辑或删除服务器源码目录，拉取后应及时部署。
+
+前端保持生产静态站点，不运行 Vite 开发服务器。变化时复用临时 Node 容器编译，依赖保存在独立卷中，仅依赖清单变化时重新安装；不创建新的前端镜像。静态文件放在 `frontend_releases` 卷，成功后原子切换 `current`，只保留当前和上一版；失败候选在下一次编译前清理。编译失败不会覆盖当前文件。保留上一版仅供人工恢复静态文件，不代表数据库迁移和后端自动回滚。
+
+旧部署首次执行会创建依赖与静态文件卷，并构建一次后端镜像、编译一次前端。以后仍执行 `git pull` 和 `make docker-prod` 即可；同机并发部署串行处理。不要直接用 `compose up --build` 绕过发布脚本，否则不会准备或更新前端静态文件。`make docker-prod-plan` 仅展示文件变化，实际部署还会检查镜像和静态产物是否缺失。
+
+只有实际构建了后端镜像且发布成功时才自动执行 `make docker-prod-trim`。清理以 2GB 为构建缓存保留目标，可通过 `PROD_BUILD_CACHE_SIZE=4GB` 调整；这是部署后的清理目标，不是构建期间的磁盘硬上限。前端保留一份依赖卷与两版静态文件，仍需预留一次编译的临时空间。
 
 两种清理命令都会删除带有 `cn.genesis.production=true` 标记、未被容器使用的悬空镜像，不删除容器、数据库卷、素材卷或有标签的版本镜像。构建缓存由同一构建器的项目共享，清理会影响其他项目。`make docker-prod-clean` 仍会清空全部未使用缓存，仅用于磁盘不足时应急，不要在每次部署前执行；执行后下一次构建会更慢。按容量清理自动适配 `--max-used-space` 或 `--keep-storage`，不支持时会报错，不会退回全量清空。
 
 如果服务器已经因 `ENOSPC` 无法构建，更新部署文件后先执行 `make docker-prod-clean`，再执行 `make docker-prod`。旧版未带标记的镜像不会自动删除；本机制也不清理业务数据或日志，不能保证磁盘永远充足，单次构建仍需足够的临时空间。需要回滚的镜像应提前打版本标签并保留相应部署配置。
 
-只需重启现有前后端服务时使用 `make docker-prod-restart`。它不应用代码或环境配置变更；更新代码和配置仍使用 `make docker-prod`。
+只需重启现有前后端服务时使用 `make docker-prod-restart`。它可以重新加载挂载的后端源码，但不编译前端、不运行迁移、不应用环境配置；日常更新统一使用 `make docker-prod`。
 
 ```bash
 cp -n .env.production.example .env.production
@@ -203,14 +211,13 @@ make docker-prod
 
 ```bash
 # 开发 / 测试
-docker compose --env-file .env.development -f compose.yml up -d --build
+docker compose --env-file .env.development -f compose.yml up -d --no-build
 
 # 生产；只使用 compose.prod.yml，不与开发 Compose 合并。
-docker compose --env-file .env.production -f compose.prod.yml up -d --build
+python3 scripts/deploy-production.py
 
-# 生产状态和迁移日志
+# 生产状态；临时迁移容器的结果直接显示在部署终端
 docker compose --env-file .env.production -f compose.prod.yml ps
-docker compose --env-file .env.production -f compose.prod.yml logs --tail 80 migrate
 ```
 
 1Panel OpenResty 可继续代理到 `http://127.0.0.1:8090`，沿用原有域名和 HTTPS。`GENESIS_VIDEO_PUBLIC_BASE_URL` 应填写实际公网 HTTPS 地址；外部代理的上传大小需容纳 201 MiB 请求体。

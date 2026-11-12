@@ -1,4 +1,4 @@
-.PHONY: install dev-frontend dev-backend lint test build check clean docker-dev docker-up docker-down docker-logs docker-check docker-prod docker-prod-trim docker-prod-clean docker-prod-restart docker-prod-down docker-prod-logs docker-prod-status
+.PHONY: install dev-frontend dev-backend lint test build check clean docker-dev docker-up docker-down docker-logs docker-check docker-prod docker-prod-plan docker-prod-rebuild-backend docker-prod-trim docker-prod-clean docker-prod-restart docker-prod-down docker-prod-logs docker-prod-status
 
 DEV_COMPOSE = docker compose --env-file .env.development -f compose.yml
 PROD_COMPOSE = docker compose --env-file .env.production -f compose.prod.yml
@@ -49,8 +49,14 @@ docker-check:
 	$(DEV_COMPOSE) exec -T backend uv run pytest
 
 docker-prod:
-	$(PROD_COMPOSE) up -d --build --wait --wait-timeout 180
-	$(MAKE) docker-prod-trim
+	python3 scripts/deploy-production.py
+
+# 只展示变更范围，不启动容器、不编译或构建镜像。
+docker-prod-plan:
+	python3 scripts/deploy-production.py --plan
+
+docker-prod-rebuild-backend:
+	python3 scripts/deploy-production.py --rebuild-backend
 
 # 日常部署保留有限缓存，兼容新版 Buildx 和旧版 builder 参数。
 docker-prod-trim:
