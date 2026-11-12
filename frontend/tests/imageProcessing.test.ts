@@ -4,6 +4,11 @@ import { encodeImage, outputDimensions, outputFilename, validateImage } from '..
 afterEach(() => vi.restoreAllMocks())
 
 describe('本地图片处理', () => {
+  it('无损模式拒绝有损格式和尺寸变更', async () => {
+    const bitmap = { width: 400, height: 200 } as ImageBitmap
+    await expect(encodeImage(bitmap, { format: 'image/webp', quality: 1, maxEdge: null, background: '#ffffff', lossless: true })).rejects.toThrow('无损模式仅支持原尺寸 PNG')
+    await expect(encodeImage(bitmap, { format: 'image/png', quality: 1, maxEdge: 100, background: '#ffffff', lossless: true })).rejects.toThrow('无损模式仅支持原尺寸 PNG')
+  })
   it('等比缩小，不放大，并拒绝无效尺寸', () => {
     expect(outputDimensions(4000, 3000, 1000)).toEqual({ width: 1000, height: 750 })
     expect(outputDimensions(100, 200, 1000)).toEqual({ width: 100, height: 200 })

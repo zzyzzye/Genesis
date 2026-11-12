@@ -1,5 +1,5 @@
 export type ImageFormat = 'image/jpeg' | 'image/png' | 'image/webp'
-export interface ImageOptions { format: ImageFormat; quality: number; maxEdge: number | null; background: '#ffffff' | '#000000' }
+export interface ImageOptions { format: ImageFormat; quality: number; maxEdge: number | null; background: '#ffffff' | '#000000'; lossless?: boolean }
 export const imageFormats = [{ mime: 'image/jpeg', label: 'JPEG', extension: 'jpg' }, { mime: 'image/png', label: 'PNG', extension: 'png' }, { mime: 'image/webp', label: 'WebP', extension: 'webp' }] as const
 export const maxFileBytes = 20 * 1024 * 1024
 export const maxPixels = 24_000_000
@@ -32,6 +32,7 @@ export function formatBytes(bytes: number) {
 
 /** 复用浏览器编码器，拒绝不支持格式时静默回退的 PNG。 */
 export async function encodeImage(bitmap: ImageBitmap, options: ImageOptions): Promise<{ blob: Blob; width: number; height: number }> {
+  if (options.lossless && (options.format !== 'image/png' || options.maxEdge !== null)) throw new Error('无损模式仅支持原尺寸 PNG，请关闭缩放后重试。')
   const { width, height } = outputDimensions(bitmap.width, bitmap.height, options.maxEdge)
   const canvas = document.createElement('canvas')
   canvas.width = width; canvas.height = height

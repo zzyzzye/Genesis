@@ -20,6 +20,26 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.clearAllMocks() })
 
 describe('图片转换与压缩工具', () => {
+  it('无损模式重置缩放并锁定 PNG，切换模式使旧结果失效', async () => {
+    render(<MemoryRouter><ImageTool /></MemoryRouter>)
+    expect(screen.getByRole('complementary', { name: '处理须知' })).toHaveTextContent('刷新或离开页面会清空图片')
+    select(); await screen.findByAltText('原图预览')
+    fireEvent.change(screen.getByLabelText('最长边（像素）'), { target: { value: '100' } })
+    fireEvent.click(screen.getByRole('button', { name: '无损 PNG' }))
+    expect(screen.getByLabelText('最长边（像素）')).toHaveValue(null)
+    expect(screen.getByLabelText('最长边（像素）')).toBeDisabled()
+    expect(screen.getByRole('slider')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'JPEG' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'PNG' })).toHaveAttribute('aria-pressed', 'true')
+    vi.mocked(processing.encodeImage).mockResolvedValueOnce({ blob: new Blob(['png'], { type: 'image/png' }), width: 400, height: 200 })
+    fireEvent.click(screen.getByRole('button', { name: '无损转换为 PNG' }))
+    await screen.findByRole('button', { name: '下载图片' })
+    expect(processing.encodeImage).toHaveBeenLastCalledWith(bitmap, expect.objectContaining({ lossless: true, format: 'image/png', maxEdge: null }))
+    expect(screen.getByText('示例-converted.png')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '自定义' }))
+    expect(screen.queryByRole('button', { name: '下载图片' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('最长边（像素）')).toBeEnabled()
+  })
   it('无需登录，转换后可下载；改参数立即失效旧结果', async () => {
     const save = vi.spyOn(download, 'downloadBlob').mockImplementation(() => {})
     render(<MemoryRouter><ImageTool /></MemoryRouter>)
