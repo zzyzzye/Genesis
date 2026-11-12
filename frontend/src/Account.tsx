@@ -128,14 +128,12 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
 }) {
   const [displayName, setDisplayName] = useState(user.display_name)
   const [bio, setBio] = useState(user.bio)
-  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url ?? '')
   const [selectedAvatar, setSelectedAvatar] = useState<{ file: File; preview: string } | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [failedAvatar, setFailedAvatar] = useState<string | null>(null)
-  const [errors, setErrors] = useState<Partial<Record<'displayName' | 'bio' | 'avatarUrl', string>>>({})
+  const [errors, setErrors] = useState<Partial<Record<'displayName' | 'bio', string>>>({})
   const nameInput = useRef<HTMLInputElement>(null)
   const bioInput = useRef<HTMLTextAreaElement>(null)
-  const avatarInput = useRef<HTMLInputElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const previewAvatar = selectedAvatar?.preview ?? user.avatar_url
   useEffect(() => () => { if (selectedAvatar) URL.revokeObjectURL(selectedAvatar.preview) }, [selectedAvatar])
@@ -150,7 +148,6 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
     }
     setUploadError(null)
     setSelectedAvatar({ file, preview: URL.createObjectURL(file) })
-    setErrors(current => ({ ...current, avatarUrl: undefined }))
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -160,23 +157,11 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
     if (!displayName.trim()) next.displayName = '请输入昵称。'
     else if (displayName.length > 100) next.displayName = '昵称最多 100 个字符。'
     if (bio.length > 1000) next.bio = '个人简介最多 1000 个字符。'
-    if (!selectedAvatar && avatarUrl.trim() && avatarUrl.trim() !== user.avatar_url) {
-      try {
-        const address = new URL(avatarUrl.trim())
-        if (!['https:', 'http:'].includes(address.protocol)) throw new Error('unsupported')
-      } catch { next.avatarUrl = '请输入 http:// 或 https:// 开头的完整头像地址。' }
-      if (avatarUrl.length > 500) next.avatarUrl = '头像地址最多 500 个字符。'
-    }
     setErrors(next)
     if (next.displayName) { nameInput.current?.focus(); return }
     if (next.bio) { bioInput.current?.focus(); return }
-    if (next.avatarUrl) {
-      const settings = avatarInput.current?.closest('details')
-      if (settings) settings.open = true
-      avatarInput.current?.focus(); return
-    }
-    const saved = await onSave(displayName.trim(), bio.trim(), avatarUrl.trim(), selectedAvatar?.file)
-    if (saved) { setAvatarUrl(saved.avatar_url ?? ''); setSelectedAvatar(null); setUploadError(null) }
+    const saved = await onSave(displayName.trim(), bio.trim(), user.avatar_url ?? '', selectedAvatar?.file)
+    if (saved) { setSelectedAvatar(null); setUploadError(null) }
   }
 
   return (
@@ -185,20 +170,16 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
       <div className="account-profile-layout">
       <section className="account-card account-card--profile" aria-labelledby="profile-title">
         <div className="account-profile-heading">
-          <div className="account-avatar" aria-hidden="true">
+          <button className="account-avatar" type="button" aria-label="上传头像" aria-describedby="profile-avatar-hint" title="点击上传头像" disabled={busy} onClick={() => fileInput.current?.click()}>
             {previewAvatar && failedAvatar !== previewAvatar ? <img alt="" src={previewAvatar} onError={() => setFailedAvatar(previewAvatar)} /> : user.display_name.slice(0, 1)}
-          </div>
+            <span className="account-avatar-upload-icon" aria-hidden="true"><Upload size={12} /></span>
+          </button>
           <div className="account-profile-identity">
             <h2 title={user.display_name}>{user.display_name}</h2>
             <p>@{user.handle} · {user.role === 'owner' ? '站点作者' : '社区成员'}</p>
-          </div>
-          <div className="account-profile-upload">
-            <div className="account-avatar-actions">
-              <button type="button" disabled={busy} onClick={() => fileInput.current?.click()}><Upload size={14} aria-hidden="true" />上传头像</button>
-              {selectedAvatar && <button type="button" disabled={busy} onClick={() => { setSelectedAvatar(null); setUploadError(null) }}>取消选择</button>}
-            </div>
+            {selectedAvatar && <div className="account-avatar-actions"><button type="button" disabled={busy} onClick={() => { setSelectedAvatar(null); setUploadError(null) }}>取消选择</button></div>}
             <input ref={fileInput} type="file" hidden accept="image/png,image/jpeg,image/webp,image/gif,image/avif" aria-label="选择头像图片" disabled={busy} onChange={event => { selectAvatar(event.currentTarget.files?.[0]); event.currentTarget.value = '' }} />
-            <p className={uploadError ? 'account-avatar-error' : 'account-avatar-hint'} role={uploadError ? 'alert' : undefined} aria-live="polite">{uploadError || (selectedAvatar ? '已选图片，保存资料后生效。' : '图片最大 5 MiB')}</p>
+            <p id="profile-avatar-hint" className={uploadError ? 'account-avatar-error' : 'account-avatar-hint'} role={uploadError ? 'alert' : undefined} aria-live="polite">{uploadError || (selectedAvatar ? '已选图片，保存资料后生效。' : '点击头像更换 · 最大 5 MiB')}</p>
           </div>
         </div>
         <form className="account-form account-profile-form" aria-label="个人资料" noValidate aria-busy={busy} onSubmit={event => { void submit(event) }} onKeyDown={event => { if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault() }}>
@@ -216,13 +197,6 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
               <div className="account-field-help">{errors.bio && <p id="profile-bio-error" className="account-field-error" role="alert">{errors.bio}</p>}</div>
             </div>
           </div>
-          <details className="account-avatar-settings"><summary>使用头像链接</summary><div className="account-field account-profile-field">
-            <label htmlFor="profile-avatar-url">头像地址</label>
-            <div className="account-profile-control">
-              <input ref={avatarInput} id="profile-avatar-url" autoCapitalize="none" spellCheck={false} maxLength={500} readOnly={busy} disabled={Boolean(selectedAvatar)} aria-invalid={Boolean(errors.avatarUrl)} aria-describedby={errors.avatarUrl ? 'profile-avatar-error' : undefined} onChange={(event) => { setAvatarUrl(event.currentTarget.value); setErrors(current => ({ ...current, avatarUrl: undefined })) }} placeholder="也可以粘贴图片链接" type="url" value={selectedAvatar ? '' : avatarUrl} />
-              <div className="account-field-help">{errors.avatarUrl && <p id="profile-avatar-error" className="account-field-error" role="alert">{errors.avatarUrl}</p>}</div>
-            </div>
-          </div></details>
           <div className="account-profile-form-footer">
             <div className="account-profile-actions">
               <button className="primary-button" type="submit" disabled={busy}>{busy && <LoaderCircle className="account-submit-spinner" size={16} aria-hidden="true" />}{busy ? '正在保存…' : '保存资料'}</button>
