@@ -165,7 +165,7 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
   }
 
   return (
-    <AccountWorkspace user={user} active="profile">
+    <AccountWorkspace user={user} active="profile" onLogout={onLogout} logoutDisabled={busy}>
       <header className="account-workspace-heading"><div><h1 id="profile-title">个人资料</h1><p>设置头像、昵称和个人简介。</p></div><FpsStatusSlot /></header>
       <div className="account-profile-layout">
       <section className="account-card account-card--profile" aria-labelledby="profile-title">
@@ -200,7 +200,6 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
           <div className="account-profile-form-footer">
             <div className="account-profile-actions">
               <button className="primary-button" type="submit" disabled={busy}>{busy && <LoaderCircle className="account-submit-spinner" size={16} aria-hidden="true" />}{busy ? '正在保存…' : '保存资料'}</button>
-              <button className="account-logout" disabled={busy} onClick={onLogout} type="button">退出登录</button>
             </div>
             <div className="account-profile-feedback" role="status">{feedback && <p className="account-feedback">{feedback}</p>}</div>
           </div>

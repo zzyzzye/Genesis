@@ -101,8 +101,6 @@ body:has(.account-shell) { min-width: 0; }
 .account-profile-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 4px; }
 .account-profile-actions .primary-button { width: 144px; min-height: 46px; gap: 8px; padding: 12px 20px; border-radius: 10px; font-size: 13px; }
 .account-profile-actions button:disabled { opacity: .6; }
-.account-profile-actions .account-logout { min-height: 44px; padding: 10px 12px; border-radius: 10px; background: transparent; color: var(--account-muted); font-size: 13px; }
-.account-logout:hover, .account-logout:focus-visible { background: var(--account-soft); color: var(--account-ink); }
 .account-profile-layout .wallet-preview { display:grid; grid-template-columns:104px minmax(0,1fr) auto; align-items:center; gap:8px 20px; padding:20px 0; border-radius:0; background:transparent; }
 .account-profile-layout .wallet-preview h2 { margin:0; align-self:start; padding-top:4px; }
 .account-profile-layout .wallet-balance--compact { display:block; }
