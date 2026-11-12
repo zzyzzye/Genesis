@@ -166,7 +166,7 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
 
   return (
     <AccountWorkspace user={user} active="profile" onLogout={onLogout} logoutDisabled={busy}>
-      <header className="account-workspace-heading"><div><h1 id="profile-title">个人资料</h1><p>设置头像、昵称和个人简介。</p></div><FpsStatusSlot /></header>
+      <header className="account-workspace-heading"><h1 id="profile-title">个人资料</h1><FpsStatusSlot /></header>
       <div className="account-profile-layout">
       <section className="account-card account-card--profile" aria-labelledby="profile-title">
         <div className="account-profile-heading">

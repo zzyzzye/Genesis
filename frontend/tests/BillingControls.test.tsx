@@ -18,7 +18,7 @@ it('零余额钱包展示真实空态，充值说明留在账务流程内', asyn
   expect(screen.getAllByText('¥0.00')).toHaveLength(1)
   expect(screen.queryByRole('link', { name:/SVG/ })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name:'查看充值说明' }))
-  expect(await screen.findByRole('dialog')).toHaveTextContent('站长人工充值')
+  expect(await screen.findByRole('dialog')).toHaveTextContent('联系站长确认账号和充值金额')
   expect(screen.getByRole('dialog')).toHaveTextContent('余额流水')
 })
 

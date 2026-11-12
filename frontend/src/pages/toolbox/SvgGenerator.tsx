@@ -100,19 +100,19 @@ export function SvgGenerator() {
     catch (reason) { setError((reason as Error).message) }
   }
   async function copy() {
-    try { await navigator.clipboard.writeText(safe); setFeedback('安全 SVG 源码已复制') }
+    try { await navigator.clipboard.writeText(safe); setFeedback('已复制 SVG') }
     catch { setFeedback('复制失败，请使用源码区手动选择复制。') }
   }
   return <ToolboxLayout detail><div className="svg-page">
-    <div className="svg-heading"><span>MiMo · 免费</span><h1>把想法画成 SVG。</h1><p>描述图标、插画或小图表，生成可预览、复制和下载的矢量图。登录后免费使用，不消耗钱包余额。</p></div>
+    <header className="svg-heading"><h1>SVG 生成器</h1><span>免费</span></header>
     {!token ? <p><Link className="svg-login" to="/account?returnTo=%2Ftoolbox%2Fsvg">登录后开始生成 →</Link></p> : <form onSubmit={event => void submit(event)} noValidate>
-      <label htmlFor="svg-description">画面描述</label><textarea className="resize-none" id="svg-description" rows={3} maxLength={6000} value={prompt} readOnly={running} onChange={e => { setPrompt(e.target.value); if (!error) intent.current = null }} placeholder="例如：画一只趴在月亮上的猫，深蓝与暖黄色，适合作为网站插画。" />
-      <div className="svg-actions"><span>不限每日次数 · 每次最多 4,096 token · 同时一个 MiMo 任务</span>{running ? <button type="button" onClick={() => void stop()} disabled={starting}>停止生成</button> : <button type="submit" disabled={!userId || !prompt.trim() || starting}>{snapshot ? '重新生成 SVG' : '免费生成 SVG'}</button>}</div>
+      <label htmlFor="svg-description">画面描述</label><textarea className="resize-none" id="svg-description" rows={3} maxLength={6000} value={prompt} readOnly={running} onChange={e => { setPrompt(e.target.value); if (!error) intent.current = null }} placeholder="描述图形、颜色和风格，例如：深蓝色月亮上的猫。" />
+      <div className="svg-actions"><details className="svg-help"><summary>使用说明</summary><p>MiMo 免费生成，不扣钱包余额。每天不限次数，每次最多输出 4,096 token，同时可运行一个任务。</p></details>{running ? <button type="button" onClick={() => void stop()} disabled={starting}>停止生成</button> : <button type="submit" disabled={!userId || !prompt.trim() || starting}>{snapshot ? '重新生成' : '生成 SVG'}</button>}</div>
     </form>}
-    <div className="svg-feedback" aria-live="polite">{running && <p role="status">正在生成 SVG，可离开后返回继续查看。</p>}{error && <p role="alert">{error} {runId && <button type="button" onClick={() => setAttempt(n => n+1)}>刷新任务状态</button>}</p>}{feedback && <p role="status">{feedback}</p>}</div>
+    <div className="svg-feedback" aria-live="polite">{running && <p role="status">正在生成…</p>}{error && <p role="alert">{error} {runId && <button type="button" onClick={() => setAttempt(n => n+1)}>刷新任务状态</button>}</p>}{feedback && <p role="status">{feedback}</p>}</div>
     <section className="svg-workspace" aria-label="SVG 生成结果">
-      <div className="svg-preview"><h2>预览</h2>{safe ? <SvgPreview source={safe} /> : <p>{running ? '生成完整 SVG 后显示预览' : '你的矢量图会显示在这里'}</p>}</div>
-      <div className="svg-source"><div className="svg-actions"><h2>{safe ? '安全源码' : '生成源码'}</h2><div><button type="button" disabled={!safe} onClick={() => void copy()}>复制 SVG</button><button type="button" disabled={!safe} onClick={() => downloadBlob(new Blob([safe], { type:'image/svg+xml' }), 'genesis.svg')}>下载 SVG</button></div></div><pre tabIndex={0} aria-label="SVG 源码"><code>{safe || source || '<svg>…</svg>'}</code></pre></div>
+      <div className="svg-preview"><h2>预览</h2>{safe ? <SvgPreview source={safe} /> : <p>{running ? '正在生成预览…' : '暂无预览'}</p>}</div>
+      <div className="svg-source"><div className="svg-actions"><h2>源码</h2><div><button type="button" disabled={!safe} onClick={() => void copy()}>复制 SVG</button><button type="button" disabled={!safe} onClick={() => downloadBlob(new Blob([safe], { type:'image/svg+xml' }), 'genesis.svg')}>下载 SVG</button></div></div><pre tabIndex={0} aria-label="SVG 源码"><code>{safe || source || '<svg>…</svg>'}</code></pre></div>
     </section>
   </div></ToolboxLayout>
 }

@@ -94,7 +94,7 @@ function RechargeDialog({ close }: { close: () => void }) {
   const button = useRef<HTMLButtonElement>(null)
   const dialog = useModalDialog(button)
   return <dialog ref={dialog} className="billing-dialog billing-dialog--account" aria-labelledby="billing-recharge-title" onCancel={close}>
-    <h2 id="billing-recharge-title">如何充值</h2><p>目前支持站长人工充值，暂未开放在线支付。请联系站长确认账号和充值金额，入账后余额会显示在钱包中。</p><p>充值、消费与退款记录可在余额流水中查询。</p>
+    <h2 id="billing-recharge-title">如何充值</h2><p>联系站长确认账号和充值金额，暂不支持在线支付。</p><p>付费任务按上游实际费用结算，不提前冻结余额。充值、消费与退款记录可在余额流水中查询。</p>
     <footer><button ref={button} type="button" onClick={close}>知道了</button></footer>
   </dialog>
 }
@@ -221,9 +221,9 @@ export function WalletPage({ admin = false }: { admin?: boolean }) {
     return <tr key={o.id}><td className="billing-record-name"><div className="billing-record-title"><span className="billing-record-icon"><Icon size={17} strokeWidth={1.5} aria-hidden="true" /></span><div><strong>{o.model}</strong><small>{kindNames[o.kind] ?? o.kind}</small></div></div>{o.note && <p className="billing-record-note">{o.note}</p>}</td><td className="billing-record-status"><span className={`billing-state billing-state--${o.status}`}>{operationStatus(o)}</span></td><td className="billing-number billing-record-amount">{o.mode === 'paid' ? <>{o.status === 'settled' ? amountLabel(o.charged_amount) : '待结算'}</> : <span className="billing-dash">—</span>}</td><td className="billing-record-actions"><button type="button" aria-label={`查看 ${o.model} 的费用明细`} onClick={() => setDetailsId(o.id)}>查看明细<ArrowUpRight size={13} aria-hidden="true" /></button>{canAdmin && ['pending','review'].includes(o.status) && <button type="button" onClick={() => setReview(o)}>人工核对</button>}</td></tr>
   })}</tbody></table></div>
   return <AccountWorkspace user={user} active={admin ? 'billing' : 'wallet'}><div className="billing-page">
-    <header className="account-workspace-heading"><div><h1>{admin ? '账务管理' : '我的钱包'}</h1><p>{admin ? '管理人工入账、价格审核与待核对的账单。' : '余额、收支与每一次创作的费用。'}</p></div><div className="billing-header-tools">{!admin && <button type="button" onClick={() => setRechargeOpen(true)}><CircleHelp size={15} aria-hidden="true" />充值说明</button>}<button className="billing-icon-button" type="button" aria-label="刷新账务" disabled={loading || !token} onClick={() => setRefresh(n => n+1)}><RefreshCw size={16} aria-hidden="true" /></button></div></header>
+    <header className="account-workspace-heading"><h1>{admin ? '账务管理' : '我的钱包'}</h1><div className="billing-header-tools">{!admin && <button type="button" onClick={() => setRechargeOpen(true)}><CircleHelp size={15} aria-hidden="true" />充值说明</button>}<button className="billing-icon-button" type="button" aria-label="刷新账务" disabled={loading || !token} onClick={() => setRefresh(n => n+1)}><RefreshCw size={16} aria-hidden="true" /></button></div></header>
     {!token ? <div className="billing-empty"><h2>登录后查看你的钱包</h2><p>余额与账单只对你本人可见。</p><Link to="/account">前往登录<ArrowUpRight size={15} aria-hidden="true" /></Link></div> : <>
-      {!admin && <section className="billing-overview" aria-label="钱包概览"><WalletBalance wallet={!loading && !error ? wallet : null} /><aside className="billing-overview-note"><span>余额使用说明</span><p>付费任务按上游实际费用结算，不提前冻结余额。</p><p>充值请联系站长，入账后可在余额流水中查看。</p></aside></section>}
+      {!admin && <section className="billing-overview" aria-label="钱包概览"><WalletBalance wallet={!loading && !error ? wallet : null} /></section>}
       <div className="billing-feedback" aria-live="polite">{loading && <span role="status">正在读取账务…</span>}{feedback && <span role="status">{feedback}</span>}</div>
       {error && <div className="billing-error" role="alert"><h2>账务暂时无法读取</h2><p>{error}</p><button type="button" onClick={() => setRefresh(n => n+1)}><RefreshCw size={14} aria-hidden="true" />重新读取</button></div>}
       {!error && <>
