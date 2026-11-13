@@ -10,6 +10,7 @@ import { amountLabel } from '../../features/billing/api'
 import { adminGet, businesses, bytes, dateLabel, statuses, uptimeLabel, type AdminUser, type Monitoring, type Overview, type Page, type Point, type Task } from './api'
 import '../../Account.css'
 import './AdminPage.css'
+import type { ProcessPage, ServicePage } from './api'
 
 const navigation = [
   {path:'',name:'总览',icon:CircleGauge},{path:'server',name:'服务器',icon:Server},
@@ -85,7 +86,10 @@ function MonitorView({section,refresh}:{section:string;refresh:number}) {
   const state=useAdminData<Monitoring>(`monitoring?window=${window}`,refresh+tick)
   const overview=useAdminData<Overview>('overview',refresh+tick)
   const data=state.data
-  return <><div className="admin-toolbar"><div className="admin-segments" aria-label="监控时间范围">{([['1h','1 小时'],['24h','24 小时'],['7d','7 天']] as const).map(([value,label])=><button key={value} aria-pressed={window===value} onClick={()=>setParams({window:value})}>{label}</button>)}</div><span>{data?`${new Date(data.sampled_at*1000).toLocaleTimeString('zh-CN')} 更新 · 每 30 秒刷新`:'每 30 秒刷新'}</span></div>
+  const hostView=(section==='server' && params.get('view')==='processes') || (section==='services' && params.get('view')==='system')
+  const switcher=section!=='' && <div className="admin-toolbar"><div className="admin-segments" aria-label="监控视图">{(section==='server'?[['resources','资源概况'],['processes','进程占用']]:[['resources','容器资源'],['system','系统服务']]).map(([value,label])=><button key={value} aria-pressed={value==='resources'?!hostView:hostView} onClick={()=>{const next=new URLSearchParams(params);next.set('view',value!);next.delete('resource_page');setParams(next)}}>{label}</button>)}</div></div>
+  if(hostView)return <>{switcher}<HostResources kind={section==='server'?'processes':'system-services'} refresh={refresh+tick}/></>
+  return <>{switcher}<div className="admin-toolbar"><div className="admin-segments" aria-label="监控时间范围">{([['1h','1 小时'],['24h','24 小时'],['7d','7 天']] as const).map(([value,label])=><button key={value} aria-pressed={window===value} onClick={()=>{const next=new URLSearchParams(params);next.set('window',value);setParams(next)}}>{label}</button>)}</div><span>{data?`${new Date(data.sampled_at*1000).toLocaleTimeString('zh-CN')} 更新 · 每 30 秒刷新`:'每 30 秒刷新'}</span></div>
     <State {...state}>{data && <>{!data.available ? <div className="admin-notice"><strong>监控未接入或暂不可用</strong><p>启动监控采集服务后，这里会显示资源占用与历史趋势。</p></div> : <div className="admin-targets">{data.targets.map(target=><span key={target.name} className={!target.up?'admin-warning':''}>{{node:'服务器采集','node-network':'主机网络采集',cadvisor:'容器采集'}[target.name]??target.name} · {target.up?'在线':'中断'}</span>)}{data.errors.length>0 && <span className="admin-warning">部分指标读取失败</span>}</div>}
     {section!=='services' && <div className={`admin-metrics${section===''?' admin-overview-metrics':''}`}>{metricDefinitions.slice(0,section==='server'?9:5).map(([key,name,unit])=>{
       const points=data.series[key]??[]; const point=points.at(-1); const current=point && data.sampled_at-point[0]<=120?point[1]:null
@@ -96,6 +100,28 @@ function MonitorView({section,refresh}:{section:string;refresh:number}) {
     </>}</State>
     {section==='' && <State {...overview}>{overview.data && <section className="admin-section"><h2>全站运行</h2><div className="admin-totals"><Link to="/admin/users"><span>用户</span><strong>{overview.data.users}</strong></Link><Link to="/admin/tasks?hours=24"><span>近 24 小时任务</span><strong>{overview.data.tasks_24h}</strong></Link><Link to="/admin/tasks?status=failed&hours=24"><span>近 24 小时失败</span><strong>{overview.data.statuses.failed??0}</strong></Link><Link to="/admin/billing"><span>待核对账务</span><strong>{overview.data.review_orders}</strong></Link></div></section>}</State>}
   </>
+}
+
+const processStates:Record<string,string>={R:'运行',S:'休眠',D:'等待 I/O',Z:'僵尸',T:'已停止',t:'跟踪停止',I:'空闲',X:'已退出'}
+const serviceStates:Record<string,string>={active:'活动',inactive:'未活动',failed:'失败',activating:'启动中',deactivating:'停止中',unknown:'未知'}
+function HostResources({kind,refresh}:{kind:'processes'|'system-services';refresh:number}) {
+  const [params,setParams]=useSearchParams()
+  const processes=kind==='processes'
+  const scope=['host','isolated','all'].includes(params.get('scope')??'')?params.get('scope')!:'host'
+  const sort=params.get('sort')==='memory'?'memory':'cpu'
+  const status=['active','inactive','failed'].includes(params.get('service_state')??'')?params.get('service_state')!:'all'
+  const page=Math.max(1,Number(params.get('resource_page'))||1)
+  const query=processes?`scope=${scope}&sort=${sort}&page=${page}`:`state=${status}&page=${page}`
+  const result=useAdminData<ProcessPage|ServicePage>(`${kind}?${query}`,refresh)
+  const change=(key:string,value:string)=>{const next=new URLSearchParams(params);next.delete('resource_page');next.set(key,value);setParams(next)}
+  const data=result.data
+  return <section className="admin-section" aria-label={processes?'宿主机进程':'系统服务'}><div className="admin-section-heading"><h2>{processes?'宿主机进程':'系统服务'}</h2><span>{processes?'CPU 100% = 1 核 · 内存为 RSS':'systemd 已加载服务 · 失败优先'}</span></div>
+    <div className="admin-toolbar"><div className="admin-segments" aria-label={processes?'进程范围':'服务状态'}>{(processes?[['host','宿主进程'],['isolated','隔离进程'],['all','全部进程']]:[['all','全部服务'],['active','活动'],['failed','失败'],['inactive','未活动']]).map(([value,label])=><button key={value} aria-pressed={(processes?scope:status)===value} onClick={()=>change(processes?'scope':'service_state',value!)}>{label}</button>)}</div>{processes && <div className="admin-segments" aria-label="进程排序">{[['cpu','CPU 排序'],['memory','内存排序']].map(([value,label])=><button key={value} aria-pressed={sort===value} onClick={()=>change('sort',value!)}>{label}</button>)}</div>}</div>
+    <State {...result}>{data && <>{'supported' in data && !data.supported?<p className="admin-empty">当前主机未使用 systemd，无法展示系统服务。</p>:<><div className="admin-table-wrap admin-resource-table"><table><thead>{processes?<tr><th>进程 / PID</th><th>范围</th><th>状态</th><th>CPU</th><th>内存</th><th>线程</th><th>运行时长</th></tr>:<tr><th>服务</th><th>状态</th><th>自动重启</th><th>活动时长</th></tr>}</thead><tbody>{'supported' in data?data.items.map(row=><tr key={row.name}><td>{row.name}</td><td className={row.state==='failed'?'admin-warning':''}>{serviceStates[row.state]??'未知'}</td><td>{row.restarts??'—'}</td><td>{uptimeLabel(row.uptime)}</td></tr>):data.items.map(row=><tr key={row.pid}><td><strong>{row.name}</strong><small>{row.pid}</small></td><td>{{host:'宿主',isolated:'隔离',unknown:'未知'}[row.scope]??'未知'}</td><td>{processStates[row.state]??'未知'}</td><td>{metricLabel(row.cpu,'%')}</td><td>{bytes(row.memory)}</td><td>{row.threads}</td><td>{uptimeLabel(row.uptime)}</td></tr>)}</tbody></table>{!data.items.length && <p className="admin-empty">{processes?'暂无符合条件的进程':'暂无符合条件的服务'}</p>}</div><Pagination data={data} change={page=>change('resource_page',String(page))}/></>}
+      {'skipped' in data && (data.skipped>0 || data.truncated) && <p className="admin-caption">{data.skipped>0?`${data.skipped} 个进程已退出或无读取权限。`:''}{data.truncated?'进程超过采集上限，仅展示前 20,000 个进程。':''}</p>}
+      <p className="admin-caption">{new Date(data.sampled_at*1000).toLocaleTimeString('zh-CN')} 更新 · 每 30 秒刷新</p><p className="admin-caption">{processes?'按资源组识别 Docker、Kubernetes、Podman 与 LXC 隔离进程；首个 CPU 样本显示未知。':'“活动”不等于应用健康；自动重启仅计 systemd 的 Restart 触发次数。'}</p>
+    </>}</State>
+  </section>
 }
 
 function Pagination({data,change}:{data:Page<unknown>;change:(page:number)=>void}) {

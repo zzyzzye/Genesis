@@ -12,6 +12,23 @@ function open(path='/admin'){return render(<MemoryRouter initialEntries={[path]}
 beforeEach(()=>{localStorage.setItem('genesis-account-token','synthetic-admin');vi.mocked(getCurrentUser).mockResolvedValue(user)})
 afterEach(()=>{cleanup();localStorage.clear();vi.resetAllMocks()})
 
+it('进程分页保留范围，切换排序重置页码',async()=>{
+  vi.mocked(adminGet).mockImplementation((path)=>Promise.resolve(path.startsWith('processes')?{items:[],total:25,page:1,page_size:20,sampled_at:100,skipped:0,truncated:false}:{}))
+  open('/admin/server?view=processes&scope=all')
+  fireEvent.click(await screen.findByRole('button',{name:'下一页'}))
+  await waitFor(()=>expect(adminGet).toHaveBeenCalledWith('processes?scope=all&sort=cpu&page=2',expect.any(AbortSignal)))
+  fireEvent.click(screen.getByRole('button',{name:'内存排序'}))
+  await waitFor(()=>expect(adminGet).toHaveBeenCalledWith('processes?scope=all&sort=memory&page=1',expect.any(AbortSignal)))
+})
+it('区分不支持 systemd 与采集失败',async()=>{
+  vi.mocked(adminGet).mockImplementation((path)=>Promise.resolve(path.startsWith('system-services')?{items:[],total:0,page:1,page_size:20,sampled_at:100,supported:false}:{}))
+  open('/admin/services?view=system')
+  expect(await screen.findByText('当前主机未使用 systemd，无法展示系统服务。')).toBeInTheDocument()
+  vi.mocked(adminGet).mockRejectedValue(new Error('系统服务采集暂不可用'))
+  fireEvent.click(screen.getByRole('button',{name:'刷新数据'}))
+  expect(await screen.findByRole('alert')).toHaveTextContent('系统服务采集暂不可用')
+})
+
 it('成员被阻止且不请求管理数据',async()=>{
   vi.mocked(getCurrentUser).mockResolvedValue({...user,role:'member'})
   open();expect(await screen.findByText('仅站长可访问')).toBeInTheDocument();expect(adminGet).not.toHaveBeenCalled()

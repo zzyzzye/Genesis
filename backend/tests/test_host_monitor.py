@@ -1,0 +1,97 @@
+"""使用合成 proc 与监控响应验证宿主采集，不读取真实进程参数。"""
+
+from pathlib import Path
+from typing import Any
+
+import httpx
+import pytest
+
+from genesis_api import host_monitor, monitoring
+
+
+def test_sampler_pid_reuse_and_privacy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CPU 使用差分，PID 复用重置，采集文件仅限资源白名单。"""
+    ticks = 200
+    started = 100
+    clock = 10.0
+    group = "0::/system.slice/docker.service"
+    reads: list[str] = []
+
+    def read(path: Path, *args: Any, **kwargs: Any) -> str:
+        reads.append(path.name)
+        if path.name == "uptime":
+            return "1000 1000"
+        if path.name == "comm":
+            return "systemd"
+        if path.name == "cgroup":
+            return group
+        if path.name == "stat":
+            fields = ["0"] * 22
+            fields[0], fields[11], fields[19], fields[21] = "S", str(ticks), str(started), "4"
+            return "42 (worker (test)) " + " ".join(fields)
+        raise AssertionError("采集器访问了非白名单文件")
+
+    monkeypatch.setattr(Path, "read_text", read)
+    monkeypatch.setattr(Path, "iterdir", lambda _: iter([Path("42")]))
+    monkeypatch.setattr(host_monitor.time, "monotonic", lambda: clock)
+    sampler = host_monitor.Sampler(Path("/synthetic"))
+    sampler.ticks = 100
+    first = sampler.sample()["items"][0]
+    assert first["cpu"] is None
+    assert first["name"] == "worker (test)"
+    assert first["scope"] == "host"
+    ticks, clock = 400, 12
+    assert sampler.sample()["items"][0]["cpu"] == 100
+    started, ticks, clock = 200, 9000, 14
+    assert sampler.sample()["items"][0]["cpu"] is None
+    group = "0::/system.slice/docker-" + "a" * 64 + ".scope"
+    assert sampler.sample()["items"][0]["scope"] == "isolated"
+    assert set(reads) == {"stat", "comm", "cgroup", "uptime"}
+
+
+@pytest.mark.anyio
+async def test_stale_process_sample(monkeypatch: pytest.MonkeyPatch) -> None:
+    """旧样本不能被重新包装成当前资源数据。"""
+
+    async def get(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        assert url == "http://host-processes:9101/snapshot"
+        return httpx.Response(200, json={"sampled_at": 0}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    with pytest.raises(ValueError, match="过期"):
+        await monitoring.host_snapshot()
+
+
+@pytest.mark.anyio
+async def test_systemd_projection_and_collector_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """systemd 失败时不展示旧的正常状态，也不返回原始标签。"""
+    healthy = True
+
+    async def get(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        expression = kwargs["params"]["query"]
+        value = "1"
+        if "collector_success" in expression:
+            value = "1" if healthy else "0"
+        elif "restart_total" in expression:
+            value = "3"
+        elif "start_time" in expression:
+            value = "0"
+        row = {
+            "metric": {"name": "example.service", "state": "failed", "private": "hidden"},
+            "value": [0, value],
+        }
+        return httpx.Response(
+            200,
+            json={"status": "success", "data": {"result": [row]}},
+            request=httpx.Request("GET", "http://prometheus"),
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    result = await monitoring.system_services()
+    assert result["items"] == [
+        {"name": "example.service", "state": "failed", "restarts": 3, "uptime": None}
+    ]
+    assert "hidden" not in str(result)
+    healthy = False
+    with pytest.raises(ValueError, match="不可用"):
+        await monitoring.system_services()

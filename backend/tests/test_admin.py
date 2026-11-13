@@ -51,10 +51,70 @@ async def test_owner_boundary(state: tuple[FastAPI, Session, User]) -> None:
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as client:
         owner.role = UserRole.MEMBER
-        for path in ["overview", "users", "tasks", "monitoring"]:
+        for path in ["overview", "users", "tasks", "monitoring", "processes", "system-services"]:
             assert (await client.get(f"/api/v1/admin/{path}")).status_code == 403
         app.dependency_overrides.pop(get_current_user)
-        assert (await client.get("/api/v1/admin/overview")).status_code == 401
+        for path in ["overview", "users", "tasks", "monitoring", "processes", "system-services"]:
+            assert (await client.get(f"/api/v1/admin/{path}")).status_code == 401
+
+
+@pytest.mark.anyio
+async def test_host_resource_pages(
+    state: tuple[FastAPI, Session, User], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """进程按资源排序分页，服务失败优先，非 systemd 主机不伪装正常。"""
+    from genesis_api.api.routes import admin
+
+    app, _, _ = state
+    supported = True
+
+    async def host() -> dict[str, Any]:
+        return {
+            "sampled_at": 100,
+            "systemd": supported,
+            "items": [
+                {
+                    "pid": i,
+                    "name": f"worker-{i}",
+                    "cpu": i,
+                    "memory": 30 - i,
+                    "scope": "host",
+                    "private": "hidden",
+                }
+                for i in range(25)
+            ],
+        }
+
+    async def services() -> dict[str, Any]:
+        return {
+            "sampled_at": 100,
+            "items": [
+                {"name": "a.service", "state": "active"},
+                {"name": "z.service", "state": "failed"},
+            ],
+        }
+
+    monkeypatch.setattr(admin, "host_snapshot", host)
+    monkeypatch.setattr(admin, "system_services", services)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        result = await client.get("/api/v1/admin/processes")
+        assert result.json()["items"][0]["pid"] == 24
+        assert "hidden" not in result.text
+        assert (await client.get("/api/v1/admin/processes?page=99")).json()["page"] == 2
+        assert (await client.get("/api/v1/admin/processes?sort=memory")).json()["items"][0][
+            "pid"
+        ] == 0
+        assert (await client.get("/api/v1/admin/processes?scope=isolated")).json()["total"] == 0
+        assert (await client.get("/api/v1/admin/system-services")).json()["items"][0][
+            "state"
+        ] == "failed"
+        assert (await client.get("/api/v1/admin/system-services?state=inactive")).json()[
+            "total"
+        ] == 0
+        supported = False
+        assert (await client.get("/api/v1/admin/system-services")).json()["supported"] is False
 
 
 @pytest.mark.anyio

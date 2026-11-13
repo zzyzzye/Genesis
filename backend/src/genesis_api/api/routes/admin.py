@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import String, case, cast, func, literal, or_, select, union_all
 
@@ -13,8 +14,77 @@ from genesis_api.billing.models import BillingOperation, Wallet
 from genesis_api.blog.models import BlogPost
 from genesis_api.identity.models import User
 from genesis_api.media.models import ImageGeneration, MediaAsset, MediaProject, VideoGeneration
+from genesis_api.monitoring import host_snapshot, system_services
 
 router = APIRouter(prefix="/admin", tags=["全站管理"])
+
+
+def resource_page(items: list[dict[str, Any]], page: int) -> dict[str, Any]:
+    """资源表复用每页二十条规则，刷新后自动收敛越界页。"""
+    total = len(items)
+    page = min(page, max(1, (total + 19) // 20))
+    return {
+        "items": items[(page - 1) * 20 : page * 20],
+        "total": total,
+        "page": page,
+        "page_size": 20,
+    }
+
+
+@router.get("/processes")
+async def processes(
+    _: OwnerDependency,
+    response: Response,
+    scope: Literal["host", "isolated", "all"] = "host",
+    sort: Literal["cpu", "memory"] = "cpu",
+    page: int = Query(1, ge=1, le=100000),
+) -> Any:
+    """分页展示进程资源，默认排除已识别的容器资源组，不暴露启动参数。"""
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        data = await host_snapshot()
+        fields = ("pid", "name", "state", "scope", "cpu", "memory", "threads", "uptime")
+        items = [
+            {key: row.get(key) for key in fields}
+            for row in data["items"]
+            if scope == "all" or row.get("scope") == scope
+        ]
+        items.sort(key=lambda row: (-(row.get(sort) or 0), row["pid"]))
+        return {
+            **resource_page(items, page),
+            "sampled_at": data["sampled_at"],
+            "skipped": data.get("skipped", 0),
+            "truncated": data.get("truncated", False),
+        }
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(503, "进程采集暂不可用，请检查 host-processes 服务") from exc
+
+
+@router.get("/system-services")
+async def services(
+    _: OwnerDependency,
+    response: Response,
+    state: Literal["all", "active", "failed", "inactive"] = "all",
+    page: int = Query(1, ge=1, le=100000),
+) -> Any:
+    """返回 systemd 已加载服务；不支持的主机与采集故障明确区分。"""
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        host = await host_snapshot()
+        if not host["systemd"]:
+            return {**resource_page([], 1), "supported": False, "sampled_at": host["sampled_at"]}
+    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+        # 进程采集与 systemd 独立，前者离线不应阻断已接通的服务采集。
+        pass
+    try:
+        data = await system_services()
+        items = [row for row in data["items"] if state == "all" or row["state"] == state]
+        items.sort(key=lambda row: (row["state"] != "failed", row["name"]))
+        return {**resource_page(items, page), "supported": True, "sampled_at": data["sampled_at"]}
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(
+            503, "系统服务采集暂不可用，请检查 node-systemd 与宿主 D-Bus 连接"
+        ) from exc
 
 
 def task_query() -> Any:

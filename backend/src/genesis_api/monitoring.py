@@ -82,6 +82,67 @@ def number(value: Any) -> float | None:
         return None
 
 
+async def host_snapshot() -> dict[str, Any]:
+    """读取固定内网进程快照，拒绝过期样本。"""
+    async with httpx.AsyncClient(timeout=5, trust_env=False) as client:
+        result = await client.get("http://host-processes:9101/snapshot")
+        result.raise_for_status()
+        data: dict[str, Any] = result.json()
+        if time.time() - float(data["sampled_at"]) > 30:
+            raise ValueError("进程样本已过期")
+        return data
+
+
+async def system_services() -> dict[str, Any]:
+    """复用 node_exporter 的 systemd 采集，仅输出服务状态与计数。"""
+    queries = [
+        'node_scrape_collector_success{job="systemd",collector="systemd"} '
+        'and on(instance) (up{job="systemd"} == 1)',
+        'node_systemd_unit_state{job="systemd",name=~".+\\\\.service"} == 1',
+        'node_systemd_service_restart_total{job="systemd"}',
+        'node_systemd_unit_start_time_seconds{job="systemd"}',
+    ]
+    async with httpx.AsyncClient(
+        base_url="http://prometheus:9090", timeout=5, trust_env=False
+    ) as client:
+
+        async def query(expression: str) -> list[Any]:
+            result = await client.get(
+                "/api/v1/query", params={"query": expression, "timeout": "3s"}
+            )
+            result.raise_for_status()
+            data = result.json()
+            if data.get("status") != "success":
+                raise ValueError("服务采集查询失败")
+            return list(data["data"]["result"])
+
+        health, states, restarts, starts = await asyncio.gather(*(query(q) for q in queries))
+    if not health or number(health[0]["value"][1]) != 1:
+        raise ValueError("systemd 采集不可用")
+    rows = {
+        str(row["metric"]["name"])[:200]: {
+            "name": str(row["metric"]["name"])[:200],
+            "state": row["metric"].get("state", "unknown"),
+            "restarts": None,
+            "uptime": None,
+        }
+        for row in states
+    }
+    for field, values in [("restarts", restarts), ("uptime", starts)]:
+        for row in values:
+            name = str(row["metric"]["name"])[:200]
+            value = number(row["value"][1])
+            if name in rows:
+                if field == "uptime":
+                    value = (
+                        max(0, time.time() - value)
+                        if value and rows[name]["state"] == "active"
+                        else None
+                    )
+                rows[name][field] = value
+    return {"sampled_at": time.time(), "items": list(rows.values())}
+
+
 async def snapshot(window: str) -> dict[str, Any]:
     """限时并行读取概况、曲线和容器资源；个别查询失败保留其他指标。"""
     now = int(time.time())

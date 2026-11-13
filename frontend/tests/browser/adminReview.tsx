@@ -21,6 +21,17 @@ window.fetch=async(input)=>{
   if(state==='error')return reply({detail:'合成数据读取失败'},503)
   if(path.endsWith('/admin/overview'))return reply(overview)
   if(path.endsWith('/admin/monitoring'))return reply(monitoring)
+  if(path.endsWith('/admin/processes')){
+    const page=Number(url.searchParams.get('page')??1)
+    const items=state==='empty'?[]:Array.from({length:25},(_,i)=>({pid:100+i,name:i===0?'nginx':'worker',state:i===2?'D':'S',scope:'host',cpu:i===0?null:25-i,memory:(64+i)*1024*1024,threads:4,uptime:3600+i}))
+    if(url.searchParams.get('sort')==='memory')items.reverse()
+    return reply({items:items.slice((page-1)*20,page*20),page,page_size:20,total:items.length,sampled_at:now,skipped:0,truncated:false})
+  }
+  if(path.endsWith('/admin/system-services')){
+    const items=state==='empty'?[]:[{name:'nginx.service',state:'active',restarts:0,uptime:3600},{name:'backup.service',state:'failed',restarts:3,uptime:null}]
+    const filtered=items.filter(row=>url.searchParams.get('state')==='all'||row.state===url.searchParams.get('state'))
+    return reply({items:filtered,total:filtered.length,page:1,page_size:20,supported:state!=='unsupported',sampled_at:now})
+  }
   if(path.endsWith('/admin/users'))return reply({items:state==='empty'||url.searchParams.get('q')?[]:[account],total:state==='empty'?0:1,page:1,page_size:20})
   if(path.endsWith('/admin/tasks'))return reply({items:state==='empty'?[]:[{id:'22222222-2222-4222-8222-222222222222',user_id:account.id,business:'media',kind:'image',status:'processing',created_at:new Date().toISOString(),completed_at:null},{id:'33333333-3333-4333-8333-333333333333',user_id:account.id,business:'blog',kind:'agent',status:'failed',created_at:new Date(Date.now()-90000).toISOString(),completed_at:new Date().toISOString()}],total:state==='empty'?0:2,page:1,page_size:20})
   if(path.endsWith('/billing/wallet'))return reply({available:'19.00000000',frozen:'0',currency:'CNY'})

@@ -1,5 +1,41 @@
 # 与 compose.yml 或 compose.prod.yml 合并使用；不发布监控端口。
 services:
+  host-processes:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/python:3.12-slim-bookworm
+    restart: unless-stopped
+    command: [python, -B, /collector.py]
+    read_only: true
+    cgroup: host
+    cap_drop: [ALL]
+    volumes:
+      - /proc:/host/proc:ro
+      - ./backend/src/genesis_api/host_monitor.py:/collector.py:ro
+    mem_limit: 128m
+    cpus: 0.25
+    security_opt: [no-new-privileges:true]
+  node-systemd:
+    image: quay.io/prometheus/node-exporter:v1.10.2
+    profiles: [host-services]
+    restart: unless-stopped
+    user: '65534:65534'
+    command:
+      - --collector.disable-defaults
+      - --collector.systemd
+      - '--collector.systemd.unit-include=.+\.service'
+      - --collector.systemd.enable-restarts-metrics
+      - --collector.systemd.enable-start-time-metrics
+    read_only: true
+    cap_drop: [ALL]
+    volumes:
+      - type: bind
+        source: /run/dbus/system_bus_socket
+        target: /var/run/dbus/system_bus_socket
+        read_only: true
+        bind:
+          create_host_path: false
+    mem_limit: 128m
+    cpus: 0.25
+    security_opt: [no-new-privileges:true]
   prometheus:
     image: ghcr.io/prometheus/prometheus:v3.13.5
     restart: unless-stopped
