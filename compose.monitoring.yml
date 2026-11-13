@@ -9,6 +9,7 @@ services:
     cap_drop: [ALL]
     volumes:
       - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
       - ./backend/src/genesis_api/host_monitor.py:/collector.py:ro
     mem_limit: 128m
     cpus: 0.25

@@ -69,6 +69,18 @@ Docker 29 的 containerd 存储通过宿主根挂载中的 `/run/containerd/cont
 快照视为不可用。Docker、Kubernetes、Podman、LXC 按资源组标记识别为隔离进程，
 其他进程归为宿主，无法读取资源组的进程归为未知；自定义容器资源组可能无法识别。
 
+硬件名称复用 `host-processes` 的独立 `/hardware` 快照，每 60 秒读取一次，超过
+180 秒的快照不展示。采集器新增只读 `/sys:/host/sys` 挂载；更新后仅需用上述
+Compose 组合执行 `up -d --no-deps --no-build host-processes`，无需构建镜像。
+CPU 只提取 `/proc/cpuinfo` 的 `model name` / `Hardware` 字段；GPU 枚举
+[PCI 显示设备](https://kernel.org/doc/html/v5.12/PCI/sysfs-pci.html)，优先读取
+[NVIDIA 驱动 Model 字段](https://download.nvidia.com/XFree86/Linux-x86_64/435.21/README/procinterface.html)
+或设备 `product_name`。没有型号时只显示厂商和 PCI ID，不把设备 ID 当成型号。
+不输出 CPU 序列号、GPU UUID 或原始硬件信息；不采集 GPU 占用率。
+CPU 未提供型号、GPU 未检测到、SoC 显示设备型号未知和采集失败分别显示。
+此信息仍属于当前 Linux 主机可见范围，Docker Desktop 不保证暴露物理 CPU 型号，
+未透传的 GPU 不可见；“未检测到可见 GPU”不等于物理机没有显卡。
+
 系统服务复用官方 [node_exporter systemd collector](https://github.com/prometheus/node_exporter/blob/v1.10.2/collector/systemd_linux.go)，使用非 root 用户连接宿主 D-Bus。
 仅接收 `.service` 单元，不读取服务环境配置，不提供启停按钮。服务采集失败时不沿用
 旧的正常状态；不是 systemd 的主机明确显示不支持。只展示 systemd 已加载单元，

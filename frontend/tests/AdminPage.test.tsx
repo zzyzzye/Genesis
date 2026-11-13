@@ -73,6 +73,19 @@ it('服务器扩展趋势保留单位、读写对比及视图切换状态',async
   expect(await screen.findByRole('img',{name:/读取与写入趋势/})).toBeInTheDocument()
   expect(screen.getByRole('button',{name:'24 小时'})).toHaveAttribute('aria-pressed','true')
 })
+it('服务器显示硬件型号并区分不可见与采集失败',async()=>{
+  const hardware={cpu_names:['Test CPU'],cpu_state:'available',gpus:[{name:'Test GPU',model_known:true,pci_id:'1234:5678'}],gpu_state:'available'}
+  vi.mocked(adminGet).mockImplementation(path=>Promise.resolve(path.startsWith('monitoring')?{sampled_at:100,series:{},targets:[],containers:[],errors:[],available:true,hardware}:{}))
+  open('/admin/server')
+  expect(await screen.findByText('Test CPU')).toBeInTheDocument()
+  expect(screen.getByText('Test GPU')).toBeInTheDocument()
+  hardware.gpus=[];hardware.gpu_state='not_detected'
+  fireEvent.click(screen.getByRole('button',{name:'刷新数据'}))
+  expect(await screen.findByText('未检测到可见 GPU')).toBeInTheDocument()
+  hardware.gpu_state='unavailable'
+  fireEvent.click(screen.getByRole('button',{name:'刷新数据'}))
+  expect(await screen.findByText('型号采集不可用')).toBeInTheDocument()
+})
 it('任务下一页保留业务筛选，切换业务重置页码',async()=>{
   vi.mocked(adminGet).mockResolvedValue({items:[],total:23,page:1,page_size:20})
   open('/admin/tasks?business=media')

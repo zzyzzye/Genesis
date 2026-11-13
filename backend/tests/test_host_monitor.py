@@ -9,6 +9,71 @@ import pytest
 from genesis_api import host_monitor, monitoring
 
 
+def test_hardware_models_and_missing(tmp_path: Path) -> None:
+    """型号去重，驱动字段严格筛选，未知型号与不可见硬件分开。"""
+    proc, sys = tmp_path / "proc", tmp_path / "sys"
+    proc.mkdir()
+    (proc / "cpuinfo").write_text(
+        "model name : Test CPU\nmodel name : Test CPU\nSerial : private\n"
+    )
+    pci = sys / "bus/pci/devices"
+    pci.mkdir(parents=True)
+    for address, vendor in [("0000:01:00.0", "10de"), ("0000:02:00.0", "1002")]:
+        device = pci / address
+        device.mkdir()
+        (device / "class").write_text("0x030200")
+        (device / "vendor").write_text(f"0x{vendor}")
+        (device / "device").write_text("0x1234")
+    nvidia = proc / "driver/nvidia/gpus/0000:01:00.0"
+    nvidia.mkdir(parents=True)
+    (nvidia / "information").write_text("Model: NVIDIA Test GPU\nGPU UUID: private\n")
+    result = host_monitor.hardware_snapshot(proc, sys)
+    assert result["cpu_names"] == ["Test CPU"]
+    assert result["gpu_state"] == "available"
+    assert result["gpus"][0]["name"] == "NVIDIA Test GPU"
+    assert result["gpus"][1] == {"name": "AMD", "model_known": False, "pci_id": "1002:1234"}
+    assert "private" not in str(result)
+    assert host_monitor.hardware_snapshot(proc, tmp_path / "missing")["gpu_state"] == "unavailable"
+    empty_sys = tmp_path / "empty"
+    (empty_sys / "bus/pci/devices").mkdir(parents=True)
+    assert host_monitor.hardware_snapshot(proc, empty_sys)["gpu_state"] == "not_detected"
+    (empty_sys / "class/drm/card0").mkdir(parents=True)
+    assert host_monitor.hardware_snapshot(proc, empty_sys)["gpu_state"] == "unknown"
+
+
+@pytest.mark.anyio
+async def test_hardware_projection_and_staleness(monkeypatch: pytest.MonkeyPatch) -> None:
+    """硬件端点去除标识字段，过期时降级，不把失败说成没有显卡。"""
+    sampled_at = monitoring.time.time()
+
+    async def get(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        assert url == "http://host-processes:9101/hardware"
+        return httpx.Response(
+            200,
+            json={
+                "sampled_at": sampled_at,
+                "cpu_names": ["Test CPU"],
+                "cpu_state": "available",
+                "gpu_state": "available",
+                "gpus": [
+                    {
+                        "name": "Test GPU",
+                        "model_known": True,
+                        "pci_id": "1234:5678",
+                        "uuid": "private",
+                    }
+                ],
+                "serial": "private",
+            },
+            request=httpx.Request("GET", url),
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    assert "private" not in str(await monitoring.hardware_info())
+    sampled_at = 0
+    assert (await monitoring.hardware_info())["gpu_state"] == "unavailable"
+
+
 def test_sampler_pid_reuse_and_privacy(monkeypatch: pytest.MonkeyPatch) -> None:
     """CPU 使用差分，PID 复用重置，采集文件仅限资源白名单。"""
     ticks = 200
