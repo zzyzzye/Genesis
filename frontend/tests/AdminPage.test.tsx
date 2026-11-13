@@ -65,8 +65,8 @@ it('内存与磁盘同时展示实际容量和百分比',async()=>{
   expect(await screen.findByText('75.0%')).toBeInTheDocument()
   expect(screen.getByText('6.0 GiB')).toBeInTheDocument()
   expect(screen.getByText('/ 8.0 GiB')).toBeInTheDocument()
-  expect(screen.getByText('50.0%')).toBeInTheDocument()
-  expect(screen.getByText('100.0 GiB')).toBeInTheDocument()
+  expect(screen.getAllByText('50.0%')[0]!).toBeInTheDocument()
+  expect(screen.getAllByText('100.0 GiB')[0]!).toBeInTheDocument()
 })
 it('监控缺失不显示零占用，业务统计仍可读取',async()=>{
   vi.mocked(adminGet).mockImplementation((path)=>Promise.resolve(path.startsWith('monitoring')?{sampled_at:100,series:{},targets:[],containers:[],errors:[],available:false}:{users:2,posts:0,projects:0,assets:0,tasks_24h:3,statuses:{failed:1},review_orders:0,businesses:[]}))
@@ -83,7 +83,7 @@ it('总览切换主趋势，保留所选时间范围',async()=>{
   expect(screen.getByRole('button',{name:'24 小时'})).toHaveAttribute('aria-pressed','true')
 })
 it('服务器扩展趋势保留单位、读写对比及视图切换状态',async()=>{
-  vi.mocked(adminGet).mockImplementation(path=>Promise.resolve(path.startsWith('monitoring')?{sampled_at:100,series:{swap:[[100,1024]],load:[[100,1.5]],read:[[100,2048]],write:[[100,4096]]},targets:[],containers:[],errors:[],available:true}:path.startsWith('processes')?{items:[],total:0,page:1,page_size:20,sampled_at:100}:{}))
+  vi.mocked(adminGet).mockImplementation(path=>Promise.resolve(path.startsWith('monitoring')?{sampled_at:100,series:{swap:[[100,1024]],load:[[100,1.5]],read:[[100,2048]],write:[[100,4096]]},targets:[],containers:[],errors:[],available:true}:path.startsWith('processes')?{items:[],total:0,page:1,page_size:20,sampled_at:100}:{users:0,tasks_24h:0,statuses:{},review_orders:0}))
   open('/admin/server?window=24h&metric=swap')
   expect(await screen.findByRole('img',{name:/Swap趋势/})).toBeInTheDocument()
   expect(screen.getByText('1.0 KiB')).toBeInTheDocument()
@@ -101,9 +101,12 @@ it('服务器扩展趋势保留单位、读写对比及视图切换状态',async
 })
 it('服务器显示硬件型号并区分不可见与采集失败',async()=>{
   const hardware={cpu_names:['Test CPU'],cpu_state:'available',gpus:[{name:'Test GPU',model_known:true,pci_id:'1234:5678'}],gpu_state:'available'}
-  vi.mocked(adminGet).mockImplementation(path=>Promise.resolve(path.startsWith('monitoring')?{sampled_at:100,series:{},targets:[],containers:[],errors:[],available:true,hardware}:{}))
-  open('/admin/server')
+  vi.mocked(adminGet).mockImplementation(path=>Promise.resolve(path.startsWith('monitoring')?{sampled_at:100,series:{},targets:[],containers:[],errors:[],available:true,hardware}:{users:0,tasks_24h:0,statuses:{},review_orders:0}))
+  open('/admin')
   expect(await screen.findByText('Test CPU')).toBeInTheDocument()
+  expect(screen.getByRole('link',{name:'监控'})).toHaveAttribute('aria-current','page')
+  expect(screen.queryByRole('link',{name:'服务器'})).not.toBeInTheDocument()
+  expect(screen.queryByRole('link',{name:'服务与容器'})).not.toBeInTheDocument()
   expect(screen.getByText('Test GPU')).toBeInTheDocument()
   hardware.gpus=[];hardware.gpu_state='not_detected'
   fireEvent.click(screen.getByRole('button',{name:'刷新数据'}))

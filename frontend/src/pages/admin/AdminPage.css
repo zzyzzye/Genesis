@@ -72,6 +72,9 @@
 .admin-monitor-detail .admin-cores span { margin:0; }
 .admin-monitor-detail .admin-cores strong { font-size:15px; font-variant-numeric:tabular-nums; }
 .admin-monitor-detail .admin-empty { padding:24px 12px; }
+.admin-monitor-navigation { display:flex; flex-direction:column; gap:8px; }
+.admin-resource-details { margin-top:20px; }
+.admin-resource-details>summary { cursor:pointer; font-size:13px; color:var(--account-muted); }
 .admin-hardware { display:flex; flex-wrap:wrap; gap:8px 28px; margin:0 0 16px; font-size:12px; color:var(--account-muted); }
 .admin-hardware>span { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 8px; min-width:0; overflow-wrap:anywhere; }
 .admin-hardware svg { flex:none; align-self:center; }.admin-hardware b { font-weight:500; color:var(--account-ink); }
