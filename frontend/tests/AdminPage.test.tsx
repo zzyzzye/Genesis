@@ -48,6 +48,14 @@ it('监控缺失不显示零占用，业务统计仍可读取',async()=>{
   fireEvent.click(screen.getByRole('button',{name:'24 小时'}))
   await waitFor(()=>expect(adminGet).toHaveBeenCalledWith('monitoring?window=24h',expect.any(AbortSignal)))
 })
+it('总览切换主趋势，保留所选时间范围',async()=>{
+  vi.mocked(adminGet).mockImplementation((path)=>Promise.resolve(path.startsWith('monitoring')?{sampled_at:100,series:{},targets:[],containers:[],errors:[],available:false}:{users:0,posts:0,projects:0,assets:0,tasks_24h:0,statuses:{},review_orders:0,businesses:[]}))
+  open('/admin?window=24h&metric=memory')
+  expect(await screen.findByRole('img',{name:/内存趋势/})).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'网络'}))
+  expect(await screen.findByRole('img',{name:/接收与发送趋势/})).toBeInTheDocument()
+  expect(screen.getByRole('button',{name:'24 小时'})).toHaveAttribute('aria-pressed','true')
+})
 it('任务下一页保留业务筛选，切换业务重置页码',async()=>{
   vi.mocked(adminGet).mockResolvedValue({items:[],total:23,page:1,page_size:20})
   open('/admin/tasks?business=media')

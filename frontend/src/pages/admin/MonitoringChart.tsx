@@ -3,7 +3,7 @@ import type { EChartsType } from 'echarts/core'
 import { ChartNoAxesCombined, RefreshCw } from 'lucide-react'
 import type { Point } from './api'
 
-export function MonitoringChart({points,name,unit,start,end}:{points:Point[];name:string;unit:string;start:number;end:number}) {
+export function MonitoringChart({points,name,unit,start,end,detail=false,comparison}:{points:Point[];name:string;unit:string;start:number;end:number;detail?:boolean;comparison?:{name:string;points:Point[]}}) {
   const root=useRef<HTMLDivElement>(null)
   const chart=useRef<EChartsType|null>(null)
   const renderer=useRef<typeof import('./monitoringChartOptions')|null>(null)
@@ -12,11 +12,11 @@ export function MonitoringChart({points,name,unit,start,end}:{points:Point[];nam
   const [attempt,setAttempt]=useState(0)
   const selected=useRef(-1)
   const [announcement,setAnnouncement]=useState('')
-  const count=points.filter(point=>point[1]!=null).length
+  const count=points.filter(point=>point[1]!=null).length+(comparison?.points.filter(point=>point[1]!=null).length??0)
   const draw=useEffectEvent(()=>{
     if(!root.current?.clientWidth||!renderer.current)return
     if(!chart.current)chart.current=renderer.current.createMonitoringChart(root.current)
-    chart.current.setOption(renderer.current.monitoringOption(points,name,unit,start,end,getComputedStyle(root.current)),{notMerge:true})
+    chart.current.setOption(renderer.current.monitoringOption(points,name,unit,start,end,getComputedStyle(root.current),detail,comparison),{notMerge:true})
     setReady(true)
   })
   useEffect(()=>{
@@ -31,21 +31,23 @@ export function MonitoringChart({points,name,unit,start,end}:{points:Point[];nam
     }).catch(()=>{if(!cancelled)setFailed(true)})
     return ()=>{cancelled=true;observer.disconnect();chart.current?.dispose();chart.current=null;renderer.current=null}
   },[attempt])
-  useEffect(()=>{draw()},[points,name,unit,start,end])
+  useEffect(()=>{draw()},[points,name,unit,start,end,detail,comparison])
   const time=(value:number)=>new Date(value*1000).toLocaleString('zh-CN',end-start>86400?{month:'2-digit',day:'2-digit'}:{hour:'2-digit',minute:'2-digit',hour12:false})
-  return <div className="admin-history">
-    <div ref={root} className="admin-history-chart" role="img" tabIndex={count>1?0:undefined} aria-label={`${name}趋势，${count} 个有效样本；左右方向键查看数值，Escape 关闭提示`} onKeyDown={event=>{
+  return <div className={`admin-history${detail?' admin-history--detail':''}`}>
+    <div ref={root} className="admin-history-chart" role="img" tabIndex={count>1&&ready?0:undefined} aria-label={`${comparison?`${name}与${comparison.name}`:name}趋势，${count} 个有效样本；左右方向键查看数值，Escape 关闭提示`} onKeyDown={event=>{
       if(event.key==='Escape'){chart.current?.dispatchAction({type:'hideTip'});return}
       if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)||!renderer.current)return
       event.preventDefault()
-      const rows=renderer.current.historyPoints(points,start,end)
+      const secondary=!points.some(p=>p[1]!=null)&&comparison
+      const rows=renderer.current.historyPoints(secondary?secondary.points:points,start,end)
       selected.current=event.key==='Home'?0:event.key==='End'?rows.length-1:Math.max(0,Math.min(rows.length-1,selected.current+(event.key==='ArrowLeft'?-1:1)))
       const point=rows[selected.current]
       if(!point)return
-      chart.current?.dispatchAction({type:'showTip',seriesIndex:0,dataIndex:selected.current})
-      setAnnouncement(`${new Date(point[0]).toLocaleString('zh-CN')}，${renderer.current.metricValue(point[1],unit)}`)
+      chart.current?.dispatchAction({type:'showTip',seriesIndex:secondary?1:0,dataIndex:selected.current})
+      const compared=comparison?.points.find(row=>row[0]*1000===point[0])
+      setAnnouncement(`${new Date(point[0]).toLocaleString('zh-CN')}，${secondary?secondary.name:name} ${renderer.current.metricValue(point[1],unit)}${comparison&&!secondary?`，${comparison.name} ${renderer.current.metricValue(compared?.[1],unit)}`:''}`)
     }} onBlur={()=>chart.current?.dispatchAction({type:'hideTip'})}/>
     {(count<2||!ready||failed)&&<div className="admin-history-placeholder"><ChartNoAxesCombined size={18} aria-hidden="true"/><span>{count===0?'暂无样本':count===1?'样本积累中':failed?'图表加载失败':'正在绘制'}</span>{failed&&<button aria-label={`重试${name}图表`} onClick={()=>setAttempt(n=>n+1)}><RefreshCw size={14}/></button>}</div>}
-    <div className="admin-history-time" aria-hidden="true"><span>{time(start)}</span><span>{time(end)}</span></div><span className="sr-only" aria-live="polite">{announcement}</span>
+    {!detail&&<div className="admin-history-time" aria-hidden="true"><span>{time(start)}</span><span>{time(end)}</span></div>}<span className="sr-only" aria-live="polite">{announcement}</span>
   </div>
 }
