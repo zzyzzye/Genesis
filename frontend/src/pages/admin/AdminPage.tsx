@@ -66,7 +66,7 @@ export function AdminPage() {
   </div>
 }
 
-const metricDefinitions:[string,string,string][]=[['cpu','CPU','%'],['memory','内存','%'],['disk','磁盘最高占用','%'],['receive','网络接收','/s'],['transmit','网络发送','/s'],['load','系统负载',''],['swap','Swap','bytes'],['read','磁盘读取','/s'],['write','磁盘写入','/s']]
+const metricDefinitions:[string,string,string][]=[['cpu','CPU','%'],['memory','内存','%'],['disk','硬盘空间','%'],['receive','网络接收','/s'],['transmit','网络发送','/s'],['load','系统负载',''],['swap','Swap','bytes'],['read','磁盘读取','/s'],['write','磁盘写入','/s']]
 const metricIcons:Record<string,LucideIcon>={cpu:Cpu,memory:MemoryStick,disk:HardDrive,receive:ArrowDownToLine,transmit:ArrowUpFromLine,load:Gauge,swap:ArrowLeftRight,read:ArrowDownToLine,write:ArrowUpFromLine}
 function capacityPercent(used:number|null|undefined,total:number|null|undefined) {
   return used!=null&&total!=null&&total>0?used/total*100:null
@@ -99,7 +99,7 @@ function MonitorView({section,refresh}:{section:string;refresh:number}) {
     if(!data)return null
       const points=data.series[key]??[]; const point=points.at(-1); const current=key==='memory'&&memoryUsed!=null?capacityPercent(memoryUsed,memoryTotal):key==='disk'&&fullestDisk?capacityPercent(fullestDisk.total!-fullestDisk.available!,fullestDisk.total):data.current?data.current[key]??null:point && data.sampled_at-point[0]<=120?point[1]:null
       const Icon=metricIcons[key]!
-      return <section key={key} className={`admin-metric admin-metric--${key}`}><div className="admin-metric-summary"><h2><Icon size={18} aria-hidden="true"/>{name}</h2><strong>{metricLabel(current,unit)}</strong><div className="admin-metric-detail">{key==='memory'?<Capacity used={memoryUsed} total={memoryTotal}/>:key==='disk'?<><Capacity used={fullestDisk?fullestDisk.total!-fullestDisk.available!:null} total={fullestDisk?.total}/><span className="admin-mount-name" title={fullestDisk?.name}>{fullestDisk?.name??'挂载点未知'}</span></>:<span>{`${data.details?.cores.length||'—'} 个逻辑核心`}</span>}</div></div><UsageRing value={current} Icon={Icon}/></section>
+      return <section key={key} className={`admin-metric admin-metric--${key}`}><div className="admin-metric-summary"><h2><Icon size={18} aria-hidden="true"/>{name}</h2><strong>{metricLabel(current,unit)}</strong><div className="admin-metric-detail">{(key==='memory'||key==='disk')&&<span className="admin-capacity-label">已用 / 总容量</span>}{key==='memory'?<Capacity used={memoryUsed} total={memoryTotal}/>:key==='disk'?<><Capacity used={fullestDisk?fullestDisk.total!-fullestDisk.available!:null} total={fullestDisk?.total}/><span className="admin-mount-name">剩余 {bytes(fullestDisk?.available)}{(data.details?.disks.length??0)>1&&` · 占用最高：${fullestDisk?.name??'未知磁盘'}`}</span></>:<span>{`${data.details?.cores.length||'—'} 个逻辑核心`}</span>}</div></div></section>
   }
   if(hostView)return <div className="admin-monitor-detail">{switcher}<HostResources kind={section==='server'?'processes':'system-services'} refresh={refresh+tick} memoryTotal={memoryTotal}/></div>
   return <div className={section?'admin-monitor-detail':undefined}><div className="admin-monitor-controls">{switcher}<div className="admin-toolbar">{section!=='services'&&<div className="admin-segments" aria-label="监控时间范围">{([['1h','1 小时'],['24h','24 小时'],['7d','7 天']] as const).map(([value,label])=><button key={value} aria-pressed={window===value} onClick={()=>{const next=new URLSearchParams(params);next.set('window',value);setParams(next)}}>{label}</button>)}</div>}<span>{data?`${new Date(data.sampled_at*1000).toLocaleTimeString('zh-CN')} 更新 · 每 30 秒刷新`:'每 30 秒刷新'}</span></div></div>
@@ -119,10 +119,6 @@ function MonitorView({section,refresh}:{section:string;refresh:number}) {
 }
 
 const processStates:Record<string,string>={R:'运行',S:'休眠',D:'等待 I/O',Z:'僵尸',T:'已停止',t:'跟踪停止',I:'空闲',X:'已退出'}
-
-function UsageRing({value,Icon}:{value:number|null|undefined;Icon:LucideIcon}) {
-  return <div className="admin-usage-ring" aria-hidden="true"><svg viewBox="0 0 64 64"><circle className="admin-ring-track" cx="32" cy="32" r="26"/><circle className="admin-ring-value" cx="32" cy="32" r="26" strokeDasharray={163.36} strokeDashoffset={163.36*(1-Math.max(0,Math.min(100,value??0))/100)}/></svg><Icon size={21}/></div>
-}
 
 function OverviewVisual({data,window,children,extended=false}:{data:Monitoring;window:string;children:ReactNode;extended?:boolean}) {
   const [params,setParams]=useSearchParams()
