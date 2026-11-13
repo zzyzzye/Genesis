@@ -1,6 +1,8 @@
 name: genesis-production
 
 services:
+  ports:
+    - "127.0.0.1:5432:5432"
   postgres:
     image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/postgres:16-alpine
     platform: linux/amd64
