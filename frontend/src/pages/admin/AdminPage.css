@@ -54,8 +54,8 @@
 .admin-main-trend { padding-top:8px; }.admin-trend-toolbar { display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:14px; }
 .admin-trend-values { display:flex; gap:24px; flex-wrap:wrap; }.admin-trend-values>span { display:flex; align-items:center; gap:7px; color:var(--account-muted); font-size:11px; }.admin-trend-values strong { color:var(--account-ink); font-size:14px; font-weight:550; font-variant-numeric:tabular-nums; }.admin-trend-values i { display:inline-block; width:15px; height:2px; background:var(--account-ink); }.admin-trend-values i.is-dashed { background:repeating-linear-gradient(to right,var(--account-muted) 0 4px,transparent 4px 7px); }
 .admin-history--detail .admin-history-chart { height:190px; }.admin-history--detail .admin-history-placeholder { inset:0; }
-.admin-monitor-detail .admin-monitor-controls { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 24px; margin-bottom:16px; }
-.admin-monitor-detail .admin-monitor-controls>.admin-toolbar { margin:0; gap:20px; }
+.admin-monitor-detail .admin-monitor-controls,.admin-overview-controls { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 24px; margin-bottom:16px; }
+.admin-monitor-detail .admin-monitor-controls>.admin-toolbar,.admin-overview-controls>.admin-toolbar { margin:0; gap:20px; }
 .admin-monitor-detail .admin-toolbar { margin-bottom:12px; }
 .admin-monitor-detail .admin-targets { margin-bottom:16px; gap:16px; }
 .admin-monitor-detail .admin-section { margin-top:20px; }

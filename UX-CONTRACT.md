@@ -78,6 +78,8 @@ Canonical UI：资金操作与明细继续由 `WalletPage` / `useModalDialog` �
 
 容器表共用 `ContainerResources`：总览前五项加明确的剩余数量展开按钮，`aria-expanded` 表示展开状态，后台刷新保留该状态；服务页显示全部。排序与数据口径不变，容量未知不当成零；收发/读写图标配读屏标签，完整容器名称保留可访问文本。窄屏仅表格内部横向滚动。
 
+总览监控对象由 `monitor=host|containers` 控制，默认宿主机，切换保留 `window` 与 `metric`，刷新与深链接恢复所选对象。按钮使用 `aria-pressed` 标识选中；宿主视图只显示宿主指标和采集状态，容器视图只显示容器表和 cAdvisor 状态，原生宿主离线不误报容器离线。
+
 macOS 原生宿主接入按 `docs/admin.md` 执行：总览、服务器读数与进程统一使用原生快照，曲线使用独立 `genesis_host_*` 指标，不混接 Docker Linux 历史；快照过期不自动回退。容器占比仍使用 Linux 采集环境的内存，来源和分母在页面明确显示。macOS 不支持 systemd 时保留“不支持”状态，不冒充 launchd 服务。原生采集进程不读取用户、参数、环境或文件内容，权限不足提示跳过数量。
 
 ## 节点副本
