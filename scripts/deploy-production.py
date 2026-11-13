@@ -10,7 +10,21 @@ from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / ".genesis-deploy" / "state.json"
-COMPOSE = ["docker", "compose", "--env-file", ".env.production", "-f", "compose.prod.yml"]
+COMPOSE = [
+    "docker", "compose", "--env-file", ".env.production",
+    "-f", "compose.prod.yml", "-f", "compose.monitoring.yml",
+]
+MONITORING_SERVICES = [
+    "prometheus", "node-exporter", "node-network", "cadvisor", "host-processes",
+]
+
+
+def start_monitoring() -> None:
+    """将采集服务接入生产网络；仅在宿主提供总线时启用 systemd 采集。"""
+    services = list(MONITORING_SERVICES)
+    if Path("/run/dbus/system_bus_socket").is_socket():
+        services.append("node-systemd")
+    run("up", "-d", "--no-build", "--no-deps", "--wait", "--wait-timeout", "180", *services)
 
 
 def fingerprint(paths: list[str]) -> str:
@@ -59,6 +73,9 @@ def deploy(plan: bool = False, rebuild_backend: bool = False) -> None:
     # 本地 Mac 只允许查看计划；不通过容器绕过禁止本地打包的约定。
     if platform.system() != "Linux":
         raise SystemExit("生产发布仅允许在 Linux 部署服务器执行；本地可用 --plan。")
+    # 在构建与迁移前检查配置，避免部署到一半才发现结构错误。
+    run("config", "--quiet")
+    start_monitoring()
     if not build_backend:
         missing = subprocess.run(
             ["docker", "image", "inspect", "genesis-production-backend"], cwd=ROOT,

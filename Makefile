@@ -1,7 +1,7 @@
 .PHONY: install dev-frontend dev-backend lint test build check clean docker-dev docker-up docker-down docker-logs docker-check docker-prod docker-prod-plan docker-prod-rebuild-backend docker-prod-trim docker-prod-clean docker-prod-restart docker-prod-down docker-prod-logs docker-prod-status
 
 DEV_COMPOSE = docker compose --env-file .env.development -f compose.yml
-PROD_COMPOSE = docker compose --env-file .env.production -f compose.prod.yml
+PROD_COMPOSE = docker compose --env-file .env.production -f compose.prod.yml -f compose.monitoring.yml
 PROD_BUILD_CACHE_SIZE ?= 2GB
 
 install:

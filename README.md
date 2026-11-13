@@ -194,6 +194,8 @@ make docker-dev
 
 如果服务器已经因 `ENOSPC` 无法构建，更新部署文件后先执行 `make docker-prod-clean`，再执行 `make docker-prod`。旧版未带标记的镜像不会自动删除；本机制也不清理业务数据或日志，不能保证磁盘永远充足，单次构建仍需足够的临时空间。需要回滚的镜像应提前打版本标签并保留相应部署配置。
 
+生产部署同时合并 `compose.monitoring.yml`，在同一生产网络启动 Prometheus、宿主资源与网络采集、cAdvisor 和宿主进程采集；存在 `/run/dbus/system_bus_socket` 时额外启动 systemd 采集。监控不发布公网端口，历史保存在独立卷中。首次启动需拉取采集镜像，资源速率通常需要等待至少两轮采样；没有 GPU 的云主机可显示“未检测到可见 GPU”。部署前先静默校验 Compose 配置，监控启动失败不会记录部署成功。
+
 只需重启现有前后端服务时使用 `make docker-prod-restart`。它可以重新加载挂载的后端源码，但不编译前端、不运行迁移、不应用环境配置；日常更新统一使用 `make docker-prod`。
 
 ```bash

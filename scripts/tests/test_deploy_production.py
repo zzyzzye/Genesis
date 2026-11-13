@@ -80,6 +80,25 @@ class DeployTests(unittest.TestCase):
     def test_plan_never_runs_docker(self):
         self.assertEqual(self.execute(["new-deps", "code", "new-ui"], plan=True), [])
 
+    def test_production_includes_monitoring_without_building(self):
+        self.assertIn("compose.monitoring.yml", deployment.COMPOSE)
+        with patch.object(Path, "is_socket", return_value=False):
+            calls = self.execute(["deps", "code", "ui"])
+        self.assertEqual(calls[0], ("config", "--quiet"))
+        self.assertEqual(list(calls[1][-5:]), deployment.MONITORING_SERVICES)
+        self.assertIn("--no-build", calls[1])
+        self.assertNotIn("node-systemd", calls[1])
+
+    def test_systemd_enabled_only_with_host_bus(self):
+        with patch.object(Path, "is_socket", return_value=True):
+            calls = self.execute(["deps", "code", "ui"])
+        self.assertEqual(calls[1][-1], "node-systemd")
+
+    def test_failed_monitoring_does_not_record_success(self):
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.execute(["deps", "code", "ui"], fail="prometheus")
+        self.assertEqual(json.loads(self.state.read_text()), self.old)
+
     def test_fingerprint_skips_environment_files(self):
         root = Path(self.directory.name)
         (root / "safe.py").write_text("print('synthetic')")
