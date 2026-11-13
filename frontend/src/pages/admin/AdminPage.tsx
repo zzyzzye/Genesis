@@ -107,7 +107,7 @@ function MonitorView({section,refresh}:{section:string;refresh:number}) {
     {section==='server' && <div className="admin-hardware" aria-label="硬件型号"><span><Cpu size={15} aria-hidden="true"/><b>CPU</b>{data.hardware?.cpu_names.length?data.hardware.cpu_names.join(' / '):data.hardware?.cpu_state==='unknown'?'型号未提供':'型号采集不可用'}</span><span><LayoutGrid size={15} aria-hidden="true"/><b>GPU</b>{data.hardware?.gpus.length?data.hardware.gpus.map((gpu,index)=><span key={`${gpu.pci_id}-${index}`}>{gpu.name}{!gpu.model_known&&` · PCI ${gpu.pci_id}（型号未提供）`}</span>):data.hardware?.gpu_state==='not_detected'?'未检测到可见 GPU':data.hardware?.gpu_state==='unknown'?'检测到显示设备，型号未提供':'型号采集不可用'}{data.hardware?.gpu_state==='partial'&&<small>部分设备读取失败</small>}</span></div>}
     {section!=='services' && <OverviewVisual data={data} window={window} extended={section==='server'}><div className="admin-overview-summary">{metricDefinitions.slice(0,3).map(renderMetric)}</div></OverviewVisual>}
     {section==='server' && data.details && <><section className="admin-section"><h2><Cpu size={18} aria-hidden="true"/>CPU 各核心</h2><div className="admin-cores">{data.details.cores.map(core=><div key={core.name}><span>核心 {core.name}</span><strong>{metricLabel(core.usage,'%')}</strong></div>)}</div>{!data.details.cores.length && <p className="admin-empty">暂无核心样本</p>}</section><section className="admin-section"><h2><HardDrive size={18} aria-hidden="true"/>可写挂载盘</h2><div className="admin-table-wrap"><table><thead><tr><th>挂载点</th><th>已占用 / 总容量</th><th>可用容量</th></tr></thead><tbody>{data.details.disks.map(disk=><tr key={disk.name}><td><span className="admin-icon-label"><HardDrive size={16} aria-hidden="true"/>{disk.name}</span></td><td><Capacity used={disk.total!=null&&disk.available!=null?disk.total-disk.available:null} total={disk.total} showPercent/></td><td>{bytes(disk.available)}</td></tr>)}</tbody></table>{!data.details.disks.length && <p className="admin-empty">暂无磁盘样本</p>}</div></section></>}
-    {(section==='' || section==='services') && <section className="admin-section"><div className="admin-section-heading"><h2><Boxes size={18} aria-hidden="true"/>容器资源</h2><span>按内存占用排序 · CPU 100% = 1 核</span></div><div className="admin-table-wrap"><table><thead><tr><th>容器</th><th><span className="admin-icon-label"><Cpu size={14} aria-hidden="true"/>CPU</span></th><th><span className="admin-icon-label"><MemoryStick size={14} aria-hidden="true"/>内存</span></th><th>接收 / 发送</th><th>读取 / 写入</th><th>运行时长</th></tr></thead><tbody>{data.containers.map(row=><tr key={row.name}><td><span className="admin-icon-label"><Boxes size={16} aria-hidden="true"/>{row.name}</span></td><td>{metricLabel(row.cpu,'%')}</td><td><MemoryCell used={row.memory} total={data.source==='macos'?data.container_memory_total:memoryTotal} basis={data.source==='macos'?'Docker 虚拟机':'主机'}/></td><td>{metricLabel(row.receive,'/s')} · {metricLabel(row.transmit,'/s')}</td><td>{metricLabel(row.read,'/s')} · {metricLabel(row.write,'/s')}</td><td>{uptimeLabel(row.uptime)}</td></tr>)}</tbody></table>{!data.containers.length && <p className="admin-empty">暂无容器样本</p>}</div><p className="admin-caption">采集状态不代表应用健康；运行时长来自当前容器启动时间。</p></section>}
+    {(section==='' || section==='services') && <ContainerResources data={data} compact={section===''} />}
     </>}</State>
     {section==='' && <State {...overview}>{overview.data && <section className="admin-section"><h2><LayoutGrid size={18} aria-hidden="true"/>全站运行</h2><div className="admin-totals">{[
       {to:'/admin/users',label:'用户',value:overview.data.users,Icon:Users},
@@ -116,6 +116,24 @@ function MonitorView({section,refresh}:{section:string;refresh:number}) {
       {to:'/admin/billing',label:'待核对账务',value:overview.data.review_orders,Icon:Wallet},
     ].map(({to,label,value,Icon})=><Link key={to} to={to}><Icon size={18} aria-hidden="true"/><span>{label}</span><strong>{value}</strong><ArrowUpRight className="admin-total-arrow" size={15} aria-hidden="true"/></Link>)}</div></section>}</State>}
   </div>
+}
+
+function ContainerResources({data,compact}:{data:Monitoring;compact:boolean}) {
+  const [expanded,setExpanded]=useState(false)
+  const total=data.source==='macos'?data.container_memory_total:data.details?.memory_total
+  const rows=compact&&!expanded?data.containers.slice(0,5):data.containers
+  return <section className="admin-section admin-containers"><div className="admin-section-heading"><h2><Boxes size={18} aria-hidden="true"/>容器资源 <span className="admin-muted">{data.containers.length}</span></h2><span>内存降序 · CPU 100% = 1 核</span></div>
+    <p className="admin-caption">内存占比基于{data.source==='macos'?'Docker 虚拟机':'主机'} · {bytes(total)}</p>
+    <div className="admin-table-wrap"><table><thead><tr><th>容器</th><th>CPU</th><th>内存 / 占比</th><th>网络 <span className="admin-io-legend">↓ 接收 ↑ 发送</span></th><th>磁盘 <span className="admin-io-legend">↓ 读取 ↑ 写入</span></th><th>已运行</th></tr></thead><tbody>{rows.map(row=>{
+      const percent=capacityPercent(row.memory,total)
+      return <tr key={row.name}><td><span className="admin-container-name" title={row.name} aria-label={row.name}><Boxes size={14} aria-hidden="true"/>{row.name.replace(/^genesis-/,'')}</span></td><td>{metricLabel(row.cpu,'%')}</td><td><span className="admin-container-memory"><span>{bytes(row.memory)}</span><span className="admin-container-bar" aria-hidden="true"><i style={{width:`${Math.min(100,Math.max(0,percent??0))}%`}}/></span><span className="admin-muted">{metricLabel(percent,'%')}</span></span></td><td><ResourceRates first={row.receive} second={row.transmit} labels={['接收','发送']}/></td><td><ResourceRates first={row.read} second={row.write} labels={['读取','写入']}/></td><td>{uptimeLabel(row.uptime)}</td></tr>
+    })}</tbody></table>{!data.containers.length&&<p className="admin-empty">暂无容器样本</p>}</div>
+    {compact&&data.containers.length>5&&<button className="admin-container-expand" onClick={()=>setExpanded(value=>!value)} aria-expanded={expanded}>{expanded?'收起':`展开其余 ${data.containers.length-5} 个容器`}<ChevronRight size={14} aria-hidden="true"/></button>}
+  </section>
+}
+
+function ResourceRates({first,second,labels}:{first:number|null|undefined;second:number|null|undefined;labels:[string,string]}) {
+  return <span className="admin-resource-rates"><span><ArrowDownToLine size={12} aria-hidden="true"/><span className="sr-only">{labels[0]} </span>{metricLabel(first,'/s')}</span><span><ArrowUpFromLine size={12} aria-hidden="true"/><span className="sr-only">{labels[1]} </span>{metricLabel(second,'/s')}</span></span>
 }
 
 const processStates:Record<string,string>={R:'运行',S:'休眠',D:'等待 I/O',Z:'僵尸',T:'已停止',t:'跟踪停止',I:'空闲',X:'已退出'}
