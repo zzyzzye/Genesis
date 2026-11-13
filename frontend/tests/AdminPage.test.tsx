@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AdminPage } from '../src/pages/admin/AdminPage'
@@ -11,6 +11,32 @@ const user={id:'synthetic',handle:'synthetic',display_name:'测试站长',role:'
 function open(path='/admin'){return render(<MemoryRouter initialEntries={[path]}><AdminPage/></MemoryRouter>)}
 beforeEach(()=>{localStorage.setItem('genesis-account-token','synthetic-admin');vi.mocked(getCurrentUser).mockResolvedValue(user)})
 afterEach(()=>{cleanup();localStorage.clear();vi.resetAllMocks()})
+
+it('切回宿主机重新确认离线状态，快速切换不接受旧请求回写',async()=>{
+  const offline={sampled_at:100,source:'macos',series:{},targets:[{name:'native-host',up:false},{name:'cadvisor',up:true}],containers:[],errors:[],available:false}
+  let recover=false
+  let pending:((data:unknown)=>void)|undefined
+  let requests=0
+  vi.mocked(adminGet).mockImplementation(path=>{
+    if(!path.startsWith('monitoring'))return Promise.resolve({users:0,tasks_24h:0,statuses:{},review_orders:0})
+    requests++
+    if(requests===2)return new Promise(resolve=>{pending=resolve})
+    return Promise.resolve(recover?{...offline,available:true,targets:[{name:'native-host',up:true},{name:'cadvisor',up:true}]}:offline)
+  })
+  open()
+  await screen.findByText('macOS 宿主采集已离线')
+  fireEvent.click(screen.getByRole('button',{name:'容器'}))
+  await waitFor(()=>expect(requests).toBe(2))
+  recover=true
+  fireEvent.click(screen.getByRole('button',{name:'宿主机'}))
+  await waitFor(()=>expect(screen.queryByText('macOS 宿主采集已离线')).not.toBeInTheDocument())
+  await act(async()=>{pending?.(offline);await Promise.resolve()})
+  await waitFor(()=>expect(requests).toBe(3))
+  expect(screen.queryByText('macOS 宿主采集已离线')).not.toBeInTheDocument()
+  recover=false
+  fireEvent.click(screen.getByRole('button',{name:'刷新数据'}))
+  await screen.findByText('macOS 宿主采集已离线')
+})
 
 it('进程分页保留范围，切换排序重置页码',async()=>{
   vi.mocked(adminGet).mockImplementation((path)=>Promise.resolve(path.startsWith('processes')?{items:[],total:25,page:1,page_size:20,sampled_at:100,skipped:0,truncated:false}:{}))
@@ -104,7 +130,7 @@ it('宿主与容器内存口径分开，离线不伪装成 Linux 资源',async()
   fireEvent.click(screen.getByRole('button',{name:'刷新数据'}))
   expect(await screen.findByText('macOS 宿主采集已离线')).toBeInTheDocument()
   expect(screen.queryByText('Linux / Docker 采集环境')).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button',{name:'容器'}))
+  await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'容器'}));await Promise.resolve()})
   expect(screen.queryByText('macOS 宿主采集已离线')).not.toBeInTheDocument()
   expect(screen.queryByText('容器采集暂不可用')).not.toBeInTheDocument()
   expect(screen.getByText('test-container')).toBeInTheDocument()

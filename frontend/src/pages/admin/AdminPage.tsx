@@ -22,7 +22,7 @@ const navigation = [
   {path:'billing',name:'账务',icon:Wallet},
 ]
 
-function useAdminData<T>(path:string, refresh:number) {
+function useAdminData<T>(path:string, refresh:number|string) {
   const [state,setState]=useState<{data?:T;error?:string;loading:boolean;path:string}>({loading:true,path})
   useEffect(()=>{
     const controller=new AbortController()
@@ -87,7 +87,8 @@ function MonitorView({section,refresh}:{section:string;refresh:number}) {
   const [params,setParams]=useSearchParams(); const window=['1h','24h','7d'].includes(params.get('window')??'')?params.get('window')!:'1h'
   const [tick,setTick]=useState(0)
   useEffect(()=>{const timer=setInterval(()=>{if(!document.hidden)setTick(n=>n+1)},30000);return ()=>clearInterval(timer)},[])
-  const state=useAdminData<Monitoring>(`monitoring?window=${window}`,refresh+tick)
+  // 切换监控对象时重新确认状态，避免沿用上一轮的离线快照。
+  const state=useAdminData<Monitoring>(`monitoring?window=${window}`,`${refresh}:${tick}:${section}:${params.get('monitor')??'host'}:${params.get('view')??'resources'}`)
   const overview=useAdminData<Overview>('overview',refresh+tick)
   const data=state.data
   const containerMode=section==='services'||(section===''&&params.get('monitor')==='containers')
