@@ -33,6 +33,15 @@ it('成员被阻止且不请求管理数据',async()=>{
   vi.mocked(getCurrentUser).mockResolvedValue({...user,role:'member'})
   open();expect(await screen.findByText('仅站长可访问')).toBeInTheDocument();expect(adminGet).not.toHaveBeenCalled()
 })
+it('内存与磁盘同时展示实际容量和百分比',async()=>{
+  vi.mocked(adminGet).mockImplementation((path)=>Promise.resolve(path.startsWith('monitoring')?{sampled_at:100,series:{},targets:[],containers:[],errors:[],available:true,details:{cores:[],memory_total:8*1024**3,memory_available:2*1024**3,disks:[{name:'/',total:200*1024**3,available:100*1024**3}]}}:{users:0,posts:0,projects:0,assets:0,tasks_24h:0,statuses:{},review_orders:0,businesses:[]}))
+  open()
+  expect(await screen.findByText('75.0%')).toBeInTheDocument()
+  expect(screen.getByText('6.0 GiB')).toBeInTheDocument()
+  expect(screen.getByText('/ 8.0 GiB')).toBeInTheDocument()
+  expect(screen.getByText('50.0%')).toBeInTheDocument()
+  expect(screen.getByText('100.0 GiB')).toBeInTheDocument()
+})
 it('监控缺失不显示零占用，业务统计仍可读取',async()=>{
   vi.mocked(adminGet).mockImplementation((path)=>Promise.resolve(path.startsWith('monitoring')?{sampled_at:100,series:{},targets:[],containers:[],errors:[],available:false}:{users:2,posts:0,projects:0,assets:0,tasks_24h:3,statuses:{failed:1},review_orders:0,businesses:[]}))
   open();expect(await screen.findByText('监控未接入或暂不可用')).toBeInTheDocument();expect(screen.queryByText('0.0%')).not.toBeInTheDocument()

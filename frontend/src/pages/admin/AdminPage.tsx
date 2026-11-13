@@ -7,10 +7,13 @@ import { getStoredAuthToken } from '../../lib/auth'
 import { useModalDialog } from '../../studio/useModalDialog'
 import { WalletPage } from '../../features/billing/WalletPage'
 import { amountLabel } from '../../features/billing/api'
-import { adminGet, businesses, bytes, dateLabel, statuses, uptimeLabel, type AdminUser, type Monitoring, type Overview, type Page, type Point, type Task } from './api'
+import { adminGet, businesses, bytes, dateLabel, statuses, uptimeLabel, type AdminUser, type Monitoring, type Overview, type Page, type Task } from './api'
 import '../../Account.css'
 import './AdminPage.css'
 import type { ProcessPage, ServicePage } from './api'
+import { metricLabel } from './api'
+import { MonitoringChart } from './MonitoringChart'
+import { Cpu, MemoryStick, HardDrive, ArrowDownToLine, ArrowUpFromLine, Gauge, ArrowLeftRight, CheckCircle2, CircleAlert, CircleHelp, Clock3, Layers3, Terminal, Settings2, ChartNoAxesCombined, ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react'
 
 const navigation = [
   {path:'',name:'总览',icon:CircleGauge},{path:'server',name:'服务器',icon:Server},
@@ -64,19 +67,20 @@ export function AdminPage() {
 }
 
 const metricDefinitions:[string,string,string][]=[['cpu','CPU','%'],['memory','内存','%'],['disk','磁盘最高占用','%'],['receive','网络接收','/s'],['transmit','网络发送','/s'],['load','系统负载',''],['swap','Swap','bytes'],['read','磁盘读取','/s'],['write','磁盘写入','/s']]
-function metricLabel(value:number|null|undefined,unit:string) {
-  if(value==null) return '—'
-  return unit==='bytes' || unit==='/s' ? `${bytes(value)}${unit==='/s'?'/s':''}` : `${value.toFixed(1)}${unit}`
+const metricIcons:Record<string,LucideIcon>={cpu:Cpu,memory:MemoryStick,disk:HardDrive,receive:ArrowDownToLine,transmit:ArrowUpFromLine,load:Gauge,swap:ArrowLeftRight,read:ArrowDownToLine,write:ArrowUpFromLine}
+function capacityPercent(used:number|null|undefined,total:number|null|undefined) {
+  return used!=null&&total!=null&&total>0?used/total*100:null
 }
-function Sparkline({points,name,unit,start,end}:{points:Point[];name:string;unit:string;start:number;end:number}) {
-  const values=points.filter((point):point is [number,number]=>point[1]!==null)
-  if(!values.length)return <div className="admin-chart-empty">暂无样本</div>
-  if(values.length<2)return <div className="admin-chart-empty">样本积累中</div>
-  const minTime=start,range=Math.max(1,end-start)
-  const max=unit==='%'?Math.max(100,...values.map(p=>p[1])):Math.max(1,...values.map(p=>p[1]))
-  const step=range/120
-  const path=points.map((p,i)=>p[1]===null?'':`${i===0 || points[i-1]![1]===null || p[0]-points[i-1]![0]>step*1.5?'M':'L'}${((p[0]-minTime)/range*300).toFixed(1)},${(70-p[1]/max*64).toFixed(1)}`).join(' ')
-  return <svg viewBox="0 0 300 76" role="img" aria-label={`${name}趋势，最高 ${metricLabel(Math.max(...values.map(p=>p[1])),unit)}`} preserveAspectRatio="none"><path d={path} fill="none" stroke="currentColor" strokeWidth="1.8" vectorEffect="non-scaling-stroke"/></svg>
+function Capacity({used,total,showPercent=false}:{used:number|null|undefined;total:number|null|undefined;showPercent?:boolean}) {
+  const percent=capacityPercent(used,total)
+  return <div className="admin-capacity-meter"><div><span>{bytes(used)} <span className="admin-muted">/ {bytes(total)}</span></span>{showPercent&&<span>{metricLabel(percent,'%')}</span>}</div><div className="admin-meter-track" aria-hidden="true"><span style={{width:`${Math.min(100,Math.max(0,percent??0))}%`}}/></div></div>
+}
+function MemoryCell({used,total}:{used:number|null|undefined;total:number|null|undefined}) {
+  return <><span>{bytes(used)}</span><small>{metricLabel(capacityPercent(used,total),'%')} · 占主机内存</small></>
+}
+function StatusIcon({state}:{state:string}) {
+  const Icon=state==='failed'||state==='down'?CircleAlert:state==='active'||state==='up'||state==='R'?CheckCircle2:state==='unknown'?CircleHelp:Clock3
+  return <Icon size={14} aria-hidden="true"/>
 }
 
 function MonitorView({section,refresh}:{section:string;refresh:number}) {
@@ -86,17 +90,21 @@ function MonitorView({section,refresh}:{section:string;refresh:number}) {
   const state=useAdminData<Monitoring>(`monitoring?window=${window}`,refresh+tick)
   const overview=useAdminData<Overview>('overview',refresh+tick)
   const data=state.data
+  const memoryTotal=data?.details?.memory_total
+  const memoryUsed=memoryTotal!=null&&data?.details?.memory_available!=null?memoryTotal-data.details.memory_available:null
+  const fullestDisk=data?.details?.disks.filter(disk=>disk.total && disk.available!=null).sort((a,b)=>(1-b.available!/b.total!)-(1-a.available!/a.total!))[0]
   const hostView=(section==='server' && params.get('view')==='processes') || (section==='services' && params.get('view')==='system')
-  const switcher=section!=='' && <div className="admin-toolbar"><div className="admin-segments" aria-label="监控视图">{(section==='server'?[['resources','资源概况'],['processes','进程占用']]:[['resources','容器资源'],['system','系统服务']]).map(([value,label])=><button key={value} aria-pressed={value==='resources'?!hostView:hostView} onClick={()=>{const next=new URLSearchParams(params);next.set('view',value!);next.delete('resource_page');setParams(next)}}>{label}</button>)}</div></div>
-  if(hostView)return <>{switcher}<HostResources kind={section==='server'?'processes':'system-services'} refresh={refresh+tick}/></>
+  const switcher=section!=='' && <div className="admin-toolbar"><div className="admin-segments" aria-label="监控视图">{(section==='server'?[['resources','资源概况'],['processes','进程占用']]:[['resources','容器资源'],['system','系统服务']]).map(([value,label])=><button key={value} aria-pressed={value==='resources'?!hostView:hostView} onClick={()=>{const next=new URLSearchParams(params);next.set('view',value!);next.delete('resource_page');setParams(next)}}>{value==='resources'?<ChartNoAxesCombined size={16} aria-hidden="true"/>:section==='server'?<Terminal size={16} aria-hidden="true"/>:<Settings2 size={16} aria-hidden="true"/>}{label}</button>)}</div></div>
+  if(hostView)return <>{switcher}<HostResources kind={section==='server'?'processes':'system-services'} refresh={refresh+tick} memoryTotal={memoryTotal}/></>
   return <>{switcher}<div className="admin-toolbar"><div className="admin-segments" aria-label="监控时间范围">{([['1h','1 小时'],['24h','24 小时'],['7d','7 天']] as const).map(([value,label])=><button key={value} aria-pressed={window===value} onClick={()=>{const next=new URLSearchParams(params);next.set('window',value);setParams(next)}}>{label}</button>)}</div><span>{data?`${new Date(data.sampled_at*1000).toLocaleTimeString('zh-CN')} 更新 · 每 30 秒刷新`:'每 30 秒刷新'}</span></div>
-    <State {...state}>{data && <>{!data.available ? <div className="admin-notice"><strong>监控未接入或暂不可用</strong><p>启动监控采集服务后，这里会显示资源占用与历史趋势。</p></div> : <div className="admin-targets">{data.targets.map(target=><span key={target.name} className={!target.up?'admin-warning':''}>{{node:'服务器采集','node-network':'主机网络采集',cadvisor:'容器采集'}[target.name]??target.name} · {target.up?'在线':'中断'}</span>)}{data.errors.length>0 && <span className="admin-warning">部分指标读取失败</span>}</div>}
+    <State {...state}>{data && <>{!data.available ? <div className="admin-notice"><strong>监控未接入或暂不可用</strong><p>启动监控采集服务后，这里会显示资源占用与历史趋势。</p></div> : <div className="admin-targets">{data.targets.map(target=><span key={target.name} className={!target.up?'admin-warning':''}>{{node:'服务器采集','node-network':'主机网络采集',cadvisor:'容器采集'}[target.name]??target.name}<StatusIcon state={target.up?'up':'down'}/>{target.up?'在线':'中断'}</span>)}{data.errors.length>0 && <span className="admin-warning">部分指标读取失败</span>}</div>}
     {section!=='services' && <div className={`admin-metrics${section===''?' admin-overview-metrics':''}`}>{metricDefinitions.slice(0,section==='server'?9:5).map(([key,name,unit])=>{
-      const points=data.series[key]??[]; const point=points.at(-1); const current=point && data.sampled_at-point[0]<=120?point[1]:null
-      return <section key={key}><h2>{name}</h2><strong>{metricLabel(current,unit)}</strong><Sparkline points={points} name={name} unit={unit} start={data.sampled_at-({ '1h':3600,'24h':86400,'7d':604800 }[window]??3600)} end={data.sampled_at}/></section>
+      const points=data.series[key]??[]; const point=points.at(-1); const current=key==='memory'&&memoryUsed!=null?capacityPercent(memoryUsed,memoryTotal):key==='disk'&&fullestDisk?capacityPercent(fullestDisk.total!-fullestDisk.available!,fullestDisk.total):point && data.sampled_at-point[0]<=120?point[1]:null
+      const Icon=metricIcons[key]!
+      return <section key={key}><h2><Icon size={18} aria-hidden="true"/>{name}</h2><strong>{metricLabel(current,unit)}</strong><div className="admin-metric-detail">{key==='memory'?<Capacity used={memoryUsed} total={memoryTotal}/>:key==='disk'?<><Capacity used={fullestDisk?fullestDisk.total!-fullestDisk.available!:null} total={fullestDisk?.total}/><span className="admin-mount-name" title={fullestDisk?.name}>{fullestDisk?.name??'挂载点未知'}</span></>:<span>{key==='cpu'?`${data.details?.cores.length||'—'} 个逻辑核心`:key==='load'?'1 分钟平均负载':key==='swap'?'已使用交换空间':'实时传输速率'}</span>}</div><MonitoringChart points={points} name={name} unit={unit} start={data.sampled_at-({ '1h':3600,'24h':86400,'7d':604800 }[window]??3600)} end={data.sampled_at}/></section>
     })}</div>}
-    {section==='server' && data.details && <><div className="admin-capacity"><span>内存：可用 {bytes(data.details.memory_available)} / 总计 {bytes(data.details.memory_total)}</span></div><section className="admin-section"><h2>CPU 各核心</h2><div className="admin-cores">{data.details.cores.map(core=><div key={core.name}><span>核心 {core.name}</span><strong>{metricLabel(core.usage,'%')}</strong></div>)}</div>{!data.details.cores.length && <p className="admin-empty">暂无核心样本</p>}</section><section className="admin-section"><h2>可写挂载盘</h2><div className="admin-table-wrap"><table><thead><tr><th>挂载点</th><th>可用容量</th><th>总容量</th><th>占用</th></tr></thead><tbody>{data.details.disks.map(disk=><tr key={disk.name}><td>{disk.name}</td><td>{bytes(disk.available)}</td><td>{bytes(disk.total)}</td><td>{disk.total && disk.available!=null?metricLabel((1-disk.available/disk.total)*100,'%'):'—'}</td></tr>)}</tbody></table>{!data.details.disks.length && <p className="admin-empty">暂无磁盘样本</p>}</div></section></>}
-    {(section==='' || section==='services') && <section className="admin-section"><div className="admin-section-heading"><h2>容器资源</h2><span>按内存占用排序 · CPU 100% = 1 核</span></div><div className="admin-table-wrap"><table><thead><tr><th>容器</th><th>CPU</th><th>内存</th><th>接收 / 发送</th><th>读取 / 写入</th><th>运行时长</th></tr></thead><tbody>{data.containers.map(row=><tr key={row.name}><td>{row.name}</td><td>{metricLabel(row.cpu,'%')}</td><td>{bytes(row.memory)}</td><td>{metricLabel(row.receive,'/s')} · {metricLabel(row.transmit,'/s')}</td><td>{metricLabel(row.read,'/s')} · {metricLabel(row.write,'/s')}</td><td>{uptimeLabel(row.uptime)}</td></tr>)}</tbody></table>{!data.containers.length && <p className="admin-empty">暂无容器样本</p>}</div><p className="admin-caption">采集状态不代表应用健康；运行时长来自当前容器启动时间。</p></section>}
+    {section==='server' && data.details && <><section className="admin-section"><h2><Cpu size={18} aria-hidden="true"/>CPU 各核心</h2><div className="admin-cores">{data.details.cores.map(core=><div key={core.name}><span>核心 {core.name}</span><strong>{metricLabel(core.usage,'%')}</strong></div>)}</div>{!data.details.cores.length && <p className="admin-empty">暂无核心样本</p>}</section><section className="admin-section"><h2><HardDrive size={18} aria-hidden="true"/>可写挂载盘</h2><div className="admin-table-wrap"><table><thead><tr><th>挂载点</th><th>已占用 / 总容量</th><th>可用容量</th></tr></thead><tbody>{data.details.disks.map(disk=><tr key={disk.name}><td><span className="admin-icon-label"><HardDrive size={16} aria-hidden="true"/>{disk.name}</span></td><td><Capacity used={disk.total!=null&&disk.available!=null?disk.total-disk.available:null} total={disk.total} showPercent/></td><td>{bytes(disk.available)}</td></tr>)}</tbody></table>{!data.details.disks.length && <p className="admin-empty">暂无磁盘样本</p>}</div></section></>}
+    {(section==='' || section==='services') && <section className="admin-section"><div className="admin-section-heading"><h2><Boxes size={18} aria-hidden="true"/>容器资源</h2><span>按内存占用排序 · CPU 100% = 1 核</span></div><div className="admin-table-wrap"><table><thead><tr><th>容器</th><th><span className="admin-icon-label"><Cpu size={14} aria-hidden="true"/>CPU</span></th><th><span className="admin-icon-label"><MemoryStick size={14} aria-hidden="true"/>内存</span></th><th>接收 / 发送</th><th>读取 / 写入</th><th>运行时长</th></tr></thead><tbody>{data.containers.map(row=><tr key={row.name}><td><span className="admin-icon-label"><Boxes size={16} aria-hidden="true"/>{row.name}</span></td><td>{metricLabel(row.cpu,'%')}</td><td><MemoryCell used={row.memory} total={memoryTotal}/></td><td>{metricLabel(row.receive,'/s')} · {metricLabel(row.transmit,'/s')}</td><td>{metricLabel(row.read,'/s')} · {metricLabel(row.write,'/s')}</td><td>{uptimeLabel(row.uptime)}</td></tr>)}</tbody></table>{!data.containers.length && <p className="admin-empty">暂无容器样本</p>}</div><p className="admin-caption">采集状态不代表应用健康；运行时长来自当前容器启动时间。</p></section>}
     </>}</State>
     {section==='' && <State {...overview}>{overview.data && <section className="admin-section"><h2>全站运行</h2><div className="admin-totals"><Link to="/admin/users"><span>用户</span><strong>{overview.data.users}</strong></Link><Link to="/admin/tasks?hours=24"><span>近 24 小时任务</span><strong>{overview.data.tasks_24h}</strong></Link><Link to="/admin/tasks?status=failed&hours=24"><span>近 24 小时失败</span><strong>{overview.data.statuses.failed??0}</strong></Link><Link to="/admin/billing"><span>待核对账务</span><strong>{overview.data.review_orders}</strong></Link></div></section>}</State>}
   </>
@@ -104,7 +112,7 @@ function MonitorView({section,refresh}:{section:string;refresh:number}) {
 
 const processStates:Record<string,string>={R:'运行',S:'休眠',D:'等待 I/O',Z:'僵尸',T:'已停止',t:'跟踪停止',I:'空闲',X:'已退出'}
 const serviceStates:Record<string,string>={active:'活动',inactive:'未活动',failed:'失败',activating:'启动中',deactivating:'停止中',unknown:'未知'}
-function HostResources({kind,refresh}:{kind:'processes'|'system-services';refresh:number}) {
+function HostResources({kind,refresh,memoryTotal}:{kind:'processes'|'system-services';refresh:number;memoryTotal?:number|null}) {
   const [params,setParams]=useSearchParams()
   const processes=kind==='processes'
   const scope=['host','isolated','all'].includes(params.get('scope')??'')?params.get('scope')!:'host'
@@ -115,9 +123,9 @@ function HostResources({kind,refresh}:{kind:'processes'|'system-services';refres
   const result=useAdminData<ProcessPage|ServicePage>(`${kind}?${query}`,refresh)
   const change=(key:string,value:string)=>{const next=new URLSearchParams(params);next.delete('resource_page');next.set(key,value);setParams(next)}
   const data=result.data
-  return <section className="admin-section" aria-label={processes?'宿主机进程':'系统服务'}><div className="admin-section-heading"><h2>{processes?'宿主机进程':'系统服务'}</h2><span>{processes?'CPU 100% = 1 核 · 内存为 RSS':'systemd 已加载服务 · 失败优先'}</span></div>
-    <div className="admin-toolbar"><div className="admin-segments" aria-label={processes?'进程范围':'服务状态'}>{(processes?[['host','宿主进程'],['isolated','隔离进程'],['all','全部进程']]:[['all','全部服务'],['active','活动'],['failed','失败'],['inactive','未活动']]).map(([value,label])=><button key={value} aria-pressed={(processes?scope:status)===value} onClick={()=>change(processes?'scope':'service_state',value!)}>{label}</button>)}</div>{processes && <div className="admin-segments" aria-label="进程排序">{[['cpu','CPU 排序'],['memory','内存排序']].map(([value,label])=><button key={value} aria-pressed={sort===value} onClick={()=>change('sort',value!)}>{label}</button>)}</div>}</div>
-    <State {...result}>{data && <>{'supported' in data && !data.supported?<p className="admin-empty">当前主机未使用 systemd，无法展示系统服务。</p>:<><div className="admin-table-wrap admin-resource-table"><table><thead>{processes?<tr><th>进程 / PID</th><th>范围</th><th>状态</th><th>CPU</th><th>内存</th><th>线程</th><th>运行时长</th></tr>:<tr><th>服务</th><th>状态</th><th>自动重启</th><th>活动时长</th></tr>}</thead><tbody>{'supported' in data?data.items.map(row=><tr key={row.name}><td>{row.name}</td><td className={row.state==='failed'?'admin-warning':''}>{serviceStates[row.state]??'未知'}</td><td>{row.restarts??'—'}</td><td>{uptimeLabel(row.uptime)}</td></tr>):data.items.map(row=><tr key={row.pid}><td><strong>{row.name}</strong><small>{row.pid}</small></td><td>{{host:'宿主',isolated:'隔离',unknown:'未知'}[row.scope]??'未知'}</td><td>{processStates[row.state]??'未知'}</td><td>{metricLabel(row.cpu,'%')}</td><td>{bytes(row.memory)}</td><td>{row.threads}</td><td>{uptimeLabel(row.uptime)}</td></tr>)}</tbody></table>{!data.items.length && <p className="admin-empty">{processes?'暂无符合条件的进程':'暂无符合条件的服务'}</p>}</div><Pagination data={data} change={page=>change('resource_page',String(page))}/></>}
+  return <section className="admin-section" aria-label={processes?'宿主机进程':'系统服务'}><div className="admin-section-heading"><h2>{processes?<Terminal size={18} aria-hidden="true"/>:<Settings2 size={18} aria-hidden="true"/>}{processes?'宿主机进程':'系统服务'}</h2><span>{processes?'CPU 100% = 1 核 · 内存为 RSS':'systemd 已加载服务 · 失败优先'}</span></div>
+    <div className="admin-toolbar"><div className="admin-segments" aria-label={processes?'进程范围':'服务状态'}>{(processes?[['host','宿主进程'],['isolated','隔离进程'],['all','全部进程']]:[['all','全部服务'],['active','活动'],['failed','失败'],['inactive','未活动']]).map(([value,label])=><button key={value} aria-pressed={(processes?scope:status)===value} onClick={()=>change(processes?'scope':'service_state',value!)}>{processes?(value==='host'?<Server size={15} aria-hidden="true"/>:value==='isolated'?<Boxes size={15} aria-hidden="true"/>:<Layers3 size={15} aria-hidden="true"/>):value==='all'?<Layers3 size={15} aria-hidden="true"/>:<StatusIcon state={value!}/>} {label}</button>)}</div>{processes && <div className="admin-segments" aria-label="进程排序">{[['cpu','CPU 排序'],['memory','内存排序']].map(([value,label])=><button key={value} aria-pressed={sort===value} onClick={()=>change('sort',value!)}>{value==='cpu'?<Cpu size={15} aria-hidden="true"/>:<MemoryStick size={15} aria-hidden="true"/>}{label}</button>)}</div>}</div>
+    <State {...result}>{data && <>{'supported' in data && !data.supported?<p className="admin-empty">当前主机未使用 systemd，无法展示系统服务。</p>:<><div className="admin-table-wrap admin-resource-table"><table><thead>{processes?<tr><th>进程 / PID</th><th>范围</th><th>状态</th><th>CPU</th><th>内存</th><th>线程</th><th>运行时长</th></tr>:<tr><th>服务</th><th>状态</th><th>自动重启</th><th>活动时长</th></tr>}</thead><tbody>{'supported' in data?data.items.map(row=><tr key={row.name}><td><span className="admin-icon-label"><Settings2 size={15} aria-hidden="true"/>{row.name}</span></td><td className={row.state==='failed'?'admin-warning':''}><span className="admin-icon-label"><StatusIcon state={row.state}/>{serviceStates[row.state]??'未知'}</span></td><td>{row.restarts??'—'}</td><td>{uptimeLabel(row.uptime)}</td></tr>):data.items.map(row=><tr key={row.pid}><td><strong className="admin-icon-label"><Terminal size={15} aria-hidden="true"/>{row.name}</strong><small>PID {row.pid}</small></td><td>{{host:'宿主',isolated:'隔离',unknown:'未知'}[row.scope]??'未知'}</td><td><span className="admin-icon-label"><StatusIcon state={row.state}/>{processStates[row.state]??'未知'}</span></td><td>{metricLabel(row.cpu,'%')}</td><td><MemoryCell used={row.memory} total={memoryTotal}/></td><td>{row.threads}</td><td>{uptimeLabel(row.uptime)}</td></tr>)}</tbody></table>{!data.items.length && <p className="admin-empty">{processes?'暂无符合条件的进程':'暂无符合条件的服务'}</p>}</div><Pagination data={data} change={page=>change('resource_page',String(page))}/></>}
       {'skipped' in data && (data.skipped>0 || data.truncated) && <p className="admin-caption">{data.skipped>0?`${data.skipped} 个进程已退出或无读取权限。`:''}{data.truncated?'进程超过采集上限，仅展示前 20,000 个进程。':''}</p>}
       <p className="admin-caption">{new Date(data.sampled_at*1000).toLocaleTimeString('zh-CN')} 更新 · 每 30 秒刷新</p><p className="admin-caption">{processes?'按资源组识别 Docker、Kubernetes、Podman 与 LXC 隔离进程；首个 CPU 样本显示未知。':'“活动”不等于应用健康；自动重启仅计 systemd 的 Restart 触发次数。'}</p>
     </>}</State>
@@ -126,7 +134,7 @@ function HostResources({kind,refresh}:{kind:'processes'|'system-services';refres
 
 function Pagination({data,change}:{data:Page<unknown>;change:(page:number)=>void}) {
   const pages=Math.max(1,Math.ceil(data.total/data.page_size))
-  return <div className="admin-pagination"><span>共 {data.total} 条 · 第 {data.page} / {pages} 页</span><div><button disabled={data.page<=1} onClick={()=>change(data.page-1)}>上一页</button><button disabled={data.page>=pages} onClick={()=>change(data.page+1)}>下一页</button></div></div>
+  return <div className="admin-pagination"><span>共 {data.total} 条 · 第 {data.page} / {pages} 页</span><div><button disabled={data.page<=1} onClick={()=>change(data.page-1)}><ChevronLeft size={15} aria-hidden="true"/>上一页</button><button disabled={data.page>=pages} onClick={()=>change(data.page+1)}>下一页<ChevronRight size={15} aria-hidden="true"/></button></div></div>
 }
 function UsersView({refresh}:{refresh:number}) {
   const [params,setParams]=useSearchParams(); const q=params.get('q')??''

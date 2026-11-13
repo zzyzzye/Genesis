@@ -27,6 +27,11 @@ export function bytes(value:number|null|undefined) {
   return `${value.toFixed(index ? 1 : 0)} ${units[index]}`
 }
 
+export function metricLabel(value:number|null|undefined,unit:string) {
+  if(value==null)return '—'
+  return unit==='bytes'||unit==='/s'?`${bytes(value)}${unit==='/s'?'/s':''}`:`${value.toFixed(1)}${unit}`
+}
+
 export function uptimeLabel(value:number|null|undefined) {
   if(value==null)return '—'
   const days=Math.floor(value/86400),hours=Math.floor(value%86400/3600),minutes=Math.floor(value%3600/60)

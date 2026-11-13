@@ -64,6 +64,8 @@ Agent 原生工具 `edit_media_canvas` 在读取最新版本后保存完整画�
 
 ## 全站管理
 
+`MonitoringChart` 复用项目 ECharts 依赖并以 SVG 绘制；响应尺寸变化，卸载时销毁，缺失样本断线。鼠标浮层和方向键/Home/End 查看使用同一数值格式，Escape/失焦关闭提示；时间范围仍来自 URL。内存和磁盘的已用容量由总量减可用量计算，百分比采用同一分母；进程及容器使用主机总内存作为占比基准，不冒充容器配额。图标为装饰，按钮、状态、图表保留可访问名称。回归覆盖 `MonitoringChart.test.ts` 和 `AdminPage.test.tsx`。
+
 宿主资源契约见 `docs/admin.md`：进程与系统服务分页复用 `AdminPage` 的 `Pagination`、`State` 和请求取消机制；视图、范围、排序、状态、页码写入 URL，筛选变化回到第一页。进程 CPU 首次样本未知，PID 复用重新计量；不支持 systemd 与采集失败分开提示。表内滚动不限制页面自然高度，后台刷新不抢焦点。采集器只读取资源字段，新增接口仍由 `OwnerDependency` 校验；回归由 `test_host_monitor.py`、`test_admin.py`、`AdminPage.test.tsx` 和既有浏览器入口覆盖。
 
 业务依据为用户确认的七页结构及 [全站管理契约](docs/admin.md)。`AdminPage` 校验站长身份后读取数据，所有新接口由 `OwnerDependency` 再校验权限；成员不能触发管理请求。账户站长入口统一到 `/admin`，旧账务地址跳转新后台，原账务确认与幂等约束不变。
