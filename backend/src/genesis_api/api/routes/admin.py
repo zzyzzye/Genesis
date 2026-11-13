@@ -14,7 +14,7 @@ from genesis_api.billing.models import BillingOperation, Wallet
 from genesis_api.blog.models import BlogPost
 from genesis_api.identity.models import User
 from genesis_api.media.models import ImageGeneration, MediaAsset, MediaProject, VideoGeneration
-from genesis_api.monitoring import host_snapshot, system_services
+from genesis_api.monitoring import NATIVE_SNAPSHOT, host_snapshot, system_services
 
 router = APIRouter(prefix="/admin", tags=["全站管理"])
 
@@ -55,9 +55,10 @@ async def processes(
             "sampled_at": data["sampled_at"],
             "skipped": data.get("skipped", 0),
             "truncated": data.get("truncated", False),
+            "source": data.get("source", "linux"),
         }
     except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
-        raise HTTPException(503, "进程采集暂不可用，请检查 host-processes 服务") from exc
+        raise HTTPException(503, "进程采集暂不可用，请检查宿主采集任务") from exc
 
 
 @router.get("/system-services")
@@ -73,7 +74,9 @@ async def services(
         host = await host_snapshot()
         if not host["systemd"]:
             return {**resource_page([], 1), "supported": False, "sampled_at": host["sampled_at"]}
-    except (httpx.HTTPError, ValueError, KeyError, TypeError):
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        if NATIVE_SNAPSHOT.exists():
+            raise HTTPException(503, "macOS 宿主采集暂不可用") from exc
         # 进程采集与 systemd 独立，前者离线不应阻断已接通的服务采集。
         pass
     try:

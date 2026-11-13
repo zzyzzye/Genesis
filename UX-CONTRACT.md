@@ -76,6 +76,8 @@ Agent 原生工具 `edit_media_canvas` 在读取最新版本后保存完整画�
 
 Canonical UI：资金操作与明细继续由 `WalletPage` / `useModalDialog` 拥有；导航弹窗共用 `useModalDialog`；只读分页表由 `AdminPage` 拥有；任务状态使用 native select，允许操作系统负责弹出列表；全局滚动条沿用基础样式。前端状态测试为 `AdminPage.test.tsx`，合成浏览器入口为 `tests/browser/adminReview.tsx`，后端权限、分页、元数据边界与监控故障测试为 `tests/test_admin.py`。
 
+macOS 原生宿主接入按 `docs/admin.md` 执行：总览、服务器读数与进程统一使用原生快照，曲线使用独立 `genesis_host_*` 指标，不混接 Docker Linux 历史；快照过期不自动回退。容器占比仍使用 Linux 采集环境的内存，来源和分母在页面明确显示。macOS 不支持 systemd 时保留“不支持”状态，不冒充 launchd 服务。原生采集进程不读取用户、参数、环境或文件内容，权限不足提示跳过数量。
+
 ## 节点副本
 
 Alt/Option 拖动复用「创建副本」的引用规则，原节点不移动，副本跟随拖动，整次手势作为一次撤销。普通粘贴只保留复制集合内部引用，并移除未复制图片的 `@` 标签、同步生成模式，避免产生失效引用。分组标题可拖动整组，组的空白区域不遮挡成员操作。

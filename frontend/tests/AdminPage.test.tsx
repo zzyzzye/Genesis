@@ -86,6 +86,19 @@ it('服务器显示硬件型号并区分不可见与采集失败',async()=>{
   fireEvent.click(screen.getByRole('button',{name:'刷新数据'}))
   expect(await screen.findByText('型号采集不可用')).toBeInTheDocument()
 })
+it('宿主与容器内存口径分开，离线不伪装成 Linux 资源',async()=>{
+  const data={sampled_at:100,source:'macos',series:{},current:{cpu:20},targets:[],containers:[{name:'test-container',memory:1024**3}],container_memory_total:4*1024**3,errors:[],available:true,details:{cores:[],memory_total:16*1024**3,memory_available:8*1024**3,disks:[]}}
+  vi.mocked(adminGet).mockImplementation(path=>Promise.resolve(path.startsWith('monitoring')?data:{users:0,tasks_24h:0,statuses:{},review_orders:0}))
+  open('/admin')
+  expect(await screen.findByText('macOS 宿主机')).toBeInTheDocument()
+  expect(screen.getByText('20.0%')).toBeInTheDocument()
+  expect(screen.getByText('25.0% · 占Docker 虚拟机内存')).toBeInTheDocument()
+  expect(screen.getByText('/ 16.0 GiB')).toBeInTheDocument()
+  data.available=false
+  fireEvent.click(screen.getByRole('button',{name:'刷新数据'}))
+  expect(await screen.findByText('macOS 宿主采集已离线')).toBeInTheDocument()
+  expect(screen.queryByText('Linux / Docker 采集环境')).not.toBeInTheDocument()
+})
 it('任务下一页保留业务筛选，切换业务重置页码',async()=>{
   vi.mocked(adminGet).mockResolvedValue({items:[],total:23,page:1,page_size:20})
   open('/admin/tasks?business=media')

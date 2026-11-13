@@ -22,10 +22,48 @@
 
 曲线采用 ECharts SVG，支持悬停或方向键查看采样时间与数值；缺失区间保持断线。
 总览主图可切换 CPU、内存、磁盘或网络，默认以同一坐标轴比较网络收发。
-内存与磁盘同时显示占用百分比、已用/总容量和占用条。容器、进程的内存百分比以
-主机总内存为基准并明确标注，不表示容器限制额度。未知容量保持“—”。
+内存与磁盘同时显示占用百分比、已用/总容量和占用条。进程内存百分比以所属宿主
+内存为基准；容器以其 Linux 采集环境内存为基准并明确标注，不表示容器限制额度。
+未知容量保持“—”。
 
 ## 监控接入
+
+### macOS 实际宿主机
+
+Docker Desktop 的 Linux 内核不能读取物理 Mac 的全部资源。本地使用
+`scripts/native-host-monitor.py` 在 macOS 上采集，通过只读共享文件传给 Docker；
+不是额外的 HTTP 服务，不开放新端口，也不修改前后端端口。
+
+```sh
+uv run --script scripts/native-host-monitor.py --install
+docker compose --env-file .env.development -f compose.yml -f compose.monitoring.yml up -d --no-deps --no-build backend node-exporter
+```
+
+安装器创建当前用户的 `cn.serenova.genesis.host-monitor` LaunchAgent，登录后自动运行，
+单实例锁避免重复采集，不使用 root。停止时执行
+`launchctl bootout gui/$(id -u)/cn.serenova.genesis.host-monitor`，如需取消下次登录启动，
+再删除 `~/Library/LaunchAgents/cn.serenova.genesis.host-monitor.plist`。
+停止后页面显示宿主离线；仅在明确要恢复 Linux 采集环境时移除
+`monitoring/runtime/snapshot.json`，不会自动回退。
+
+采集复用 [psutil 7.2.2](https://psutil.readthedocs.io/stable/) 原生接口，每 5 秒原子更新
+`monitoring/runtime/snapshot.json`（0600）和 `native.prom`（0644）。运行目录忽略提交，
+不能复制到其他服务器。JSON 只给后台读取，Prometheus 通过 node_exporter textfile
+采集不含标签的 `genesis_host_*` 数值；不把进程名写入历史库。
+CPU/GPU 名称分别读取固定 sysctl 字段和 system_profiler 显示设备型号，每 5 分钟更新，
+不保存序列号、UUID、显示器详情、启动参数或环境变量。
+
+内存以 macOS 可用内存计算；磁盘展示启动盘的数据卷，避免 APFS 多挂载重复统计；
+网络汇总 `en*` 接口，不合计回环、隧道和桥接接口。磁盘读写为系统累计计数的差分。
+进程展示当前用户有权限读取的资源字段，权限不足和已退出的进程会计入跳过数量。
+macOS 不展示 Linux systemd 服务；本版本不提供 launchd 服务清单或 GPU 使用率。
+
+页面明确标注「macOS 宿主机」，资源曲线、核心、容量和进程来自原生采集；容器仍来自
+cAdvisor，其内存百分比以 Docker Linux 虚拟机内存为分母，单独标注。历史从接入时开始，
+不拼接之前的虚拟机数据。快照超过 30 秒或损坏时显示离线，禁止自动回退到虚拟机；
+PromQL 按采集时间过滤过期 textfile 数据，避免把最后一次读数伪装成持续采样。
+
+### Linux / Docker 采集环境
 
 监控使用官方 Prometheus、node_exporter 与 cAdvisor 镜像，无本地构建。
 Compose 叠加文件不改变现有服务、网络或端口，不向宿主发布监控端口。
@@ -89,7 +127,7 @@ CPU 未提供型号、GPU 未检测到、SoC 显示设备型号未知和采集�
 
 ## 统计边界
 
-- Docker Desktop 上的主机指标属于 Docker Linux 虚拟机，不是 macOS 物理机。
+- 未启用原生宿主任务时，Docker Desktop 的 Linux 指标属于虚拟机，页面标注「Linux / Docker 采集环境」。接入原生任务后，总览与服务器资源切换到实际 macOS，容器保持单独口径。
 - 磁盘概况取可写文件系统的最高占用率，排除内存、overlay、镜像和光盘文件系统。
   详情列出各挂载点容量；同一文件系统可能挂载多处，不能将容量相加。
 - 容器 CPU 100% 表示使用一个逻辑核心，可能超过 100%；主机 CPU 为整体利用率。

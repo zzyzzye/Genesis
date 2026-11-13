@@ -1,5 +1,6 @@
 """使用合成 proc 与监控响应验证宿主采集，不读取真实进程参数。"""
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -7,6 +8,54 @@ import httpx
 import pytest
 
 from genesis_api import host_monitor, monitoring
+
+
+@pytest.mark.anyio
+async def test_native_host_source_and_stale_no_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """宿主资源不混用虚拟机详情，过期后不回退到虚拟机或进程端点。"""
+    now = monitoring.time.time()
+    native = {
+        "sampled_at": now,
+        "source": "macos",
+        "hardware": {"cpu_names": ["Test Mac"], "gpus": []},
+        "details": {
+            "memory_total": 16 * 1024**3,
+            "memory_available": 8 * 1024**3,
+            "cores": [],
+            "disks": [],
+        },
+        "values": {"cpu": 20},
+        "items": [],
+        "systemd": False,
+    }
+    monitoring.NATIVE_SNAPSHOT.write_text(json.dumps(native))
+    queries = []
+
+    async def get(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
+        assert self.base_url.host == "prometheus"
+        queries.append(kwargs["params"]["query"])
+        return httpx.Response(
+            200,
+            json={"status": "success", "data": {"result": []}},
+            request=httpx.Request("GET", "http://prometheus"),
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    data = await monitoring.snapshot("1h")
+    assert data["source"] == "macos"
+    assert data["details"]["memory_total"] == 16 * 1024**3
+    assert data["current"]["cpu"] == 20
+    assert any("genesis_host_cpu" in query for query in queries)
+    assert not any("rate(node_cpu_seconds_total" in query and "avg" in query for query in queries)
+    assert (await monitoring.host_snapshot())["source"] == "macos"
+    native["sampled_at"] = 0
+    monitoring.NATIVE_SNAPSHOT.write_text(json.dumps(native))
+    data = await monitoring.snapshot("1h")
+    assert data["source"] == "macos" and data["available"] is False
+    assert data["series"]["cpu"] == []
+    assert "memory_total" not in data["details"]
+    with pytest.raises(ValueError, match="过期"):
+        await monitoring.host_snapshot()
 
 
 def test_hardware_models_and_missing(tmp_path: Path) -> None:

@@ -1,11 +1,34 @@
 """读取内网 Prometheus 白名单指标，不暴露原始标签或基础设施配置。"""
 
 import asyncio
+import json
 import math
 import time
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+NATIVE_SNAPSHOT = Path("/host-monitor/snapshot.json")
+
+
+def native_snapshot() -> dict[str, Any] | None:
+    """读取固定宿主桥接路径；已接入但失联时拒绝回退到 Docker 虚拟机。"""
+    if not NATIVE_SNAPSHOT.exists():
+        return None
+    try:
+        data: dict[str, Any] = json.loads(NATIVE_SNAPSHOT.read_text())
+        sampled_at = float(data["sampled_at"])
+        if data.get("source") != "macos" or not 0 <= time.time() - sampled_at <= 30:
+            raise ValueError("macOS 宿主快照已过期或来源无效")
+        if not all(isinstance(data.get(key), dict) for key in ("hardware", "details", "values")):
+            raise ValueError("macOS 宿主快照字段不完整")
+        if not isinstance(data.get("items"), list) or "systemd" not in data:
+            raise ValueError("macOS 宿主进程快照字段不完整")
+        return data
+    except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("macOS 宿主快照不可用") from exc
+
 
 FILESYSTEM = '{job="node",fstype!~"tmpfs|overlay|squashfs|iso9660"}'
 HOST_QUERIES = {
@@ -84,6 +107,9 @@ def number(value: Any) -> float | None:
 
 async def host_snapshot() -> dict[str, Any]:
     """读取固定内网进程快照，拒绝过期样本。"""
+    native = native_snapshot()
+    if native is not None:
+        return native
     async with httpx.AsyncClient(timeout=5, trust_env=False) as client:
         result = await client.get("http://host-processes:9101/snapshot")
         result.raise_for_status()
@@ -152,6 +178,9 @@ async def hardware_info() -> dict[str, Any]:
         "gpu_state": "unavailable",
     }
     try:
+        native = native_snapshot()
+        if native is not None:
+            return dict(native["hardware"])
         async with httpx.AsyncClient(timeout=3, trust_env=False) as client:
             response = await client.get("http://host-processes:9101/hardware")
             response.raise_for_status()
@@ -182,6 +211,21 @@ async def snapshot(window: str) -> dict[str, Any]:
     now = int(time.time())
     seconds = {"1h": 3600, "24h": 86400, "7d": 604800}[window]
     errors: list[str] = []
+    native_enabled = NATIVE_SNAPSHOT.exists()
+    try:
+        native = native_snapshot()
+    except ValueError:
+        native = None
+        errors.append("native_host")
+    host_queries = (
+        {
+            key: f'genesis_host_{key}{{job="node"}} and on(job,instance) '
+            '(time() - genesis_host_sampled_at_seconds{job="node"} < 30)'
+            for key in HOST_QUERIES
+        }
+        if native_enabled
+        else HOST_QUERIES
+    )
     async with httpx.AsyncClient(
         base_url="http://prometheus:9090", timeout=5, trust_env=False
     ) as client:
@@ -208,7 +252,7 @@ async def snapshot(window: str) -> dict[str, Any]:
         hardware, results = await asyncio.gather(
             hardware_info(),
             asyncio.gather(
-                *(query(key, value, True) for key, value in HOST_QUERIES.items()),
+                *(query(key, value, True) for key, value in host_queries.items()),
                 *(query(key, value) for key, value in CONTAINER_QUERIES.items()),
                 *(query(key, value) for key, value in DETAIL_QUERIES.items()),
                 query("targets", 'up{job=~"node|node-network|cadvisor"}'),
@@ -244,17 +288,27 @@ async def snapshot(window: str) -> dict[str, Any]:
         else:
             details[key] = number(rows[0]["value"][1]) if rows else None
     details["disks"] = sorted(disks.values(), key=lambda row: row["name"])
+    container_memory_total = details.get("memory_total")
+    if native_enabled:
+        details = native["details"] if native else {"cores": [], "disks": []}
+        targets = [row for row in targets if row["name"] == "cadvisor"]
+        targets.insert(0, {"name": "native-host", "up": native is not None})
+        if native is None:
+            series = {key: [] for key in HOST_QUERIES}
     return {
-        "sampled_at": now,
+        "sampled_at": native["sampled_at"] if native else now,
         "window": window,
         "series": series,
         "details": details,
         "hardware": hardware,
+        "source": "macos" if native_enabled else "linux",
+        "current": native["values"] if native else None,
+        "container_memory_total": container_memory_total,
         "containers": sorted(
             containers.values(), key=lambda row: row.get("memory") or 0, reverse=True
         ),
         "targets": targets,
         "errors": errors,
-        "available": bool(targets),
+        "available": native is not None if native_enabled else bool(targets),
         "retention_days": 7,
     }
