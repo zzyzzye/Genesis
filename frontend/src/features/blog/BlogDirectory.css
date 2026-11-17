@@ -81,11 +81,13 @@ body:has(.blog-portal) { min-width: 0; }
 .portal-post-cover { position: relative; grid-row: 1; align-self: start; overflow: hidden; border-radius: 14px; background: var(--portal-soft); }
 .portal-post-cover > img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; }
 .portal-post-topic { position: absolute; bottom: 9px; left: 10px; max-width: calc(100% - 20px); overflow: hidden; padding: 4px 7px; border-radius: 5px; background: rgb(255 255 255 / 94%); color: #333; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.portal-post-link h3 { grid-row: 2; margin: 15px 0 9px; font-size: 17px; font-weight: 650; letter-spacing: -.015em; line-height: 1.6; overflow-wrap: anywhere; }
-.portal-post-link > p { display: -webkit-box; grid-row: 3; align-self: start; margin: 0 0 12px; overflow: hidden; color: var(--portal-muted); font-size: 12px; line-height: 1.85; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.portal-post-tags { display: flex; grid-row: 4; min-height: 18px; flex-wrap: wrap; align-content: start; gap: 4px 9px; margin-bottom: 11px; color: var(--portal-muted); font-size: 11px; }
+.portal-post-link h3 { grid-row: 2; margin: 10px 0 6px; font-size: 15px; font-weight: 600; letter-spacing: -.015em; line-height: 1.45; overflow-wrap: anywhere; }
+.portal-post-link > p { display: -webkit-box; grid-row: 3; align-self: start; margin: 0 0 8px; overflow: hidden; color: var(--portal-muted); font-size: 12px; line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.portal-post-tags { display: flex; grid-row: 4; min-height: 16px; flex-wrap: wrap; align-content: start; gap: 4px 9px; margin-bottom: 8px; color: var(--portal-muted); font-size: 11px; line-height: 1.45; }
 .portal-post-tags:empty { min-height: 0; margin-bottom: 0; }
 .portal-post-link footer { display: flex; grid-row: 5; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 7px; }
+.portal-post-link .portal-author { gap: 6px; font-size: 11px; }
+.portal-post-link .portal-author > img, .portal-post-link .portal-author-avatar { width: 22px; height: 22px; }
 .portal-post-link footer > time { color: var(--portal-muted); font-size: 10px; }
 .portal-post-link h3 { transition: color var(--portal-motion-duration) ease; }
 .portal-post-link:hover h3, .portal-post-link:focus-visible h3 { color: #666; }
@@ -147,7 +149,7 @@ body:has(.blog-portal) { min-width: 0; }
 @media (max-width: 580px) {
   .portal-main { padding-inline: 16px; }.portal-brand > a, .blog-portal--collapsed .portal-brand > a { font-size: 15px; }.portal-brand > button { width: 34px; }
   .portal-featured { display: flex; min-height: 0; flex-direction: column-reverse; gap: 14px; padding: 13px; border-radius: 20px; }.portal-featured-cover { border-radius: 12px; }.portal-featured-cover > img { height: auto; min-height: 0; aspect-ratio: 16 / 10; }.portal-featured-copy { padding: 4px 7px 9px; }.portal-featured-copy > .portal-author { margin-bottom: 16px; }.portal-featured-copy > .portal-author > img, .portal-featured-copy > .portal-author .portal-author-avatar { width: 30px; height: 30px; font-size: 12px; }.portal-featured-topics { font-size: 12px; }.portal-featured h2 { font-size: 23px; }.portal-featured-copy > p { margin-block: 12px 16px; }.portal-cover-meta { right: 9px; bottom: 10px; font-size: 10px; }.portal-cover-meta > * { padding: 5px 7px; }
-  .portal-post-grid { grid-template-columns: minmax(0, 1fr); gap: 30px; }.portal-section-heading h2 { font-size: 21px; }.portal-post-link h3 { font-size: 18px; }.portal-post-link > p { font-size: 13px; }.portal-post-tags { font-size: 12px; }.portal-post-link footer > time { font-size: 11px; }
+  .portal-post-grid { grid-template-columns: minmax(0, 1fr); gap: 30px; }.portal-section-heading h2 { font-size: 21px; }.portal-post-link h3 { font-size: 16px; }.portal-post-link > p { font-size: 13px; }.portal-post-tags { font-size: 12px; }.portal-post-link footer > time { font-size: 11px; }
   .portal-pagination { gap: 10px; }.portal-pagination button { padding-inline: 10px; }.portal-footer { margin-top: 38px; }.blog-search-surface { padding: 18px; }.blog-search-dialog { max-height: calc(100dvh - 40px); margin-top: 20px; }
 }
 @media (prefers-reduced-motion: reduce) { .blog-portal *, .blog-search-dialog *, .portal-mobile-navigation * { scroll-behavior: auto !important; transition: none !important; }.portal-post-link:is(:hover, :focus-visible), .portal-post-link:is(:hover, :focus-visible) .portal-post-cover > img { transform: none; } }
