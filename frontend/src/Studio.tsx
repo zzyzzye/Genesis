@@ -400,8 +400,16 @@ function Dashboard({
       setHasVersionConflict(false)
       loadedResource.current = savedPost.id
       bypassNavigation.current = true
-      setFeedback(status === 'published' ? '已发布到站点。' : savedPost.scheduled_at ? `草稿已保存，计划于 ${new Date(savedPost.scheduled_at).toLocaleString('zh-CN')} 发布。` : '草稿已保存到站点。')
-      void navigate(`${studioBasePath}/posts/${encodeURIComponent(savedPost.id)}/edit`)
+      if (status === 'published') {
+        setPublication(null)
+        void navigate(`/articles/${encodeURIComponent(savedPost.slug)}`, {
+          replace: true,
+          state: { publication: { postId: savedPost.id, slug: savedPost.slug, updated: source.status === 'published' } },
+        })
+      } else {
+        setFeedback(savedPost.scheduled_at ? `草稿已保存，计划于 ${new Date(savedPost.scheduled_at).toLocaleString('zh-CN')} 发布。` : '草稿已保存到站点。')
+        void navigate(`${studioBasePath}/posts/${encodeURIComponent(savedPost.id)}/edit`)
+      }
       return true
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : '保存失败，输入已保留，请检查网络后重试。')
@@ -597,7 +605,7 @@ function Dashboard({
         </main>
       </StudioWorkspaceTransition>
       </AnimatePresence>
-      {publication && <BlogWorkflowDialog title={publication.status === 'published' ? '更新已发布文章' : '发布前检查'} description={publication.status === 'published' ? '确认后，站点上的文章将更新为当前内容。' : '确认后，这篇文章将公开显示在博客中。'} confirmLabel={publication.status === 'published' ? '确认更新发布' : '确认发布'} busy={isSaving} error={feedback} onCancel={() => setPublication(null)} onConfirm={() => { void savePost('published', publication).then((saved) => { if (saved) setPublication(null) }) }}>
+      {publication && <BlogWorkflowDialog title={publication.status === 'published' ? '更新已发布文章' : '发布前检查'} description={publication.status === 'published' ? '确认后，站点上的文章将更新为当前内容。' : '确认后，这篇文章将公开显示在博客中。'} confirmLabel={publication.status === 'published' ? '确认更新发布' : '确认发布'} busy={isSaving} error={feedback} onCancel={() => setPublication(null)} onConfirm={() => { void savePost('published', publication) }}>
         <dl>
           <div><dt>标题</dt><dd>{publication.title}</dd></div>
           <div><dt>地址</dt><dd>/articles/{publication.slug}</dd></div>

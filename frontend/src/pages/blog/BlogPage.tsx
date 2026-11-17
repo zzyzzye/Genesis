@@ -52,9 +52,19 @@ function PublicBlog() {
   const { slug } = useParams<{ slug: string }>()
   const [articleState, setArticleState] = useState<ArticleState>({ status: 'idle' })
   const [searchOpen, setSearchOpen] = useState(false)
+  const publicationFocus = useRef<HTMLDivElement>(null)
   const articleRequest = useRef<AbortController | null>(null)
   const isArticle = location.pathname.startsWith('/articles/')
   const currentArticle = articleState.status === 'ready' && articleState.post.slug === slug ? articleState.post : null
+  const publication = (location.state as { publication?: { postId?: unknown; slug?: unknown; updated?: unknown } } | null)?.publication
+  const publicationPostId = isArticle && publication && publication.slug === slug && typeof publication.postId === 'string' ? publication.postId : null
+
+  useEffect(() => {
+    if (!publicationPostId) return
+    // 发布后从正文中段进入阅读页时，先把明确的结果与后续操作带到眼前。
+    publicationFocus.current?.focus({ preventScroll: true })
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [publicationPostId])
 
   useEffect(() => {
     if (!isArticle) return
@@ -131,6 +141,10 @@ function PublicBlog() {
 
       <main>
         <article className="reader-shell">
+          {publicationPostId && <div ref={publicationFocus} className="reader-publication-result" role="status" tabIndex={-1}>
+            <div><strong>{publication?.updated === true ? '文章已更新' : '文章已发布'}</strong><p>发布成功，文章已公开。你可以在此查看线上效果。</p></div>
+            <Link to={`/blog/studio/posts/${encodeURIComponent(publicationPostId)}/edit`}>继续编辑</Link>
+          </div>}
           <div className="reader-navigation"><button className="back-button" type="button" onClick={closeArticle}>
             <span aria-hidden="true">←</span> 返回文章列表
           </button><nav aria-label="其他空间"><SpaceLinks current="blog" /></nav></div>
@@ -157,7 +171,7 @@ function PublicBlog() {
             <div className="reader-feedback" aria-busy={articleState.status !== 'error'}>
               {articleState.status === 'error' ? <>
                 <h1>文章暂时无法打开</h1>
-                <p role="alert">文章可能尚未公开，或内容服务暂时不可用。</p>
+                <p role="alert">{publicationPostId ? '发布已成功，公开页面暂时未能加载。请重试读取，无需再次发布。' : '文章可能尚未公开，或内容服务暂时不可用。'}</p>
                 <button type="button" onClick={() => { if (slug) openArticle(slug) }}>重新加载文章</button>
               </> : <p role="status">正在打开文章…</p>}
             </div>

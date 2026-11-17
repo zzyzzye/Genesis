@@ -19,6 +19,12 @@
 .reader-header .portal-search-trigger { width: min(100%, 560px); }
 .reader-header .portal-brand > .reader-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 17px; }
 .blog-page--article .reader-shell { box-sizing: border-box; width: min(calc(100% - 64px), 1280px); max-width: 1280px; padding: 28px 0 64px; }
+.reader-publication-result { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 24px; margin:0 0 24px; padding:18px 20px; border:0; border-radius:12px; outline:0; box-shadow:none; background:var(--portal-soft); color:var(--portal-ink); }
+.reader-publication-result>div { min-width:0; }
+.reader-publication-result strong { font-size:18px; font-weight:600; }
+.reader-publication-result p { margin:6px 0 0; color:var(--portal-muted); font-size:13px; line-height:1.6; }
+.reader-publication-result>a { display:inline-flex; align-items:center; justify-content:center; flex:none; min-height:40px; padding:8px 14px; border:0; border-radius:8px; outline:0; box-shadow:none; background:var(--portal-ink); color:var(--portal-paper); font-size:13px; }
+.reader-publication-result>a:is(:hover,:focus-visible) { background:#333; }
 .blog-page--article .back-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin: 0 0 26px -10px; padding: 8px 10px; border: 0; border-radius: 10px; outline: 0; box-shadow: none; background: transparent; color: var(--blog-muted); font: inherit; font-size: 13px; cursor: pointer; }
 .blog-page--article .back-button:is(:hover, :focus-visible) { background: var(--blog-hover); color: var(--blog-ink); }
 .reader-navigation { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 26px; }

@@ -11,20 +11,31 @@ const savedPost = {
   created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z',
 }
 
+function requestUrl(input: RequestInfo | URL) { return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url }
+
 function setup(path: string, postList: unknown[] = [], expiredTags = false) {
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   localStorage.setItem('genesis-studio-token', 'writing-test-token')
   window.history.pushState({}, '', path)
+  let storedPosts = postList
+  let publicPost = savedPost
   const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
-    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+    const url = requestUrl(input)
     if (expiredTags && url.endsWith('/admin/blog/tags')) return Promise.resolve(new Response('{"detail":"登录已过期"}', { status: 401 }))
     let data: unknown = []
     if (url.endsWith('/auth/me')) data = author
-    if (url.endsWith('/admin/blog/posts')) data = postList
+    if (url.endsWith('/admin/blog/posts')) data = storedPosts
+    if (url.endsWith(`/blog/posts/${encodeURIComponent(publicPost.slug)}`)) data = publicPost
+    if (url.includes('/comments?')) data = { items: [], total: 0 }
+    if (url.endsWith('/guide')) data = { status: 'unavailable' }
+    if (url.includes('/blog/links?')) data = { items: [], total: 0 }
     if (url.includes('/admin/blog/links?')) data = { items: [], total: 0 }
     if (url.includes('/admin/blog/attachments?')) data = { items: [], total: 0, breadcrumbs: [], max_upload_bytes: 200 * 1024 * 1024 }
     if (init?.method === 'PUT' || init?.method === 'POST') {
       const payload = JSON.parse(typeof init.body === 'string' ? init.body : '{}') as Record<string, unknown>
       data = { ...savedPost, ...payload, updated_at: '2026-10-08T00:00:00Z' }
+      publicPost = data as typeof savedPost
+      storedPosts = [publicPost]
     }
     return Promise.resolve(new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } }))
   })
@@ -166,7 +177,10 @@ describe('可靠博客写作流程', () => {
     fireEvent.click(confirm)
     fireEvent.click(confirm)
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-    expect(await screen.findByText('已发布到站点。')).toBeInTheDocument()
+    expect(await screen.findByText('文章已更新')).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/articles/writing-post')
+    expect(await screen.findByRole('heading', { name: '修改后的文章', level: 1 })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '继续编辑' })).toHaveAttribute('href', '/blog/studio/posts/writing-post/edit')
     const writes = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')
     expect(writes).toHaveLength(1)
     const body = writes[0]?.[1]?.body
@@ -174,19 +188,78 @@ describe('可靠博客写作流程', () => {
     expect(sessionStorage.getItem(blogDraftKey(author.id, savedPost.id))).toBeNull()
   })
 
+  it('新文章发布后直接展示公开文章与成功回执，继续编辑没有恢复或离开弹窗', async () => {
+    const draft = { ...createEmptyEditor(), title: '第一次发布', slug: 'first-publication', contentMarkdown: '# 新文章正文' }
+    sessionStorage.setItem(blogDraftKey(author.id, null), JSON.stringify({ editor: draft, savedAt: Date.now() }))
+    const { fetchMock } = setup('/blog/studio/posts/new/edit')
+    fireEvent.click(await screen.findByRole('button', { name: '恢复内容' }))
+    fireEvent.click(screen.getByRole('button', { name: '发布' }))
+    const dialog = await screen.findByRole('dialog', { name: '发布前检查' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '确认发布' }))
+    const receipt = await screen.findByText('文章已发布')
+    expect(receipt.closest('[role="status"]')).toHaveFocus()
+    expect(await screen.findByRole('heading', { name: '第一次发布', level: 1 })).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/articles/first-publication')
+    expect(sessionStorage.getItem(blogDraftKey(author.id, null))).toBeNull()
+    expect(fetchMock.mock.calls.filter(([input, init]) => requestUrl(input).endsWith('/admin/blog/posts') && init?.method === 'POST')).toHaveLength(1)
+    fireEvent.click(screen.getByRole('link', { name: '继续编辑' }))
+    expect(await screen.findByRole('textbox', { name: '文章标题' })).toHaveValue('第一次发布')
+    expect(screen.queryByRole('button', { name: '恢复内容' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('发布失败保留当前修改与暂存，重试成功后才离开编辑器', async () => {
+    const { fetchMock } = setup('/blog/studio/posts/writing-post/edit', [savedPost])
+    fireEvent.change(await screen.findByRole('textbox', { name: '文章标题' }), { target: { value: '失败后保留的修改' } })
+    fireEvent.click(screen.getByRole('button', { name: '更新发布' }))
+    const dialog = await screen.findByRole('dialog', { name: '更新已发布文章' })
+    fetchMock.mockResolvedValueOnce(new Response('{"detail":"服务暂时不可用"}', { status: 503 }))
+    fireEvent.click(within(dialog).getByRole('button', { name: '确认更新发布' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('服务暂时不可用')
+    expect(window.location.pathname).toBe('/blog/studio/posts/writing-post/edit')
+    expect(sessionStorage.getItem(blogDraftKey(author.id, savedPost.id))).toContain('失败后保留的修改')
+    fireEvent.click(within(dialog).getByRole('button', { name: '取消' }))
+    expect(screen.getByRole('textbox', { name: '文章标题' })).toHaveValue('失败后保留的修改')
+    fireEvent.click(screen.getByRole('button', { name: '更新发布' }))
+    fireEvent.click(within(await screen.findByRole('dialog', { name: '更新已发布文章' })).getByRole('button', { name: '确认更新发布' }))
+    expect(await screen.findByText('文章已更新')).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/articles/writing-post')
+  })
+
+  it('发布成功而公开页读取失败时保留成功回执，重试不重复发布', async () => {
+    const { fetchMock } = setup('/blog/studio/posts/writing-post/edit', [savedPost])
+    await screen.findByRole('textbox', { name: '文章标题' })
+    const original = fetchMock.getMockImplementation()!
+    fetchMock.mockImplementation((input, init) => requestUrl(input).endsWith('/blog/posts/writing-post') && !requestUrl(input).includes('/admin/')
+      ? Promise.resolve(new Response('{"detail":"读取暂时不可用"}', { status: 503 })) : original(input, init))
+    fireEvent.click(screen.getByRole('button', { name: '更新发布' }))
+    fireEvent.click(within(await screen.findByRole('dialog', { name: '更新已发布文章' })).getByRole('button', { name: '确认更新发布' }))
+    expect(await screen.findByText('文章已更新')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('发布已成功，公开页面暂时未能加载')
+    fireEvent.click(screen.getByRole('button', { name: '重新加载文章' }))
+    await screen.findByRole('alert')
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1)
+    expect(screen.getByRole('link', { name: '继续编辑' })).toBeInTheDocument()
+  })
+
   it('保存冲突保留输入，核对最新版本后可继续编辑并保存', async () => {
     const { fetchMock } = setup('/blog/studio/posts/writing-post/edit', [savedPost])
     fireEvent.change(await screen.findByRole('textbox', { name: '文章标题' }), { target: { value: '本地修改' } })
     let writeCount = 0
     const latest = { ...savedPost, title: '站点上的新标题', content_markdown: '站点的新正文', updated_at: '2026-10-08T00:00:00Z' }
+    let published = latest
     fetchMock.mockImplementation((input, init) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const url = requestUrl(input)
       if (init?.method === 'PUT') {
         writeCount += 1
         if (writeCount === 1) return Promise.resolve(new Response(JSON.stringify({ detail: '文章版本冲突' }), { status: 409 }))
         const payload = JSON.parse(typeof init.body === 'string' ? init.body : '{}') as Record<string, unknown>
-        return Promise.resolve(new Response(JSON.stringify({ ...latest, ...payload }), { status: 200 }))
+        published = { ...latest, ...payload }
+        return Promise.resolve(new Response(JSON.stringify(published), { status: 200 }))
       }
+      if (url.endsWith('/blog/posts/writing-post')) return Promise.resolve(new Response(JSON.stringify(published), { status: 200 }))
+      if (url.includes('/comments?')) return Promise.resolve(new Response('{"items":[],"total":0}', { status: 200 }))
+      if (url.includes('/blog/links?')) return Promise.resolve(new Response('{"items":[],"total":0}', { status: 200 }))
       if (url.endsWith('/admin/blog/posts/writing-post')) return Promise.resolve(new Response(JSON.stringify(latest), { status: 200 }))
       return Promise.resolve(new Response(JSON.stringify(url.endsWith('/auth/me') ? author : []), { status: 200 }))
     })
@@ -204,7 +277,8 @@ describe('可靠博客写作流程', () => {
     expect(screen.getByRole('textbox', { name: '文章标题' })).toHaveValue('本地修改')
     fireEvent.click(screen.getByRole('button', { name: '更新发布' }))
     fireEvent.click(within(await screen.findByRole('dialog', { name: '更新已发布文章' })).getByRole('button', { name: '确认更新发布' }))
-    expect(await screen.findByText('已发布到站点。')).toBeInTheDocument()
+    expect(await screen.findByText('文章已更新')).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/articles/writing-post')
     const lastWrite = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT').at(-1)?.[1]?.body
     expect(JSON.parse(typeof lastWrite === 'string' ? lastWrite : '{}')).toMatchObject({ title: '本地修改', expected_updated_at: latest.updated_at })
   })
