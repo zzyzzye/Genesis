@@ -11,8 +11,8 @@ afterEach(() => {
 })
 
 it.each([
-  ['/blog/pages', '/blog', 'Genesis 博客'],
-  ['/blog/pages/about', '/blog', 'Genesis 博客'],
+  ['/blog/pages', '/blog', '最近的文章'],
+  ['/blog/pages/about', '/blog', '最近的文章'],
   ['/blog/studio/pages', '/blog/studio', '仪表盘'],
   ['/blog/studio/pages/new/edit', '/blog/studio', '仪表盘'],
   ['/studio/blog/pages/about/edit', '/blog/studio', '仪表盘'],
