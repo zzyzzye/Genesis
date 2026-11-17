@@ -1,3 +1,22 @@
+# 影音空间统一导航（2026-11-16）
+
+`MediaLayout` 是非画布页面唯一的导航与页面框架入口。一级制作导航仅保留「作品」与「素材库」：`/media` 统一管理全部作品，移除工作台与项目库的重复分区。作品列表、账户素材、作品概览和作品素材共用侧栏、顶栏、账户、新建作品、镜头搭档与返回 Genesis；路由切换保留框架，不创建页面专属侧栏。作品内的概览、素材和画布入口属于内容区二级导航，全局「作品」仍为当前项。画布保留已有独立编辑布局。
+
+| 能力 | 唯一入口 | 行为约定 |
+| --- | --- | --- |
+| 主导航 | `MediaLayout.Navigation` | 原生 Router 链接；作品、素材库顺序固定，只有当前项具有 `aria-current=page`。 |
+| 页面标题 | `MediaPageHeading` | 相同标题字号、描述行高、上方位置和内容边距。 |
+| 作品展示 | `MediaProjects` / `ProjectCover` | 所有作品按最近编辑排序；首批展示 24 个，更多作品通过「显示更多作品」展开，搜索与清空重置展示范围。不再提供最近六个、查看全部或创作快捷入口分区。 |
+| 新建与管理 | `ProjectDialog` | 顶栏与空态新建统一；失败保留名称，成功进入新作品概览；改名、删除继续使用原校验和确认。 |
+| 手机导航 | `useModalDialog` | 与桌面相同的菜单数据；链接选择和 Escape 关闭，Tab 约束焦点，关闭后恢复触发器。 |
+| 搜索与历史 | Router URL | 搜索保留 `q`；旧 `view=projects` 以 replace 归并为作品地址，保留其他查询条件和锚点，不新增历史记录。浏览器前进后退恢复 URL、搜索条件和当前导航。 |
+
+素材库使用统一内容区，范围、类型、搜索、清空、上传和分页均在列表区域内；不通过改变全局导航表达素材范围。加载、失败、空态和无结果保留可用的导航与新建入口。页面使用稳定滚动条占位，不能因作品数量或页面长度改变卡片宽度。
+
+作品列表由页面框架内的 `useMediaProjects` 保留，返回「作品」时先展示已有列表并后台刷新，不重复显示整片空白加载区；离开当前查询后忽略迟到响应。缓存仅存在于当前页面框架的内存中。明确的新建、改名、删除和手动重试继续更新对应作品数据。
+
+导航组件复用、前进后退与手机菜单回归由 `frontend/tests/MediaNavigation.test.tsx` 维护；卡片尺寸、侧栏坐标、桌面和窄屏下的连续切换由 Compose 浏览器实测验证。
+
 # 工具箱目录与导航（2026-11-12）
 
 ## 图片转换与压缩
@@ -110,7 +129,7 @@ Alt/Option 拖动复用「创建副本」的引用规则，原节点不移动，
 
 ## 影音工作区配色
 
-首页、作品概览、素材页和影音助手统一消费 `MediaHome.css` 的黑白与中性灰角色。主动作采用浅底深字，悬停和键盘聚焦继续保持足够对比；选中导航使用低对比深灰底面与白灰文字，品牌副标使用辅助灰。输入聚焦保持原底色，无边框、描边、阴影或下划线。
+作品列表、作品概览、素材页和影音助手统一消费 `MediaLayout.css` 的黑白与中性灰角色。主动作采用浅底深字，悬停和键盘聚焦继续保持足够对比；选中导航使用低对比深灰底面与白灰文字，品牌副标使用辅助灰。输入聚焦保持原底色，无边框、描边、阴影或下划线。
 
 2026-11-03 复用 Compose 5173，检查真实作品概览、作品素材页、助手展开，以及隔离首页空态与新建对话框；桌面和 390×844 覆盖正常、选中、导航收放、输入聚焦、主按钮键盘聚焦和禁用状态，无横向溢出。18 项相关测试、ESLint、TypeScript/生产构建及 strict 审计通过；保留既有构建分块提示与 DESIGN lint 七项警告。未修改真实作品或提交模型任务。
 
@@ -277,9 +296,13 @@ React Flow 的原生 `onMoveStart` / `onMoveEnd` 拥有滚轮平移手势的起�
 
 ## Canonical UI Map
 
-影音制作首页由 `MediaHome` 与 `ProjectPreview` 共同拥有：顶栏创建项目、监看最近编辑项目的真实图片、六项工具创建命名画布、最近项目与全部项目保留 q/view URL 状态。监看仅是素材预览，不伪装视频播放、时间线或生成状态。图片来自当前作品的鉴权素材 API，最多读取前四项中不超过 8 MiB 的图片，首页不读取视频；封面接近视口才加载。切换画面沿用原生按钮、aria-pressed 和可见勾选，退出和更换素材释放临时地址，迟到响应不得更新旧项目。加载、无图片、无项目、预览失败和列表失败分别呈现；预览失败保留项目、画布和素材入口，并可原位重试。`AssetPreview` 的 passive 变体用于链接或按钮内部，避免嵌套重试按钮。
+影音动效由 `lib/motion.ts`、`media/MediaMotion.tsx` 和 `MediaMotion.css` 共同实现：页内导航按 pathname 入场，查询参数变化不重播页面；素材加载、空态及结果仅整体淡入。项目操作菜单使用 `StudioActionMenu` 的 animated 变体，其他调用保持默认行为。弹窗沿用 `useModalDialog` 的焦点约束与恢复，关闭时立即 inert/aria-hidden，动画结束后才卸载；生成模型和参数 popover 保留原生开关、Escape 与定位，关闭后立即停止交互。所有新增动效响应系统减少动态效果。退场焦点回归见 `MediaMotion.test.tsx`。
 
-项目管理复用 `StudioActionMenu` 的顶层弹层、方向键/Home/End、Escape 和焦点恢复，颜色由 home 令牌映射既有 studio 角色；创建、改名和删除复用 `ProjectDialog` 与 `useModalDialog`。创建和改名默认聚焦名称，删除默认聚焦取消；失败保留输入，提交期间只读并阻止重复操作，取消不写入。浏览器验收入口为 `frontend/tests/browser/media-home.html`，仅本地开发可用，API 读写由合成响应隔离；组件证据为 `MediaHome.test.tsx`、`ProjectPreview.test.tsx` 与 `AssetPreview.test.tsx`。
+2026-11-16 复用 Compose 5173，在 1440×1000 和 390×844 检查正常作品、搜索空态、素材筛选、封面弹窗、手机导航、画布节点菜单与生成参数；隔离合成页面验证读取失败与重试、模型菜单进出场、Escape 焦点恢复及退场 inert。逐帧确认透明度与位移连续变化，减少动态效果时即时完成，输入聚焦无边框、描边或阴影，页面无横向溢出。117 项相关回归通过；首次两项画布时序用例失败，单独复测及完整 Media 测试组重跑通过。ESLint、TypeScript、strict 静态审计通过，DESIGN lint 零错误、保留七项既有警告；未本地打包或调用付费生成。
+
+影音入口统一由 `MediaLayout`、`MediaProjects` 和 `ProjectPreview` 拥有：侧栏只区分作品与素材库，顶栏统一新建作品，作品列表保留 q 搜索状态。旧 view=projects 地址归并为作品入口，不再提供工作台、最近六个和监看分区。封面优先使用用户保存的图片，未设置时自动展示作品图片；接近视口才加载，迟到响应不得更新旧作品。图片沿用会话缓存、鉴权读取与 `AssetPreview` 的 passive 变体，避免链接内部嵌套重试按钮。加载、空态、搜索无结果和失败均保留全局导航与恢复入口。
+
+作品管理复用 `StudioActionMenu` 的顶层弹层、方向键/Home/End、Escape 和焦点恢复，颜色由 home 令牌映射既有 studio 角色；创建、改名和删除复用 `ProjectDialog` 与 `useModalDialog`。创建和改名默认聚焦名称，删除默认聚焦取消；失败保留输入，提交期间只读并阻止重复操作，取消不写入。浏览器验收入口为 `frontend/tests/browser/media-home.html`，仅本地开发可用，API 读写由合成响应隔离；组件证据为 `MediaProjects.test.tsx`、`MediaNavigation.test.tsx`、`ProjectPreview.test.tsx` 与 `AssetPreview.test.tsx`。
 
 生图模式由 `canvasReferences.ts` 的直接图片参考筛选、`VideoGeneration.tsx` 的只读状态及后端 `media/image.py` 的归属和文件校验共同实现。图片生成不依赖旧 generation.mode；有有效图片参考以 multipart 调用 edits，无图片参考以 JSON 调用 generations。图片参考尚未就绪、文件不可用、数量超过 16 或模型不支持编辑时阻止提交；不静默回退文生图。上传、素材选择、连线、断开、撤销及重新打开均遵循同一规则，文字和其他媒体不计入图片参考。Agent 按 get_media_canvas 返回的 image_reference_node_ids 识别含图片参考的节点，配置模型工具也按实际连线校验能力。
 
@@ -375,7 +398,7 @@ ESLint、TypeScript/生产构建、写作/独立页面/目录相关 20 项测试
 | Select/Listbox | 原生 select、ImageParameters、VideoParameters、RatioOptions | premium-ui.json、AgentModelPicker、ReasoningEffortControl、BlogAssistant、ProjectCanvas、AssetLibrary | 简单枚举使用系统菜单管理弹出几何与键盘；思考模式/强度、执行方式、素材类型和参考模式维持原生行为；图片/视频生成参数复用选项块，视频时长使用原生 range 和 number；模型目录搜索沿用现有专用面板 | 浏览器展开、选择、Escape，组件测试 |
 | 表单下拉箭头 | base.css 的原生 select 关闭态 | DESIGN.md、既有 select | 单选框统一箭头尺寸、居中和右侧留白，保留系统菜单及键盘行为；助手执行方式不再叠加第二个箭头 | 闭合/展开、键盘与 Escape、浅色/暗色、长值和窄屏 |
 | 账户资料 | AccountProfile、AccountWorkspace 的 profile 变体、WalletPreview | Account.tsx/CSS、features/account/AccountWorkspace.tsx/CSS、features/billing/WalletBalance.tsx | 资料与余额沿单一内容轴排列；桌面标签在左，窄屏标签在上；余额置于表单之后；账户导航与创作入口分组，仅作者显示写作台且窄屏不隐藏；头像失败回落首字；退出位于侧栏账户区，手机端位于右上角，保存期间禁用；保留原校验、防重及失败输入 | 桌面与短屏、390/320px、空简介、长昵称、图片失败、聚焦、校验、提交中、保存成功与失败、成员/作者 |
-| Form | AccountForm、AccountProfile、AiChatPanel、ProjectDialog 与各业务表单 | Account.tsx、AiChatPanel.tsx、ProjectCanvas.tsx、MediaHome.tsx | 提交表单使用 noValidate、业务校验及重复提交锁；个人资料必填/长度错误与字段关联并聚焦首错，头像通过点击头像选图并校验格式和大小，保存失败保留输入与选图；节点编辑无需表单提交 | 校验、焦点、提交锁、失败重试、整数时长、保存恢复 |
+| Form | AccountForm、AccountProfile、AiChatPanel、ProjectDialog 与各业务表单 | Account.tsx、AiChatPanel.tsx、ProjectCanvas.tsx、ProjectDialog.tsx | 提交表单使用 noValidate、业务校验及重复提交锁；个人资料必填/长度错误与字段关联并聚焦首错，头像通过点击头像选图并校验格式和大小，保存失败保留输入与选图；节点编辑无需表单提交 | 校验、焦点、提交锁、失败重试、整数时长、保存恢复 |
 | CRUD | useCanvas、作品素材 API | useCanvas.ts、api/routes/media.py | 节点修改可撤销；素材删除沿用既有确认流程 | 组件测试、后端权限与素材类型测试 |
 | 文章导出 | PostsIndex、downloadBlogArticles、共享 downloadBlob | blog/export.py、admin_blog.py 的所有者只读导出接口 | 单篇 Markdown 可读回收站；整库 ZIP 只含普通文章，回收站独立导出，均不受前端筛选分页影响；含原正文与 front matter，不含评论/附件/页面；请求取消、同步防重、失败保留列表，响应 no-store | 授权与 404、正文和多分类保真、删除范围、归档路径、临时文件关闭、重复点击/取消竞态、失败重试、空态、桌面与窄屏 |
 | 文章导入 | PostImportDialog、BlogWorkflowDialog、原生文件选择 | blog/importing.py、blog_operations.py | 先预览后确认，只创建所选草稿；同路径含回收站均不覆盖；冲突项禁用；预览可取消，提交同步锁及导航保护；失败保留文件和稳定操作标识，重试核对回执；成功返回原列表，刷新失败与提交成功分开说明 | Markdown/ZIP/Genesis 清单、非法路径与 YAML 拒绝、UTF-8、冲突/空态、重试防重、焦点、桌面/390/320px |

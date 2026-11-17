@@ -1,7 +1,8 @@
-/** 复用 Compose 前端与真实工作台组件，所有 API 读写均使用合成响应。 */
+/** 复用 Compose 前端与真实作品列表组件，所有 API 读写均使用合成响应。 */
 import { createRoot } from 'react-dom/client'
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom'
-import { MediaHome } from '../../src/pages/media/MediaHome'
+import { MediaProjects } from '../../src/pages/media/MediaProjects'
+import { MediaLayout } from '../../src/pages/media/MediaLayout'
 import '../../styles/base.css'
 import '../../styles/shared.css'
 import '../../src/pages/media/MediaPage.css'
@@ -46,7 +47,7 @@ window.fetch = async (input, init) => {
     if (state === 'preview-error' && previewFailures++ < 2) return json({ detail: '预览暂不可用。' }, 503)
     return json({ items: images, total: images.length })
   }
-  if (path.startsWith('/assets/') && path.endsWith('/file')) {
+  if (path.startsWith('/assets/') && (path.endsWith('/file') || path.endsWith('/thumbnail'))) {
     if (state === 'image-error' && path.includes('frame-one') && imageFailures++ < 1) return json({ detail: '图片暂不可用。' }, 503)
     const night = path.includes('frame-one')
     const artwork = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720" fill="${night ? '#263f4c' : '#b58055'}"/><circle cx="940" cy="180" r="90" fill="${night ? '#d3dce1' : '#f0d2a1'}"/><path d="M0 500 340 280 640 490 900 360 1280 560V720H0Z" fill="#10181b"/><text x="48" y="72" fill="#fff" font-family="sans-serif" font-size="28">合成验收画面 · ${night ? '夜幕' : '晨光'}</text></svg>`
@@ -56,11 +57,11 @@ window.fetch = async (input, init) => {
 }
 
 export function Destination() {
-  return <main style={{ padding: 32 }}><h1>画布入口已打开</h1><p>这里只检查导航，不创建真实项目。</p><Link to="/media">返回工作台</Link></main>
+  return <main style={{ padding: 32 }}><h1>画布入口已打开</h1><p>这里只检查导航，不创建真实作品。</p><Link to="/media">返回作品</Link></main>
 }
 
 createRoot(document.getElementById('root')!).render(<div className="media-workspace"><MemoryRouter initialEntries={['/media']}><Routes>
-  <Route path="/media" element={<MediaHome />} />
+  <Route path="/media" element={<MediaLayout>{(create, collection) => <MediaProjects onCreate={create} collection={collection} />}</MediaLayout>} />
   <Route path="/media/projects/:id/canvas" element={<Destination />} />
   <Route path="/media/projects/:id" element={<Destination />} />
   <Route path="/media/projects/:id/assets" element={<Destination />} />

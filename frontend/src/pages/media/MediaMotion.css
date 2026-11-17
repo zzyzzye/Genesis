@@ -1,0 +1,24 @@
+/* 独立 translate 不覆盖菜单居中与画布定位使用的 transform。 */
+@keyframes media-backdrop-enter { from { opacity:0; } to { opacity:1; } }
+@keyframes media-backdrop-exit { to { opacity:0; } }
+[data-media-dialog]::backdrop { animation:media-backdrop-enter var(--motion-panel-duration,.36s) var(--motion-layout-ease,ease) both; }
+[data-media-dialog][data-exiting]::backdrop { animation:media-backdrop-exit .2s ease both; }
+.media-generation-model-menu,.media-editor .media-generation-popover {
+  opacity:0; translate:0 8px;
+  transition:opacity var(--motion-panel-duration,.36s) var(--motion-layout-ease,ease),translate var(--motion-panel-duration,.36s) var(--motion-layout-ease,ease),display var(--motion-panel-duration,.36s) allow-discrete,overlay var(--motion-panel-duration,.36s) allow-discrete;
+}
+.media-generation-model-menu:is(:popover-open,[data-open=true]),.media-editor .media-generation-popover:is(:popover-open,[data-open=true]) { opacity:1; translate:0 0; }
+.media-generation-model-menu:not(:popover-open):not([data-open=true]) { display:none; }
+@starting-style {
+  .media-generation-model-menu:is(:popover-open,[data-open=true]),.media-editor .media-generation-popover:is(:popover-open,[data-open=true]) { opacity:0; translate:0 8px; }
+}
+.media-preview>img { opacity:0; transition:opacity var(--motion-panel-duration,.36s) ease; }
+.media-preview>img[data-ready=true] { opacity:1; }
+.media-library-results { min-height:240px; }
+.media-editor :is(button,a),.media-home-dialog button { transition:background-color .2s ease,color .2s ease,opacity .2s ease; }
+.media-project-trigger>svg { transition:rotate var(--motion-panel-duration,.36s) var(--motion-layout-ease,ease); }
+.media-project-trigger[aria-expanded=true]>svg { rotate:180deg; }
+@media(prefers-reduced-motion:reduce) {
+  .media-workspace *, .media-editor *, [data-media-dialog], [data-media-dialog] *, .media-generation-model-menu { animation:none!important; transition:none!important; }
+  [data-media-dialog]::backdrop { animation:none!important; }
+}

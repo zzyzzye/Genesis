@@ -294,6 +294,7 @@ def project_data(project: MediaProject) -> dict[str, object]:
     return {
         "id": str(project.id),
         "name": project.name,
+        "cover_asset_id": str(project.cover_asset_id) if project.cover_asset_id else None,
         "updated_at": project.updated_at.isoformat(),
         "version": project.version,
     }

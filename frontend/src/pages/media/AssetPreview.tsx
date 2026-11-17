@@ -14,10 +14,11 @@ function AssetPreviewContent({ asset, controls = false, thumbnail = false, passi
   const [url, setUrl] = useState('')
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
+  const [imageReady, setImageReady] = useState(false)
   const streaming = asset.kind === 'video' || asset.kind === 'audio'
   const assetId = asset.id
   const session = getStoredAuthToken()
-  const retry = () => { if (!streaming) invalidateImage(assetId, session, thumbnail); setUrl(''); setError(''); setAttempt((value) => value + 1) }
+  const retry = () => { if (!streaming) invalidateImage(assetId, session, thumbnail); setUrl(''); setError(''); setImageReady(false); setAttempt((value) => value + 1) }
   useEffect(() => {
     if (!streaming) return subscribeImage(assetId, session, state => { setUrl(state.url); setError(state.error) }, thumbnail)
     let active = true
@@ -33,7 +34,7 @@ function AssetPreviewContent({ asset, controls = false, thumbnail = false, passi
   return <div className={`media-preview${thumbnail ? ' is-thumbnail' : ''}`} onPointerDown={(event) => { if ((event.target as HTMLElement).closest('video,audio,a,button,.media-player-shell')) event.stopPropagation() }}>
     {thumbnail && (error || !url) ? <div className="media-thumbnail-placeholder">
       {error ? passive ? <ImageOff size={20} role="img" aria-label="预览暂不可用" /> : <button type="button" className="media-thumbnail-retry nodrag nopan" aria-label={`重试预览：${asset.name}`} title={`${error}，点击重试`} onClick={retry}><RotateCcw size={18} strokeWidth={1.6} aria-hidden="true" /></button> : <ImagePlus size={20} strokeWidth={1.6} role="img" aria-label={`正在加载预览：${asset.name}`} />}
-    </div> : error ? <span>{error} {!passive && <button className="nodrag nopan" onClick={retry}>重试</button>}</span> : !url ? <span>加载素材…</span> : asset.kind === 'image' ? <img src={url} alt={asset.name} draggable={false} onLoad={(event) => onImageDimensions?.(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} onError={() => setError('此图片无法预览')} /> : controls && !thumbnail && (asset.kind === 'video' || asset.kind === 'audio') ? <Suspense fallback={<span>加载播放器…</span>}>
+    </div> : error ? <span>{error} {!passive && <button className="nodrag nopan" onClick={retry}>重试</button>}</span> : !url ? <span>加载素材…</span> : asset.kind === 'image' ? <img data-ready={imageReady} src={url} alt={asset.name} draggable={false} onLoad={(event) => { setImageReady(true); onImageDimensions?.(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight) }} onError={() => setError('此图片无法预览')} /> : controls && !thumbnail && (asset.kind === 'video' || asset.kind === 'audio') ? <Suspense fallback={<span>加载播放器…</span>}>
       <MediaPlayer key={url} src={url} kind={asset.kind} name={asset.name} onError={() => setError('素材播放失败，请重试或下载原文件')} />
     </Suspense> : asset.kind === 'video' ? <video className="nodrag nopan" src={url} crossOrigin="use-credentials" muted={thumbnail} playsInline preload="metadata" aria-label={thumbnail ? `视频参考：${asset.name}` : undefined} onError={() => setError('视频加载失败，请重试或下载原文件')} /> : <span className="media-audio-symbol" aria-label="音频素材">♫</span>}
     {controls && url && <a className="media-download nodrag nopan" href={streaming ? `${url}?download=true` : url} download={asset.download_name ?? asset.name} aria-label="下载原文件" title="下载原文件"><Download size={15} aria-hidden="true" /></a>}

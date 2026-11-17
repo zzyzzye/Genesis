@@ -47,6 +47,19 @@ export const canvasEditorTransition: Variants = {
   exit: { opacity: 0, y: 8, transition: { duration: motionTiming.quick, ease: motionTiming.ease } },
 }
 
+// 影音页面与浮层共用短距离过渡，不缩放正文或影响画布坐标。
+export const mediaSurfaceTransition: Variants = {
+  initial: { opacity: 0, y: 8 },
+  enter: { opacity: 1, y: 0, transition: { duration: motionTiming.page, ease: layoutEase } },
+  exit: { opacity: 0, y: 4, transition: { duration: motionTiming.quick, ease: layoutEase } },
+}
+
+export const mediaNavigationTransition: Variants = {
+  initial: { opacity: 0, x: -24 },
+  enter: { opacity: 1, x: 0, transition: { duration: motionTiming.panel, ease: layoutEase } },
+  exit: { opacity: 0, x: -16, transition: { duration: motionTiming.quick, ease: layoutEase } },
+}
+
 // 沿引用路径匀速流动，每条曲线保留两个短光段。
 export const canvasReferenceFlow: Variants = {
   initial: { pathLength: .08, pathSpacing: .42, pathOffset: 0 },

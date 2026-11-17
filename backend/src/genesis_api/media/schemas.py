@@ -13,6 +13,12 @@ class ProjectWrite(BaseModel):
     name: str = Field(min_length=1, max_length=120)
 
 
+class ProjectCoverWrite(BaseModel):
+    """指定作品封面图片；空值恢复自动选图。"""
+
+    asset_id: UUID | None
+
+
 class GenerationSettings(BaseModel):
     """随画布保存的生成参数草稿，不表示已经提交模型生成任务。"""
 

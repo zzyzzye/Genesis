@@ -34,6 +34,7 @@ from genesis_api.media.schemas import (
     AssetReference,
     CanvasDocument,
     CanvasWrite,
+    ProjectCoverWrite,
     ProjectWrite,
 )
 from genesis_api.media.thumbnails import thumbnail
@@ -192,6 +193,42 @@ def rename_project(
     project = service.project_for(session, user.id, project_id)
     project.name = data.name
     project.updated_at = datetime.now(UTC)
+    session.commit()
+    return service.project_data(project)
+
+
+@router.put("/projects/{project_id}/cover")
+def set_project_cover(
+    project_id: UUID,
+    data: ProjectCoverWrite,
+    user: CurrentUserDependency,
+    session: SessionDependency,
+) -> dict[str, object]:
+    """保存作品封面，复用当前用户的作品图片或账户图片。
+
+    Args:
+        project_id: 当前用户拥有的作品。
+        data: 图片素材标识，空值恢复自动选图。
+        user: 已认证用户，封面图片必须属于该用户。
+        session: 锁定作品后保存封面；不改变画布版本或最近编辑时间。
+
+    Returns:
+        带持久封面标识的作品摘要。
+
+    Raises:
+        HTTPException: 作品或图片不可用返回 404，非图片返回 422。
+    """
+    project = service.project_for(session, user.id, project_id)
+    if data.asset_id is not None:
+        asset = service.asset_for(session, user.id, data.asset_id)
+        if asset.kind != "image":
+            raise HTTPException(422, "请选择图片作为作品封面")
+        reference = session.get(ProjectAsset, (project_id, asset.id))
+        if reference is None:
+            if not asset.in_library:
+                raise HTTPException(404, "图片不在当前作品或账户素材库中")
+            session.add(ProjectAsset(project_id=project_id, asset_id=asset.id))
+    project.cover_asset_id = data.asset_id
     session.commit()
     return service.project_data(project)
 
@@ -548,6 +585,8 @@ def remove_reference(
     """
     project = service.project_for(session, user.id, project_id)
     service.asset_for(session, user.id, asset_id)
+    if project.cover_asset_id == asset_id:
+        project.cover_asset_id = None
     session.execute(
         delete(ProjectAsset).where(
             ProjectAsset.project_id == project_id, ProjectAsset.asset_id == asset_id

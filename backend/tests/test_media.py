@@ -104,6 +104,54 @@ async def media_client(
 
 
 @pytest.mark.anyio
+async def test_project_cover_persistence_and_access(media_client: AsyncClient) -> None:
+    """封面独立持久化，只允许当前作品或账户库中的自有图片。"""
+    c = media_client
+    project = (await c.post("projects", json={"name": "封面作品"})).json()
+    project_id = project["id"]
+    image = (await c.post("assets", files={"file": ("封面.png", b"cover", "image/png")})).json()
+    cover_url = f"projects/{project_id}/cover"
+    response = await c.put(cover_url, json={"asset_id": image["id"]})
+    assert response.status_code == 200
+    assert response.json()["cover_asset_id"] == image["id"]
+    assert response.json()["version"] == project["version"]
+    assert response.json()["updated_at"] == project["updated_at"]
+    assert (await c.get("projects")).json()[0]["cover_asset_id"] == image["id"]
+    assert (await c.get(f"projects/{project_id}/assets")).json()["total"] == 1
+    assert (await c.patch(f"projects/{project_id}", json={"name": "改名"})).json()[
+        "cover_asset_id"
+    ] == image["id"]
+    audio = (await c.post("assets", files={"file": ("声音.mp3", b"audio", "audio/mpeg")})).json()
+    assert (await c.put(cover_url, json={"asset_id": audio["id"]})).status_code == 422
+    other = (await c.post("projects", json={"name": "其他作品"})).json()["id"]
+    private_image = (
+        await c.post(
+            f"projects/{other}/assets", files={"file": ("私有.png", b"image", "image/png")}
+        )
+    ).json()
+    assert (await c.put(cover_url, json={"asset_id": private_image["id"]})).status_code == 404
+    assert (await c.put(cover_url, json={"asset_id": str(uuid4())})).status_code == 404
+    app = c._transport.app  # type: ignore[attr-defined]
+    owner = app.dependency_overrides[get_current_user]()
+    session = app.dependency_overrides[get_session]()
+    viewer = User(handle="cover-viewer", display_name="浏览者", role=UserRole.MEMBER)
+    session.add(viewer)
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: viewer
+    assert (await c.put(cover_url, json={"asset_id": image["id"]})).status_code == 404
+    viewer_project = (await c.post("projects", json={"name": "别人的作品"})).json()["id"]
+    assert (
+        await c.put(f"projects/{viewer_project}/cover", json={"asset_id": image["id"]})
+    ).status_code == 404
+    app.dependency_overrides[get_current_user] = lambda: owner
+    assert (await c.put(cover_url, json={"asset_id": None})).json()["cover_asset_id"] is None
+    await c.put(cover_url, json={"asset_id": image["id"]})
+    assert (await c.delete(f"projects/{project_id}/assets/{image['id']}")).status_code == 200
+    assert (await c.get(f"projects/{project_id}")).json()["cover_asset_id"] is None
+    assert (await c.get(f"assets/{image['id']}")).status_code == 200
+
+
+@pytest.mark.anyio
 async def test_project_asset_lifecycle(media_client: AsyncClient) -> None:
     c = media_client
     assert (await c.get("health")).status_code == 200

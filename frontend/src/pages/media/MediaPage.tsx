@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { developmentLogin, getCurrentUser, type CurrentUser } from '../../lib/api'
 import { getStoredAuthToken, storeAuthToken } from '../../lib/auth'
-import { MediaHome } from './MediaHome'
+import { MediaProjects } from './MediaProjects'
+import { MediaLayout } from './MediaLayout'
 import { ProjectCanvas } from './ProjectCanvas'
 import { AccountAssetsPage, ProjectAssetsPage, ProjectOverviewPage } from './ProjectWorkspace'
 import { MediaAssistant, type MediaAssistantNode, type MediaCanvasActions, type MediaCanvasPlan } from './MediaAssistant'
@@ -47,12 +48,11 @@ export function MediaPage() {
   if (checking) return <main className="media-gate" role="status">正在打开创作空间…</main>
   if (!user) return <main className="media-gate"><Link to="/">← Genesis</Link><small>YOUR CREATIVE SPACE</small><h1>从一个作品开始。</h1><p>登录后管理你的作品、私有素材与创作画布。</p>{authError && <p role="alert">{authError}</p>}<Link className="media-accent" to={`/account?returnTo=${encodeURIComponent(location.pathname)}`}>登录并继续</Link></main>
   const page = location.pathname.endsWith('/canvas') ? 'canvas' : location.pathname.endsWith('/assets') ? 'assets' : projectId ? 'project' : 'projects'
-  const content = !projectId
-    ? (page === 'assets' ? <AccountAssetsPage /> : <MediaHome />)
-    : page === 'canvas'
-      ? <ProjectCanvas key={`${user.id}:${projectId}`} projectId={projectId} userId={user.id} onAgentNodeChange={setAgentNode} onAgentCanvasApplyChange={handleAgentCanvasApplyChange} onAgentActionsChange={setCanvasActions} />
-      : page === 'assets'
-        ? <ProjectAssetsPage projectId={projectId} />
-        : <ProjectOverviewPage projectId={projectId} />
+  const content = page === 'canvas' && projectId
+    ? <ProjectCanvas key={`${user.id}:${projectId}`} projectId={projectId} userId={user.id} onAgentNodeChange={setAgentNode} onAgentCanvasApplyChange={handleAgentCanvasApplyChange} onAgentActionsChange={setCanvasActions} />
+    : <MediaLayout projectId={projectId}>{(create, collection) => !projectId
+      ? page === 'assets' ? <AccountAssetsPage /> : <MediaProjects onCreate={create} collection={collection} />
+      : page === 'assets' ? <ProjectAssetsPage key={projectId} projectId={projectId} /> : <ProjectOverviewPage key={projectId} projectId={projectId} />
+    }</MediaLayout>
   return <div className="media-workspace">{content}<MediaAssistant key={user.id} userId={user.id} attachmentsAllowed page={page} projectId={projectId} selectedNode={page === 'canvas' ? agentNode : null} onApplyCanvasPlan={page === 'canvas' ? agentCanvasApply ?? undefined : undefined} canvasActions={page === 'canvas' ? canvasActions : null} /></div>
 }

@@ -40,7 +40,8 @@ export function GenerationModelPicker({ models, value, disabled, label, placehol
   useEffect(() => () => cancelClose(), [cancelClose])
   if (disabled && open) setOpen(false)
   useLayoutEffect(() => {
-    if (!open || !menu.current || !trigger.current) return
+    if (!open) { menu.current?.hidePopover?.(); return }
+    if (!menu.current || !trigger.current) return
     const surface = menu.current
     surface.showPopover?.()
     const position = () => {
@@ -68,7 +69,7 @@ export function GenerationModelPicker({ models, value, disabled, label, placehol
     <button ref={trigger} type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? `${id}-list` : undefined} aria-describedby={preview && !open ? `${id}-preview` : undefined} disabled={disabled} onPointerEnter={event => { if (selected && event.pointerType !== 'touch') show(selected, event.currentTarget) }} onPointerLeave={leave} onFocus={event => { if (selected && !open) show(selected, event.currentTarget) }} onBlur={closePreview} onClick={() => { closePreview(); setQuery(''); setOpen(!open) }}>
       <Cpu size={14} aria-hidden="true" /><span>{selected?.id ?? placeholder}</span><ChevronDown size={12} aria-hidden="true" />
     </button>
-    {open && createPortal(<div ref={menu} data-model-menu="generation" popover={native ? 'auto' : undefined} className="media-generation-model-menu nodrag nowheel media-wheel-isolated nopan" onWheel={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onToggle={event => { if (event.newState === 'closed') { setOpen(false); closePreview() } }} onKeyDown={event => {
+    {createPortal(<div ref={menu} data-model-menu="generation" data-open={open} inert={!open} aria-hidden={!open || undefined} hidden={!native && !open} popover={native ? 'auto' : undefined} className="media-generation-model-menu nodrag nowheel media-wheel-isolated nopan" onWheel={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onToggle={event => { if (event.newState === 'closed') { setOpen(false); closePreview() } }} onKeyDown={event => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(true); return }
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
         const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]')]
