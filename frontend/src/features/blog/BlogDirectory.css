@@ -73,19 +73,18 @@ body:has(.blog-portal) { min-width: 0; }
 .portal-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 23px; }
 .portal-section-heading h2 { margin: 0; font-size: 23px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; scroll-margin-top: 94px; }
 .portal-section-heading > span { flex: none; color: var(--portal-muted); font-size: 12px; }
-.portal-post-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 30px 25px; margin: 0; padding: 0; list-style: none; }
-.portal-post-grid > li { display: grid; grid-row: span 5; grid-template-rows: subgrid; row-gap: 0; min-width: 0; }
+.portal-post-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 30px 25px; margin: 0; padding: 0; list-style: none; }
+.portal-post-grid > li { display: grid; grid-row: span 4; grid-template-rows: subgrid; row-gap: 0; min-width: 0; }
 .portal-post-grid > li > article { display: grid; grid-row: 1 / -1; grid-template-rows: subgrid; row-gap: 0; min-width: 0; }
-/* 同排卡片共享五段高度，长标题和缺失摘要都不再挤乱后续内容。 */
+/* 同排卡片共享封面、标题、摘要与作者四段高度，标签叠放在封面内。 */
 .portal-post-link { display: grid; grid-row: 1 / -1; grid-template-rows: subgrid; row-gap: 0; min-width: 0; border-radius: 10px; }
 .portal-post-cover { position: relative; grid-row: 1; align-self: start; overflow: hidden; border-radius: 14px; background: var(--portal-soft); }
 .portal-post-cover > img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; }
-.portal-post-topic { position: absolute; bottom: 9px; left: 10px; max-width: calc(100% - 20px); overflow: hidden; padding: 4px 7px; border-radius: 5px; background: rgb(255 255 255 / 94%); color: #333; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.portal-post-link h3 { grid-row: 2; margin: 10px 0 6px; font-size: 15px; font-weight: 600; letter-spacing: -.015em; line-height: 1.45; overflow-wrap: anywhere; }
-.portal-post-link > p { display: -webkit-box; grid-row: 3; align-self: start; margin: 0 0 8px; overflow: hidden; color: var(--portal-muted); font-size: 12px; line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.portal-post-tags { display: flex; grid-row: 4; min-height: 16px; flex-wrap: wrap; align-content: start; gap: 4px 9px; margin-bottom: 8px; color: var(--portal-muted); font-size: 11px; line-height: 1.45; }
-.portal-post-tags:empty { min-height: 0; margin-bottom: 0; }
-.portal-post-link footer { display: flex; grid-row: 5; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 7px; }
+.portal-post-link h3 { display: -webkit-box; grid-row: 2; align-self: start; margin: 10px 0 6px; overflow: hidden; font-size: 15px; font-weight: 600; letter-spacing: -.015em; line-height: 1.45; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.portal-post-link > p { display: -webkit-box; grid-row: 3; align-self: start; margin: 0 0 8px; overflow: hidden; color: var(--portal-muted); font-size: 12px; line-height: 1.6; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
+.portal-post-tags { position: absolute; right: 10px; bottom: 10px; left: 10px; display: flex; gap: 6px; color: #333; font-size: 11px; line-height: 1.45; }
+.portal-post-tags > span { min-width: 0; max-width: calc((100% - 6px) / 2); overflow: hidden; padding: 4px 7px; border-radius: 5px; background: rgb(255 255 255 / 94%); text-overflow: ellipsis; white-space: nowrap; }
+.portal-post-link footer { display: flex; grid-row: 4; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 7px; }
 .portal-post-link .portal-author { gap: 6px; font-size: 11px; }
 .portal-post-link .portal-author > img, .portal-post-link .portal-author-avatar { width: 22px; height: 22px; }
 .portal-post-link footer > time { color: var(--portal-muted); font-size: 10px; }
@@ -131,7 +130,7 @@ body:has(.blog-portal) { min-width: 0; }
 }
 @media (max-width: 1199px) {
   .blog-portal { --portal-sidebar-width: 208px; }.blog-portal--collapsed { --portal-sidebar-width: 76px; }
-  .portal-main { padding-inline: 25px; }.portal-post-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 20px; }
+  .portal-main { padding-inline: 25px; }.portal-post-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 20px; }
   .portal-featured { gap: 16px; padding: 16px; }.portal-featured-copy { padding: 10px; }.portal-featured h2 { font-size: 24px; }.portal-featured-copy > .portal-author { margin-bottom: 20px; }
 }
 @media (max-width: 1000px) {
