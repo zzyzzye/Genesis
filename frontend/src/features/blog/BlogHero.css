@@ -18,26 +18,19 @@
 .blog-hero-quote blockquote { margin: 0; font-family: "Songti SC", "Noto Serif SC", "STSong", serif; font-size: clamp(28px, 3.2vw, 46px); font-weight: 500; line-height: 1.7; letter-spacing: .035em; overflow-wrap: anywhere; text-wrap: balance; }
 .blog-hero-quote blockquote > span { display: block; }
 .blog-hero-quote figcaption { margin-top: 24px; color: rgb(255 255 255 / 85%); font-size: 11px; letter-spacing: .18em; }
-.blog-hero-read { position: absolute; bottom: 30px; display: flex; flex-direction: column; min-width: 116px; min-height: 76px; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 24px; color: #fff; font-size: 12px; letter-spacing: .1em; transition: background 200ms ease; }
-.blog-hero-read-label { animation: blog-read-float 2.8s ease-in-out infinite; }
-.blog-hero-read-arrow { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; background: rgb(255 255 255 / 9%); animation: blog-read-drift 2.8s ease-in-out infinite; transition: background 200ms ease; }
-.blog-hero-read:is(:hover, :focus-visible) { background: rgb(255 255 255 / 14%); }
-.blog-hero-read:is(:hover, :focus-visible) .blog-hero-read-arrow { background: rgb(255 255 255 / 18%); }
-.blog-hero-read:active { background: rgb(255 255 255 / 20%); }
-
-@keyframes blog-read-float {
-  0%, 100% { transform: translateY(0); }
-  45% { transform: translateY(-2px); }
-}
+.blog-hero-read { position: absolute; bottom: 30px; display: flex; flex-direction: column; min-width: 104px; min-height: 64px; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; background: transparent; color: rgb(255 255 255 / 80%); font-size: 12px; letter-spacing: .1em; transition: color 200ms ease; }
+.blog-hero-read-arrow { display: grid; width: 20px; height: 20px; place-items: center; animation: blog-read-drift 1.8s ease-in-out infinite; will-change: transform; }
+.blog-hero-read:is(:hover, :focus-visible) { color: #fff; }
+.blog-hero-read:active { color: rgb(255 255 255 / 65%); }
 
 @keyframes blog-read-drift {
-  0%, 20%, 100% { transform: translateY(0); opacity: .75; }
-  55% { transform: translateY(6px); opacity: 1; }
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, 4px, 0); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .blog-hero-read-label, .blog-hero-read-arrow { animation: none; }
-  .blog-hero-read, .blog-hero-read-arrow { transition: none; }
+  .blog-hero-read-arrow { animation: none; will-change: auto; }
+  .blog-hero-read { transition: none; }
 }
 
 @media (max-width: 800px) {
