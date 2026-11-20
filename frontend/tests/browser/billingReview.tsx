@@ -49,7 +49,14 @@ window.fetch = async (input, init) => {
   }
   if (path.endsWith('/admin/billing/policies')) return reply(method === 'GET' ? [] : { id:'policy' },method === 'GET' ? 200 : 201)
   if (path.endsWith('/billing/operations')) return reply({ items:state === 'empty' ? [] : [bill,{ ...bill,id:'pending',kind:'image',model:'gpt-image-2',status:'pending' },{ ...bill,id:'free',provider:'mimo',mode:'free',model:'mimo-v2.6-flash',charged_amount:'0.00000000' }],total:state === 'empty' ? 0 : 3 })
-  if (path.includes('/billing/operations/')) return reply({ ...bill,calls:[{ request_id:'synthetic-gateway-request',status:'settled',amount:'0.00025200',details:{ prompt_tokens:4391,completion_tokens:7,cache_tokens:4224,matched_tier:'short',billing_formula:{ final_quota:126,effective_group_ratio:0.2 },response_model:{ upstream_model:'gpt-5.6-terra' } } }] })
+  if (path.includes('/billing/operations/')) {
+    const free = path.endsWith('/free')
+    return reply({ ...bill,mode:free ? 'free' : 'paid',provider:free ? 'mimo' : 'openai',model:free ? 'mimo-v2.6-pro' : bill.model,
+      created_at:'2026-11-20T08:00:00Z',call_count:free ? 3 : 1,generation_status:'completed',
+      generation_metrics:state === 'legacy' ? null : { input_tokens:4391,output_tokens:234,token_source:'estimated',first_token_seconds:0.8,total_seconds:12.4,tokens_per_second:20.2,input_model:free ? 'mimo-v2.6-pro' : bill.model },
+      calls:free ? Array.from({ length:3 }, (_,index) => ({ id:`synthetic-${index}`,created_at:`2026-11-20T08:00:0${index}Z`,request_id:null,status:'unknown',amount:'0',details:{} })) : [{ id:'synthetic-call',created_at:'2026-11-20T08:00:00Z',request_id:'synthetic-gateway-request',status:'settled',amount:'0.00025200',details:{ prompt_tokens:4391,completion_tokens:7,cache_tokens:4224,matched_tier:'short',billing_formula:{ final_quota:126,effective_group_ratio:0.2 },response_model:{ upstream_model:'gpt-5.6-terra' } } }],
+    })
+  }
   if (path.endsWith('/ai/chat/runs') && method === 'POST') { started = true; completed = false; stopped = false; return reply({ id:'55555555-5555-4555-8555-555555555555',status:'pending' },202) }
   if (path.includes('/ai/chat/runs/') && method === 'DELETE') { stopped = true; return new Response(null,{ status:204 }) }
   if (path.includes('/ai/chat/runs/') && path.endsWith('/stream')) {

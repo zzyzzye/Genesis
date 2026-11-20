@@ -7,11 +7,14 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from genesis_api.ai.models import AiChatRun
+from genesis_api.ai.schemas import AiGenerationMetrics
 from genesis_api.api.dependencies import CurrentUserDependency, OwnerDependency, SessionDependency
 from genesis_api.billing.models import BillingOperation, PricePolicy, UpstreamCharge, WalletEntry
 from genesis_api.billing.schemas import CreditRequest, PolicyRequest, QuoteRequest
 from genesis_api.billing.service import (
     ZERO,
+    aware,
     channel_id,
     connection,
     create_quote,
@@ -38,17 +41,39 @@ router = APIRouter(tags=["账务"])
 
 def _details(session: Session, row: BillingOperation) -> dict[str, Any]:
     """仅投影当前订单的计费证据，不返回渠道凭据引用。"""
+    run = (
+        session.execute(
+            select(AiChatRun.generation_metrics, AiChatRun.status).where(
+                AiChatRun.id == row.source_id, AiChatRun.user_id == row.user_id
+            )
+        ).first()
+        if row.kind == "agent" and row.source_id is not None
+        else None
+    )
     return {
         **operation_data(row),
+        "created_at": aware(row.created_at).isoformat(),
+        "call_count": row.call_count,
+        "generation_status": run.status.value if run else None,
+        # 复用任务统计的白名单；最近输入和正文输出不能冒充整轮计费用量。
+        "generation_metrics": AiGenerationMetrics.model_validate(
+            run.generation_metrics
+        ).model_dump(exclude_unset=True)
+        if run and run.generation_metrics
+        else None,
         "calls": [
             {
+                "id": str(c.id),
+                "created_at": aware(c.created_at).isoformat(),
                 "request_id": c.request_id,
                 "status": c.status,
                 "amount": money(c.amount),
                 "details": c.details,
             }
             for c in session.scalars(
-                select(UpstreamCharge).where(UpstreamCharge.operation_id == row.id)
+                select(UpstreamCharge)
+                .where(UpstreamCharge.operation_id == row.id)
+                .order_by(UpstreamCharge.created_at, UpstreamCharge.id)
             )
         ],
     }
@@ -106,20 +131,7 @@ def operation(
     )
     if row is None:
         raise HTTPException(404, "账单不存在")
-    return {
-        **operation_data(row),
-        "calls": [
-            {
-                "request_id": c.request_id,
-                "status": c.status,
-                "amount": money(c.amount),
-                "details": c.details,
-            }
-            for c in session.scalars(
-                select(UpstreamCharge).where(UpstreamCharge.operation_id == row.id)
-            )
-        ],
-    }
+    return _details(session, row)
 
 
 @router.get("/billing/operations")

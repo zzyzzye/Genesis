@@ -143,6 +143,53 @@ def test_personal_bills_exclude_platform_costs(state: Any) -> None:
     assert routes.admin_operation(rows[2].id, owner, session)["mode"] == "platform"
 
 
+def test_bill_details_include_safe_task_metrics_and_ordered_calls(state: Any) -> None:
+    """明细复用任务统计，保留零值及估算来源，不暴露正文或跨账户任务。"""
+    session, user, owner, _, _, _ = state
+    operation = quote_and_admit(state)
+    run = AiChatRun(
+        id=operation.source_id,
+        user_id=user.id,
+        surface="blog",
+        provider="openai",
+        status=AiChatRunStatus.COMPLETED,
+        generation_metrics={
+            "input_tokens": 0,
+            "output_tokens": 123,
+            "token_source": "estimated",
+            "total_seconds": 2.5,
+            "unrelated": "不得输出的合成字段",
+        },
+        content="不得输出的合成正文",
+    )
+    early = datetime(2026, 11, 20, tzinfo=UTC)
+    charges = [
+        UpstreamCharge(
+            operation_id=operation.id, channel="synthetic", created_at=early + timedelta(seconds=n)
+        )
+        for n in (2, 1)
+    ]
+    operation.call_count = 2
+    session.add_all([run, *charges])
+    session.commit()
+    result = routes.operation(operation.id, user, session)
+    assert result["call_count"] == 2 and result["created_at"]
+    assert result["generation_status"] == "completed"
+    assert result["generation_metrics"]["input_tokens"] == 0
+    assert result["generation_metrics"]["token_source"] == "estimated"
+    assert [call["id"] for call in result["calls"]] == [str(c.id) for c in reversed(charges)]
+    assert "不得输出" not in json.dumps(result, ensure_ascii=False)
+    with pytest.raises(HTTPException) as caught:
+        routes.operation(operation.id, owner, session)
+    assert caught.value.status_code == 404
+    run.user_id = owner.id
+    session.commit()
+    assert routes.operation(operation.id, user, session)["generation_metrics"] is None
+    session.delete(run)
+    session.commit()
+    assert routes.operation(operation.id, user, session)["generation_status"] is None
+
+
 def sample(request_id: str = "gateway-request", quota: int = 126, kind: int = 2) -> dict[str, Any]:
     """保留实际结算字段，去掉原账号、令牌名、渠道和个人信息。"""
     return {

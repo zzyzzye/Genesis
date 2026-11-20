@@ -4,7 +4,8 @@ import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, CircleHelp, Fil
 import { ApiError, getCurrentUser, type CurrentUser } from '../../lib/api'
 import { getStoredAuthToken } from '../../lib/auth'
 import { useModalDialog } from '../../studio/useModalDialog'
-import { amountLabel, billingApi, billingLabel, isWallet, type BillingOperation, type Page, type Wallet } from './api'
+import { amountLabel, billingApi, isWallet, type BillingOperation, type Page, type Wallet } from './api'
+import { ChargeDialog } from './ChargeDialog'
 import { AccountWorkspace } from '../account/AccountWorkspace'
 import { WalletBalance } from './WalletBalance'
 import './Billing.css'
@@ -14,7 +15,6 @@ type Account = Wallet & { id: string; handle: string; display_name: string }
 type Policy = { id: string; model: string; kind: string; active: boolean; max_request_amount: string; evidence: string }
 type AdminOperation = BillingOperation & { user_id: string }
 type Action = { title: string; summary: string; path: string; body: Record<string, unknown> }
-type Charge = { request_id: string | null; status: string; amount: string; details: Record<string, unknown> }
 const entryKinds: Record<string, string> = { credit:'人工充值',correction:'账务更正',reserve:'历史预算冻结',release:'历史冻结退回',settle:'费用结算',refund:'供应商退款',review:'人工核对',policy:'价格审核' }
 const kindNames: Record<string, string> = { agent:'Agent 对话',image:'图片生成',video:'视频生成' }
 function operationStatus(row: BillingOperation): string {
@@ -33,38 +33,6 @@ function field(form: FormData, key: string): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function ChargeDialog({ id, admin, close }: { id: string; admin: boolean; close: () => void }) {
-  const cancel = useRef<HTMLButtonElement>(null)
-  const dialog = useModalDialog(cancel)
-  const [data, setData] = useState<(BillingOperation & { calls:Charge[] }) | null>(null)
-  const [error, setError] = useState('')
-  const [attempt, setAttempt] = useState(0)
-  const shown = (value: unknown) => typeof value === 'string' || typeof value === 'number' ? String(value) : '未知'
-  const property = (value: unknown, key: string) => value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined
-  useEffect(() => {
-    const controller = new AbortController()
-    void billingApi<BillingOperation & { calls:Charge[] }>(`${admin ? '/admin' : ''}/billing/operations/${id}`, 'GET', undefined, undefined, controller.signal)
-      .then(result => { if (!controller.signal.aborted) { setData(result); setError('') } })
-      .catch((reason: Error) => { if (!controller.signal.aborted) setError(reason.message) })
-    return () => controller.abort()
-  }, [id, admin, attempt])
-  return <dialog ref={dialog} className="billing-dialog billing-dialog--account" aria-labelledby="billing-details-title" onCancel={close}>
-    <h2 id="billing-details-title">费用明细</h2>
-    {error ? <p role="alert">{error} <button type="button" onClick={() => setAttempt(n => n+1)}>重试</button></p> : !data ? <p role="status">正在读取明细…</p> : <>
-      <p>{data.model} · {billingLabel(data)}</p>{data.note && <p>{data.note}</p>}
-      <dl>{data.calls.map((call, index) => <div key={call.request_id ?? index}>
-        <dt>请求 ID</dt><dd>{call.request_id ?? '尚未取得网关请求 ID'}</dd>
-        <dt>上游费用</dt><dd>{data.mode === 'free' ? '不扣钱包余额' : call.status === 'settled' ? amountLabel(call.amount) : '待核对'}</dd>
-        <dt>输入 / 输出 Token</dt><dd>{shown(call.details.prompt_tokens)} / {shown(call.details.completion_tokens)}</dd>
-        <dt>缓存读取 / 命中阶梯</dt><dd>{shown(call.details.cache_tokens)} / {shown(call.details.matched_tier)}</dd>
-        <dt>结算额度 / 实际分组倍率</dt><dd>{shown(property(call.details.billing_formula, 'final_quota'))} / {shown(property(call.details.billing_formula, 'effective_group_ratio'))}</dd>
-        <dt>模型映射</dt><dd>{typeof call.details.response_model === 'object' && call.details.response_model !== null ? shown((call.details.response_model as Record<string, unknown>).upstream_model) : '未知'}</dd>
-      </div>)}</dl>
-      {!data.calls.length && <p>暂无上游请求记录。</p>}
-    </>}
-    <footer><button ref={cancel} type="button" onClick={close}>关闭明细</button></footer>
-  </dialog>
-}
 
 function ConfirmAction({ action, done, cancel }: { action: Action; done: () => void; cancel: () => void }) {
   const button = useRef<HTMLButtonElement>(null)
