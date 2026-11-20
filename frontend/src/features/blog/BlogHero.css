@@ -1,9 +1,7 @@
 .blog-hero {
   position: relative;
   display: flex;
-  min-height: 420px;
-  height: 75svh;
-  max-height: 1000px;
+  height: 100dvh;
   align-items: center;
   justify-content: center;
   isolation: isolate;
@@ -24,7 +22,6 @@
 .blog-hero-read:is(:hover, :focus-visible) { background: rgb(255 255 255 / 14%); }
 
 @media (max-width: 800px) {
-  .blog-hero { height: 52svh; min-height: 280px; max-height: 560px; }
   .blog-hero-brand { --genesis-logo-size: 24px; --genesis-wordmark-size: 15px; top: 22px; left: 22px; }
   .blog-hero-quote { width: calc(100% - 48px); padding-block: 66px; }
   .blog-hero-quote blockquote { font-size: clamp(23px, 5vw, 32px); line-height: 1.65; letter-spacing: .02em; }
