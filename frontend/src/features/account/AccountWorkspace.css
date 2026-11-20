@@ -24,7 +24,7 @@
 .account-workspace-heading h1 { margin:0; font-size:34px; font-weight:600; letter-spacing:-.04em; line-height:1.3; }
 .account-workspace-heading p { margin:12px 0 0; color:var(--account-muted); font-size:13px; line-height:1.8; }
 .account-workspace button:disabled { cursor:default; }
-.account-workspace--profile .account-workspace-main { max-width:824px; padding:40px 52px 20px; }
+.account-workspace--profile .account-workspace-main { max-width:1240px; padding:40px clamp(28px,4vw,60px) 24px; }
 .account-workspace--profile .account-workspace-heading { margin-bottom:32px; }
 .account-workspace--profile .account-workspace-heading h1 { font-size:28px; }
 .account-workspace--profile .account-workspace-heading p { margin-top:8px; }

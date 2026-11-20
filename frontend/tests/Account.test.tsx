@@ -19,6 +19,7 @@ function deferred<T>() {
 function setup(path = '/account') {
   const router = createMemoryRouter([
     { path: '/account', element: <Account /> },
+    { path: '/account/wallet', element: <Account /> },
     { path: '*', element: <p>已回到原页面</p> },
   ], { initialEntries: [path] })
   const view = render(<RouterProvider router={router} />)
@@ -37,9 +38,45 @@ describe('账户登录与注册', () => {
     vi.mocked(getCurrentUser).mockResolvedValue(user)
     vi.mocked(registerAccount).mockResolvedValue(user)
     vi.mocked(updateCurrentUser).mockResolvedValue(user)
-    vi.mocked(request).mockResolvedValue({ available:'0.00000000',frozen:'0.00000000',currency:'CNY' })
+    vi.mocked(request).mockImplementation(path => Promise.resolve(path === '/billing/wallet'
+      ? { available:'0.00000000',frozen:'0.00000000',currency:'CNY' }
+      : { items:[],total:0 }))
   })
   afterEach(() => { cleanup(); localStorage.clear(); vi.resetAllMocks() })
+
+  it('资料与钱包合并，切换流水和刷新账务不丢失资料草稿', async () => {
+    storeAuthToken(session.access_token)
+    setup()
+    await screen.findByText('暂无生成账单。')
+    expect(screen.getByRole('heading', { name:'个人账户' })).toBeVisible()
+    expect(screen.getByText('¥0.00')).toBeVisible()
+    const name = screen.getByRole('textbox', { name:'昵称' })
+    fireEvent.change(name, { target:{ value:'未保存的昵称' } })
+    fireEvent.click(screen.getByRole('link', { name:'余额流水，共 0 条' }))
+    await screen.findByText('暂无余额流水。')
+    fireEvent.click(screen.getByRole('button', { name:'刷新账务' }))
+    await screen.findByText('暂无余额流水。')
+    expect(name).toHaveValue('未保存的昵称')
+    expect(getCurrentUser).toHaveBeenCalledTimes(1)
+    expect(updateCurrentUser).not.toHaveBeenCalled()
+  })
+
+  it('旧钱包地址保留流水参数，账务失败时仍可编辑个人资料', async () => {
+    storeAuthToken(session.access_token)
+    vi.mocked(request).mockRejectedValue(new Error('测试账务读取失败'))
+    const { router } = setup('/account/wallet?tab=entries&page=2')
+    await screen.findByRole('heading', { name:'账务暂时无法读取' })
+    const name = screen.getByRole('textbox', { name:'昵称' })
+    fireEvent.change(name, { target:{ value:'失败时保留的昵称' } })
+    vi.mocked(request).mockImplementation(path => Promise.resolve(path === '/billing/wallet'
+      ? { available:'4.50000000',frozen:'0.00000000',currency:'CNY' }
+      : { items:[],total:0 }))
+    fireEvent.click(screen.getByRole('button', { name:'重新读取' }))
+    await screen.findByText('暂无余额流水。')
+    expect(name).toHaveValue('失败时保留的昵称')
+    expect(screen.getByText('¥4.50')).toBeVisible()
+    expect(router.state.location.search).toBe('?tab=entries&page=2')
+  })
 
   it('选图预览后随资料保存，失败可重试，成功不重复上传', async () => {
     storeAuthToken(session.access_token)

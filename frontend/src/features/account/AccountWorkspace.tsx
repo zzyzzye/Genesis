@@ -1,4 +1,4 @@
-import { ArrowUpRight, Clapperboard, LogOut, PenLine, ShieldCheck, UserRound, Wallet } from 'lucide-react'
+import { ArrowUpRight, Clapperboard, LogOut, PenLine, ShieldCheck, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { GenesisLogo } from '../../components/GenesisLogo'
@@ -14,15 +14,14 @@ export function AccountWorkspace({ user, active, children, onLogout, logoutDisab
   logoutDisabled?: boolean
 }) {
   const items = [
-    { id:'profile',name:'个人资料',path:'/account',icon:UserRound },
-    { id:'wallet',name:'我的钱包',path:'/account/wallet',icon:Wallet },
+    { id:'profile',name:'个人账户',path:'/account',icon:UserRound },
     ...(user?.role === 'owner' ? [{ id:'billing',name:'全站管理',path:'/admin',icon:ShieldCheck }] : []),
   ]
   return <div className={`account-shell account-workspace account-workspace--${active}`}>
     <aside className="account-workspace-sidebar">
       <Link className="account-workspace-brand" to="/" aria-label="Genesis 首页"><GenesisLogo /></Link>
       <div className="account-workspace-navigation"><p>个人空间</p><nav aria-label="账户服务">
-        {items.map(item => <Link key={item.id} to={item.path} aria-current={active === item.id ? 'page' : undefined}><item.icon size={18} strokeWidth={1.6} aria-hidden="true" />{item.name}</Link>)}
+        {items.map(item => <Link key={item.id} to={item.path} aria-current={(active === 'wallet' ? 'profile' : active) === item.id ? 'page' : undefined}><item.icon size={18} strokeWidth={1.6} aria-hidden="true" />{item.name}</Link>)}
       </nav></div>
       <div className="account-workspace-shortcuts"><p>创作</p><nav aria-label="创作入口">
         <Link to="/media"><Clapperboard size={17} strokeWidth={1.6} aria-hidden="true" /><span>返回创作空间</span><ArrowUpRight size={13} aria-hidden="true" /></Link>

@@ -10,7 +10,6 @@ import { MediaPage } from './pages/media/MediaPage'
 import { ToolboxPage } from './pages/toolbox/ToolboxPage'
 import { SvgGenerator } from './pages/toolbox/SvgGenerator'
 import { ImageTool } from './pages/toolbox/ImageTool'
-import { WalletPage } from './features/billing/WalletPage'
 import { AdminPage } from './pages/admin/AdminPage'
 import { motionCssVariables, pageTransition } from './lib/motion'
 import { SessionRecovery } from './SessionRecovery'
@@ -81,7 +80,7 @@ function PageRoutes({ location }: { location: Location }) {
         <Route path="/studio/blog/*" element={<LegacyStudioRedirect />} />
         <Route path="/studio" element={<LegacyStudioRedirect />} />
         <Route path="/account" element={<Account />} />
-        <Route path="/account/wallet" element={<WalletPage />} />
+        <Route path="/account/wallet" element={<Account />} />
         <Route path="/account/billing" element={<LegacyBillingRedirect />} />
         <Route path="/admin/*" element={<AdminPage />} />
       </Routes>

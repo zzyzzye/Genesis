@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowDownLeft, ArrowUpRight, ChevronLeft, ChevronRight, CircleHelp, Film, MessageSquare, RefreshCw, Sparkles } from 'lucide-react'
 import { ApiError, getCurrentUser, type CurrentUser } from '../../lib/api'
@@ -99,7 +99,7 @@ function RechargeDialog({ close }: { close: () => void }) {
   </dialog>
 }
 
-export function WalletPage({ admin = false, embedded = false, refreshKey = 0 }: { admin?: boolean; embedded?: boolean; refreshKey?: number }) {
+export function WalletPage({ admin = false, embedded = false, refreshKey = 0, accountUser, profile }: { admin?: boolean; embedded?: boolean; refreshKey?: number; accountUser?: CurrentUser; profile?: ReactNode }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const page = Math.max(1, Number(searchParams.get('page')) || 1)
   const tab = searchParams.get('tab') === 'entries' ? 'entries' : 'usage'
@@ -155,7 +155,7 @@ export function WalletPage({ admin = false, embedded = false, refreshKey = 0 }: 
       if (controller.signal.aborted) return
       setLoading(true); setError('')
       try {
-        const current = await getCurrentUser(token!)
+        const current = accountUser ?? await getCurrentUser(token!)
         if (controller.signal.aborted) return
         setUser(current)
         if (admin && current.role !== 'owner') throw new Error('需要站点管理权限')
@@ -176,7 +176,7 @@ export function WalletPage({ admin = false, embedded = false, refreshKey = 0 }: 
     }
     void load()
     return () => controller.abort()
-  }, [admin, page, refresh, refreshKey, token])
+  }, [admin, page, refresh, refreshKey, token, accountUser])
   useEffect(() => {
     if (!admin || user?.role !== 'owner' || !query.trim()) return
     const controller = new AbortController()
@@ -220,10 +220,17 @@ export function WalletPage({ admin = false, embedded = false, refreshKey = 0 }: 
     const Icon = o.kind === 'image' ? Sparkles : o.kind === 'video' ? Film : MessageSquare
     return <tr key={o.id}><td className="billing-record-name"><div className="billing-record-title"><span className="billing-record-icon"><Icon size={17} strokeWidth={1.5} aria-hidden="true" /></span><div><strong>{o.model}</strong><small>{kindNames[o.kind] ?? o.kind}</small></div></div>{o.note && <p className="billing-record-note">{o.note}</p>}</td><td className="billing-record-status"><span className={`billing-state billing-state--${o.status}`}>{operationStatus(o)}</span></td><td className="billing-number billing-record-amount">{o.mode === 'paid' ? <>{o.status === 'settled' ? amountLabel(o.charged_amount) : '待结算'}</> : <span className="billing-dash">—</span>}</td><td className="billing-record-actions"><button type="button" aria-label={`查看 ${o.model} 的费用明细`} onClick={() => setDetailsId(o.id)}>查看明细<ArrowUpRight size={13} aria-hidden="true" /></button>{canAdmin && ['pending','review'].includes(o.status) && <button type="button" onClick={() => setReview(o)}>人工核对</button>}</td></tr>
   })}</tbody></table></div>
-  const content = <div className="billing-page">
+  const content = <div className={`billing-page${profile ? ' billing-page--account' : ''}`}>
     {!embedded && <header className="account-workspace-heading"><h1>{admin ? '账务管理' : '我的钱包'}</h1><div className="billing-header-tools">{!admin && <button type="button" onClick={() => setRechargeOpen(true)}><CircleHelp size={15} aria-hidden="true" />充值说明</button>}<button className="billing-icon-button" type="button" aria-label="刷新账务" disabled={loading || !token} onClick={() => setRefresh(n => n+1)}><RefreshCw size={16} aria-hidden="true" /></button></div></header>}
     {!token ? <div className="billing-empty"><h2>登录后查看你的钱包</h2><p>余额与账单只对你本人可见。</p><Link to="/account">前往登录<ArrowUpRight size={15} aria-hidden="true" /></Link></div> : <>
-      {!admin && <section className="billing-overview" aria-label="钱包概览"><WalletBalance wallet={!loading && !error ? wallet : null} /></section>}
+      {!admin && <div className={profile ? 'billing-account-overview' : undefined}>
+        {profile}
+        <section className="billing-overview" aria-label="钱包概览">
+          {profile && <div className="billing-account-wallet-heading"><h2>我的钱包</h2><button className="billing-icon-button" type="button" aria-label="刷新账务" disabled={loading || !token} onClick={() => setRefresh(n => n+1)}><RefreshCw size={16} aria-hidden="true" /></button></div>}
+          <WalletBalance wallet={!loading && !error ? wallet : null} />
+          {profile && <div className="billing-account-wallet-footer"><p>用于 AI 对话、图片与视频创作<br />每笔费用都可以在下方账单中查看。</p><button type="button" onClick={() => setRechargeOpen(true)}><CircleHelp size={15} aria-hidden="true" />充值说明</button></div>}
+        </section>
+      </div>}
       <div className="billing-feedback" aria-live="polite">{loading && <span role="status">正在读取账务…</span>}{feedback && <span role="status">{feedback}</span>}</div>
       {error && <div className="billing-error" role="alert"><h2>账务暂时无法读取</h2><p>{error}</p><button type="button" onClick={() => setRefresh(n => n+1)}><RefreshCw size={14} aria-hidden="true" />重新读取</button></div>}
       {!error && <>

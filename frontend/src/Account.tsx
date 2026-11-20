@@ -5,7 +5,7 @@ import { ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle, Upload } from 'luc
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { GenesisLogo } from './components/GenesisLogo'
 import { AccountWorkspace } from './features/account/AccountWorkspace'
-import { WalletPreview } from './features/billing/WalletBalance'
+import { WalletPage } from './features/billing/WalletPage'
 import { FpsStatusSlot } from './features/performance/FpsMonitor'
 import { authTokenChangedEvent, clearStoredAuthToken, getStoredAuthToken, latestAuthToken, logoutAuthSession, storeAuthToken, studioAuthTokenKey } from './lib/auth'
 import { getCurrentUser, login, registerAccount, updateCurrentUser, type CurrentUser } from './lib/api'
@@ -166,9 +166,10 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
 
   return (
     <AccountWorkspace user={user} active="profile" onLogout={onLogout} logoutDisabled={busy}>
-      <header className="account-workspace-heading"><h1 id="profile-title">个人资料</h1><FpsStatusSlot /></header>
-      <div className="account-profile-layout">
+      <header className="account-workspace-heading"><h1>个人账户</h1><FpsStatusSlot /></header>
+      <WalletPage embedded accountUser={user} profile={
       <section className="account-card account-card--profile" aria-labelledby="profile-title">
+        <h2 id="profile-title" className="account-section-title">个人资料</h2>
         <div className="account-profile-heading">
           <button className="account-avatar" type="button" aria-label="上传头像" aria-describedby="profile-avatar-hint" title="点击上传头像" disabled={busy} onClick={() => fileInput.current?.click()}>
             {previewAvatar && failedAvatar !== previewAvatar ? <img alt="" src={previewAvatar} onError={() => setFailedAvatar(previewAvatar)} /> : user.display_name.slice(0, 1)}
@@ -205,8 +206,7 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
           </div>
         </form>
       </section>
-      <WalletPreview userId={user.id} />
-      </div>
+      } />
     </AccountWorkspace>
   )
 }
