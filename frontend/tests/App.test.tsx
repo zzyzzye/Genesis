@@ -119,7 +119,7 @@ describe('App', () => {
 
     if (path === '/blog') {
       expect(await screen.findByRole('heading', { name: '最近的文章' })).toBeInTheDocument()
-      expect(await screen.findByText('2 篇记录')).toBeInTheDocument()
+      expect(await screen.findByText('2 篇文章')).toBeInTheDocument()
       expect(screen.getByText('把个人网站当作长期使用的空间')).toBeInTheDocument()
       fireEvent.click(screen.getByLabelText('阅读 从一个完整模块开始'))
     }
@@ -186,6 +186,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: '返回文章列表' }))
     expect(await screen.findByRole('heading', { name: '搜索「模块」' })).toBeInTheDocument()
     expect(new URLSearchParams(window.location.search).get('q')).toBe('模块')
+    expect(window.location.hash).toBe('#articles')
   })
 
   it('文章加载与失败保持阅读页，重试成功后可返回列表', async () => {

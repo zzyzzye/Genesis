@@ -1,13 +1,14 @@
 import './BlogDirectory.css'
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { ArrowLeft, ArrowRight, BookOpen, ChevronDown, ChevronLeft, ChevronRight, CornerUpLeft, Menu, PanelLeftClose, PanelLeftOpen, Search, Tag, UserRound, X } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { getBlogPosts, getPublicBlogTags, type BlogPostPreview, type PublicBlogTag } from '../../lib/api'
 import { useModalDialog } from '../../studio/useModalDialog'
 import { BlogLinks } from './BlogLinks'
 import { BlogSearch } from './BlogSearch'
+import { BlogHero } from './BlogHero'
 import { GenesisLogo } from '../../components/GenesisLogo'
 import { SpaceLinks } from '../../components/SpaceLinks'
 import { FpsStatusSlot } from '../performance/FpsMonitor'
@@ -35,7 +36,7 @@ function Author({ post }: { post: BlogPostPreview }) {
 }
 
 function JournalBrand({ onNavigate }: { onNavigate?: () => void }) {
-  return <Link className="portal-journal-brand" to="/blog" aria-label="Genesis Journal" title="Genesis Journal" onClick={onNavigate}>
+  return <Link className="portal-journal-brand" to="/blog#top" aria-label="Genesis Journal" title="Genesis Journal" onClick={onNavigate}>
     <GenesisLogo markOnly />
     <span className="portal-journal-wordmark"><strong>Genesis</strong><span>JOURNAL</span></span>
   </Link>
@@ -46,7 +47,7 @@ function Navigation({ tags, activeTag, error, onTag, onRetry, onNavigate }: { ta
   return <>
     <nav className="portal-navigation" aria-label="博客导航">
       <span className="portal-nav-label">阅读</span>
-      <Link to="/blog" className="is-active" aria-current="page" aria-label="博客首页" title="博客首页" onClick={onNavigate}><BookOpen size={18} /><span>博客首页</span><span className="portal-nav-current" aria-hidden="true" /></Link>
+      <Link to="/blog#top" className="is-active" aria-current="page" aria-label="博客首页" title="博客首页" onClick={onNavigate}><BookOpen size={18} /><span>博客首页</span><span className="portal-nav-current" aria-hidden="true" /></Link>
     </nav>
     <div className="portal-sidebar-tags">
       <button className="portal-tags-toggle" type="button" aria-expanded={tagsOpen} aria-label={tagsOpen ? '收起标签列表' : '展开标签列表'} onClick={() => setTagsOpen(value => !value)}><Tag size={17} /><span>探索标签</span><ChevronDown size={15} /></button>
@@ -73,11 +74,12 @@ function MobileNavigation({ onClose, children }: { onClose: () => void; children
 
 export function BlogDirectory() {
   const [params, setParams] = useSearchParams()
+  const location = useLocation()
   const query = (params.get('q') ?? '').trim().slice(0, 200)
   const activeTag = params.get('tag') ?? ''
   const page = Math.min(1000000, Math.max(1, Number.parseInt(params.get('page') ?? '1', 10) || 1))
   const requestKey = JSON.stringify([query, activeTag, page])
-  const returnTo = `/blog${params.size ? `?${params}` : ''}`
+  const returnTo = `/blog${params.size ? `?${params}` : ''}#articles`
   const [state, setState] = useState<DirectoryState>({ key: requestKey, status: 'loading', items: [], total: 0 })
   const [topics, setTopics] = useState<PublicBlogTag[]>([])
   const [tagsError, setTagsError] = useState(false)
@@ -89,11 +91,24 @@ export function BlogDirectory() {
   const [mobile, setMobile] = useState(() => window.matchMedia?.('(max-width: 800px)').matches ?? false)
   const [featuredIndex, setFeaturedIndex] = useState(0)
   const heading = useRef<HTMLHeadingElement>(null)
+  const readingArea = useRef<HTMLDivElement>(null)
+  const previousRequest = useRef(requestKey)
   const current: DirectoryState = state.key === requestKey ? state : { key: requestKey, status: 'loading', items: [], total: 0 }
   const featured = !query && !activeTag && page === 1 ? current.items.filter(post => post.is_featured) : []
   const feature = featured[Math.min(featuredIndex, Math.max(0, featured.length - 1))]
   const pages = Math.max(1, Math.ceil(current.total / pageSize))
   const filtered = Boolean(query || activeTag)
+
+  useLayoutEffect(() => {
+    const changed = previousRequest.current !== requestKey
+    previousRequest.current = requestKey
+    // 筛选、分页及从文章返回时直接进入阅读区，不要求再次划过封面。
+    if (filtered || page > 1 || location.hash === '#articles' || (changed && location.hash !== '#top')) {
+      readingArea.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+    } else if (location.hash === '#top') {
+      document.getElementById('top')?.scrollIntoView({ block: 'start', behavior: 'instant' })
+    }
+  }, [requestKey, filtered, page, location.hash, location.key])
 
   useEffect(() => {
     document.title = '博客 · Genesis'
@@ -161,10 +176,12 @@ export function BlogDirectory() {
   const navigation = (onNavigate?: () => void) => <Navigation tags={topics} activeTag={activeTag} error={tagsError} onTag={filter} onRetry={() => setTagsRetry(value => value + 1)} onNavigate={onNavigate} />
 
   return <div className={`blog-portal${collapsed ? ' blog-portal--collapsed' : ''}`} id="top" style={{ '--portal-motion-duration': `${motionTiming.blogSidebar}s`, '--portal-motion-ease': `cubic-bezier(${motionTiming.ease.join(',')})` } as CSSProperties}>
+    <BlogHero />
+    <div className="portal-reading-layout" ref={readingArea}>
     <header className="portal-directory-header">
       <div className="portal-header-location">
         <button className="portal-sidebar-toggle" type="button" aria-label={mobile ? '打开博客导航' : collapsed ? '展开博客侧栏' : '收起博客侧栏'} title={mobile ? '打开导航' : collapsed ? '展开侧栏' : '收起侧栏'} aria-expanded={mobile ? mobileOpen : !collapsed} onClick={() => { if (mobile) setMobileOpen(true); else setCollapsed(value => !value) }}>{mobile ? <Menu size={20} /> : collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</button>
-        <nav className="portal-breadcrumb" aria-label="当前位置"><Link to="/blog">博客</Link><ChevronRight size={13} aria-hidden="true" /><span aria-current="page">{query ? '搜索结果' : activeTag ? '标签筛选' : '文章'}</span></nav>
+        <nav className="portal-breadcrumb" aria-label="当前位置"><Link to="/blog#top">博客</Link><ChevronRight size={13} aria-hidden="true" /><span aria-current="page">{query ? '搜索结果' : activeTag ? '标签筛选' : '文章'}</span></nav>
         <div className="portal-mobile-brand"><JournalBrand /></div>
       </div>
       <div className="portal-header-actions">
@@ -179,7 +196,7 @@ export function BlogDirectory() {
         <div className="portal-featured-copy"><Author post={feature} /><div className="portal-featured-topics">{feature.tags.map(tag => tag.name).join(' · ') || (feature.categories ?? (feature.category ? [feature.category] : [])).map(category => category.name).join(' · ') || '精选文章'}</div><h2>{feature.title}</h2>{feature.excerpt && <p>{feature.excerpt}</p>}<div className="portal-featured-actions"><Link to={`/articles/${encodeURIComponent(feature.slug)}`} state={{ blogReturnTo: returnTo }} aria-label={`阅读全文 ${feature.title}`}>阅读全文 <ArrowRight size={19} /></Link>{featured.length > 1 && <div className="portal-featured-pages"><button type="button" aria-label="精选文章：上一篇" disabled={featuredIndex === 0} onClick={() => setFeaturedIndex(value => Math.max(0, value - 1))}><ArrowLeft size={20} /></button><button type="button" aria-label="精选文章：下一篇" disabled={featuredIndex >= featured.length - 1} onClick={() => setFeaturedIndex(value => Math.min(featured.length - 1, value + 1))}><ArrowRight size={20} /></button></div>}</div></div>
         <div className="portal-featured-cover"><Cover key={feature.id} post={feature} featured /><div className="portal-cover-meta"><time dateTime={feature.published_at}>{dateFormatter.format(new Date(feature.published_at))}</time><span>{feature.read_time_minutes} 分钟阅读</span></div></div>
       </section>}
-      <section className="portal-posts" id="articles" aria-labelledby="articles-title" aria-busy={current.status === 'loading'}>
+      <section className="portal-posts" id="articles" tabIndex={-1} aria-labelledby="articles-title" aria-busy={current.status === 'loading'}>
         <div className="portal-section-heading"><h1 id="articles-title" ref={heading}>{query ? `搜索「${query}」` : '最近的文章'}</h1>{current.status === 'ready' && <span>{current.total} 篇文章</span>}</div>
         <nav className="portal-topics" aria-label="按标签筛选文章"><button type="button" aria-pressed={!activeTag} onClick={() => filter('')}>全部文章</button>{topics.map(tag => <button key={tag.id} type="button" aria-pressed={activeTag === tag.slug} onClick={() => filter(tag.slug)}>{tag.name}</button>)}</nav>
         {filtered && <div className="portal-filter-summary"><span>{activeTag && `标签：${topics.find(tag => tag.slug === activeTag)?.name ?? activeTag}`}</span><button type="button" onClick={() => setParams(new URLSearchParams())}>清除筛选 <X size={14} /></button></div>}
@@ -201,6 +218,7 @@ export function BlogDirectory() {
       <BlogLinks />
       <footer className="portal-footer"><span>Genesis · 记录与分享</span><a href="#top">回到顶部 ↑</a></footer>
     </main>
+    </div>
     {searchOpen && <BlogSearch initialQuery={query} onClose={() => setSearchOpen(false)} onSearch={search} />}
     {mobileOpen && <MobileNavigation onClose={() => setMobileOpen(false)}>{navigation(() => setMobileOpen(false))}</MobileNavigation>}
   </div>

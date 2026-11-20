@@ -37,6 +37,22 @@ describe('公开博客目录', () => {
     expect(screen.getByLabelText('当前路径')).toHaveTextContent('/blog?tag=engineering')
   })
 
+  it('搜索直达阅读区，清除条件仍留在阅读区，首页入口返回封面', async () => {
+    const scrollTargets: Element[] = []
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (this: Element) { scrollTargets.push(this) })
+    try {
+      open('/blog?q=工程')
+      expect(await screen.findByRole('link', { name: '阅读 工程实践' })).toBeInTheDocument()
+      expect(screen.getByRole('region', { name: 'Genesis Journal 每日一笺' })).toBeInTheDocument()
+      expect(scrollTargets.at(-1)).toHaveClass('portal-reading-layout')
+      fireEvent.click(screen.getByRole('button', { name: '清除筛选' }))
+      await waitFor(() => expect(getBlogPosts).toHaveBeenLastCalledWith(expect.any(AbortSignal), undefined, { q: '', tag: '', offset: undefined }))
+      expect(scrollTargets.at(-1)).toHaveClass('portal-reading-layout')
+      fireEvent.click(screen.getByRole('link', { name: '博客首页' }))
+      expect(scrollTargets.at(-1)).toHaveAttribute('id', 'top')
+    } finally { scroll.mockRestore() }
+  })
+
   it('分页查询带偏移量，越界时返回最后一页', async () => {
     vi.mocked(getBlogPosts).mockResolvedValue({ items: [post], total: 25 })
     open('/blog?q=工程&tag=engineering&page=99')

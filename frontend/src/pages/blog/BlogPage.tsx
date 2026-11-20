@@ -91,6 +91,7 @@ function PublicBlog() {
 
   function openArticle(slug: string) {
     if (location.pathname !== `/articles/${slug}`) void navigate(`/articles/${slug}`)
+    if (!location.hash) document.getElementById('top')?.scrollIntoView({ block: 'start', behavior: 'instant' })
     articleRequest.current?.abort()
     const controller = new AbortController()
     articleRequest.current = controller
@@ -112,7 +113,7 @@ function PublicBlog() {
   function closeArticle() {
     articleRequest.current?.abort()
     const returnTo = (location.state as { blogReturnTo?: unknown } | null)?.blogReturnTo
-    void navigate(typeof returnTo === 'string' && /^\/blog(?:\?|$)/.test(returnTo) ? returnTo : '/blog')
+    void navigate(typeof returnTo === 'string' && /^\/blog(?:[?#]|$)/.test(returnTo) ? returnTo : '/blog#articles')
   }
 
   function returnToTop(event: MouseEvent<HTMLAnchorElement>) {
