@@ -45,6 +45,58 @@
 .billing-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:28px 18px; text-align:center; color:var(--account-muted); }
 .billing-empty>svg { margin-bottom:18px; color:#93938b; }.billing-empty h2,.billing-empty h3 { margin:0 0 10px; color:var(--account-ink); font-size:15px; font-weight:500; }.billing-empty p { margin:0; font-size:12px; line-height:1.8; }.billing-empty>button { min-height:40px; margin-top:18px; color:var(--account-ink); }
 .billing-error { padding:26px; border-radius:12px; background:var(--account-surface); }.billing-error h2 { margin:0; font-size:16px; font-weight:500; }.billing-error p { color:var(--account-muted); font-size:12px; line-height:1.8; overflow-wrap:anywhere; }.billing-error button { background:var(--account-hover); }
+/* 个人账单采用平铺账本，管理账务仍沿用原有表格密度。 */
+.billing-history--personal { display:grid; grid-template-columns:minmax(0,1fr) auto; align-content:start; align-items:center; gap:20px 24px; min-height:300px; }
+.billing-history--personal > :not(.billing-section-heading,.billing-history-tabs) { grid-column:1 / -1; }
+.billing-history--personal .billing-section-heading { justify-content:flex-start; gap:12px; margin:0; }
+.billing-history--personal .billing-section-heading h2 { font-size:18px; }
+.billing-history--personal .billing-section-heading > span { font-size:11px; }
+.billing-history--personal .billing-history-tabs { gap:4px; margin:0; }
+.billing-history--personal .billing-history-tabs a { gap:9px; min-height:40px; padding:10px 14px; border-radius:9px; font-size:12px; }
+.billing-history--personal .billing-history-tabs a[aria-current] { background:var(--account-ink); color:var(--account-paper); }
+.billing-history--personal .billing-history-tabs a[aria-current]:is(:hover,:focus-visible) { background:color-mix(in srgb,var(--account-ink) 85%,var(--account-paper)); }
+.billing-history--personal .billing-history-tabs a[aria-current] span { color:inherit; opacity:.75; }
+.billing-history--personal .billing-history-tabs a:active { opacity:.8; }
+.billing-history--personal .billing-table { table-layout:fixed; border-collapse:separate; border-spacing:0; }
+.billing-history--personal .billing-table th { height:40px; padding:10px 16px; background:var(--account-surface); font-size:11px; }
+.billing-history--personal .billing-table th:first-child { width:46%; border-radius:8px 0 0 8px; }
+.billing-history--personal .billing-table th:last-child { border-radius:0 8px 8px 0; }
+.billing-history--personal .billing-table--usage th:nth-child(2) { width:16%; }
+.billing-history--personal .billing-table--usage th:nth-child(3) { width:22%; }
+.billing-history--personal .billing-table td { padding:18px 16px; border-bottom:1px solid var(--account-soft); font-size:13px; }
+.billing-history--personal .billing-table tbody tr:is(:hover,:focus-within) { background:var(--account-surface); }
+.billing-history--personal .billing-record-title strong { font-size:14px; font-weight:550; }
+.billing-history--personal .billing-record-title small { font-size:12px; }
+.billing-history--personal .billing-record-icon { width:36px; height:36px; border-radius:50%; background:var(--account-soft); color:var(--account-ink); }
+.billing-history--personal .billing-record-note { margin-left:48px; }
+.billing-history--personal .billing-table .billing-record-amount { font-size:15px; letter-spacing:-.025em; white-space:normal; overflow-wrap:anywhere; }
+.billing-history--personal .billing-state { padding:5px 9px; border-radius:6px; background:var(--account-soft); color:var(--account-muted); }
+.billing-history--personal .billing-state--review { color:var(--account-ink); font-weight:600; }
+.billing-history--personal .billing-record-actions button { min-height:40px; font-size:12px; padding:8px 10px; }
+.billing-history--personal .billing-pagination { padding:0; font-size:11px; }
+.billing-history--personal .billing-pagination button { min-height:40px; background:var(--account-surface); }
+.billing-history--personal .billing-pagination button:is(:hover,:focus-visible):not(:disabled) { background:var(--account-hover); }
+.billing-history--personal .billing-empty,.billing-history-loading { min-height:220px; padding:32px 20px; border-radius:12px; background:var(--account-surface); }
+.billing-history-loading { display:flex; align-items:center; justify-content:center; gap:10px; color:var(--account-muted); font-size:12px; }
+@media(max-width:1100px) {
+  .billing-history--personal { grid-template-columns:minmax(0,1fr); gap:16px; }
+  .billing-history--personal .billing-history-tabs { justify-self:start; }
+}
+@media(max-width:760px) {
+  .billing-history--personal .billing-section-heading { justify-content:space-between; }
+  .billing-history--personal .billing-history-tabs { display:grid; grid-template-columns:1fr 1fr; width:100%; }
+  .billing-history--personal .billing-history-tabs a { justify-content:center; min-height:44px; }
+  .billing-history--personal .billing-table tr { grid-template-columns:minmax(0,1fr) minmax(80px,42%); gap:10px 12px; padding:18px 0; border-bottom:1px solid var(--account-soft); }
+  .billing-history--personal .billing-table td { padding:0; border:0; }
+  .billing-history--personal .billing-record-note { margin:8px 0 0; }
+  .billing-history--personal .billing-record-status { align-self:center; }
+  .billing-history--personal .billing-record-actions button { min-height:40px; padding:8px; }
+  .billing-history--personal .billing-table .billing-record-date { grid-column:1 / -1; font-size:11px; }
+  .billing-history--personal tr[data-long-amount="true"] .billing-record-name { grid-column:1 / -1; }
+  .billing-history--personal tr[data-long-amount="true"] .billing-record-amount { grid-column:1 / -1; grid-row:2; }
+  .billing-history--personal tr[data-long-amount="true"] :is(.billing-record-date,.billing-record-status,.billing-record-actions) { grid-row:3; }
+  .billing-history--personal .billing-pagination > div { gap:4px; }
+}
 .billing-admin-section { margin:12px 0 40px; }.billing-admin-section>label { max-width:520px; }.billing-page label { display:flex; flex-direction:column; gap:10px; color:var(--account-muted); font-size:12px; line-height:1.6; }
 .billing-page :is(input,textarea,select):where(:not(.account-card--profile *)) { min-width:0; min-height:46px; width:100%; border:0; outline:none; box-shadow:none; border-radius:9px; padding:12px 14px; background:var(--account-soft); color:var(--account-ink); font:inherit; font-size:13px; }
 .billing-page :is(input,textarea,select):where(:not(.account-card--profile *)):focus { border:0; outline:none; box-shadow:none; background:var(--account-soft); }.billing-page textarea:where(:not(.account-card--profile *)) { resize:none; min-height:80px; }
