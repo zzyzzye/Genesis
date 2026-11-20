@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ArrowDown, ArrowUp, ArrowUpRight, Pause, Play, Shuffle, UserRound } from 'lucide-react'
+import { ArrowDown, ArrowUpRight, Pause, Play, Shuffle, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { HomeReading } from './HomeReading'
 import { GenesisSculpture } from './GenesisSculpture'
 import { GenesisLogo } from '../../components/GenesisLogo'
 import { useLiveReducedMotion } from '../../lib/motion'
@@ -55,9 +54,7 @@ function Home() {
           </Link>)}
         </nav>
       </section>
-      <HomeReading />
     </main>
-    <footer className="home-footer"><span>Genesis · 思考与创造的自留地</span><a href="#top">回到顶部<ArrowUp aria-hidden="true" size={14} /></a></footer>
   </div>
 }
 
