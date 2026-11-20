@@ -45,7 +45,6 @@ function Home() {
           data-active={active === index} onPointerEnter={() => setHovered(index)} onPointerLeave={() => setHovered(null)} onFocus={() => setFocused(index)} onBlur={() => setFocused(null)}>
           <span className="home-portal-art"><PortalArtwork kind={system.id} reducedMotion={motionReduced} paused={paused} /></span>
           <span className="home-portal-caption"><span className="home-portal-english">{system.english}</span><span className="home-portal-name">{system.name}<ArrowUpRight aria-hidden="true" size={21} strokeWidth={1.4} /></span><span className="home-portal-description">{system.description}</span></span>
-          <span className="home-portal-enter" aria-hidden="true">{system.action}<ArrowUpRight size={14} /></span>
         </Link>)}
       </nav>
       <div className="home-universe-controls">

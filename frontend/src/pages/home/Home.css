@@ -48,13 +48,11 @@ body:has(.home-page) { min-width: 0; background: #101112; }
 .home-portal-name { display: flex; align-items: center; gap: 13px; margin-top: 10px; font-size: 25px; font-weight: 450; letter-spacing: .12em; }
 .home-portal-name svg { color: var(--home-muted); transition: transform 300ms, color 300ms; }
 .home-portal-description { margin-top: 12px; color: var(--home-muted); font-size: 12px; line-height: 1.7; }
-.home-portal-enter { display: inline-flex; align-items: center; gap: 10px; min-height: 38px; padding: 8px 12px; margin-top: 14px; border-radius: 6px; background: var(--home-hover); font-size: 11px; opacity: 0; transform: translateY(5px); transition: opacity 220ms, transform 220ms; }
 .home-page .home-portal:focus-visible { background: transparent; }
 .home-portal[data-active="true"] .home-portal-art { transform: translateY(-12px) rotate(-4deg) scale(1.06); }
 .home-portal--lab[data-active="true"] .home-portal-art { transform: translateY(-12px) rotate(8deg) scale(1.06); }
 .home-portal--studio[data-active="true"] .home-portal-art { transform: translateY(-12px) rotate(-15deg) scale(1.06); }
 .home-portal[data-active="true"] .home-portal-art::before { opacity: .2; }
-.home-portal[data-active="true"] .home-portal-enter { opacity: 1; transform: none; }
 .home-portal[data-active="true"] .home-portal-name svg { transform: translate(3px, -3px); color: var(--home-ink); }
 .home-portal:focus-visible .home-portal-name { background: var(--home-hover); border-radius: 6px; }
 .home-universe-controls { position: absolute; inset: auto 0 16px; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
@@ -88,7 +86,6 @@ body:has(.home-page) { min-width: 0; background: #101112; }
   .home-portal-name { font-size: 22px; gap: 8px; }
   .home-portal-english { font-size: 9px; letter-spacing: .12em; }
   .home-portal-description { font-size: 11px; margin-top: 9px; max-width: 120px; }
-  .home-portal-enter { display: none; }
   .home-portal[data-active="true"] .home-portal-name { color: #fff; background: var(--home-hover); border-radius: 6px; }
   .home-universe-controls { bottom: 10px; }
   .home-navigation-hint { font-size: 10px; }
