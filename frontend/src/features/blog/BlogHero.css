@@ -18,8 +18,27 @@
 .blog-hero-quote blockquote { margin: 0; font-family: "Songti SC", "Noto Serif SC", "STSong", serif; font-size: clamp(28px, 3.2vw, 46px); font-weight: 500; line-height: 1.7; letter-spacing: .035em; overflow-wrap: anywhere; text-wrap: balance; }
 .blog-hero-quote blockquote > span { display: block; }
 .blog-hero-quote figcaption { margin-top: 24px; color: rgb(255 255 255 / 85%); font-size: 11px; letter-spacing: .18em; }
-.blog-hero-read { position: absolute; bottom: 30px; display: flex; min-width: 100px; min-height: 44px; align-items: center; justify-content: center; gap: 12px; padding: 10px 16px; border-radius: 999px; color: #fff; font-size: 12px; letter-spacing: .1em; }
+.blog-hero-read { position: absolute; bottom: 30px; display: flex; flex-direction: column; min-width: 116px; min-height: 76px; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border-radius: 24px; color: #fff; font-size: 12px; letter-spacing: .1em; transition: background 200ms ease; }
+.blog-hero-read-label { animation: blog-read-float 2.8s ease-in-out infinite; }
+.blog-hero-read-arrow { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; background: rgb(255 255 255 / 9%); animation: blog-read-drift 2.8s ease-in-out infinite; transition: background 200ms ease; }
 .blog-hero-read:is(:hover, :focus-visible) { background: rgb(255 255 255 / 14%); }
+.blog-hero-read:is(:hover, :focus-visible) .blog-hero-read-arrow { background: rgb(255 255 255 / 18%); }
+.blog-hero-read:active { background: rgb(255 255 255 / 20%); }
+
+@keyframes blog-read-float {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(-2px); }
+}
+
+@keyframes blog-read-drift {
+  0%, 20%, 100% { transform: translateY(0); opacity: .75; }
+  55% { transform: translateY(6px); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .blog-hero-read-label, .blog-hero-read-arrow { animation: none; }
+  .blog-hero-read, .blog-hero-read-arrow { transition: none; }
+}
 
 @media (max-width: 800px) {
   .blog-hero-brand { --genesis-logo-size: 24px; --genesis-wordmark-size: 15px; top: 22px; left: 22px; }

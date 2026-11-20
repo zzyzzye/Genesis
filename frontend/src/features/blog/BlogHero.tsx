@@ -2,10 +2,12 @@ import './BlogHero.css'
 
 import { useEffect, useState } from 'react'
 import { ArrowDown } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
 import { GenesisLogo } from '../../components/GenesisLogo'
 import { getDailyJournalQuote, millisecondsUntilNextJournalDay } from './journalQuotes'
 
 export function BlogHero() {
+  const location = useLocation()
   const [quote, setQuote] = useState(() => getDailyJournalQuote())
   const [imageFailed, setImageFailed] = useState(false)
 
@@ -28,6 +30,6 @@ export function BlogHero() {
     <div className="blog-hero-shade" aria-hidden="true" />
     <div className="blog-hero-brand"><GenesisLogo inverse label="Genesis Journal" /></div>
     <figure className="blog-hero-quote"><blockquote>{quote.split('，').map((line, index, lines) => <span key={line}>{line}{index < lines.length - 1 ? '，' : ''}</span>)}</blockquote><figcaption>每日一笺<span aria-hidden="true"> · </span>原创短句</figcaption></figure>
-    <a className="blog-hero-read" href="#articles"><span>向下阅读</span><ArrowDown size={19} aria-hidden="true" /></a>
+    <Link className="blog-hero-read" to={{ search: location.search, hash: '#articles' }} state={{ smoothBlogScroll: true }}><span className="blog-hero-read-label">向下阅读</span><span className="blog-hero-read-arrow" aria-hidden="true"><ArrowDown size={19} /></span></Link>
   </section>
 }

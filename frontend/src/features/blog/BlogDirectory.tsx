@@ -104,11 +104,14 @@ export function BlogDirectory() {
     previousRequest.current = requestKey
     // 筛选、分页及从文章返回时直接进入阅读区，不要求再次划过封面。
     if (filtered || page > 1 || location.hash === '#articles' || (changed && location.hash !== '#top')) {
-      readingArea.current?.scrollIntoView({ block: 'start', behavior: 'instant' })
+      const readFromHero = location.hash === '#articles' && (location.state as { smoothBlogScroll?: boolean } | null)?.smoothBlogScroll === true
+      const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      if (readFromHero) document.getElementById('articles')?.focus({ preventScroll: true })
+      readingArea.current?.scrollIntoView({ block: 'start', behavior: readFromHero && !reducedMotion ? 'smooth' : 'instant' })
     } else if (location.hash === '#top') {
       document.getElementById('top')?.scrollIntoView({ block: 'start', behavior: 'instant' })
     }
-  }, [requestKey, filtered, page, location.hash, location.key])
+  }, [requestKey, filtered, page, location.hash, location.key, location.state])
 
   useEffect(() => {
     document.title = '博客 · Genesis'
