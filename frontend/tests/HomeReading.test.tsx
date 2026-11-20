@@ -1,12 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Home } from '../src/pages/home/Home'
 import { getBlogPosts, type BlogPostPreview } from '../src/lib/api'
 
 vi.mock('../src/lib/api', () => ({ getBlogPosts: vi.fn() }))
 const article: BlogPostPreview = { id: 'one', slug: 'home-reading', title: '给想法留一个地方', excerpt: '从每天的记录开始。', cover_image_url: null, is_featured: false, read_time_minutes: 3, published_at: '2026-10-10T00:00:00Z', author: { id: 'author', handle: 'author', display_name: '作者', avatar_url: null }, category: null, tags: [] }
-afterEach(() => vi.resetAllMocks())
+beforeEach(() => { vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null) })
+afterEach(() => { vi.resetAllMocks(); vi.restoreAllMocks() })
 function setup() { return render(<MemoryRouter><Home /></MemoryRouter>) }
 
 describe('首页文章选读', () => {
@@ -31,7 +32,7 @@ describe('首页文章选读', () => {
     expect(screen.getByRole('link', { name: '查看工具箱' })).toHaveAttribute('href', '/toolbox')
     expect(screen.getByRole('link', { name: '进入影音' })).toHaveAttribute('href', '/media')
     expect(screen.getByRole('link', { name: '账户' })).toHaveAttribute('href', '/account')
-    expect(screen.getByText('筹备中')).toBeInTheDocument()
+    expect(screen.queryByText('筹备中')).not.toBeInTheDocument()
   })
 
   it('失败保留入口，手动重试可以恢复文章', async () => {
@@ -42,5 +43,16 @@ describe('首页文章选读', () => {
     fireEvent.click(screen.getByRole('button', { name: '重新加载文章' }))
     expect(await screen.findByRole('link', { name: '阅读 给想法留一个地方' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('可暂停光雕并切换形态，不影响空间导航', async () => {
+    vi.mocked(getBlogPosts).mockResolvedValue({ items: [], total: 0 })
+    setup()
+    await screen.findByText('还没有发布的文章，之后再来看看。')
+    fireEvent.click(screen.getByRole('button', { name: '暂停光雕动画' }))
+    expect(screen.getByRole('button', { name: '播放光雕动画' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '切换光雕形态' }))
+    expect(screen.getByText('星核')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '进入影音' })).toHaveAttribute('href', '/media')
   })
 })

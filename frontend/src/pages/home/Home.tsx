@@ -1,58 +1,64 @@
-import { useEffect } from 'react'
-import { ArrowRight, ArrowUp, ArrowUpRight, BookOpen, Clapperboard, UserRound, Wrench } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowDown, ArrowUp, ArrowUpRight, Pause, Play, Shuffle, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { HomeReading } from './HomeReading'
+import { GenesisSculpture } from './GenesisSculpture'
 import { GenesisLogo } from '../../components/GenesisLogo'
+import { useLiveReducedMotion } from '../../lib/motion'
 import './Home.css'
-import { FpsStatusSlot } from '../../features/performance/FpsMonitor'
+
+// 门面只承载探索入口，具体业务仍在各自空间内完成。
 
 const systems = [
-  { name: '博客', path: '/blog', description: '技术实践、产品思考与日常随笔', action: '进入博客', icon: BookOpen },
-  { name: '工具箱', path: '/toolbox', description: '收集日常所需，让琐事简单一点', action: '查看工具箱', icon: Wrench, status: '筹备中' },
-  { name: '影音', path: '/media', description: '整理素材，把灵感编排成作品', action: '进入影音', icon: Clapperboard },
+  { name: '博客', english: 'Journal', path: '/blog', description: '把思考写下来', action: '进入博客' },
+  { name: '工具箱', english: 'Laboratory', path: '/toolbox', description: '让好奇心动手', action: '查看工具箱' },
+  { name: '影音', english: 'Studio', path: '/media', description: '给灵感一个形状', action: '进入影音' },
 ]
 
 function Home() {
+  const reducedMotion = useLiveReducedMotion()
+  const [paused, setPaused] = useState(false)
+  const [form, setForm] = useState<0 | 1>(0)
   useEffect(() => { document.title = 'Genesis · 个人空间' }, [])
 
-  return (
-    <div className="home-page" id="top">
-      <a className="home-skip-link" href="#home-main">跳到主要内容</a>
-      <header className="home-header">
-        <Link className="home-brand" to="/" aria-label="Genesis 首页"><GenesisLogo /></Link>
-        <nav aria-label="主导航">
-          {systems.map(system => <Link key={system.path} to={system.path}>{system.name}</Link>)}
-        </nav>
-        <div className="fps-status-actions"><FpsStatusSlot /><Link className="home-account" to="/account"><UserRound aria-hidden="true" size={17} />账户<ArrowUpRight aria-hidden="true" size={14} /></Link></div>
-      </header>
-      <main id="home-main" tabIndex={-1}>
-        <section className="home-overview" aria-label="欢迎来到 Genesis">
+  return <div className="home-page" id="top">
+    <a className="home-skip-link" href="#home-main">跳到主要内容</a>
+    <header className="home-header">
+      <Link className="home-brand" to="/" aria-label="Genesis 首页"><GenesisLogo inverse /></Link>
+      <nav aria-label="主导航">{systems.map(system => <Link key={system.path} to={system.path}>{system.name}</Link>)}</nav>
+      <Link className="home-account" to="/account"><UserRound aria-hidden="true" size={16} /><span>账户</span><ArrowUpRight aria-hidden="true" size={14} /></Link>
+    </header>
+    <main id="home-main" tabIndex={-1}>
+      <section className="home-hero" aria-label="欢迎来到 Genesis">
+        <div className="home-hero-stage">
+          <GenesisSculpture form={form} paused={paused || reducedMotion} />
           <div className="home-intro">
-            <p className="home-kicker"><span aria-hidden="true" />一个持续生长的个人空间</p>
-            <h1 id="home-title">记录，探索，<br /><span>慢慢创造。</span></h1>
-            <p className="home-intro-copy">在文章里梳理想法，用工具处理日常，<br className="home-copy-break" />把闪过的灵感，变成留得下来的作品。</p>
-            <Link className="home-start-reading" to="/blog">开始阅读<ArrowRight aria-hidden="true" size={17} /></Link>
+            <p className="home-kicker"><span />一个人的数字宇宙</p>
+            <h1>让想法，<br /><span>发生。</span><i aria-hidden="true">*</i></h1>
+            <p className="home-intro-copy">写一点代码，记一些想法。<br />在理性与想象之间，造点有意思的东西。</p>
+            <a className="home-explore" href="#home-spaces">探索我的空间<ArrowDown aria-hidden="true" size={17} /></a>
           </div>
-          <section className="home-systems" aria-labelledby="systems-title">
-            <div className="home-spaces-heading"><h2 id="systems-title">探索空间</h2><span>阅读 / 整理 / 创作</span></div>
-            <div className="home-system-list">
-              {systems.map(system => <Link className="home-system" key={system.path} to={system.path} aria-label={system.action}>
-                <span className="home-system-icon"><system.icon aria-hidden="true" size={24} strokeWidth={1.6} /></span>
-                <div className="home-system-copy">
-                  <div className="home-system-title"><h3>{system.name}</h3>{system.status && <span>{system.status}</span>}</div>
-                  <p>{system.description}</p>
-                </div>
-                <ArrowUpRight className="home-system-arrow" aria-hidden="true" size={20} strokeWidth={1.6} />
-              </Link>)}
+          <div className="home-art-caption">
+            <span className="home-art-name">{form === 0 ? '环流' : '星核'}<span aria-hidden="true"> / {form === 0 ? 'ORBIT' : 'CORE'}</span></span>
+            <span className="home-art-hint">{reducedMotion ? '静态光雕 · 已遵循系统动画偏好' : '移动鼠标，轻轻拨动光轨'}</span>
+            <div className="home-art-controls">
+              <button type="button" onClick={() => setForm(value => value === 0 ? 1 : 0)} aria-label="切换光雕形态"><Shuffle size={14} aria-hidden="true" />切换形态</button>
+              {!reducedMotion && <button type="button" onClick={() => setPaused(value => !value)} aria-label={paused ? '播放光雕动画' : '暂停光雕动画'}>{paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}{paused ? '播放' : '暂停'}</button>}
             </div>
-          </section>
-        </section>
-        <HomeReading />
-      </main>
-      <footer className="home-footer"><span>Genesis · 个人空间</span><a href="#top">回到顶部<ArrowUp aria-hidden="true" size={14} /></a></footer>
-    </div>
-  )
+          </div>
+        </div>
+        <div className="home-hero-signature" aria-hidden="true"><span>GENESIS</span><p>保持好奇<br />保持创造</p></div>
+        <nav className="home-spaces" id="home-spaces" aria-label="探索空间" tabIndex={-1}>
+          {systems.map(system => <Link className="home-space" key={system.path} to={system.path} aria-label={system.action}>
+            <span className="home-space-name"><span>{system.english}</span><strong>{system.name}</strong></span>
+            <span className="home-space-description">{system.description}</span><ArrowUpRight aria-hidden="true" size={22} strokeWidth={1.3} />
+          </Link>)}
+        </nav>
+      </section>
+      <HomeReading />
+    </main>
+    <footer className="home-footer"><span>Genesis · 思考与创造的自留地</span><a href="#top">回到顶部<ArrowUp aria-hidden="true" size={14} /></a></footer>
+  </div>
 }
-
 
 export { Home }
