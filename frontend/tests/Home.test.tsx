@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Home } from '../src/pages/home/Home'
 
@@ -16,12 +16,20 @@ describe('首页门面', () => {
     expect(screen.getByRole('link', { name: '账户' })).toHaveAttribute('href', '/account')
   })
 
-  it('可暂停光雕并切换形态，不影响空间导航', () => {
+  it('可暂停星轨，聚焦入口时点亮对应世界', () => {
     setup()
-    fireEvent.click(screen.getByRole('button', { name: '暂停光雕动画' }))
-    expect(screen.getByRole('button', { name: '播放光雕动画' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '切换光雕形态' }))
-    expect(screen.getByText('星核')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '进入影音' })).toHaveAttribute('href', '/media')
+    fireEvent.click(screen.getByRole('button', { name: '暂停星轨动画' }))
+    expect(screen.getByRole('button', { name: '播放星轨动画' })).toBeInTheDocument()
+    const portal = screen.getByRole('link', { name: '进入影音' })
+    fireEvent.focus(portal)
+    expect(portal).toHaveAttribute('data-active', 'true')
+    fireEvent.blur(portal)
+    expect(portal).toHaveAttribute('data-active', 'false')
+  })
+
+  it.each([['进入博客', '/blog'], ['查看工具箱', '/toolbox'], ['进入影音', '/media']])('点击 %s 直接进入对应系统', (name, path) => {
+    render(<MemoryRouter><Routes><Route path="/" element={<Home />} /><Route path={path} element={<h1>目标空间</h1>} /></Routes></MemoryRouter>)
+    fireEvent.click(screen.getByRole('link', { name }))
+    expect(screen.getByRole('heading', { name: '目标空间' })).toBeInTheDocument()
   })
 })
