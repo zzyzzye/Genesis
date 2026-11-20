@@ -18,6 +18,8 @@
 .blog-hero-quote blockquote { margin: 0; font-family: "Songti SC", "Noto Serif SC", "STSong", serif; font-size: clamp(28px, 3.2vw, 46px); font-weight: 500; line-height: 1.7; letter-spacing: .035em; overflow-wrap: anywhere; text-wrap: balance; }
 .blog-hero-quote blockquote > span { display: block; }
 .blog-hero-quote figcaption { margin-top: 24px; color: rgb(255 255 255 / 85%); font-size: 11px; letter-spacing: .18em; }
+.blog-hero-quote figcaption a { display: inline-flex; min-height: 24px; align-items: center; padding-inline: 8px; color: inherit; border-radius: 4px; }
+.blog-hero-quote figcaption a:is(:hover, :focus-visible) { color: #fff; background: rgb(255 255 255 / 10%); }
 .blog-hero-read { position: absolute; bottom: 30px; display: flex; flex-direction: column; min-width: 104px; min-height: 64px; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; background: transparent; color: rgb(255 255 255 / 80%); font-size: 12px; letter-spacing: .1em; transition: color 200ms ease; }
 .blog-hero-read-arrow { display: grid; width: 20px; height: 20px; place-items: center; animation: blog-read-drift 1.8s ease-in-out infinite; will-change: transform; }
 .blog-hero-read:is(:hover, :focus-visible) { color: #fff; }

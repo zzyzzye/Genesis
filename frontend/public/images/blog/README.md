@@ -7,3 +7,26 @@
 - `forest.jpg`：其他主题。提示词：横向编辑摄影，深绿色森林与平静湖面，自然日光、轻雾与丰富但克制的绿色，宁静的旅行杂志构图，无文字、标志或水印。
 
 生成工具：`image_gen.imagegen`，默认内置模式。前端选择逻辑：`src/features/blog/BlogDirectory.tsx` 的 `fallbackCover`。
+
+## 随机首屏风景
+
+以下四张新增图片通过内置 ImageGen 各自独立生成，再转换为质量 82 的 JPEG，保留生成尺寸。与 `forest.jpg` 组成 5 张首屏图片池，每次仅请求选中的一张。图片为 AI 生成风景，不代表真实地点。
+
+共用提示词要求：写实自然风景摄影、横向 16:9、适合文学博客全屏背景、中央留出叠加白色中文短句的空间、中央竖向裁切适配手机、无人物/文字/标志/水印。各图最终提示词主题：
+
+- `hero-coast.jpg`：安静的崎岖海岸，深青色海水、层叠远崖、柔和暮色天空；克制蓝灰色调，真实岩石与海浪纹理。
+- `hero-dunes.jpg`：黄昏的流动沙丘，暖赭色沙脊、柔和深影与淡色天空；自然沙粒纹理，安静的电影摄影氛围。
+- `hero-snow.jpg`：蓝调时刻的遥远雪山倒映在平静高山湖泊中，深板岩蓝湖水、浅色雪峰与薄雾；自然写实。
+- `hero-mist.jpg`：中国南方自然山景气质，层叠青山逐渐隐入晨雾，远处山脊与云海；低饱和玉绿与炭灰色，柔和光线。
+
+随机选择与去重由 `src/features/blog/journalQuotes.ts` 维护，渲染及加载失败回退由 `BlogHero.tsx` 维护。
+
+## 短句来源
+
+24 句原创文字与 12 句公有领域古诗词分别标注，古诗词仅将繁体转换为简体，不改写或虚构署名；2026-11-20 对照以下原文核对，前端署名链接保留出处：
+
+- 王维：[山居秋暝](https://zh.wikisource.org/wiki/山居秋暝)、[终南别业](https://zh.wikisource.org/wiki/終南別業)、[竹里馆](https://zh.wikisource.org/wiki/輞川集_(王維)/竹里館)。
+- 苏轼：[定风波](https://zh.wikisource.org/wiki/定風波_(莫聽穿林打葉聲))、[水调歌头](https://zh.wikisource.org/wiki/水調歌頭_(明月幾時有))。
+- 陶渊明：[饮酒·其五](https://zh.wikisource.org/wiki/飲酒二十首#其五)。
+- 李白：[独坐敬亭山](https://zh.wikisource.org/wiki/獨坐敬亭山)。
+- 王之涣：[登鹳雀楼](https://zh.wikisource.org/wiki/登鸛雀樓_(王之渙))。

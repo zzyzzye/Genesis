@@ -43,13 +43,17 @@ describe('公开博客目录', () => {
     try {
       open('/blog?q=工程')
       expect(await screen.findByRole('link', { name: '阅读 工程实践' })).toBeInTheDocument()
-      expect(screen.getByRole('region', { name: 'Genesis Journal 每日一笺' })).toBeInTheDocument()
+      const hero = screen.getByRole('region', { name: 'Genesis Journal 首屏' })
+      const heroText = hero.querySelector('blockquote')?.textContent
+      const heroImage = hero.querySelector('img')?.getAttribute('src')
       expect(scrollTargets.at(-1)).toHaveClass('portal-reading-layout')
       fireEvent.click(screen.getByRole('button', { name: '清除筛选' }))
       await waitFor(() => expect(getBlogPosts).toHaveBeenLastCalledWith(expect.any(AbortSignal), undefined, { q: '', tag: '', offset: undefined }))
       expect(scrollTargets.at(-1)).toHaveClass('portal-reading-layout')
       fireEvent.click(screen.getByRole('link', { name: '博客首页' }))
       expect(scrollTargets.at(-1)).toHaveAttribute('id', 'top')
+      expect(hero.querySelector('blockquote')?.textContent).toBe(heroText)
+      expect(hero.querySelector('img')?.getAttribute('src')).toBe(heroImage)
     } finally { scroll.mockRestore() }
   })
 
