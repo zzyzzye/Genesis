@@ -45,4 +45,18 @@ describe('首页门面', () => {
     fireEvent.click(screen.getByRole('button', { name: '暂停首页动画' }))
     expect(screen.getByRole('button', { name: '播放首页动画' })).toBeInTheDocument()
   })
+
+  it('可预览光照并恢复跟随本地时间', () => {
+    vi.spyOn(Date.prototype, 'getHours').mockReturnValue(12)
+    vi.spyOn(Date.prototype, 'getMinutes').mockReturnValue(30)
+    setup()
+    const slider = screen.getByRole('slider', { name: '预览一天的光照' })
+    expect(slider).toHaveAttribute('aria-valuetext', '12:30，白昼')
+    fireEvent.change(slider, { target: { value: '0' } })
+    expect(slider).toHaveAttribute('aria-valuetext', '00:00，夜晚')
+    expect(screen.getByRole('button', { name: '跟随本地时间' })).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(screen.getByRole('button', { name: '跟随本地时间' }))
+    expect(slider).toHaveAttribute('aria-valuetext', '12:30，白昼')
+    expect(screen.getByRole('button', { name: '跟随本地时间' })).toHaveAttribute('aria-pressed', 'true')
+  })
 })

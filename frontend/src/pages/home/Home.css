@@ -2,6 +2,8 @@
 html:has(.home-page) { background: #101112; color-scheme: dark; --scroll-thumb: #555; --scroll-hover: #777; --scroll-active: #999; }
 body:has(.home-page) { min-width: 0; background: #101112; }
 .home-page {
+  position: relative;
+  isolation: isolate;
   --home-paper: #101112;
   --home-ink: #f0efeb;
   --home-muted: #a4a6a8;
@@ -26,22 +28,22 @@ body:has(.home-page) { min-width: 0; background: #101112; }
 .home-header nav a, .home-account { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 44px; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: var(--home-muted); transition: background 160ms, color 160ms; }
 .home-account { justify-self: end; }
 .home-header a:hover { color: var(--home-ink); background: var(--home-hover); }
-.home-universe { position: relative; isolation: isolate; height: calc(100svh - 80px); min-height: 690px; max-width: 1600px; margin-inline: auto; }
-.home-cosmos { position: absolute; z-index: -2; inset: 0; overflow: hidden; pointer-events: none; background: radial-gradient(ellipse at 50% 50%, #b1c4ce0b, transparent 58%); }
+.home-universe { position: relative; z-index: 1; height: calc(100svh - 80px); min-height: 690px; max-width: 1600px; margin-inline: auto; }
+.home-cosmos { position: absolute; z-index: -1; inset: 0; overflow: hidden; pointer-events: none; background: radial-gradient(ellipse at var(--solar-position) 55%, #354b65, #080d16 68%); }
+.home-cosmos::after { content: ""; position: absolute; inset: 0; background: linear-gradient(#080d1655, transparent 40%, #080d1622); }
 .home-cosmos canvas { width: 100%; height: 100%; display: block; }
 .home-intro { position: relative; z-index: 1; text-align: center; padding-top: clamp(28px, 5vh, 58px); pointer-events: none; }
 .home-kicker { margin: 0 0 18px; color: var(--home-muted); font-size: 11px; letter-spacing: .3em; }
 .home-intro h1 { margin: 0; font-size: clamp(25px, 2.6vw, 38px); font-weight: 400; letter-spacing: .06em; line-height: 1.5; }
 .home-intro-copy { margin: 13px 0 0; color: var(--home-muted); font-size: 12px; letter-spacing: .08em; }
-.home-wordmark { position: absolute; z-index: -1; top: 25%; left: 50%; transform: translateX(-50%); font-family: "Arial Black", "Helvetica Neue", sans-serif; font-size: clamp(90px, 16vw, 250px); font-weight: 900; letter-spacing: -.075em; line-height: 1; color: #d6dee0; opacity: .11; pointer-events: none; user-select: none; }
+.home-wordmark { position: absolute; z-index: -1; top: 25%; left: 50%; transform: translateX(-50%); font-family: "Arial Black", "Helvetica Neue", sans-serif; font-size: clamp(90px, 16vw, 250px); font-weight: 900; letter-spacing: -.075em; line-height: 1; color: #d6dee0; opacity: .07; pointer-events: none; user-select: none; }
 .home-portals { position: absolute; inset: 0; }
 .home-portal { position: absolute; width: clamp(220px, 23vw, 340px); transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; text-align: center; -webkit-tap-highlight-color: transparent; }
 .home-portal--journal { left: 20%; top: 48%; --portal-light: #d8b995; }
 .home-portal--lab { left: 50%; top: 68%; --portal-light: #a4dce5; }
 .home-portal--studio { left: 80%; top: 44%; --portal-light: #d6c5e5; }
 .home-portal-art { position: relative; display: block; width: clamp(190px, 19vw, 270px); aspect-ratio: 1; transition: transform 650ms cubic-bezier(.2,.7,.2,1); }
-.home-portal-art::before { content: ""; position: absolute; z-index: -1; inset: -12%; background: radial-gradient(ellipse, var(--portal-light), transparent 65%); opacity: .08; transition: opacity 450ms; }
-.home-portal-art svg { width: 100%; height: 100%; overflow: visible; }
+.home-portal-art svg { width: 100%; height: 100%; overflow: visible; color: var(--portal-light); }
 .home-portal-object { display: block; width: 100%; height: 100%; }
 .home-portal-caption { display: flex; flex-direction: column; align-items: center; margin-top: -5px; }
 .home-portal-english { color: var(--home-muted); font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: .22em; }
@@ -52,12 +54,20 @@ body:has(.home-page) { min-width: 0; background: #101112; }
 .home-portal[data-active="true"] .home-portal-art { transform: translateY(-12px) rotate(-4deg) scale(1.06); }
 .home-portal--lab[data-active="true"] .home-portal-art { transform: translateY(-12px) rotate(8deg) scale(1.06); }
 .home-portal--studio[data-active="true"] .home-portal-art { transform: translateY(-12px) rotate(-15deg) scale(1.06); }
-.home-portal[data-active="true"] .home-portal-art::before { opacity: .2; }
 .home-portal[data-active="true"] .home-portal-name svg { transform: translate(3px, -3px); color: var(--home-ink); }
 .home-portal:focus-visible .home-portal-name { background: var(--home-hover); border-radius: 6px; }
 .home-universe-controls { position: absolute; inset: auto 0 16px; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
-.home-navigation-hint { color: var(--home-muted); font-size: 11px; line-height: 1.9; letter-spacing: .04em; }
-.home-navigation-hint > span { display: block; color: #81868a; }
+.home-solar-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.home-solar-controls label { display: flex; gap: 9px; align-items: center; color: var(--home-muted); font-size: 11px; }
+.home-solar-controls strong { color: var(--home-ink); font-family: ui-monospace, monospace; font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.home-solar-controls input { appearance: none; width: 180px; height: 44px; margin: 0; padding: 0; cursor: ew-resize; outline: 0; border: 0; box-shadow: none; background: transparent; }
+.home-solar-controls input::-webkit-slider-runnable-track { height: 2px; background: #69717b; border: 0; }
+.home-solar-controls input::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; margin-top: -5px; border-radius: 50%; border: 0; box-shadow: none; background: #e1e6eb; }
+.home-solar-controls input::-moz-range-track { height: 2px; background: #69717b; border: 0; }
+.home-solar-controls input::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; border: 0; box-shadow: none; background: #e1e6eb; }
+.home-solar-controls input:focus { outline: 0; border: 0; box-shadow: none; background: transparent; }
+.home-solar-controls input:focus-visible + button { color: var(--home-ink); }
+.home-follow-time[aria-pressed="true"] { color: var(--home-ink); }
 .home-universe-controls button { display: inline-flex; align-items: center; gap: 8px; padding: 12px; min-height: 44px; border-radius: 6px; background: transparent; color: var(--home-muted); font-size: 11px; }
 .home-universe-controls button:hover { background: var(--home-hover); color: var(--home-ink); }
 @media (max-width: 1050px) and (min-width: 761px) {
@@ -71,7 +81,7 @@ body:has(.home-page) { min-width: 0; background: #101112; }
   .home-header nav { display: none; }
   .home-brand { --genesis-logo-size: 25px; --genesis-wordmark-size: 19px; padding-left: 0; }
   .home-account { padding-right: 0; }
-  .home-universe { min-height: calc(100svh - 72px); height: auto; padding-bottom: 88px; }
+  .home-universe { min-height: calc(100svh - 72px); height: auto; padding-bottom: 142px; }
   .home-intro { padding-top: 24px; text-align: left; }
   .home-kicker { margin-bottom: 12px; font-size: 10px; }
   .home-intro h1 { font-size: clamp(24px, 6vw, 32px); letter-spacing: .02em; }
@@ -88,7 +98,11 @@ body:has(.home-page) { min-width: 0; background: #101112; }
   .home-portal-description { font-size: 11px; margin-top: 9px; max-width: 120px; }
   .home-portal[data-active="true"] .home-portal-name { color: #fff; background: var(--home-hover); border-radius: 6px; }
   .home-universe-controls { bottom: 10px; }
-  .home-navigation-hint { font-size: 10px; }
+  .home-universe-controls { flex-wrap: wrap; align-items: center; gap: 0; }
+  .home-solar-controls { width: 100%; gap: 0 12px; }
+  .home-solar-controls label { width: 100%; }
+  .home-solar-controls input { flex: 1; min-width: 100px; }
+  .home-universe-controls > button { margin-left: auto; }
 }
 @media (prefers-reduced-motion: reduce) {
   .home-page *, .home-page *::before, .home-page *::after { scroll-behavior: auto; transition: none !important; }

@@ -3,6 +3,7 @@ import { ArrowUpRight, Pause, Play, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { GenesisUniverse } from './GenesisUniverse'
 import { PortalArtwork } from './PortalArtwork'
+import { solarScene } from './solarScene'
 import { GenesisLogo } from '../../components/GenesisLogo'
 import { useLiveReducedMotion } from '../../lib/motion'
 import './Home.css'
@@ -22,10 +23,21 @@ function Home() {
   const [paused, setPaused] = useState(false)
   const [hovered, setHovered] = useState<number | null>(null)
   const [focused, setFocused] = useState<number | null>(null)
+  const [now, setNow] = useState(() => new Date())
+  const [previewMinute, setPreviewMinute] = useState<number | null>(null)
+  const minute = previewMinute ?? now.getHours() * 60 + now.getMinutes()
+  const sunlight = solarScene(minute)
   const active = hovered ?? focused
   useEffect(() => { document.title = 'Genesis · 个人空间' }, [])
+  useEffect(() => {
+    const refresh = () => setNow(new Date())
+    const interval = window.setInterval(refresh, 30_000)
+    document.addEventListener('visibilitychange', refresh)
+    return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', refresh) }
+  }, [])
 
   return <div className="home-page" id="top" data-paused={paused || motionReduced}>
+    <GenesisUniverse minute={minute} paused={paused || motionReduced} />
     <a className="home-skip-link" href="#home-main">跳到主要内容</a>
     <header className="home-header">
       <Link className="home-brand" to="/" aria-label="Genesis 首页"><GenesisLogo inverse /></Link>
@@ -33,9 +45,8 @@ function Home() {
       <Link className="home-account" to="/account"><UserRound aria-hidden="true" size={16} /><span>账户</span><ArrowUpRight aria-hidden="true" size={14} /></Link>
     </header>
     <main className="home-universe" id="home-main" tabIndex={-1}>
-      <GenesisUniverse active={active} paused={paused || motionReduced} />
       <div className="home-intro">
-        <p className="home-kicker">一个人的数字宇宙</p>
+        <p className="home-kicker">此刻，自成一个世界</p>
         <h1>好奇心，没有边界。</h1>
         <p className="home-intro-copy">选一个世界，让想法开始旅行。</p>
       </div>
@@ -48,7 +59,11 @@ function Home() {
         </Link>)}
       </nav>
       <div className="home-universe-controls">
-        <span className="home-navigation-hint">三个世界，同一份好奇。<span>点击入口，启程探索</span></span>
+        <div className="home-solar-controls">
+          <label htmlFor="home-daylight"><span>{previewMinute === null ? '本地时间' : '时间预览'}</span><strong>{sunlight.time}</strong><span>· {sunlight.label}</span></label>
+          <input id="home-daylight" type="range" min="0" max="1439" step="1" value={minute} aria-label="预览一天的光照" aria-valuetext={`${sunlight.time}，${sunlight.label}`} onChange={event => setPreviewMinute(Number(event.target.value))} />
+          <button type="button" className="home-follow-time" aria-pressed={previewMinute === null} onClick={() => { setNow(new Date()); setPreviewMinute(null) }}>跟随本地时间</button>
+        </div>
         <button type="button" onClick={() => {
           if (motionReduced) { setAllowMotion(true); setPaused(false) }
           else setPaused(value => !value)
