@@ -2,7 +2,7 @@ import './BlogDirectory.css'
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { motion } from 'motion/react'
-import { ArrowLeft, ArrowRight, BookOpen, ChevronLeft, ChevronRight, CornerUpLeft, Home, Menu, Search, Tag, UserRound, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, BookOpen, ChevronDown, ChevronLeft, ChevronRight, CornerUpLeft, Home, Menu, Search, Tag, UserRound, X } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { getBlogPosts, getPublicBlogTags, type BlogPostPreview, type PublicBlogTag } from '../../lib/api'
 import { useModalDialog } from '../../studio/useModalDialog'
@@ -10,7 +10,6 @@ import { BlogLinks } from './BlogLinks'
 import { BlogSearch } from './BlogSearch'
 import { GenesisLogo } from '../../components/GenesisLogo'
 import { SpaceLinks } from '../../components/SpaceLinks'
-import { TagCloud } from '../../components/TagCloud'
 import { FpsStatusSlot } from '../performance/FpsMonitor'
 import { motionTiming, useLiveReducedMotion } from '../../lib/motion'
 
@@ -20,8 +19,8 @@ const pageSize = 12
 
 function fallbackCover(post: BlogPostPreview): string {
   const topic = `${post.slug} ${post.title} ${post.tags.map(tag => tag.name).join(' ')}`.toLowerCase()
-  if (/写作|文字|writing/.test(topic)) return '/images/blog/writing.jpg'
-  if (/python|工程|技术|模块|code|module/.test(topic)) return '/images/blog/architecture.jpg'
+  if (/写作|文字|排版|markdown|writing/.test(topic)) return '/images/blog/writing.jpg'
+  if (/python|linux|mcp|大模型|工程|技术|模块|code|module/.test(topic)) return '/images/blog/architecture.jpg'
   return '/images/blog/forest.jpg'
 }
 
@@ -36,6 +35,7 @@ function Author({ post }: { post: BlogPostPreview }) {
 }
 
 function Navigation({ tags, activeTag, error, onTag, onRetry, onNavigate }: { tags: PublicBlogTag[]; activeTag: string; error: boolean; onTag: (slug: string) => void; onRetry: () => void; onNavigate?: () => void }) {
+  const [tagsOpen, setTagsOpen] = useState(false)
   return <>
     <nav className="portal-navigation" aria-label="博客导航">
       <span className="portal-nav-label">阅读空间</span>
@@ -46,7 +46,11 @@ function Navigation({ tags, activeTag, error, onTag, onRetry, onNavigate }: { ta
       <span className="portal-nav-label">其他空间</span>
       <SpaceLinks current="blog" onNavigate={onNavigate} />
     </nav>
-    <div className="portal-sidebar-tags"><h2><Tag size={15} />探索标签</h2><TagCloud compact label="标签词云" items={tags.map(tag => ({ id: tag.slug, name: tag.name, count: tag.post_count }))} selectedId={activeTag} itemLabel={tag => `筛选标签 ${tag.name}`} onSelect={slug => { onTag(slug); onNavigate?.() }} />{error && <button className="portal-tags-retry" type="button" onClick={onRetry}>重新加载标签</button>}</div>
+    <div className="portal-sidebar-tags">
+      <button className="portal-tags-toggle" type="button" aria-expanded={tagsOpen} aria-label={tagsOpen ? '收起标签列表' : '展开标签列表'} onClick={() => setTagsOpen(value => !value)}><Tag size={17} /><span>探索标签</span><ChevronDown size={15} /></button>
+      {tagsOpen && <ul className="portal-tag-list" aria-label="全部标签">{tags.map(tag => <li key={tag.id}><button type="button" aria-label={`筛选标签 ${tag.name}`} aria-pressed={activeTag === tag.slug} onClick={() => { onTag(tag.slug); onNavigate?.() }}><span>{tag.name}</span><span>{tag.post_count}</span></button></li>)}</ul>}
+      {error && <button className="portal-tags-retry" type="button" onClick={onRetry}>重新加载标签</button>}
+    </div>
     <nav className="portal-navigation portal-account-navigation" aria-label="账户与返回">
       <Link to="/account" aria-label="我的账户" title="我的账户" onClick={onNavigate}><UserRound size={19} /><span>我的账户</span></Link>
       <Link to="/" aria-label="返回 Genesis" title="返回 Genesis" onClick={onNavigate}><CornerUpLeft size={19} /><span>返回 Genesis</span></Link>
@@ -158,15 +162,27 @@ export function BlogDirectory() {
     </header>
     <aside className="portal-sidebar" aria-label="博客侧栏">{navigation()}</aside>
     <main className="portal-main">
-      <nav className="portal-topics" aria-label="按标签筛选文章"><button type="button" aria-pressed={!activeTag} onClick={() => filter('')}>全部文章</button>{topics.map(tag => <button key={tag.id} type="button" aria-pressed={activeTag === tag.slug} onClick={() => filter(tag.slug)}>{tag.name}</button>)}</nav>
       {feature && <section key={feature.id} className="portal-featured" aria-label="精选文章">
         <div className="portal-featured-copy"><Author post={feature} /><div className="portal-featured-topics">{feature.tags.map(tag => tag.name).join(' · ') || (feature.categories ?? (feature.category ? [feature.category] : [])).map(category => category.name).join(' · ') || '精选文章'}</div><h2>{feature.title}</h2>{feature.excerpt && <p>{feature.excerpt}</p>}<div className="portal-featured-actions"><Link to={`/articles/${encodeURIComponent(feature.slug)}`} state={{ blogReturnTo: returnTo }} aria-label={`阅读全文 ${feature.title}`}>阅读全文 <ArrowRight size={19} /></Link>{featured.length > 1 && <div className="portal-featured-pages"><button type="button" aria-label="精选文章：上一篇" disabled={featuredIndex === 0} onClick={() => setFeaturedIndex(value => Math.max(0, value - 1))}><ArrowLeft size={20} /></button><button type="button" aria-label="精选文章：下一篇" disabled={featuredIndex >= featured.length - 1} onClick={() => setFeaturedIndex(value => Math.min(featured.length - 1, value + 1))}><ArrowRight size={20} /></button></div>}</div></div>
         <div className="portal-featured-cover"><Cover key={feature.id} post={feature} featured /><div className="portal-cover-meta"><time dateTime={feature.published_at}>{dateFormatter.format(new Date(feature.published_at))}</time><span>{feature.read_time_minutes} 分钟阅读</span></div></div>
       </section>}
       <section className="portal-posts" id="articles" aria-labelledby="articles-title" aria-busy={current.status === 'loading'}>
-        <div className="portal-section-heading"><h2 id="articles-title" ref={heading}>{query ? `搜索「${query}」` : '最近的文章'}</h2>{current.status === 'ready' && <span>{current.total} 篇记录</span>}</div>
+        <div className="portal-section-heading"><div><span className="portal-section-label">GENESIS JOURNAL</span><h1 id="articles-title" ref={heading}>{query ? `搜索「${query}」` : '最近的文章'}</h1></div>{current.status === 'ready' && <span>{current.total} 篇文章</span>}</div>
+        <nav className="portal-topics" aria-label="按标签筛选文章"><button type="button" aria-pressed={!activeTag} onClick={() => filter('')}>全部文章</button>{topics.map(tag => <button key={tag.id} type="button" aria-pressed={activeTag === tag.slug} onClick={() => filter(tag.slug)}>{tag.name}</button>)}</nav>
         {filtered && <div className="portal-filter-summary"><span>{activeTag && `标签：${topics.find(tag => tag.slug === activeTag)?.name ?? activeTag}`}</span><button type="button" onClick={() => setParams(new URLSearchParams())}>清除筛选 <X size={14} /></button></div>}
-        {current.status === 'loading' ? <div className="portal-feedback" role="status">正在加载文章…</div> : current.status === 'error' ? <div className="portal-feedback" role="alert"><h3>文章暂时未能加载</h3><p>内容服务暂时不可用，请重新加载。</p><button type="button" onClick={() => setRetry(value => value + 1)}>重新加载</button></div> : current.items.length === 0 ? <div className="portal-feedback"><h3>{filtered ? '没有匹配的文章' : '还没有发布的文章'}</h3><p>{filtered ? '试试其他关键词或标签。' : '之后再来看看新的记录。'}</p>{filtered && <button type="button" onClick={() => setParams(new URLSearchParams())}>查看全部文章</button>}</div> : <ul className="portal-post-grid" aria-label="文章列表">{current.items.map(post => <li key={post.id}><article><Link className="portal-post-link" to={`/articles/${encodeURIComponent(post.slug)}`} state={{ blogReturnTo: returnTo }} aria-label={`阅读 ${post.title}`}><div className="portal-post-cover"><Cover key={post.cover_image_url ?? post.id} post={post} />{post.tags.length > 0 && <div className="portal-post-tags">{post.tags.slice(0, 2).map(tag => <span key={tag.id} title={tag.name}>#{tag.name}</span>)}</div>}</div><h3 title={post.title}>{post.title}</h3>{post.excerpt && <p>{post.excerpt}</p>}<footer><Author post={post} /><time dateTime={post.published_at}>{dateFormatter.format(new Date(post.published_at))}</time></footer></Link></article></li>)}</ul>}
+        {current.status === 'loading' ? <div className="portal-feedback" role="status">正在加载文章…</div> : current.status === 'error' ? <div className="portal-feedback" role="alert"><h3>文章暂时未能加载</h3><p>内容服务暂时不可用，请重新加载。</p><button type="button" onClick={() => setRetry(value => value + 1)}>重新加载</button></div> : current.items.length === 0 ? <div className="portal-feedback"><h3>{filtered ? '没有匹配的文章' : '还没有发布的文章'}</h3><p>{filtered ? '试试其他关键词或标签。' : '之后再来看看新的记录。'}</p>{filtered && <button type="button" onClick={() => setParams(new URLSearchParams())}>查看全部文章</button>}</div> : (
+          <ul className="portal-post-grid" aria-label="文章列表">
+            {current.items.map(post => <li key={post.id}><article>
+              <Link className="portal-post-link" to={`/articles/${encodeURIComponent(post.slug)}`} state={{ blogReturnTo: returnTo }} aria-label={`阅读 ${post.title}`}>
+                <div className="portal-post-cover"><Cover key={post.cover_image_url ?? post.id} post={post} /></div>
+                <div className="portal-post-topline"><span className="portal-post-tags">{post.tags.slice(0, 2).map(tag => <span key={tag.id} title={tag.name}>{tag.name}</span>)}</span><span>{post.read_time_minutes} 分钟阅读</span></div>
+                <h2 title={post.title}>{post.title}</h2>
+                {post.excerpt && <p>{post.excerpt}</p>}
+                <footer><Author post={post} /><time dateTime={post.published_at}>{dateFormatter.format(new Date(post.published_at))}</time></footer>
+              </Link>
+            </article></li>)}
+          </ul>
+        )}
         {current.status === 'ready' && pages > 1 && <nav className="portal-pagination" aria-label="文章分页"><button type="button" disabled={page <= 1} onClick={() => changePage(page - 1)}><ChevronLeft size={16} />上一页</button><span>第 {page} / {pages} 页</span><button type="button" disabled={page >= pages} onClick={() => changePage(page + 1)}>下一页<ChevronRight size={16} /></button></nav>}
       </section>
       <BlogLinks />

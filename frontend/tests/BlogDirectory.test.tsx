@@ -22,7 +22,11 @@ describe('公开博客目录', () => {
   it('使用全站标签计数与 URL 筛选，收起侧栏仍保留导航名称', async () => {
     open()
     expect(await screen.findByRole('link', { name: '阅读 工程实践' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '筛选标签 工程' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '展开标签列表' }))
     expect(screen.getByRole('button', { name: '筛选标签 工程' })).toHaveTextContent('14')
+    fireEvent.click(screen.getByRole('button', { name: '收起标签列表' }))
+    expect(screen.queryByRole('button', { name: '筛选标签 工程' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '收起博客侧栏' }))
     expect(screen.getByRole('link', { name: '我的账户' })).toHaveAttribute('href', '/account')
     expect(screen.getByRole('link', { name: '前往工具箱' })).toHaveAttribute('href', '/toolbox')
@@ -79,9 +83,10 @@ describe('公开博客目录', () => {
   it('手机导航使用模态菜单，选中标签后关闭并保留筛选', async () => {
     vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
     open()
-    await screen.findByRole('button', { name: '筛选标签 工程' })
+    await screen.findByRole('button', { name: '工程' })
     fireEvent.click(screen.getByRole('button', { name: '打开博客导航' }))
     const dialog = screen.getByRole('dialog', { name: '博客导航菜单' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '展开标签列表' }))
     fireEvent.click(within(dialog).getByRole('button', { name: '筛选标签 工程' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.getByLabelText('当前路径')).toHaveTextContent('tag=engineering')
