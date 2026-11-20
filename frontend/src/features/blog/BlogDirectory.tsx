@@ -100,6 +100,22 @@ export function BlogDirectory() {
   const filtered = Boolean(query || activeTag)
 
   useLayoutEffect(() => {
+    // 目录自行管理定位，防止浏览器在刷新后覆盖首屏位置；离开目录即恢复。
+    const previous = window.history.scrollRestoration
+    const restore = () => { window.history.scrollRestoration = previous }
+    const manage = () => { window.history.scrollRestoration = 'manual' }
+    manage()
+    // 整页刷新不会执行 React 卸载，离开文档时也要交还滚动恢复设置。
+    window.addEventListener('pagehide', restore)
+    window.addEventListener('pageshow', manage)
+    return () => {
+      window.removeEventListener('pagehide', restore)
+      window.removeEventListener('pageshow', manage)
+      restore()
+    }
+  }, [])
+
+  useLayoutEffect(() => {
     const changed = previousRequest.current !== requestKey
     previousRequest.current = requestKey
     // 筛选、分页及从文章返回时直接进入阅读区，不要求再次划过封面。
@@ -108,7 +124,7 @@ export function BlogDirectory() {
       const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
       if (readFromHero) document.getElementById('articles')?.focus({ preventScroll: true })
       readingArea.current?.scrollIntoView({ block: 'start', behavior: readFromHero && !reducedMotion ? 'smooth' : 'instant' })
-    } else if (location.hash === '#top') {
+    } else {
       document.getElementById('top')?.scrollIntoView({ block: 'start', behavior: 'instant' })
     }
   }, [requestKey, filtered, page, location.hash, location.key, location.state])

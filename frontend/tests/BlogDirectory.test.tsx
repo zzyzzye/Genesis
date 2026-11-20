@@ -66,6 +66,27 @@ describe('公开博客目录', () => {
     expect(await screen.findByText('第 2 / 3 页')).toBeInTheDocument()
   })
 
+  it('普通入口定位首屏，显式文章锚点进入正文，离开时恢复浏览器滚动管理', () => {
+    const targets: Element[] = []
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(function (this: Element) { targets.push(this) })
+    const restoration = window.history.scrollRestoration
+    try {
+      const first = open('/blog')
+      expect(targets.at(-1)).toHaveAttribute('id', 'top')
+      expect(window.history.scrollRestoration).toBe('manual')
+      fireEvent(window, new Event('pagehide'))
+      expect(window.history.scrollRestoration).toBe(restoration)
+      fireEvent(window, new Event('pageshow'))
+      expect(window.history.scrollRestoration).toBe('manual')
+      first.unmount()
+      expect(window.history.scrollRestoration).toBe(restoration)
+      const anchored = open('/blog#articles')
+      expect(targets.at(-1)).toHaveClass('portal-reading-layout')
+      anchored.unmount()
+      expect(window.history.scrollRestoration).toBe(restoration)
+    } finally { scroll.mockRestore() }
+  })
+
   it('失败可重试，空搜索结果可恢复全部文章', async () => {
     vi.mocked(getBlogPosts).mockRejectedValueOnce(new Error('暂时不可用')).mockResolvedValueOnce({ items: [], total: 0 })
     open('/blog?q=没有')
