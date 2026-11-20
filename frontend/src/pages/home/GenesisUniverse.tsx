@@ -22,7 +22,7 @@ export function GenesisUniverse({ active, paused }: { active: number | null; pau
 
     function draw(delta = 0) {
       if (!ctx) return
-      elapsed.current += delta * .000025
+      elapsed.current += delta * .00016
       const time = elapsed.current
       const ease = 1 - Math.exp(-delta / 240)
       offsetX += (pointerX - offsetX) * ease
@@ -58,8 +58,9 @@ export function GenesisUniverse({ active, paused }: { active: number | null; pau
         }
         const comet = time * 1.3 + orbit * 2.1
         ctx.globalAlpha = .9
+        ctx.lineWidth = 1.8
         ctx.beginPath()
-        ctx.ellipse(0, 0, r, r * .35, 0, comet, comet + .06)
+        ctx.ellipse(0, 0, r, r * .35, 0, comet, comet + .14)
         ctx.stroke()
         ctx.restore()
       }

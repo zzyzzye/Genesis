@@ -2,8 +2,13 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Home } from '../src/pages/home/Home'
+import { useLiveReducedMotion } from '../src/lib/motion'
 
-beforeEach(() => { vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null) })
+vi.mock('../src/lib/motion', () => ({ useLiveReducedMotion: vi.fn(() => false) }))
+beforeEach(() => {
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+  vi.mocked(useLiveReducedMotion).mockReturnValue(false)
+})
 afterEach(() => vi.restoreAllMocks())
 function setup() { return render(<MemoryRouter><Home /></MemoryRouter>) }
 
@@ -16,10 +21,10 @@ describe('首页门面', () => {
     expect(screen.getByRole('link', { name: '账户' })).toHaveAttribute('href', '/account')
   })
 
-  it('可暂停星轨，聚焦入口时点亮对应世界', () => {
+  it('可暂停首页动画，聚焦入口时点亮对应世界', () => {
     setup()
-    fireEvent.click(screen.getByRole('button', { name: '暂停星轨动画' }))
-    expect(screen.getByRole('button', { name: '播放星轨动画' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '暂停首页动画' }))
+    expect(screen.getByRole('button', { name: '播放首页动画' })).toBeInTheDocument()
     const portal = screen.getByRole('link', { name: '进入影音' })
     fireEvent.focus(portal)
     expect(portal).toHaveAttribute('data-active', 'true')
@@ -31,5 +36,13 @@ describe('首页门面', () => {
     render(<MemoryRouter><Routes><Route path="/" element={<Home />} /><Route path={path} element={<h1>目标空间</h1>} /></Routes></MemoryRouter>)
     fireEvent.click(screen.getByRole('link', { name }))
     expect(screen.getByRole('heading', { name: '目标空间' })).toBeInTheDocument()
+  })
+
+  it('尊重减少动画偏好，也允许用户主动开启并再次暂停', () => {
+    vi.mocked(useLiveReducedMotion).mockReturnValue(true)
+    setup()
+    fireEvent.click(screen.getByRole('button', { name: '开启首页动画' }))
+    fireEvent.click(screen.getByRole('button', { name: '暂停首页动画' }))
+    expect(screen.getByRole('button', { name: '播放首页动画' })).toBeInTheDocument()
   })
 })

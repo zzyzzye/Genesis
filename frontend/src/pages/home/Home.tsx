@@ -17,13 +17,15 @@ const systems = [
 
 function Home() {
   const reducedMotion = useLiveReducedMotion()
+  const [allowMotion, setAllowMotion] = useState(false)
+  const motionReduced = reducedMotion && !allowMotion
   const [paused, setPaused] = useState(false)
   const [hovered, setHovered] = useState<number | null>(null)
   const [focused, setFocused] = useState<number | null>(null)
   const active = hovered ?? focused
   useEffect(() => { document.title = 'Genesis · 个人空间' }, [])
 
-  return <div className="home-page" id="top" data-paused={paused || reducedMotion}>
+  return <div className="home-page" id="top" data-paused={paused || motionReduced}>
     <a className="home-skip-link" href="#home-main">跳到主要内容</a>
     <header className="home-header">
       <Link className="home-brand" to="/" aria-label="Genesis 首页"><GenesisLogo inverse /></Link>
@@ -31,7 +33,7 @@ function Home() {
       <Link className="home-account" to="/account"><UserRound aria-hidden="true" size={16} /><span>账户</span><ArrowUpRight aria-hidden="true" size={14} /></Link>
     </header>
     <main className="home-universe" id="home-main" tabIndex={-1}>
-      <GenesisUniverse active={active} paused={paused || reducedMotion} />
+      <GenesisUniverse active={active} paused={paused || motionReduced} />
       <div className="home-intro">
         <p className="home-kicker">一个人的数字宇宙</p>
         <h1>好奇心，没有边界。</h1>
@@ -41,14 +43,17 @@ function Home() {
       <nav className="home-portals" aria-label="探索空间">
         {systems.map((system, index) => <Link className={`home-portal home-portal--${system.id}`} key={system.path} to={system.path} aria-label={system.action}
           data-active={active === index} onPointerEnter={() => setHovered(index)} onPointerLeave={() => setHovered(null)} onFocus={() => setFocused(index)} onBlur={() => setFocused(null)}>
-          <span className="home-portal-art"><PortalArtwork kind={system.id} reducedMotion={reducedMotion} /></span>
+          <span className="home-portal-art"><PortalArtwork kind={system.id} reducedMotion={motionReduced} paused={paused} /></span>
           <span className="home-portal-caption"><span className="home-portal-english">{system.english}</span><span className="home-portal-name">{system.name}<ArrowUpRight aria-hidden="true" size={21} strokeWidth={1.4} /></span><span className="home-portal-description">{system.description}</span></span>
           <span className="home-portal-enter" aria-hidden="true">{system.action}<ArrowUpRight size={14} /></span>
         </Link>)}
       </nav>
       <div className="home-universe-controls">
         <span className="home-navigation-hint">三个世界，同一份好奇。<span>点击入口，启程探索</span></span>
-        {!reducedMotion && <button type="button" onClick={() => setPaused(value => !value)} aria-label={paused ? '播放星轨动画' : '暂停星轨动画'}>{paused ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}{paused ? '播放星轨' : '暂停星轨'}</button>}
+        <button type="button" onClick={() => {
+          if (motionReduced) { setAllowMotion(true); setPaused(false) }
+          else setPaused(value => !value)
+        }} aria-label={motionReduced ? '开启首页动画' : paused ? '播放首页动画' : '暂停首页动画'}>{paused || motionReduced ? <Play size={14} aria-hidden="true" /> : <Pause size={14} aria-hidden="true" />}{motionReduced ? '开启动画' : paused ? '播放动画' : '暂停动画'}</button>
       </div>
     </main>
   </div>
