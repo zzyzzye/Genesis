@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, Moon, Pause, Play, RotateCcw, Sun, UserRound } from 'lucide-react'
+import { ArrowUpRight, Pause, Play, UserRound } from 'lucide-react'
+import { animate, useMotionValue } from 'motion/react'
 import { Link } from 'react-router-dom'
 import { GenesisUniverse } from './GenesisUniverse'
 import { PortalArtwork } from './PortalArtwork'
-import { solarScene } from './solarScene'
+import { nearestSolarMinute } from './solarScene'
+import { HomeSolarControls } from './HomeSolarControls'
 import { GenesisLogo } from '../../components/GenesisLogo'
 import { useLiveReducedMotion } from '../../lib/motion'
 import './Home.css'
@@ -26,7 +28,9 @@ function Home() {
   const [now, setNow] = useState(() => new Date())
   const [previewMinute, setPreviewMinute] = useState<number | null>(null)
   const minute = previewMinute ?? now.getHours() * 60 + now.getMinutes()
-  const sunlight = solarScene(minute)
+  const displayedMinute = useMotionValue(minute)
+  const returnMinute = useMotionValue(minute)
+  const [returning, setReturning] = useState(false)
   const active = hovered ?? focused
   useEffect(() => { document.title = 'Genesis · 个人空间' }, [])
   useEffect(() => {
@@ -36,8 +40,38 @@ function Home() {
     return () => { window.clearInterval(interval); document.removeEventListener('visibilitychange', refresh) }
   }, [])
 
+  useEffect(() => {
+    if (returning) {
+      const controlStart = returnMinute.get()
+      const lightStart = ((displayedMinute.get() % 1440) + 1440) % 1440
+      // 共用一个进度：滑块和数字从当前显示值出发，背景从当前光照接续，避免任一方跳变。
+      const transition = animate(0, 1, {
+        duration: motionReduced ? 0 : .95,
+        ease: [.4, 0, .2, 1],
+        onUpdate: progress => {
+          returnMinute.set(controlStart + (minute - controlStart) * progress)
+          displayedMinute.set(lightStart + (minute - lightStart) * progress)
+        },
+        onComplete: () => setReturning(false),
+      })
+      return () => transition.stop()
+    }
+    if (motionReduced) { displayedMinute.jump(minute); return }
+    const target = nearestSolarMinute(displayedMinute.get(), minute)
+    const transition = animate(displayedMinute, target, { type: 'spring', stiffness: 100, damping: 26, restDelta: .01, restSpeed: .05 })
+    return () => transition.stop()
+  }, [displayedMinute, minute, motionReduced, returnMinute, returning])
+
+  function followLocalTime() {
+    if (returning) return
+    returnMinute.jump(minute)
+    setNow(new Date())
+    setPreviewMinute(null)
+    setReturning(!motionReduced)
+  }
+
   return <div className="home-page" id="top" data-paused={paused || motionReduced}>
-    <GenesisUniverse minute={minute} paused={paused || motionReduced} reducedMotion={motionReduced} active={active} />
+    <GenesisUniverse minute={minute} displayedMinute={displayedMinute} paused={paused || motionReduced} active={active} />
     <a className="home-skip-link" href="#home-main">跳到主要内容</a>
     <header className="home-header">
       <Link className="home-brand" to="/" aria-label="Genesis 首页"><GenesisLogo inverse /></Link>
@@ -59,22 +93,8 @@ function Home() {
         </Link>)}
       </nav>
       <div className="home-universe-controls">
-        <div className="home-solar-controls">
-          <div className="home-solar-heading">
-            <label htmlFor="home-daylight">
-              <span className="home-solar-mode">{previewMinute === null ? '本地时间' : '光照预览'}</span>
-              <span className="home-solar-reading"><strong>{sunlight.time}</strong><span className="home-solar-phase">{sunlight.label === '夜晚' ? <Moon size={13} aria-hidden="true" /> : <Sun size={13} aria-hidden="true" />}{sunlight.label}</span></span>
-            </label>
-            <button type="button" className="home-follow-time" aria-label="跟随本地时间" aria-pressed={previewMinute === null} onClick={() => { setNow(new Date()); setPreviewMinute(null) }}>
-              {previewMinute === null ? <span className="home-solar-live" aria-hidden="true" /> : <RotateCcw size={12} aria-hidden="true" />}
-              {previewMinute === null ? '实时同步' : '回到此刻'}
-            </button>
-          </div>
-          <div className="home-solar-timeline">
-            <input id="home-daylight" type="range" min="0" max="1439" step="1" value={minute} aria-label="预览一天的光照" aria-valuetext={`${sunlight.time}，${sunlight.label}`} onChange={event => setPreviewMinute(Number(event.target.value))} />
-            <div className="home-solar-ticks" aria-hidden="true">{['00', '06', '12', '18', '24'].map(hour => <span key={hour}>{hour}</span>)}</div>
-          </div>
-        </div>
+        <HomeSolarControls minute={minute} following={previewMinute === null} returning={returning} returnMinute={returnMinute}
+          onFollow={followLocalTime} onPreview={value => { setReturning(false); setPreviewMinute(value) }} />
         <button type="button" onClick={() => {
           if (motionReduced) { setAllowMotion(true); setPaused(false) }
           else setPaused(value => !value)

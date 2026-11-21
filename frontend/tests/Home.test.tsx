@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Home } from '../src/pages/home/Home'
@@ -46,7 +46,7 @@ describe('首页门面', () => {
     expect(screen.getByRole('button', { name: '播放首页动画' })).toBeInTheDocument()
   })
 
-  it('可预览光照并恢复跟随本地时间', () => {
+  it('恢复实时期间滑块与数字经过中间分钟，再到达本地时间', async () => {
     vi.spyOn(Date.prototype, 'getHours').mockReturnValue(12)
     vi.spyOn(Date.prototype, 'getMinutes').mockReturnValue(30)
     setup()
@@ -56,7 +56,27 @@ describe('首页门面', () => {
     expect(slider).toHaveAttribute('aria-valuetext', '00:00，夜晚')
     expect(screen.getByRole('button', { name: '跟随本地时间' })).toHaveAttribute('aria-pressed', 'false')
     fireEvent.click(screen.getByRole('button', { name: '跟随本地时间' }))
-    expect(slider).toHaveAttribute('aria-valuetext', '12:30，白昼')
+    expect(slider).toHaveValue('0')
+    await waitFor(() => {
+      const value = Number((slider as HTMLInputElement).value)
+      expect(value).toBeGreaterThan(0)
+      expect(value).toBeLessThan(750)
+      const time = `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`
+      expect(slider.getAttribute('aria-valuetext')).toContain(time)
+      expect(screen.getByText(time, { selector: 'strong' })).toBeInTheDocument()
+    })
+    await waitFor(() => expect(slider).toHaveAttribute('aria-valuetext', '12:30，白昼'), { timeout: 2000 })
     expect(screen.getByRole('button', { name: '跟随本地时间' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('减少动态效果时滑块和数字直接恢复实时', () => {
+    vi.mocked(useLiveReducedMotion).mockReturnValue(true)
+    vi.spyOn(Date.prototype, 'getHours').mockReturnValue(12)
+    vi.spyOn(Date.prototype, 'getMinutes').mockReturnValue(30)
+    setup()
+    fireEvent.change(screen.getByRole('slider'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: '跟随本地时间' }))
+    expect(screen.getByRole('slider')).toHaveValue('750')
+    expect(screen.getByText('12:30', { selector: 'strong' })).toBeInTheDocument()
   })
 })

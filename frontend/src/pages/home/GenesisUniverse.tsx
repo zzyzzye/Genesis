@@ -1,23 +1,15 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
-import { animate, useMotionValue } from 'motion/react'
-import { nearestSolarMinute, solarScene } from './solarScene'
+import type { MotionValue } from 'motion/react'
+import { solarScene } from './solarScene'
 
 /** 地平线光场按本地时刻变化；地表是程序纹理，不请求定位或外部地图。 */
-export function GenesisUniverse({ minute, paused, reducedMotion, active }: { minute: number; paused: boolean; reducedMotion: boolean; active: number | null }) {
+export function GenesisUniverse({ minute, displayedMinute, paused, active }: { minute: number; displayedMinute: MotionValue<number>; paused: boolean; active: number | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const elapsed = useRef(0)
   const activePortal = useRef(active)
   const motion = useRef({ x: 0, y: 0, targetX: 0, targetY: 0, pull: 0, portalX: .5, portalY: .5 })
-  const displayedMinute = useMotionValue(minute)
   const light = solarScene(minute)
   useEffect(() => { activePortal.current = active }, [active])
-  useEffect(() => {
-    // 选择值按分钟保存，光照连续跟随；快速反向拖动从当前进度接续，不重置画布。
-    if (reducedMotion) { displayedMinute.jump(minute); return }
-    const target = nearestSolarMinute(displayedMinute.get(), minute)
-    const transition = animate(displayedMinute, target, { type: 'spring', stiffness: 100, damping: 26, restDelta: .01, restSpeed: .05 })
-    return () => transition.stop()
-  }, [displayedMinute, minute, reducedMotion])
   useEffect(() => {
     const canvas = canvasRef.current
     const host = canvas?.parentElement
