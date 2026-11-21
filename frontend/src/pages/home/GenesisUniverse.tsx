@@ -1,12 +1,14 @@
 import { useEffect, useRef, type CSSProperties } from 'react'
 import type { MotionValue } from 'motion/react'
 import { solarScene } from './solarScene'
-import { createCelestialBodies } from './CelestialBodies'
+import { paintStarfield } from './starfield'
+import { nextRibbonFishRoute, paintRibbonFish, ribbonFishPose, RIBBON_FISH_DURATION } from './ribbonFish'
 
-/** 天空、地球与月亮共享时间光照；天体渲染与入口操作保持独立。 */
+/** 地平线光场按本地时刻变化；地表是程序纹理，不请求定位或外部地图。 */
 export function GenesisUniverse({ minute, displayedMinute, paused, active }: { minute: number; displayedMinute: MotionValue<number>; paused: boolean; active: number | null }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const elapsed = useRef(0)
+  const fishPass = useRef({ start: 4, direction: 1, route: -1 })
   const activePortal = useRef(active)
   const motion = useRef({ x: 0, y: 0, targetX: 0, targetY: 0, pull: 0, portalX: .5, portalY: .5 })
   const light = solarScene(minute)
@@ -22,7 +24,14 @@ export function GenesisUniverse({ minute, displayedMinute, paused, active }: { m
     const scene = document.createElement('canvas')
     const background = scene.getContext('2d')
     if (!background) return
-    const bodies = createCelestialBodies()
+    if (fishPass.current.route < 0) {
+      fishPass.current.route = nextRibbonFishRoute(-1, Math.random())
+      fishPass.current.direction = Math.random() < .5 ? 1 : -1
+    }
+    const terrain = document.createElement('canvas')
+    const surface = terrain.getContext('2d')
+    let pixels: ImageData | undefined
+    let geometry = new Float32Array(0)
     host.dataset.ready = 'true'
     let width = 0, height = 0, frame = 0, last = 0, radius = 0, centerY = 0
     let visible = true
@@ -47,24 +56,49 @@ export function GenesisUniverse({ minute, displayedMinute, paused, active }: { m
     }
     function onPointerLeave() { motion.current.targetX = 0; motion.current.targetY = 0 }
 
+    function prepareSurface() {
+      if (!surface) return
+      const scale = Math.min(1, 720 / width, 600 / height)
+      terrain.width = Math.ceil(width * scale)
+      terrain.height = Math.ceil(height * scale)
+      pixels = surface.createImageData(terrain.width, terrain.height)
+      geometry = new Float32Array(terrain.width * terrain.height * 5)
+      // 球面法线和纹理只随尺寸改变，过渡期间只计算光照点积，避免逐帧重复三角运算。
+      for (let py = Math.floor(height * .55 * scale); py < terrain.height; py++) {
+        for (let px = 0; px < terrain.width; px++) {
+          const nx = (px / scale - width / 2) / radius
+          const ny = (py / scale - centerY) / radius
+          const squared = nx * nx + ny * ny
+          if (squared >= 1) continue
+          const nz = Math.sqrt(1 - squared)
+          const longitude = Math.atan2(nx, nz)
+          const latitude = Math.asin(ny)
+          const index = py * terrain.width + px
+          geometry[index * 5] = nx
+          geometry[index * 5 + 1] = ny
+          geometry[index * 5 + 2] = nz
+          geometry[index * 5 + 3] = .93 + .07 * Math.sin(longitude * 82 + latitude * 43)
+          geometry[index * 5 + 4] = Math.max(0, Math.sin(longitude * 31 + Math.sin(latitude * 17) * 2) * Math.sin(latitude * 43 + Math.cos(longitude * 11) * 3) - .15) * 18
+          pixels.data[index * 4 + 3] = 255
+        }
+      }
+    }
+
     function paintScene() {
       if (!background) return
       const daylight = sun.daylight
       const warmth = sun.twilight
+      const cx = width / 2
       const sunX = width * (.5 - Math.cos(sun.angle) * .43)
-      const sunY = height * (.13 + (1 - daylight) * .2)
+      const horizon = centerY - Math.sqrt(radius * radius - Math.pow(sunX - cx, 2))
+      const sunY = horizon - sun.elevation * height * .48
       const sky = background.createLinearGradient(0, 0, 0, height)
       sky.addColorStop(0, '#080d16')
-      sky.addColorStop(.55, `rgb(${Math.round(7 + warmth * 15)}, ${Math.round(12 + daylight * 10 + warmth * 5)}, ${Math.round(23 + daylight * 18)})`)
+      sky.addColorStop(.55, `rgb(${Math.round(9 + warmth * 28)}, ${Math.round(15 + daylight * 27 + warmth * 10)}, ${Math.round(27 + daylight * 46)})`)
       sky.addColorStop(1, '#080c12')
       background.fillStyle = sky
       background.fillRect(0, 0, width, height)
-      for (let i = 0; i < 150; i++) {
-        background.globalAlpha = (.2 + i % 4 * .13) * (1 - daylight * .8)
-        background.fillStyle = '#d9e6f4'
-        background.fillRect(((i * .6180339) % 1) * width, ((i * .4142135) % 1) * height, i % 7 === 0 ? 1.6 : .7, i % 7 === 0 ? 1.6 : .7)
-      }
-      background.globalAlpha = 1
+      paintStarfield(background, width, height, daylight)
       const sunlightVisibility = Math.max(0, Math.min(1, (sun.elevation + .28) / .2))
       if (sunlightVisibility > 0) {
         background.globalAlpha = sunlightVisibility
@@ -83,6 +117,38 @@ export function GenesisUniverse({ minute, displayedMinute, paused, active }: { m
         background.fillRect(sunX - 24, sunY - 24, 48, 48)
       }
       background.globalAlpha = 1
+      if (surface && pixels) {
+        const lx = -Math.cos(sun.angle)
+        const ly = -sun.elevation * .9
+        const lz = sun.elevation * .65
+        const length = Math.hypot(lx, ly, lz)
+        for (let index = 0, field = 0; index < pixels.data.length; index += 4, field += 5) {
+          const nz = geometry[field + 2]!
+          if (nz === 0) continue
+          const diffuse = Math.max(0, (geometry[field]! * lx + geometry[field + 1]! * ly + nz * lz) / length)
+          const lit = diffuse * geometry[field + 3]!
+          const cloud = diffuse * geometry[field + 4]!
+          pixels.data[index] = 5 + lit * (28 + warmth * 54) + cloud
+          pixels.data[index + 1] = 11 + lit * (59 + warmth * 16) + cloud
+          pixels.data[index + 2] = 19 + lit * 78 + cloud
+        }
+        surface.putImageData(pixels, 0, 0)
+        background.drawImage(terrain, 0, 0, width, height)
+      }
+      const rim = background.createLinearGradient(0, 0, width, 0)
+      const litSide = Math.max(.02, Math.min(.98, sunX / width))
+      rim.addColorStop(0, `rgba(70,132,210,${.12 + daylight * .1})`)
+      rim.addColorStop(litSide, `rgba(${Math.round(62 + (43 + warmth * 150) * sunlightVisibility)},${Math.round(112 + (73 + warmth * 20) * sunlightVisibility)},${Math.round(204 + (51 - warmth * 108) * sunlightVisibility)},${.34 + .56 * sunlightVisibility})`)
+      rim.addColorStop(1, `rgba(70,132,210,${.12 + daylight * .1})`)
+      background.strokeStyle = rim
+      for (const [lineWidth, opacity] of [[64, .025], [32, .05], [16, .09], [7, .2], [2, .85]]) {
+        background.lineWidth = lineWidth!
+        background.globalAlpha = opacity!
+        background.beginPath()
+        background.arc(cx, centerY, radius, 0, Math.PI * 2)
+        background.stroke()
+      }
+      background.globalAlpha = 1
     }
 
     function draw(delta = 0) {
@@ -95,6 +161,16 @@ export function GenesisUniverse({ minute, displayedMinute, paused, active }: { m
       }
       elapsed.current += delta * .001
       const time = elapsed.current
+      // 共用可暂停的动画时钟；后台和减少动态效果时不会另起定时器触发鱼影。
+      if (time > fishPass.current.start + RIBBON_FISH_DURATION) {
+        fishPass.current = {
+          start: time + 6 + Math.random() * 6,
+          direction: Math.random() < .5 ? 1 : -1,
+          route: nextRibbonFishRoute(fishPass.current.route, Math.random()),
+        }
+      }
+      const fishProgress = (time - fishPass.current.start) / RIBBON_FISH_DURATION
+      const fish = ribbonFishPose(width, height, fishProgress, fishPass.current.direction, fishPass.current.route)
       const state = motion.current
       const ease = 1 - Math.exp(-delta / 520)
       const portal = activePortal.current === null ? undefined : portals[activePortal.current]
@@ -114,7 +190,49 @@ export function GenesisUniverse({ minute, displayedMinute, paused, active }: { m
       ctx.translate(-width / 2, -height / 2)
       ctx.drawImage(scene, 0, 0, width, height)
 
-      bodies?.draw(ctx, width / 2, centerY, radius, time, sun)
+      // 连续球面投影表现转动，避免用轻微摆动的平面线条冒充自转。
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(width / 2, centerY, radius - 3, 0, Math.PI * 2)
+      ctx.clip()
+      ctx.strokeStyle = '#8ec5e0'
+      ctx.lineWidth = .7
+      ctx.globalAlpha = .13 + sun.daylight * .06
+      function spherePoint(latitude: number, longitude: number) {
+        const x = Math.cos(latitude) * Math.sin(longitude)
+        const y = Math.sin(latitude)
+        const z = Math.cos(latitude) * Math.cos(longitude)
+        return { x: width / 2 + radius * x, y: centerY + radius * (y * .94 + z * .342), visible: -y * .342 + z * .94 > 0 }
+      }
+      for (let line = 0; line < 28; line++) {
+        ctx.beginPath()
+        let connected = false
+        for (let step = 0; step <= 72; step++) {
+          const meridian = line < 20
+          const latitude = meridian ? -Math.PI / 2 + step / 72 * Math.PI : -1.42 + (line - 20) * .19
+          const longitude = meridian ? line / 20 * Math.PI * 2 + time * .045 : step / 72 * Math.PI * 2
+          const point = spherePoint(latitude, longitude)
+          if (point.visible) {
+            if (connected) ctx.lineTo(point.x, point.y)
+            else ctx.moveTo(point.x, point.y)
+          }
+          connected = point.visible
+        }
+        ctx.stroke()
+      }
+      ctx.restore()
+      const sweep = Math.PI * 1.5 + Math.sin(time * .2) * .65
+      for (let segment = 0; segment < 12; segment++) {
+        const angle = sweep + (segment / 12 - .5) * .28
+        for (const [thickness, opacity] of [[20, .035], [8, .09], [1.5, .6]]) {
+          ctx.strokeStyle = '#b7e6f0'
+          ctx.globalAlpha = opacity! * Math.sin(segment / 11 * Math.PI)
+          ctx.lineWidth = thickness!
+          ctx.beginPath()
+          ctx.arc(width / 2, centerY, radius, angle, angle + .025)
+          ctx.stroke()
+        }
+      }
       ctx.restore()
 
       // 整屏光带缓慢穿行；入口聚焦时只弯曲光流，不移动真实导航。
@@ -122,10 +240,14 @@ export function GenesisUniverse({ minute, displayedMinute, paused, active }: { m
       ctx.globalCompositeOperation = 'screen'
       const tint = `${Math.round(115 + sun.twilight * 104)},${Math.round(191 - sun.twilight * 13)},${Math.round(216 - sun.twilight * 79)}`
       const wash = ctx.createRadialGradient(width * (.5 + Math.sin(time * .19) * .3), height * .48, 0, width * .5, height * .55, width * .6)
-      wash.addColorStop(0, `rgba(${tint},.035)`)
+      wash.addColorStop(0, `rgba(${tint},.08)`)
       wash.addColorStop(1, `rgba(${tint},0)`)
       ctx.fillStyle = wash
       ctx.fillRect(0, 0, width, height)
+      paintRibbonFish(ctx, fish, tint)
+      // 桌面适度增加飘带的宽度与细线，窄屏保留原密度，避免遮住入口。
+      const strandCount = width > 760 ? 22 : 18
+      const ribbonSpread = width > 760 ? .105 : .085
       for (let band = 0; band < 3; band++) {
         const samples = 80
         const points: { x: number; y: number; spread: number }[] = []
@@ -137,19 +259,23 @@ export function GenesisUniverse({ minute, displayedMinute, paused, active }: { m
           y += Math.sin(p * Math.PI * 3 - time * .18 + band) * height * .028 + state.y * 24 * envelope
           const attraction = Math.exp(-Math.pow((p - state.portalX) / .22, 2)) * state.pull * .88
           y += (state.portalY * height - y) * attraction
-          points.push({ x, y, spread: height * .085 * envelope * (1 - attraction * .8) })
+          if (fish) {
+            const nearFish = Math.exp(-Math.pow((x - fish.x) / (fish.length * .65), 2) - Math.pow((y - fish.y) / (fish.length * .4), 2))
+            y += Math.sin(p * Math.PI * 4 + time * .45 + band) * height * .012 * nearFish * fish.opacity
+          }
+          points.push({ x, y, spread: height * ribbonSpread * envelope * (1 - attraction * .8) })
         }
         const sheen = ctx.createLinearGradient(0, 0, width, 0)
         sheen.addColorStop(0, `rgba(${tint},0)`)
         sheen.addColorStop(.22, `rgba(${tint},.18)`)
-        sheen.addColorStop(.58, `rgba(${tint},.4)`)
+        sheen.addColorStop(.58, `rgba(${tint},${width > 760 ? .46 : .4})`)
         sheen.addColorStop(1, `rgba(${tint},0)`)
         ctx.strokeStyle = sheen
         ctx.lineWidth = .8
         ctx.save()
         ctx.translate(state.x * (18 + band * 7), 0)
-        for (let strand = 0; strand < 18; strand++) {
-          const offset = strand / 17 - .5
+        for (let strand = 0; strand < strandCount; strand++) {
+          const offset = strand / (strandCount - 1) - .5
           ctx.globalAlpha = .24 + .45 * Math.pow(Math.abs(offset) * 2, 3)
           ctx.beginPath()
           for (const [index, point] of points.entries()) {
@@ -188,19 +314,21 @@ export function GenesisUniverse({ minute, displayedMinute, paused, active }: { m
       if (!document.hidden && visible) { draw(); if (!paused) frame = requestAnimationFrame(tick) }
     }
     function resize() {
-      if (!canvas || !host || !ctx) return
+      if (!canvas || !host || !ctx || !background) return
       width = host.clientWidth
       height = host.clientHeight
       if (!width || !height) return
-      const ratio = Math.min(window.devicePixelRatio || 1, 1.5)
+      const ratio = Math.min(window.devicePixelRatio || 1, 2)
       canvas.width = Math.round(width * ratio)
       canvas.height = Math.round(height * ratio)
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
-      scene.width = Math.round(width)
-      scene.height = Math.round(height)
-      radius = width <= 760 ? width * .39 : Math.min(width * .28, height * .30)
-      centerY = height * (width <= 760 ? .54 : .60)
-      bodies?.resize(width <= 760)
+      // 天空缓存与显示画布使用相同像素密度，保留高分屏下的星点细节。
+      scene.width = canvas.width
+      scene.height = canvas.height
+      background.setTransform(ratio, 0, 0, ratio, 0, 0)
+      radius = Math.max(width * .67, height * .9)
+      centerY = height * .55 + radius
+      prepareSurface()
       paintedMinute = Number.NaN
       measure()
       draw()
