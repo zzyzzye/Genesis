@@ -36,7 +36,7 @@ body:has(.home-page) { min-width: 0; background: #101112; }
 .home-kicker { margin: 0 0 18px; color: var(--home-muted); font-size: 11px; letter-spacing: .3em; }
 .home-intro h1 { margin: 0; font-size: clamp(25px, 2.6vw, 38px); font-weight: 400; letter-spacing: .06em; line-height: 1.5; }
 .home-intro-copy { margin: 13px 0 0; color: var(--home-muted); font-size: 12px; letter-spacing: .08em; }
-.home-wordmark { position: absolute; z-index: -1; top: 25%; left: 50%; transform: translateX(-50%); font-family: "Arial Black", "Helvetica Neue", sans-serif; font-size: clamp(90px, 16vw, 250px); font-weight: 900; letter-spacing: -.075em; line-height: 1; color: #d6dee0; opacity: .07; pointer-events: none; user-select: none; }
+.home-wordmark { position: absolute; z-index: -1; top: 25%; left: 50%; transform: translateX(-50%); font-family: "Arial Black", "Helvetica Neue", sans-serif; font-size: clamp(90px, 16vw, 250px); font-weight: 900; letter-spacing: -.075em; line-height: 1; color: #d6dee0; opacity: .025; pointer-events: none; user-select: none; }
 .home-portals { position: absolute; inset: 0; }
 .home-portal { position: absolute; width: clamp(220px, 23vw, 340px); transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; text-align: center; -webkit-tap-highlight-color: transparent; }
 .home-portal--journal { left: 20%; top: 48%; --portal-light: #d8b995; }
@@ -94,12 +94,12 @@ body:has(.home-page) { min-width: 0; background: #101112; }
   .home-kicker { margin-bottom: 12px; font-size: 10px; }
   .home-intro h1 { font-size: clamp(24px, 6vw, 32px); letter-spacing: .02em; }
   .home-intro-copy { font-size: 11px; margin-top: 8px; }
-  .home-wordmark { top: 172px; font-size: 19vw; opacity: .1; }
+  .home-wordmark { top: 172px; font-size: 19vw; opacity: .04; }
   .home-portals { position: relative; display: flex; flex-direction: column; padding-top: 40px; gap: 10px; }
   .home-portal { position: relative; inset: auto; transform: none; width: 100%; min-height: 190px; flex-direction: row; text-align: left; gap: 8px; }
   .home-portal--lab { flex-direction: row-reverse; text-align: right; }
   .home-portal-art { flex: 0 0 52%; width: 52%; max-width: 200px; }
-  .home-portal-caption { align-items: flex-start; min-width: 0; margin: 0; }
+  .home-portal-caption { --home-muted: var(--home-ink); align-items: flex-start; min-width: 0; margin: 0; }
   .home-portal--lab .home-portal-caption { align-items: flex-end; margin-left: auto; }
   .home-portal-name { font-size: 22px; gap: 8px; }
   .home-portal-english { font-size: 9px; letter-spacing: .12em; }
