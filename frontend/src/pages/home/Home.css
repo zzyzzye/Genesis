@@ -56,20 +56,28 @@ body:has(.home-page) { min-width: 0; background: #101112; }
 .home-portal--studio[data-active="true"] .home-portal-art { transform: translateY(-12px) rotate(-15deg) scale(1.06); }
 .home-portal[data-active="true"] .home-portal-name svg { transform: translate(3px, -3px); color: var(--home-ink); }
 .home-portal:focus-visible .home-portal-name { background: var(--home-hover); border-radius: 6px; }
-.home-universe-controls { position: absolute; inset: auto 0 16px; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
-.home-solar-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.home-solar-controls label { display: flex; gap: 9px; align-items: center; color: var(--home-muted); font-size: 11px; }
-.home-solar-controls strong { color: var(--home-ink); font-family: ui-monospace, monospace; font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums; }
-.home-solar-controls input { appearance: none; width: 180px; height: 44px; margin: 0; padding: 0; cursor: ew-resize; outline: 0; border: 0; box-shadow: none; background: transparent; }
-.home-solar-controls input::-webkit-slider-runnable-track { height: 2px; background: #69717b; border: 0; }
-.home-solar-controls input::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; margin-top: -5px; border-radius: 50%; border: 0; box-shadow: none; background: #e1e6eb; }
-.home-solar-controls input::-moz-range-track { height: 2px; background: #69717b; border: 0; }
-.home-solar-controls input::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; border: 0; box-shadow: none; background: #e1e6eb; }
+.home-universe-controls { position: absolute; inset: auto 0 24px; display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
+.home-solar-controls { width: 288px; max-width: 100%; color: var(--home-muted); }
+.home-solar-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.home-solar-controls label { display: flex; flex-direction: column; gap: 5px; }
+.home-solar-mode { font-size: 10px; letter-spacing: .14em; }
+.home-solar-reading { display: flex; align-items: center; gap: 12px; }
+.home-solar-controls strong { color: var(--home-ink); font-family: ui-monospace, monospace; font-size: 22px; line-height: 1.2; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.home-solar-phase { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; }
+.home-solar-live { width: 4px; height: 4px; margin-inline: 4px; border-radius: 50%; background: currentColor; }
+.home-solar-timeline { margin-top: 2px; }
+.home-solar-controls input { appearance: none; display: block; width: 100%; height: 44px; margin: 0; padding: 0; cursor: ew-resize; outline: 0; border: 0; box-shadow: none; background: transparent; }
+.home-solar-controls input::-webkit-slider-runnable-track { height: 1px; background: color-mix(in srgb, var(--home-muted) 55%, transparent); border: 0; }
+.home-solar-controls input::-webkit-slider-thumb { appearance: none; width: 7px; height: 7px; margin-top: -3px; border-radius: 50%; border: 0; box-shadow: none; background: var(--home-ink); }
+.home-solar-controls input::-moz-range-track { height: 1px; background: color-mix(in srgb, var(--home-muted) 55%, transparent); border: 0; }
+.home-solar-controls input::-moz-range-thumb { width: 7px; height: 7px; border-radius: 50%; border: 0; box-shadow: none; background: var(--home-ink); }
 .home-solar-controls input:focus { outline: 0; border: 0; box-shadow: none; background: transparent; }
-.home-solar-controls input:focus-visible + button { color: var(--home-ink); }
-.home-follow-time[aria-pressed="true"] { color: var(--home-ink); }
+.home-solar-ticks { display: flex; justify-content: space-between; margin-top: -13px; pointer-events: none; font: 9px/1.2 ui-monospace, monospace; }
+.home-solar-ticks span { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.home-solar-ticks span::before { content: ""; height: 3px; width: 1px; background: currentColor; opacity: .5; }
 .home-universe-controls button { display: inline-flex; align-items: center; gap: 8px; padding: 12px; min-height: 44px; border-radius: 6px; background: transparent; color: var(--home-muted); font-size: 11px; }
-.home-universe-controls button:hover { background: var(--home-hover); color: var(--home-ink); }
+.home-page .home-universe-controls button:is(:hover, :focus-visible, :active) { background: transparent; color: var(--home-ink); }
+.home-page .home-follow-time { padding: 0; min-width: 76px; justify-content: flex-end; transition: color 160ms; }
 @media (max-width: 1050px) and (min-width: 761px) {
   .home-portal--journal { left: 19%; }
   .home-portal--studio { left: 81%; }
@@ -81,7 +89,7 @@ body:has(.home-page) { min-width: 0; background: #101112; }
   .home-header nav { display: none; }
   .home-brand { --genesis-logo-size: 25px; --genesis-wordmark-size: 19px; padding-left: 0; }
   .home-account { padding-right: 0; }
-  .home-universe { min-height: calc(100svh - 72px); height: auto; padding-bottom: 142px; }
+  .home-universe { min-height: calc(100svh - 72px); height: auto; padding-bottom: 190px; }
   .home-intro { padding-top: 24px; text-align: left; }
   .home-kicker { margin-bottom: 12px; font-size: 10px; }
   .home-intro h1 { font-size: clamp(24px, 6vw, 32px); letter-spacing: .02em; }
@@ -97,11 +105,8 @@ body:has(.home-page) { min-width: 0; background: #101112; }
   .home-portal-english { font-size: 9px; letter-spacing: .12em; }
   .home-portal-description { font-size: 11px; margin-top: 9px; max-width: 120px; }
   .home-portal[data-active="true"] .home-portal-name { color: #fff; background: var(--home-hover); border-radius: 6px; }
-  .home-universe-controls { bottom: 10px; }
-  .home-universe-controls { flex-wrap: wrap; align-items: center; gap: 0; }
-  .home-solar-controls { width: 100%; gap: 0 12px; }
-  .home-solar-controls label { width: 100%; }
-  .home-solar-controls input { flex: 1; min-width: 100px; }
+  .home-universe-controls { bottom: 16px; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .home-solar-controls { width: 100%; }
   .home-universe-controls > button { margin-left: auto; }
 }
 @media (prefers-reduced-motion: reduce) {

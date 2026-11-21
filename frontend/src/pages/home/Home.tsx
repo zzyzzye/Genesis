@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, Pause, Play, UserRound } from 'lucide-react'
+import { ArrowUpRight, Moon, Pause, Play, RotateCcw, Sun, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { GenesisUniverse } from './GenesisUniverse'
 import { PortalArtwork } from './PortalArtwork'
@@ -60,9 +60,20 @@ function Home() {
       </nav>
       <div className="home-universe-controls">
         <div className="home-solar-controls">
-          <label htmlFor="home-daylight"><span>{previewMinute === null ? '本地时间' : '时间预览'}</span><strong>{sunlight.time}</strong><span>· {sunlight.label}</span></label>
-          <input id="home-daylight" type="range" min="0" max="1439" step="1" value={minute} aria-label="预览一天的光照" aria-valuetext={`${sunlight.time}，${sunlight.label}`} onChange={event => setPreviewMinute(Number(event.target.value))} />
-          <button type="button" className="home-follow-time" aria-pressed={previewMinute === null} onClick={() => { setNow(new Date()); setPreviewMinute(null) }}>跟随本地时间</button>
+          <div className="home-solar-heading">
+            <label htmlFor="home-daylight">
+              <span className="home-solar-mode">{previewMinute === null ? '本地时间' : '光照预览'}</span>
+              <span className="home-solar-reading"><strong>{sunlight.time}</strong><span className="home-solar-phase">{sunlight.label === '夜晚' ? <Moon size={13} aria-hidden="true" /> : <Sun size={13} aria-hidden="true" />}{sunlight.label}</span></span>
+            </label>
+            <button type="button" className="home-follow-time" aria-label="跟随本地时间" aria-pressed={previewMinute === null} onClick={() => { setNow(new Date()); setPreviewMinute(null) }}>
+              {previewMinute === null ? <span className="home-solar-live" aria-hidden="true" /> : <RotateCcw size={12} aria-hidden="true" />}
+              {previewMinute === null ? '实时同步' : '回到此刻'}
+            </button>
+          </div>
+          <div className="home-solar-timeline">
+            <input id="home-daylight" type="range" min="0" max="1439" step="1" value={minute} aria-label="预览一天的光照" aria-valuetext={`${sunlight.time}，${sunlight.label}`} onChange={event => setPreviewMinute(Number(event.target.value))} />
+            <div className="home-solar-ticks" aria-hidden="true">{['00', '06', '12', '18', '24'].map(hour => <span key={hour}>{hour}</span>)}</div>
+          </div>
         </div>
         <button type="button" onClick={() => {
           if (motionReduced) { setAllowMotion(true); setPaused(false) }
