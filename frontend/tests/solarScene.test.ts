@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { solarScene } from '../src/pages/home/solarScene'
+import { nearestSolarMinute, solarScene } from '../src/pages/home/solarScene'
 
 describe('首页昼夜光照', () => {
+  it('跨午夜沿相邻分钟过渡，不绕行整个白天', () => {
+    expect(nearestSolarMinute(1439, 0)).toBe(1440)
+    expect(nearestSolarMinute(0, 1439)).toBe(-1)
+    expect(nearestSolarMinute(1441, 2)).toBe(1442)
+    expect(nearestSolarMinute(-1, 1)).toBe(1)
+    expect(nearestSolarMinute(540.5, 541)).toBe(541)
+    expect(solarScene(nearestSolarMinute(1439, 0))).toEqual(solarScene(0))
+  })
+
   it('早晨与傍晚的光源分处两侧，正午升起、午夜落下', () => {
     expect(Math.cos(solarScene(360).angle)).toBeCloseTo(1)
     expect(Math.cos(solarScene(1080).angle)).toBeCloseTo(-1)

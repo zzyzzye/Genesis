@@ -37,7 +37,7 @@ function Home() {
   }, [])
 
   return <div className="home-page" id="top" data-paused={paused || motionReduced}>
-    <GenesisUniverse minute={minute} paused={paused || motionReduced} active={active} />
+    <GenesisUniverse minute={minute} paused={paused || motionReduced} reducedMotion={motionReduced} active={active} />
     <a className="home-skip-link" href="#home-main">跳到主要内容</a>
     <header className="home-header">
       <Link className="home-brand" to="/" aria-label="Genesis 首页"><GenesisLogo inverse /></Link>
