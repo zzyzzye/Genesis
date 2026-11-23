@@ -185,9 +185,12 @@ def get_ai_chat_run_snapshot(
         return None
     history = []
     if include_history and run.conversation_id is not None:
-        conversation = session.scalar(select(AiConversation).where(
-            AiConversation.id == run.conversation_id, AiConversation.user_id == user_id,
-        ))
+        conversation = session.scalar(
+            select(AiConversation).where(
+                AiConversation.id == run.conversation_id,
+                AiConversation.user_id == user_id,
+            )
+        )
         if conversation is not None:
             history = conversation_detail(session, conversation).messages
     return AiChatRunSnapshot(
@@ -371,14 +374,25 @@ class AiChatRunManager:
                         if isinstance(token, TextMessageContentEvent):
                             pending += token.delta
                         elif isinstance(token, MessagesSnapshotEvent):
-                            content = "".join(
-                                message.content or "" for message in token.messages
-                                if message.role == "assistant" and (message.metadata or {}).get(
-                                    "genesis", {},
-                                ).get("run_id") == str(run_id)
-                            ) + question_content
+                            content = (
+                                "".join(
+                                    message.content or ""
+                                    for message in token.messages
+                                    if message.role == "assistant"
+                                    and (message.metadata or {})
+                                    .get(
+                                        "genesis",
+                                        {},
+                                    )
+                                    .get("run_id")
+                                    == str(run_id)
+                                )
+                                + question_content
+                            )
                             await self._persist(
-                                run_id, replace_content=content, events=pending_events,
+                                run_id,
+                                replace_content=content,
+                                events=pending_events,
                                 metrics=metrics.snapshot(),
                             )
                             pending, pending_events = "", []
@@ -391,7 +405,8 @@ class AiChatRunManager:
                         # 按长度或间隔批量写入快照，避免每个文本片段都产生数据库提交。
                         now = asyncio.get_running_loop().time()
                         if (
-                            len(pending) >= self._flush_size or len(pending_events) >= 64
+                            len(pending) >= self._flush_size
+                            or len(pending_events) >= 64
                             or now - last_flush >= self._flush_interval
                             or token.type == EventType.RUN_STARTED
                         ):
@@ -416,8 +431,10 @@ class AiChatRunManager:
             except asyncio.CancelledError:
                 # 保留已到达的正文与统计；用户取消后的终态仍由 cancel 保存。
                 await self._persist(
-                    run_id, append_content=pending,
-                    metrics=metrics.snapshot(), events=pending_events,
+                    run_id,
+                    append_content=pending,
+                    metrics=metrics.snapshot(),
+                    events=pending_events,
                 )
                 raise
             except RuntimeError as exc:
@@ -448,9 +465,9 @@ class AiChatRunManager:
         with self._session_factory() as session:
             run = session.get(AiChatRun, run_id)
             if run is not None:
-                history.restore([
-                    AgentToolCall.model_validate(item) for item in run.tool_calls or []
-                ])
+                history.restore(
+                    [AgentToolCall.model_validate(item) for item in run.tool_calls or []]
+                )
 
     def _persist_tool_call_sync(self, run_id: UUID, call: AgentToolCall) -> None:
         """按回调 ID 更新单项快照，行锁避免并行工具覆盖彼此的记录。"""
@@ -682,12 +699,20 @@ class AiChatRunManager:
             run = session.scalar(select(AiChatRun).where(AiChatRun.id == run_id).with_for_update())
             if run is None:
                 return
-            session.add_all([
-                AiChatRunEvent(run_id=run_id, payload=event.model_dump(
-                    mode="json", by_alias=True, exclude_none=True,
-                )) for event in events or []
-                if event.type != EventType.RUN_FINISHED or status == AiChatRunStatus.COMPLETED
-            ])
+            session.add_all(
+                [
+                    AiChatRunEvent(
+                        run_id=run_id,
+                        payload=event.model_dump(
+                            mode="json",
+                            by_alias=True,
+                            exclude_none=True,
+                        ),
+                    )
+                    for event in events or []
+                    if event.type != EventType.RUN_FINISHED or status == AiChatRunStatus.COMPLETED
+                ]
+            )
             if replace_content is not None:
                 run.content = replace_content
                 run.sequence += 1
@@ -812,7 +837,7 @@ def _request_from_payload(payload: dict[str, object]) -> AiChatRequest:
         ValueError: 载荷为空或不符合请求契约，包含 Pydantic ValidationError。
     """
     if not payload:
-        raise ValueError("empty request payload")
+        raise ValueError("请求载荷不能为空")
     return AiChatRequest.model_validate(payload)
 
 

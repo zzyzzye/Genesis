@@ -85,7 +85,7 @@
 @media(max-width:700px) { .media-projects { padding:24px 20px 60px; }.media-project-intro { grid-template-columns:minmax(0,1fr); grid-template-areas:"eyebrow" "title" "description" "actions"; row-gap:0; padding:32px 0 26px; }.media-project-intro h1 { font-size:clamp(34px,9vw,48px); }.media-project-intro>div { flex-direction:row; flex-wrap:wrap; margin-top:18px; }.media-project-grid { grid-template-columns:1fr; }.media-project-heading { flex-wrap:wrap; padding:18px 0; }.media-project-heading input { width:100%; }.media-project-workspace { padding:24px 20px 60px; }.media-workspace-heading { align-items:flex-start; flex-direction:column; gap:24px; padding:52px 0 36px; }.media-assets-page-heading { align-items:flex-start; flex-direction:column; gap:16px; padding:22px 0 14px; }.media-workspace-heading>.media-accent { align-self:stretch; }.media-assets-page-heading>.media-accent { align-self:flex-start; }.media-workspace-sections { grid-template-columns:1fr; }.media-workspace-card { min-height:205px; padding:22px; }.media-assets-page-heading>div { gap:8px; }.media-assets-page-heading h1 { font-size:32px; }.media-asset-library-page { padding-top:18px; }.media-asset-library-page .media-library-grid { grid-template-columns:1fr; }.media-project-menu { top:12px; left:12px; }.media-drawer { inset:8px; width:auto; padding:20px; }.media-canvas-toolbar { bottom:12px; flex-wrap:wrap; justify-content:center; width:max-content; max-width:calc(100vw - 24px); gap:0; }.media-canvas-toolbar button { font-size:12px; padding:7px 9px; min-height:40px; }.media-canvas-empty { padding-bottom:100px; } }
 @media(prefers-reduced-motion:reduce) { :is(.media-projects,.media-project-workspace,.media-gate,.media-editor) * { scroll-behavior:auto!important; transition:none!important; } }
 
-/* The editor controls float over the canvas; no persistent navigation panel. */
+/* 编辑器控件悬浮于画布上，不设置常驻导航面板。 */
 .media-project-controls { display:flex; align-items:stretch; gap:6px; max-width:100%; }
 .media-project-controls button { display:flex; align-items:center; justify-content:center; min-height:44px; margin:0; border:0; box-shadow:none; }
 .media-project-back { flex:0 0 44px; padding:0; }
@@ -192,7 +192,7 @@
 .media-canvas-empty-actions button { min-height:34px!important; padding:7px 9px!important; font-size:11px!important; }
 @media(max-width:700px) { .media-canvas-empty { width:min(250px,calc(100vw - 36px)); padding:16px 12px; }.media-canvas-empty h1 { font-size:18px; }.media-canvas-empty-actions { flex-direction:column; width:100%; }.media-canvas-empty-actions button { width:100%; } }
 
-/* A quiet, contextual assistant: it belongs to the editing bench rather than a separate app shell. */
+/* 助手融入编辑工作区，保持低干扰，并结合当前上下文提供帮助。 */
 .media-agent { position:fixed; z-index:24; right:24px; bottom:24px; display:flex; flex-direction:column; align-items:flex-end; gap:12px; font-family:Inter,"PingFang SC",sans-serif; }
 .media-agent button,.media-agent textarea { font-family:inherit; }.media-agent button:focus-visible,.media-agent textarea:focus-visible { outline:0; box-shadow:none; }
 .media-agent__launcher { display:grid; width:54px; height:54px; padding:0; place-items:center; border:0; border-radius:50%; background:#282f31; color:#e5eaeb; box-shadow:0 12px 30px #0007; cursor:pointer; }
