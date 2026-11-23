@@ -154,7 +154,8 @@ def get_comment_avatar(item_id: UUID, session: SessionDependency) -> Response:
         .where(
             BlogComment.id == item_id,
             BlogComment.state == BlogCommentState.PUBLIC,
-            BlogPost.status == BlogPostStatus.PUBLISHED, BlogPost.deleted_at.is_(None),
+            BlogPost.status == BlogPostStatus.PUBLISHED,
+            BlogPost.deleted_at.is_(None),
         )
     )
     if item is None or item.qq_number is None:

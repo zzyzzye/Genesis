@@ -13,14 +13,16 @@ depends_on: Sequence[str] | None = None
 
 def upgrade() -> None:
     """仅插入缺失的钱包，不生成流水或覆盖已有余额。"""
-    op.execute(sa.text("""
+    op.execute(
+        sa.text("""
         INSERT INTO billing_wallets (user_id, available, frozen)
         SELECT users.id, 0.00000000, 0.00000000
         FROM users
         LEFT JOIN billing_wallets ON billing_wallets.user_id = users.id
         WHERE billing_wallets.user_id IS NULL
         ON CONFLICT (user_id) DO NOTHING
-    """))
+    """)
+    )
 
 
 def downgrade() -> None:

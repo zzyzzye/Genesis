@@ -1,6 +1,7 @@
 """使用合成 proc 与监控响应验证宿主采集，不读取真实进程参数。"""
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +14,7 @@ from genesis_api import host_monitor, monitoring
 @pytest.mark.anyio
 async def test_native_host_source_and_stale_no_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     """宿主资源不混用虚拟机详情，过期后不回退到虚拟机或进程端点。"""
-    now = monitoring.time.time()
+    now = time.time()
     native = {
         "sampled_at": now,
         "source": "macos",
@@ -93,7 +94,7 @@ def test_hardware_models_and_missing(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_hardware_projection_and_staleness(monkeypatch: pytest.MonkeyPatch) -> None:
     """硬件端点去除标识字段，过期时降级，不把失败说成没有显卡。"""
-    sampled_at = monitoring.time.time()
+    sampled_at = time.time()
 
     async def get(self: httpx.AsyncClient, url: str, **kwargs: Any) -> httpx.Response:
         assert url == "http://host-processes:9101/hardware"
@@ -147,7 +148,7 @@ def test_sampler_pid_reuse_and_privacy(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(Path, "read_text", read)
     monkeypatch.setattr(Path, "iterdir", lambda _: iter([Path("42")]))
-    monkeypatch.setattr(host_monitor.time, "monotonic", lambda: clock)
+    monkeypatch.setattr(time, "monotonic", lambda: clock)
     sampler = host_monitor.Sampler(Path("/synthetic"))
     sampler.ticks = 100
     first = sampler.sample()["items"][0]

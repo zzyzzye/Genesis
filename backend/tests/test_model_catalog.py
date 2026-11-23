@@ -37,34 +37,57 @@ async def test_channel_cache_coalesces_requests_and_returns_independent_copies()
         return httpx.Response(200, json={"data": [{"id": "test-model"}]})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
-        first = asyncio.create_task(cache.get(
-            "https://test.invalid/v1/models", {"Authorization": "Bearer synthetic-a"},
-            client=client,
-        ))
+        first = asyncio.create_task(
+            cache.get(
+                "https://test.invalid/v1/models",
+                {"Authorization": "Bearer synthetic-a"},
+                client=client,
+            )
+        )
         await entered.wait()
-        second = asyncio.create_task(cache.get(
-            "https://test.invalid/v1/models",
-            {"authorization": "Bearer synthetic-a", "accept": "application/json"},
-            client=client, refresh=True,
-        ))
+        second = asyncio.create_task(
+            cache.get(
+                "https://test.invalid/v1/models",
+                {"authorization": "Bearer synthetic-a", "accept": "application/json"},
+                client=client,
+                refresh=True,
+            )
+        )
         await asyncio.sleep(0)
         release.set()
         a, b = await asyncio.gather(first, second)
         a["data"].clear()
         assert b["data"] == [{"id": "test-model"}]
-        await cache.get("https://test.invalid/v1/models", {
-            "Authorization": "Bearer synthetic-a",
-        }, client=client)
+        await cache.get(
+            "https://test.invalid/v1/models",
+            {
+                "Authorization": "Bearer synthetic-a",
+            },
+            client=client,
+        )
         assert calls == 1
-        await cache.get("https://test.invalid/v1/models", {
-            "Authorization": "Bearer synthetic-b",
-        }, client=client)
-        await cache.get("https://other.invalid/v1/models", {
-            "Authorization": "Bearer synthetic-a",
-        }, client=client)
-        await cache.get("https://test.invalid/v1/models", {
-            "x-api-key": "synthetic-a", "anthropic-version": "2023-06-01",
-        }, client=client)
+        await cache.get(
+            "https://test.invalid/v1/models",
+            {
+                "Authorization": "Bearer synthetic-b",
+            },
+            client=client,
+        )
+        await cache.get(
+            "https://other.invalid/v1/models",
+            {
+                "Authorization": "Bearer synthetic-a",
+            },
+            client=client,
+        )
+        await cache.get(
+            "https://test.invalid/v1/models",
+            {
+                "x-api-key": "synthetic-a",
+                "anthropic-version": "2023-06-01",
+            },
+            client=client,
+        )
         assert calls == 4
 
 
@@ -83,9 +106,13 @@ async def test_stale_cache_is_bounded_and_auth_failure_evicts(
         return httpx.Response(code, json={"data": [{"id": "cached"}]})
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+
         async def get(refresh: bool = False) -> dict[str, object]:
             return await cache.get(
-                "https://test.invalid/models", {}, client=client, refresh=refresh,
+                "https://test.invalid/models",
+                {},
+                client=client,
+                refresh=refresh,
             )
 
         assert (await get())["data"]
@@ -110,9 +137,11 @@ async def test_stale_cache_is_bounded_and_auth_failure_evicts(
 @pytest.mark.anyio
 async def test_invalid_payload_is_not_cached() -> None:
     cache = ModelCatalog()
-    async with httpx.AsyncClient(transport=httpx.MockTransport(
-        lambda _: httpx.Response(200, json={"data": "invalid"}),
-    )) as client:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"data": "invalid"}),
+        )
+    ) as client:
         with pytest.raises(ValueError, match="格式无效"):
             await cache.get("https://test.invalid/models", {}, client=client)
     assert not cache.entries
@@ -127,9 +156,11 @@ async def test_text_image_video_share_the_same_upstream_catalog(
         monkeypatch.setattr(module, "model_catalog", cache)
     settings = Settings(
         text_openai_base_url="https://shared.invalid/v1",
-        image_api_base_url="https://shared.invalid", video_api_base_url="https://shared.invalid",
+        image_api_base_url="https://shared.invalid",
+        video_api_base_url="https://shared.invalid",
         text_openai_api_key=SecretStr("synthetic-shared"),
-        image_api_key=SecretStr("synthetic-shared"), video_api_key=SecretStr("synthetic-shared"),
+        image_api_key=SecretStr("synthetic-shared"),
+        video_api_key=SecretStr("synthetic-shared"),
     )
     requests = []
 
@@ -138,12 +169,18 @@ async def test_text_image_video_share_the_same_upstream_catalog(
         return httpx.Response(200, json={"data": [{"id": "shared-model"}]})
 
     original = httpx.AsyncClient
-    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(
-        transport=httpx.MockTransport(respond), **kwargs,
-    ))
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: original(
+            transport=httpx.MockTransport(respond),
+            **kwargs,
+        ),
+    )
     text_models, images, videos = await asyncio.gather(
         ModelDiscoveryService(settings).list_models("openai"),
-        image.available_models(settings), video.available_models(settings),
+        image.available_models(settings),
+        video.available_models(settings),
     )
     assert any(model.id == "shared-model" for model in text_models.models)
     assert images == [{"id": "shared-model"}]
@@ -153,15 +190,22 @@ async def test_text_image_video_share_the_same_upstream_catalog(
 
 @pytest.mark.anyio
 async def test_catalog_response_does_not_wait_for_pricing(monkeypatch: pytest.MonkeyPatch) -> None:
-    discovery = AsyncMock(return_value=ProviderModels(
-        provider="openai", models=[AvailableModel(id="test-model")],
-    ))
+    discovery = AsyncMock(
+        return_value=ProviderModels(
+            provider="openai",
+            models=[AvailableModel(id="test-model")],
+        )
+    )
     prices = AsyncMock(side_effect=AssertionError("首次目录请求不应同步价格"))
     monkeypatch.setattr(ModelDiscoveryService, "list_models", discovery)
     monkeypatch.setattr(yyapi_pricing_service, "for_models", prices)
     user = User(id=uuid4(), handle="test", display_name="测试", role=UserRole.OWNER)
     result = await llm.list_provider_models(
-        "openai", user, Settings(), MagicMock(), include_pricing=False,
+        "openai",
+        user,
+        Settings(),
+        MagicMock(),
+        include_pricing=False,
     )
     assert result.models[0].id == "test-model"
     assert result.models[0].billing_mode == "platform"
@@ -173,25 +217,38 @@ async def test_manual_price_sync_does_not_repeat_model_discovery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """文本价格同步绕过价格缓存，但复用刚同步的模型目录。"""
-    discovery = AsyncMock(return_value=ProviderModels(
-        provider="openai", models=[AvailableModel(id="test-model")],
-    ))
+    discovery = AsyncMock(
+        return_value=ProviderModels(
+            provider="openai",
+            models=[AvailableModel(id="test-model")],
+        )
+    )
     prices = AsyncMock(return_value={})
     monkeypatch.setattr(ModelDiscoveryService, "list_models", discovery)
     monkeypatch.setattr(yyapi_pricing_service, "for_models", prices)
     user = User(id=uuid4(), handle="test", display_name="测试", role=UserRole.OWNER)
     await llm.list_provider_models(
-        "openai", user, Settings(), MagicMock(), refresh_pricing=True,
+        "openai",
+        user,
+        Settings(),
+        MagicMock(),
+        refresh_pricing=True,
     )
     discovery.assert_awaited_once_with("openai", refresh=False)
+    assert prices.await_args is not None
     assert prices.await_args.kwargs["refresh"] is True
 
 
-@pytest.mark.parametrize(("adapter", "model"), [
-    ("openai", "gpt-5"), ("anthropic", "claude-sonnet-4-5"),
-    ("google_genai", "gemini-2.5-flash"), ("xai", "grok-4"),
-    ("openai", "unknown-model"),
-])
+@pytest.mark.parametrize(
+    ("adapter", "model"),
+    [
+        ("openai", "gpt-5"),
+        ("anthropic", "claude-sonnet-4-5"),
+        ("google_genai", "gemini-2.5-flash"),
+        ("xai", "grok-4"),
+        ("openai", "unknown-model"),
+    ],
+)
 def test_lightweight_profile_matches_framework_client(adapter: str, model: str) -> None:
     """依赖升级时确保轻量查询与框架客户端原生能力保持一致。"""
     client = init_chat_model(model=model, model_provider=adapter, api_key="synthetic-profile-test")

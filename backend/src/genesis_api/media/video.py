@@ -157,17 +157,34 @@ def build_payload(
     ids: list[str] = []
     image_numbers: dict[UUID, int] = {}
     image_assets: list[UUID] = []
-    connected = [sources[edge.source] for edge in document.edges if (
-        edge.target == node.id and edge.source in sources and edge.source != node.id
-        and (sources[edge.source].asset_id is not None or sources[edge.source].type in (
-            "image", "image_generation", "video", "video_asset", "audio", "audio_generation",
-        ))
-    )]
+    connected = [
+        sources[edge.source]
+        for edge in document.edges
+        if (
+            edge.target == node.id
+            and edge.source in sources
+            and edge.source != node.id
+            and (
+                sources[edge.source].asset_id is not None
+                or sources[edge.source].type
+                in (
+                    "image",
+                    "image_generation",
+                    "video",
+                    "video_asset",
+                    "audio",
+                    "audio_generation",
+                )
+            )
+        )
+    ]
     # 图片只有在提示词中显式引用才提交，未使用的候选不触发素材校验。
     mentioned = mentioned_image_nodes(node.text)
-    connected = [source for source in connected if (
-        source.type not in ("image", "image_generation") or str(source.id) in mentioned
-    )]
+    connected = [
+        source
+        for source in connected
+        if (source.type not in ("image", "image_generation") or str(source.id) in mentioned)
+    ]
     if not connected and node.generation.mode != "first_last":
         node = node.model_copy(
             update={"generation": node.generation.model_copy(update={"mode": "text"})}
@@ -480,8 +497,14 @@ async def refresh_videos() -> None:
 
 
 async def admit_task(
-    session: Session, user: User, project_id: UUID, data: VideoSubmit, settings: Settings,
-    *, expected_version: int | None = None, reuse_active: bool = False,
+    session: Session,
+    user: User,
+    project_id: UUID,
+    data: VideoSubmit,
+    settings: Settings,
+    *,
+    expected_version: int | None = None,
+    reuse_active: bool = False,
 ) -> tuple[VideoGeneration, dict[str, object] | None]:
     """复用页面的视频准入、计费和幂等校验。
 
@@ -537,9 +560,11 @@ async def admit_task(
     )
     payload = build_payload(task, document, session, settings)
     node = next(n for n in document.nodes if n.id == data.node_id)
-    node = node.model_copy(update={
-        "text": resolve_text_mentions(node.text, document, node.id),
-    })
+    node = node.model_copy(
+        update={
+            "text": resolve_text_mentions(node.text, document, node.id),
+        }
+    )
     billing.admit(
         session,
         user,

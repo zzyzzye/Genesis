@@ -151,7 +151,9 @@ class EmbeddedAgentRuntime:
             if yyapi:
                 hooks["request"].insert(0, clean_gateway_headers)
             self._anthropic_http_clients[yyapi] = httpx2.AsyncClient(
-                timeout=60, event_hooks=hooks, trust_env=False,
+                timeout=60,
+                event_hooks=hooks,
+                trust_env=False,
             )
         return self._anthropic_http_clients[yyapi]
 
@@ -274,9 +276,7 @@ class EmbeddedAgentRuntime:
         if adapter_provider == "openai":
             kwargs["stream_usage"] = True
         if adapter_provider in ("openai", "xai") and provider != "mimo":
-            kwargs["use_responses_api"] = (
-                True if use_responses_api is None else use_responses_api
-            )
+            kwargs["use_responses_api"] = True if use_responses_api is None else use_responses_api
         # 推理模型可能不接受 temperature；显式档位交由框架映射供应商参数。
         if profile.get("temperature") is not False and reasoning_effort is None:
             kwargs["temperature"] = settings.text_temperature
@@ -386,8 +386,13 @@ class EmbeddedAgentRuntime:
                     InputFallbackMiddleware(
                         provider,
                         lambda: self._build_model(
-                            settings, provider, model, reasoning_effort, thinking_mode,
-                            output_cap=output_cap, use_responses_api=False,
+                            settings,
+                            provider,
+                            model,
+                            reasoning_effort,
+                            thinking_mode,
+                            output_cap=output_cap,
+                            use_responses_api=False,
                         ),
                     ),
                     *([AttachmentFilesMiddleware()] if module in ("blog", "media") else []),
@@ -459,24 +464,35 @@ class EmbeddedAgentRuntime:
             if request.context and request.context.module
             else ("blog" if request.surface in ("blog", "studio") else request.surface)
         )
-        graph = create_agent(
-            model=self._build_model(
-                settings, "mimo", model, thinking_mode="disabled", output_cap=4096,
-            ),
-            system_prompt=svg_system_message(), checkpointer=self._checkpointer,
-        ) if request.purpose == "svg" else self._graph(
-            settings,
-            provider,
-            model,
-            module,
-            request.reasoning_effort,
-            request.thinking_mode,
-            **({"output_cap": output_cap} if output_cap else {}),
+        graph = (
+            create_agent(
+                model=self._build_model(
+                    settings,
+                    "mimo",
+                    model,
+                    thinking_mode="disabled",
+                    output_cap=4096,
+                ),
+                system_prompt=svg_system_message(),
+                checkpointer=self._checkpointer,
+            )
+            if request.purpose == "svg"
+            else self._graph(
+                settings,
+                provider,
+                model,
+                module,
+                request.reasoning_effort,
+                request.thinking_mode,
+                **({"output_cap": output_cap} if output_cap else {}),
+            )
         )
-        config = RunnableConfig(configurable={
-            "thread_id": thread_id,
-            "genesis_run_id": str(request.billing_source_id or thread_id),
-        })
+        config = RunnableConfig(
+            configurable={
+                "thread_id": thread_id,
+                "genesis_run_id": str(request.billing_source_id or thread_id),
+            }
+        )
         resuming = bool(
             request.resume_from_checkpoint
             and self._checkpointer is not None
@@ -526,7 +542,8 @@ class EmbeddedAgentRuntime:
             # 已有 checkpoint 时不重复读取原文件或提交消息，由框架恢复执行状态。
             graph_input = None
         public_events = PublicAgentEvents(
-            str(request.billing_source_id or thread_id), tool_history or ToolCallHistory(),
+            str(request.billing_source_id or thread_id),
+            tool_history or ToolCallHistory(),
         )
         if resuming:
             saved = await graph.aget_state(config)
@@ -537,12 +554,19 @@ class EmbeddedAgentRuntime:
                 if message.type == "ai" and message.id:
                     public_events.current_messages.add(message.id)
         adapter = AuthorizedLangGraphAgent(
-            name="genesis", graph=graph, config=config, graph_input=graph_input,
+            name="genesis",
+            graph=graph,
+            config=config,
+            graph_input=graph_input,
             public_events=public_events,
         )
         protocol_input = RunAgentInput(
-            thread_id=thread_id, run_id=public_events.run_id,
-            state={}, messages=[], tools=[], context=[],
+            thread_id=thread_id,
+            run_id=public_events.run_id,
+            state={},
+            messages=[],
+            tools=[],
+            context=[],
             forwarded_props={"stream_subgraphs": False},
         )
         with (
@@ -605,7 +629,12 @@ class EmbeddedAgentRuntime:
                 if attempt or not unsupported_responses(error):
                     raise
                 client = self._build_model(
-                    settings, provider, model, effort, thinking, use_responses_api=False,
+                    settings,
+                    provider,
+                    model,
+                    effort,
+                    thinking,
+                    use_responses_api=False,
                 )
         raise RuntimeError("模型未返回完整结构化结果")
 
@@ -663,7 +692,12 @@ class EmbeddedAgentRuntime:
                 if not unsupported_responses(error):
                     raise
                 fallback = self._build_model(
-                    settings, provider, model, effort, thinking, use_responses_api=False,
+                    settings,
+                    provider,
+                    model,
+                    effort,
+                    thinking,
+                    use_responses_api=False,
                 )
                 value = await fallback.with_structured_output(AiConversationTitle).ainvoke(messages)
             if not isinstance(value, AiConversationTitle):

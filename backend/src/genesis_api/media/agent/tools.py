@@ -71,8 +71,10 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
                 document = CanvasDocument.model_validate(project.canvas)
                 source_kinds = {
                     node.id: service.readable_asset(session, actor_id, node.asset_id).kind
-                    if node.asset_id is not None else
-                    "image" if node.type in ("image", "image_generation") else node.type
+                    if node.asset_id is not None
+                    else "image"
+                    if node.type in ("image", "image_generation")
+                    else node.type
                     for node in document.nodes
                 }
                 return project.version, document, source_kinds
@@ -92,30 +94,36 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
             作品版本、全部节点和连线；不包含浏览器尚未保存的编辑。
         """
         version, document, source_kinds = await asyncio.to_thread(read_canvas, project_id)
-        references = {
-            node.id: image.reference_nodes(document, node.id) for node in document.nodes
-        }
+        references = {node.id: image.reference_nodes(document, node.id) for node in document.nodes}
         return {
             "project_id": str(project_id),
             "version": version,
-            "nodes": [{
-                **node.model_dump(mode="json"),
-                "reference_node_ids": [str(source.id) for source in references[node.id]],
-                "image_reference_node_ids": [
-                    str(source.id) for source in references[node.id]
-                    if source_kinds[source.id] == "image"
-                ],
-                "image_mention_token": f"@[图片](ref:{node.id})"
-                if source_kinds[node.id] == "image" else None,
-                "text_reference_node_ids": [
-                    str(source.id) for source in references[node.id] if source.type == "text"
-                ],
-                "text_mention_token": f"@[文字](ref:{node.id})"
-                if node.type == "text" else None,
-            } for node in document.nodes],
+            "nodes": [
+                {
+                    **node.model_dump(mode="json"),
+                    "reference_node_ids": [str(source.id) for source in references[node.id]],
+                    "image_reference_node_ids": [
+                        str(source.id)
+                        for source in references[node.id]
+                        if source_kinds[source.id] == "image"
+                    ],
+                    "image_mention_token": f"@[图片](ref:{node.id})"
+                    if source_kinds[node.id] == "image"
+                    else None,
+                    "text_reference_node_ids": [
+                        str(source.id) for source in references[node.id] if source.type == "text"
+                    ],
+                    "text_mention_token": f"@[文字](ref:{node.id})"
+                    if node.type == "text"
+                    else None,
+                }
+                for node in document.nodes
+            ],
             "edges": [edge.model_dump(mode="json") for edge in document.edges],
             "image_generation_with_references_node_ids": [
-                str(node.id) for node in document.nodes if node.type == "image_generation"
+                str(node.id)
+                for node in document.nodes
+                if node.type == "image_generation"
                 and any(source_kinds[source.id] == "image" for source in references[node.id])
             ],
             "source": "已保存画布；浏览器未保存修改可能不同",
@@ -334,8 +342,11 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
                     session,
                     user,
                     project_id,
-                    GenerationSubmit(request_id=request_id, node_id=node_id,
-                                     acknowledge_unknown=acknowledge_unknown),
+                    GenerationSubmit(
+                        request_id=request_id,
+                        node_id=node_id,
+                        acknowledge_unknown=acknowledge_unknown,
+                    ),
                     settings,
                     expected_version=expected_version,
                     reuse_active=True,
@@ -390,7 +401,9 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
 
     @tool(response_format="content_and_artifact")
     async def edit_media_canvas(
-        project_id: UUID, expected_version: int, document: CanvasDocument,
+        project_id: UUID,
+        expected_version: int,
+        document: CanvasDocument,
     ) -> tuple[dict[str, object], dict[str, object]]:
         """按用户要求直接保存完整画布，支持节点新建/删除/副本/编组/取消编组/排版/移动缩放/参数及引用编辑。
 
@@ -407,6 +420,7 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
         Returns:
             已保存版本、完整文档与前端同步回执。没有启动付费生成。
         """
+
         def write() -> tuple[dict[str, object], dict[str, object]]:
             try:
                 actor = require_actor(module="media")
@@ -416,37 +430,64 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
                         result = {"version": project.version, "document": project.canvas}
                     else:
                         result = service.save_canvas(
-                            session, actor, project_id,
+                            session,
+                            actor,
+                            project_id,
                             CanvasWrite(version=expected_version, document=document),
                         )
                 receipt = uuid5(NAMESPACE_URL, f"canvas:{project_id}:{result['version']}")
-                return result, {"resource": {
-                    "module": "media", "kind": "canvas_edit", "id": str(receipt),
-                    "scope_id": str(project_id), "parent_id": str(project_id),
-                }}
+                return result, {
+                    "resource": {
+                        "module": "media",
+                        "kind": "canvas_edit",
+                        "id": str(receipt),
+                        "scope_id": str(project_id),
+                        "parent_id": str(project_id),
+                    }
+                }
             except (HTTPException, RuntimeError) as exc:
                 raise ToolException(
                     str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
                 ) from None
+
         return await asyncio.to_thread(write)
 
     @tool
     async def get_media_assets(project_id: UUID, page: int = 1) -> dict[str, object]:
         """读取当前用户作品及账户库素材的真实 ID、名称与类型，每页50项，不返回文件授权地址。"""
+
         def read() -> dict[str, object]:
             actor = require_actor(module="media")
             with SessionLocal() as session:
                 service.project_for(session, actor, project_id)
-                linked = set(session.scalars(select(ProjectAsset.asset_id).where(
-                    ProjectAsset.project_id == project_id
-                )))
-                rows = session.scalars(select(MediaAsset).where(
-                    MediaAsset.owner_id == actor,
-                    (MediaAsset.id.in_(linked)) | MediaAsset.in_library,
-                ).order_by(MediaAsset.id).offset((max(1, page) - 1) * 50).limit(51)).all()
-                return {"items": [{"id": str(row.id), "name": row.name, "kind": row.kind,
-                                   "linked": row.id in linked} for row in rows[:50]],
-                        "has_more": len(rows) > 50}
+                linked = set(
+                    session.scalars(
+                        select(ProjectAsset.asset_id).where(ProjectAsset.project_id == project_id)
+                    )
+                )
+                rows = session.scalars(
+                    select(MediaAsset)
+                    .where(
+                        MediaAsset.owner_id == actor,
+                        (MediaAsset.id.in_(linked)) | MediaAsset.in_library,
+                    )
+                    .order_by(MediaAsset.id)
+                    .offset((max(1, page) - 1) * 50)
+                    .limit(51)
+                ).all()
+                return {
+                    "items": [
+                        {
+                            "id": str(row.id),
+                            "name": row.name,
+                            "kind": row.kind,
+                            "linked": row.id in linked,
+                        }
+                        for row in rows[:50]
+                    ],
+                    "has_more": len(rows) > 50,
+                }
+
         try:
             return await asyncio.to_thread(read)
         except (HTTPException, RuntimeError) as exc:
@@ -457,6 +498,7 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
     @tool
     async def reference_media_asset(project_id: UUID, asset_id: UUID) -> dict[str, object]:
         """关联本人账户素材，随后用 edit_media_canvas 创建素材节点及连线。"""
+
         def attach() -> dict[str, object]:
             actor = require_actor(module="media")
             with SessionLocal() as session:
@@ -469,6 +511,7 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
                     session.add(ProjectAsset(project_id=project_id, asset_id=asset_id))
                     session.commit()
                 return {"id": str(asset.id), "name": asset.name, "kind": asset.kind}
+
         try:
             return await asyncio.to_thread(attach)
         except (HTTPException, RuntimeError) as exc:
@@ -478,7 +521,10 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
 
     @tool(response_format="content_and_artifact")
     async def submit_video_generation(
-        project_id: UUID, node_id: UUID, expected_version: int, config: RunnableConfig,
+        project_id: UUID,
+        node_id: UUID,
+        expected_version: int,
+        config: RunnableConfig,
         acknowledge_unknown: bool = False,
     ) -> tuple[dict[str, object], dict[str, object]]:
         """提交已保存的视频节点，可能收费；同轮同节点及已有运行任务复用，不重复生成。"""
@@ -493,15 +539,30 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
                 if user is None:
                     raise ToolException("账户不存在")
                 task, payload = await video.admit_task(
-                    session, user, project_id,
-                    video.VideoSubmit(request_id=request_id, node_id=node_id,
-                                      acknowledge_unknown=acknowledge_unknown), settings,
-                    expected_version=expected_version, reuse_active=True,
+                    session,
+                    user,
+                    project_id,
+                    video.VideoSubmit(
+                        request_id=request_id,
+                        node_id=node_id,
+                        acknowledge_unknown=acknowledge_unknown,
+                    ),
+                    settings,
+                    expected_version=expected_version,
+                    reuse_active=True,
                 )
-                result = {"project_id": str(project_id), **video.task_data(task),
-                          "reused": payload is None}
-                resource = {"module": "media", "kind": "video_generation", "id": str(task.id),
-                            "scope_id": str(project_id), "parent_id": str(node_id)}
+                result = {
+                    "project_id": str(project_id),
+                    **video.task_data(task),
+                    "reused": payload is None,
+                }
+                resource = {
+                    "module": "media",
+                    "kind": "video_generation",
+                    "id": str(task.id),
+                    "scope_id": str(project_id),
+                    "parent_id": str(node_id),
+                }
                 if payload is not None:
                     video.start_agent_task(task.id, payload, settings)
                 return result, {"resource": resource}
@@ -513,6 +574,7 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
     @tool
     async def get_video_generation_task(project_id: UUID, task_id: UUID) -> dict[str, object]:
         """查询已提交视频任务的当前状态与结果素材，不重新生成。"""
+
         def read() -> dict[str, object]:
             actor = require_actor(module="media")
             with SessionLocal() as session:
@@ -521,6 +583,7 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
                 if task is None or task.owner_id != actor or task.project_id != project_id:
                     raise ToolException("视频任务不存在")
                 return video.task_data(task)
+
         try:
             return await asyncio.to_thread(read)
         except (HTTPException, RuntimeError) as exc:
@@ -530,7 +593,9 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
 
     @tool(response_format="content_and_artifact")
     async def retry_generation_save(
-        project_id: UUID, task_id: UUID, kind: Literal["image", "video"],
+        project_id: UUID,
+        task_id: UUID,
+        kind: Literal["image", "video"],
     ) -> tuple[dict[str, object], dict[str, object]]:
         """重试保存已有图片或视频结果，不发起新的付费生成。
 
@@ -550,24 +615,39 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
             with SessionLocal() as session:
                 service.project_for(session, actor, project_id)
                 user = session.get(User, actor)
-                task = (session.get(ImageGeneration, task_id) if kind == "image"
-                        else session.get(VideoGeneration, task_id))
-                if (user is None or task is None or task.owner_id != actor
-                        or task.project_id != project_id):
+                task = (
+                    session.get(ImageGeneration, task_id)
+                    if kind == "image"
+                    else session.get(VideoGeneration, task_id)
+                )
+                if (
+                    user is None
+                    or task is None
+                    or task.owner_id != actor
+                    or task.project_id != project_id
+                ):
                     raise ToolException("生成任务不存在")
                 if task.status in ("downloading", "completed"):
-                    result = (image.task_data(task) if isinstance(task, ImageGeneration)
-                              else video.task_data(task))
+                    result = (
+                        image.task_data(task)
+                        if isinstance(task, ImageGeneration)
+                        else video.task_data(task)
+                    )
                 elif kind == "image":
                     result = retry_image_save(project_id, task_id, user, session, background)
                 else:
                     result = retry_video_download(project_id, task_id, user, session)
                 node_id = str(task.node_id)
             await background()
-            return result, {"resource": {
-                "module": "media", "kind": f"{kind}_generation", "id": str(task_id),
-                "scope_id": str(project_id), "parent_id": node_id,
-            }}
+            return result, {
+                "resource": {
+                    "module": "media",
+                    "kind": f"{kind}_generation",
+                    "id": str(task_id),
+                    "scope_id": str(project_id),
+                    "parent_id": node_id,
+                }
+            }
         except HTTPException as exc:
             raise ToolException(str(exc.detail)) from None
 
@@ -579,8 +659,12 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
         submit_image_generation,
         get_image_generation_task,
         rename_node,
-        edit_media_canvas, get_media_assets, reference_media_asset,
-        submit_video_generation, get_video_generation_task, retry_generation_save,
+        edit_media_canvas,
+        get_media_assets,
+        reference_media_asset,
+        submit_video_generation,
+        get_video_generation_task,
+        retry_generation_save,
     ]
     for entry in result:
         entry.handle_tool_error = True
@@ -588,6 +672,8 @@ def build_media_tools(settings: Settings, *, review: bool = True) -> list[BaseTo
     if review:
         from genesis_api.media.agent.actions import MEDIA_ACTIONS, reviewed_tool
 
-        return [reviewed_tool(entry, settings) if entry.name in MEDIA_ACTIONS else entry
-                for entry in result]
+        return [
+            reviewed_tool(entry, settings) if entry.name in MEDIA_ACTIONS else entry
+            for entry in result
+        ]
     return result

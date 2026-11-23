@@ -17,7 +17,9 @@ def upgrade() -> None:
         "ai_chat_run_events",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column(
-            "run_id", sa.Uuid(), sa.ForeignKey("ai_chat_runs.id", ondelete="CASCADE"),
+            "run_id",
+            sa.Uuid(),
+            sa.ForeignKey("ai_chat_runs.id", ondelete="CASCADE"),
             nullable=False,
         ),
         sa.Column("payload", sa.JSON(), nullable=False),

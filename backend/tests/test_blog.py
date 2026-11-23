@@ -336,7 +336,8 @@ async def test_owner_can_log_in_and_read_own_profile(
 
 @pytest.mark.anyio
 async def test_member_can_register_and_manage_own_profile(
-    client: AsyncClient, database_session: Session,
+    client: AsyncClient,
+    database_session: Session,
 ) -> None:
     registration_data = {
         "handle": "reader_one",
@@ -486,17 +487,17 @@ async def test_member_cannot_access_blog_management(
     assert login_response.status_code == 200
     assert response.status_code == 403
     member_headers = {"Authorization": f"Bearer {token}"}
-    assert (await client.get(
-        "/api/v1/admin/blog/posts?trashed=true", headers=member_headers
-    )).status_code == 403
+    assert (
+        await client.get("/api/v1/admin/blog/posts?trashed=true", headers=member_headers)
+    ).status_code == 403
     trash_path = "/api/v1/admin/blog/posts/00000000-0000-0000-0000-000000000000"
     version = {"expected_updated_at": "2026-10-21T00:00:00Z"}
-    assert (await client.post(
-        f"{trash_path}/restore", headers=member_headers, params=version
-    )).status_code == 403
-    assert (await client.delete(
-        f"{trash_path}/permanent", headers=member_headers, params=version
-    )).status_code == 403
+    assert (
+        await client.post(f"{trash_path}/restore", headers=member_headers, params=version)
+    ).status_code == 403
+    assert (
+        await client.delete(f"{trash_path}/permanent", headers=member_headers, params=version)
+    ).status_code == 403
     assert (await client.get("/api/v1/admin/blog/links", headers=member_headers)).status_code == 403
     assert (
         await client.post(
@@ -522,8 +523,11 @@ async def test_post_trash_restore_and_permanent_delete(
     add_blog_content(database_session)
     headers = {"Authorization": f"Bearer {await authenticate_owner(client, database_session)}"}
     data = {
-        "slug": "trash-lifecycle", "title": "回收站验收", "excerpt": "保留这段摘要",
-        "content_markdown": "# 保留正文", "status": "published",
+        "slug": "trash-lifecycle",
+        "title": "回收站验收",
+        "excerpt": "保留这段摘要",
+        "content_markdown": "# 保留正文",
+        "status": "published",
         "tags": [{"name": "回收站专属", "slug": "trash-only"}],
     }
     created = await client.post("/api/v1/admin/blog/posts", headers=headers, json=data)
@@ -532,14 +536,19 @@ async def test_post_trash_restore_and_permanent_delete(
     path = f"/api/v1/admin/blog/posts/{post_id}"
     public = "/api/v1/blog/posts/trash-lifecycle"
     assert (await client.get(public)).status_code == 200
-    assert (await client.delete(
-        path, headers=headers, params={"expected_updated_at": "2020-01-01T00:00:00Z"}
-    )).status_code == 409
+    assert (
+        await client.delete(
+            path, headers=headers, params={"expected_updated_at": "2020-01-01T00:00:00Z"}
+        )
+    ).status_code == 409
     assert (await client.post(f"{path}/restore", headers=headers)).status_code == 422
-    assert (await client.delete(
-        f"{path}/permanent", headers=headers,
-        params={"expected_updated_at": created.json()["updated_at"]},
-    )).status_code == 409
+    assert (
+        await client.delete(
+            f"{path}/permanent",
+            headers=headers,
+            params={"expected_updated_at": created.json()["updated_at"]},
+        )
+    ).status_code == 409
     assert (await client.delete(path, headers=headers)).status_code == 204
     trash = (await client.get("/api/v1/admin/blog/posts?trashed=true", headers=headers)).json()
     assert len(trash) == 1 and trash[0]["id"] == post_id
@@ -570,18 +579,21 @@ async def test_post_trash_restore_and_permanent_delete(
     assert restored.json()["published_at"] is None
     assert restored.json()["tags"][0]["slug"] == "trash-only"
     assert (await client.get(public)).status_code == 404
-    assert (await client.delete(
-        f"{path}/permanent", headers=headers, params=params
-    )).status_code == 409
+    assert (
+        await client.delete(f"{path}/permanent", headers=headers, params=params)
+    ).status_code == 409
     assert (await client.delete(path, headers=headers)).status_code == 204
     current = (await client.get("/api/v1/admin/blog/posts?trashed=true", headers=headers)).json()[0]
-    assert (await client.delete(
-        f"{path}/permanent", headers=headers,
-        params={"expected_updated_at": current["updated_at"]},
-    )).status_code == 204
-    assert (await client.delete(
-        f"{path}/permanent", headers=headers, params=params
-    )).status_code == 404
+    assert (
+        await client.delete(
+            f"{path}/permanent",
+            headers=headers,
+            params={"expected_updated_at": current["updated_at"]},
+        )
+    ).status_code == 204
+    assert (
+        await client.delete(f"{path}/permanent", headers=headers, params=params)
+    ).status_code == 404
     assert (await client.get("/api/v1/admin/blog/posts?trashed=true", headers=headers)).json() == []
 
 
@@ -601,8 +613,11 @@ async def test_post_multiple_categories_round_trip(
         assert response.status_code == 201
         category_ids.append(response.json()["id"])
     payload = {
-        "title": "多分类文章", "slug": "multiple-categories",
-        "content_markdown": "正文", "excerpt": "摘要", "category_ids": category_ids,
+        "title": "多分类文章",
+        "slug": "multiple-categories",
+        "content_markdown": "正文",
+        "excerpt": "摘要",
+        "category_ids": category_ids,
     }
     created = await client.post("/api/v1/admin/blog/posts", headers=headers, json=payload)
     assert created.status_code == 201
@@ -610,9 +625,9 @@ async def test_post_multiple_categories_round_trip(
     saved = await client.get(path, headers=headers)
     assert {item["id"] for item in saved.json()["categories"]} == set(category_ids)
     for category_id in category_ids:
-        assert (await client.delete(
-            f"/api/v1/admin/blog/categories/{category_id}", headers=headers
-        )).status_code == 409
+        assert (
+            await client.delete(f"/api/v1/admin/blog/categories/{category_id}", headers=headers)
+        ).status_code == 409
     payload["category_ids"] = category_ids[1:]
     updated = await client.put(path, headers=headers, json=payload)
     assert updated.status_code == 200
@@ -686,13 +701,14 @@ async def test_owner_taxonomy_crud_preserves_articles(
     assert linked_item["slug"] == "linked-renamed"
     assert (await client.delete(post_path, headers=headers)).status_code == 204
     assert (await client.delete(path, headers=headers)).status_code == 409
-    trashed = (await client.get(
-        "/api/v1/admin/blog/posts?trashed=true", headers=headers
-    )).json()[0]
-    assert (await client.delete(
-        f"{post_path}/permanent", headers=headers,
-        params={"expected_updated_at": trashed["updated_at"]},
-    )).status_code == 204
+    trashed = (await client.get("/api/v1/admin/blog/posts?trashed=true", headers=headers)).json()[0]
+    assert (
+        await client.delete(
+            f"{post_path}/permanent",
+            headers=headers,
+            params={"expected_updated_at": trashed["updated_at"]},
+        )
+    ).status_code == 204
     assert (await client.delete(path, headers=headers)).status_code == 204
     assert (await client.delete(path, headers=headers)).status_code == 404
     assert (
@@ -792,20 +808,35 @@ def test_agent_create_and_publish_is_one_operation(
     owner = database_session.scalar(select(User).where(User.handle == "genesis"))
     assert owner is not None
     owner_id = owner.id
-    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
-        bind=database_session.get_bind(), expire_on_commit=False,
-    ))
+    monkeypatch.setattr(
+        blog_agent_tools,
+        "SessionLocal",
+        sessionmaker(
+            bind=database_session.get_bind(),
+            expire_on_commit=False,
+        ),
+    )
     payload: dict[str, object] = {
-        "title": "直接发布", "excerpt": "摘要",
-        "content_markdown": "完整正文", "slug": "direct-publish",
+        "title": "直接发布",
+        "excerpt": "摘要",
+        "content_markdown": "完整正文",
+        "slug": "direct-publish",
     }
     with agent_invocation_context(
-        owner_id, "owner", "blog",
+        owner_id,
+        "owner",
+        "blog",
         execution_mode="automatic" if automatic else "approval_required",
     ):
-        proposal = json.loads(blog_agent_tools._preview("create_and_publish", payload, Settings(
-            agent_action_secret=SecretStr("x" * 32),
-        )))
+        proposal = json.loads(
+            blog_agent_tools._preview(
+                "create_and_publish",
+                payload,
+                Settings(
+                    agent_action_secret=SecretStr("x" * 32),
+                ),
+            )
+        )
     assert proposal["executed"] is automatic
     post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "direct-publish"))
     if not automatic:
@@ -823,9 +854,14 @@ def test_agent_create_and_publish_is_one_operation(
         confirm_blog_action(
             "create_and_publish", payload, current_user=owner, session=database_session
         )
-    assert len(list(database_session.scalars(
-        select(BlogPost).where(BlogPost.slug == "direct-publish")
-    ))) == 1
+    assert (
+        len(
+            list(
+                database_session.scalars(select(BlogPost).where(BlogPost.slug == "direct-publish"))
+            )
+        )
+        == 1
+    )
 
 
 def test_agent_create_and_publish_rejects_invalid_content_without_draft(
@@ -839,11 +875,12 @@ def test_agent_create_and_publish_rejects_invalid_content_without_draft(
         confirm_blog_action(
             "create_and_publish",
             {"title": " ", "excerpt": "摘要", "content_markdown": "正文", "slug": "invalid-direct"},
-            current_user=owner, session=database_session,
+            current_user=owner,
+            session=database_session,
         )
-    assert database_session.scalar(
-        select(BlogPost).where(BlogPost.slug == "invalid-direct")
-    ) is None
+    assert (
+        database_session.scalar(select(BlogPost).where(BlogPost.slug == "invalid-direct")) is None
+    )
 
 
 def test_agent_publication_checks_content_and_sets_publish_time(database_session: Session) -> None:
@@ -908,7 +945,8 @@ def test_agent_slug_conflicts_rollback_without_changing_articles(
         "content_markdown": "不应被保存的正文",
     }
     payload: dict[str, object] = (
-        changes if action in {"create_draft", "create_and_publish"}
+        changes
+        if action in {"create_draft", "create_and_publish"}
         else {"post_id": str(target.id), "changes": changes}
     )
     with pytest.raises(HTTPException) as raised:
@@ -933,14 +971,18 @@ def test_agent_slug_conflicts_rollback_without_changing_articles(
 @pytest.mark.anyio
 @pytest.mark.parametrize("automatic", [False, True])
 async def test_agent_creates_scheduled_post_with_taxonomy_in_one_operation(
-    database_session: Session, monkeypatch: pytest.MonkeyPatch, automatic: bool,
+    database_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    automatic: bool,
 ) -> None:
     """同一次操作保存分类、标签和计划；审阅不提前写入，自动模式直接执行。"""
     add_blog_content(database_session)
     owner = database_session.scalar(select(User).where(User.handle == "genesis"))
     assert owner is not None
-    categories = [BlogCategory(name="工程实践", slug="practice"),
-                  BlogCategory(name="写作", slug="writing")]
+    categories = [
+        BlogCategory(name="工程实践", slug="practice"),
+        BlogCategory(name="写作", slug="writing"),
+    ]
     database_session.add_all(categories)
     database_session.commit()
     category_ids = [str(item.id) for item in categories]
@@ -948,26 +990,46 @@ async def test_agent_creates_scheduled_post_with_taxonomy_in_one_operation(
     monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessions)
     tools = {item.name: item for item in blog_agent_tools.build_blog_tools(Settings())}
     scheduled = (datetime.now(UTC) + timedelta(days=2)).isoformat()
-    with agent_invocation_context(owner.id, "owner", "blog", execution_mode=(
-        "automatic" if automatic else "approval_required"
-    )):
+    with agent_invocation_context(
+        owner.id,
+        "owner",
+        "blog",
+        execution_mode=("automatic" if automatic else "approval_required"),
+    ):
         taxonomy = json.loads(await tools["list_taxonomies"].ainvoke({}))
         assert {item["id"] for item in taxonomy["categories"]} == set(category_ids)
         assert {item["name"] for item in taxonomy["tags"]} == {"工程", "随笔"}
-        proposal = json.loads(await tools["create_scheduled_post"].ainvoke({
-            "title": "计划文章", "excerpt": "摘要", "content_markdown": "完整正文",
-            "slug": "agent-scheduled", "category_ids": category_ids,
-            "tags": [{"name": "工程", "slug": "engineering"}, {"name": "新标签", "slug": "new"}],
-            "scheduled_at": scheduled, "cover_image_url": "https://example.com/cover.png",
-        }))
+        proposal = json.loads(
+            await tools["create_scheduled_post"].ainvoke(
+                {
+                    "title": "计划文章",
+                    "excerpt": "摘要",
+                    "content_markdown": "完整正文",
+                    "slug": "agent-scheduled",
+                    "category_ids": category_ids,
+                    "tags": [
+                        {"name": "工程", "slug": "engineering"},
+                        {"name": "新标签", "slug": "new"},
+                    ],
+                    "scheduled_at": scheduled,
+                    "cover_image_url": "https://example.com/cover.png",
+                }
+            )
+        )
     assert proposal["executed"] is automatic
     assert proposal["payload"]["category_names"] == ["工程实践", "写作"]
     if not automatic:
-        assert database_session.scalar(select(BlogPost).where(
-            BlogPost.slug == "agent-scheduled",
-        )) is None
-        confirm_blog_action("create_draft", proposal["payload"], current_user=owner,
-                            session=database_session)
+        assert (
+            database_session.scalar(
+                select(BlogPost).where(
+                    BlogPost.slug == "agent-scheduled",
+                )
+            )
+            is None
+        )
+        confirm_blog_action(
+            "create_draft", proposal["payload"], current_user=owner, session=database_session
+        )
     database_session.expire_all()
     post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "agent-scheduled"))
     assert post is not None and post.status is BlogPostStatus.DRAFT
@@ -987,7 +1049,9 @@ async def test_agent_creates_scheduled_post_with_taxonomy_in_one_operation(
 @pytest.mark.anyio
 @pytest.mark.parametrize("automatic", [False, True])
 async def test_agent_schedule_edit_cancel_and_publish_preserve_article(
-    database_session: Session, monkeypatch: pytest.MonkeyPatch, automatic: bool,
+    database_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    automatic: bool,
 ) -> None:
     """定时、普通修改、取消、立即发布沿用人工流程，省略字段不会清除计划。"""
     add_blog_content(database_session)
@@ -1000,15 +1064,23 @@ async def test_agent_schedule_edit_cancel_and_publish_preserve_article(
     post.categories = [category]
     database_session.commit()
     category_id = category.id
-    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
-        bind=database_session.get_bind(), expire_on_commit=False,
-    ))
+    monkeypatch.setattr(
+        blog_agent_tools,
+        "SessionLocal",
+        sessionmaker(
+            bind=database_session.get_bind(),
+            expire_on_commit=False,
+        ),
+    )
     tools = {item.name: item for item in blog_agent_tools.build_blog_tools(Settings())}
 
     async def update(changes: dict[str, object], tool_name: str = "update_post") -> None:
-        with agent_invocation_context(owner_id, "owner", "blog", execution_mode=(
-            "automatic" if automatic else "approval_required"
-        )):
+        with agent_invocation_context(
+            owner_id,
+            "owner",
+            "blog",
+            execution_mode=("automatic" if automatic else "approval_required"),
+        ):
             detail = json.loads(await tools["get_post"].ainvoke({"post_id": str(post_id)}))
             arguments: dict[str, object] = {
                 "post_id": str(post_id),
@@ -1021,8 +1093,9 @@ async def test_agent_schedule_edit_cancel_and_publish_preserve_article(
             proposal = json.loads(await tools[tool_name].ainvoke(arguments))
         assert proposal["payload"]["expected_updated_at"] == detail["updated_at"]
         if not automatic:
-            confirm_blog_action("update_post", proposal["payload"], current_user=owner,
-                                session=database_session)
+            confirm_blog_action(
+                "update_post", proposal["payload"], current_user=owner, session=database_session
+            )
         database_session.expire_all()
 
     scheduled = (datetime.now(UTC) + timedelta(days=2)).isoformat()
@@ -1046,25 +1119,35 @@ async def test_agent_schedule_edit_cancel_and_publish_preserve_article(
     assert post.status is BlogPostStatus.DRAFT and post.published_at is None
     with agent_invocation_context(owner_id, "owner", "blog"):
         latest = json.loads(await tools["get_post"].ainvoke({"post_id": str(post_id)}))
-        feedback = await tools["cancel_post_schedule"].ainvoke({
-            "post_id": str(post_id), "expected_updated_at": latest["updated_at"],
-        })
+        feedback = await tools["cancel_post_schedule"].ainvoke(
+            {
+                "post_id": str(post_id),
+                "expected_updated_at": latest["updated_at"],
+            }
+        )
         assert "无需取消" in feedback
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("action", ["update_post", "publish_post", "delete_post"])
 async def test_agent_checks_versions_before_proposal_and_confirmation(
-    database_session: Session, monkeypatch: pytest.MonkeyPatch, action: str,
+    database_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
 ) -> None:
     """读取后或确认前出现新版本，都不能覆盖、公开或删除较新的文章。"""
     add_blog_content(database_session)
     owner = database_session.scalar(select(User).where(User.handle == "genesis"))
     post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "private-draft"))
     assert owner is not None and post is not None
-    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
-        bind=database_session.get_bind(), expire_on_commit=False,
-    ))
+    monkeypatch.setattr(
+        blog_agent_tools,
+        "SessionLocal",
+        sessionmaker(
+            bind=database_session.get_bind(),
+            expire_on_commit=False,
+        ),
+    )
     tools = {item.name: item for item in blog_agent_tools.build_blog_tools(Settings())}
     with agent_invocation_context(owner.id, "owner", "blog"):
         detail = json.loads(await tools["get_post"].ainvoke({"post_id": str(post.id)}))
@@ -1075,13 +1158,21 @@ async def test_agent_checks_versions_before_proposal_and_confirmation(
         post.title = "其他页面的新标题"
         touch_post(post)
         database_session.commit()
-        feedback = await tools[action].ainvoke({
-            "type": "tool_call", "name": action, "args": arguments, "id": "stale-version",
-        })
+        feedback = await tools[action].ainvoke(
+            {
+                "type": "tool_call",
+                "name": action,
+                "args": arguments,
+                "id": "stale-version",
+            }
+        )
         assert feedback.status == "error" and "文章已变更" in feedback.content
     with pytest.raises(HTTPException) as raised:
         confirm_blog_action(
-            action, proposal["payload"], current_user=owner, session=database_session,
+            action,
+            proposal["payload"],
+            current_user=owner,
+            session=database_session,
         )
     assert raised.value.status_code == 409
     assert post.title == "其他页面的新标题" and post.deleted_at is None
@@ -1089,46 +1180,69 @@ async def test_agent_checks_versions_before_proposal_and_confirmation(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("changes, reason", [
-    ({"scheduled_at": "2020-01-01T09:00:00+08:00"}, "晚于当前时间"),
-    ({"scheduled_at": "2099-01-01T09:00:00"}, "时区偏移"),
-    ({"category_ids": [str(uuid4())]}, "分类不存在"),
-    ({"tags": [{"name": "误改共享名称", "slug": "engineering"}]}, "沿用其名称"),
-    ({"schedule_at": "2099-01-01T09:00:00+08:00"}, "不支持的修改字段"),
-])
+@pytest.mark.parametrize(
+    "changes, reason",
+    [
+        ({"scheduled_at": "2020-01-01T09:00:00+08:00"}, "晚于当前时间"),
+        ({"scheduled_at": "2099-01-01T09:00:00"}, "时区偏移"),
+        ({"category_ids": [str(uuid4())]}, "分类不存在"),
+        ({"tags": [{"name": "误改共享名称", "slug": "engineering"}]}, "沿用其名称"),
+        ({"schedule_at": "2099-01-01T09:00:00+08:00"}, "不支持的修改字段"),
+    ],
+)
 async def test_agent_invalid_arguments_return_correctable_native_tool_errors(
-    database_session: Session, monkeypatch: pytest.MonkeyPatch,
-    changes: dict[str, object], reason: str,
+    database_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    changes: dict[str, object],
+    reason: str,
 ) -> None:
     """无效参数不生成确认卡或写入，修正后同一个工具可继续处理。"""
     add_blog_content(database_session)
     owner = database_session.scalar(select(User).where(User.handle == "genesis"))
     post = database_session.scalar(select(BlogPost).where(BlogPost.slug == "private-draft"))
     assert owner is not None and post is not None
-    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
-        bind=database_session.get_bind(), expire_on_commit=False,
-    ))
-    tool = next(item for item in blog_agent_tools.build_blog_tools(Settings())
-                if item.name == "update_post")
+    monkeypatch.setattr(
+        blog_agent_tools,
+        "SessionLocal",
+        sessionmaker(
+            bind=database_session.get_bind(),
+            expire_on_commit=False,
+        ),
+    )
+    tool = next(
+        item for item in blog_agent_tools.build_blog_tools(Settings()) if item.name == "update_post"
+    )
     with agent_invocation_context(owner.id, "owner", "blog"):
-        result = await tool.ainvoke({
-            "type": "tool_call", "name": "update_post", "id": "bad", "args": {
-                "post_id": str(post.id), "changes": json.dumps(changes),
-                "expected_updated_at": post.updated_at.replace(tzinfo=UTC).isoformat(),
-            },
-        })
+        result = await tool.ainvoke(
+            {
+                "type": "tool_call",
+                "name": "update_post",
+                "id": "bad",
+                "args": {
+                    "post_id": str(post.id),
+                    "changes": json.dumps(changes),
+                    "expected_updated_at": post.updated_at.replace(tzinfo=UTC).isoformat(),
+                },
+            }
+        )
         assert result.status == "error" and reason in result.content
         assert post.title == "尚未发布的草稿" and post.scheduled_at is None
-        valid = json.loads(await tool.ainvoke({
-            "post_id": str(post.id), "changes": '{"excerpt":"修正后的摘要"}',
-            "expected_updated_at": post.updated_at.replace(tzinfo=UTC).isoformat(),
-        }))
+        valid = json.loads(
+            await tool.ainvoke(
+                {
+                    "post_id": str(post.id),
+                    "changes": '{"excerpt":"修正后的摘要"}',
+                    "expected_updated_at": post.updated_at.replace(tzinfo=UTC).isoformat(),
+                }
+            )
+        )
         assert valid["type"] == "pending_action" and not valid["executed"]
 
 
 @pytest.mark.anyio
 async def test_agent_search_uses_taxonomies_and_literal_text(
-    database_session: Session, monkeypatch: pytest.MonkeyPatch,
+    database_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     add_blog_content(database_session)
     owner = database_session.scalar(select(User).where(User.handle == "genesis"))
@@ -1138,9 +1252,14 @@ async def test_agent_search_uses_taxonomies_and_literal_text(
     category = BlogCategory(name="分类关键词", slug="topic")
     post.categories = [category]
     database_session.commit()
-    monkeypatch.setattr(blog_agent_tools, "SessionLocal", sessionmaker(
-        bind=database_session.get_bind(), expire_on_commit=False,
-    ))
+    monkeypatch.setattr(
+        blog_agent_tools,
+        "SessionLocal",
+        sessionmaker(
+            bind=database_session.get_bind(),
+            expire_on_commit=False,
+        ),
+    )
     with agent_invocation_context(owner.id, "owner", "blog"):
         assert [item["slug"] for item in json.loads(blog_agent_tools._search_posts("工程"))] == [
             "published-featured",

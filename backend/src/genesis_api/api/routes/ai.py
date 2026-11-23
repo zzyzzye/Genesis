@@ -249,21 +249,34 @@ def _prepare_request(
 
 
 def _load_snapshot(
-    run_id: UUID, user_id: UUID, include_history: bool = False,
+    run_id: UUID,
+    user_id: UUID,
+    include_history: bool = False,
 ) -> AiChatRunSnapshot | None:
     """为订阅轮询创建独立会话，返回当前用户的任务快照或 None。"""
     with SessionLocal() as session:
         return get_ai_chat_run_snapshot(
-            session, run_id=run_id, user_id=user_id, include_history=include_history,
+            session,
+            run_id=run_id,
+            user_id=user_id,
+            include_history=include_history,
         )
 
 
 def _load_events(run_id: UUID, user_id: UUID, after: int) -> list[tuple[int, BaseEvent]]:
     """只读取归属当前用户的公开事件；每批有界，避免长对话占满订阅内存。"""
     with SessionLocal() as session:
-        rows = session.scalars(select(AiChatRunEvent).join(AiChatRun).where(
-            AiChatRun.id == run_id, AiChatRun.user_id == user_id, AiChatRunEvent.id > after,
-        ).order_by(AiChatRunEvent.id).limit(512)).all()
+        rows = session.scalars(
+            select(AiChatRunEvent)
+            .join(AiChatRun)
+            .where(
+                AiChatRun.id == run_id,
+                AiChatRun.user_id == user_id,
+                AiChatRunEvent.id > after,
+            )
+            .order_by(AiChatRunEvent.id)
+            .limit(512)
+        ).all()
         adapter: TypeAdapter[Event] = TypeAdapter(Event)
         return [(row.id, adapter.validate_python(row.payload)) for row in rows]
 
@@ -296,9 +309,14 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
         while True:
             snapshot = await asyncio.to_thread(_load_snapshot, run_id, user_id)
             if snapshot is None:
-                yield str(encoder.encode(RunErrorEvent(
-                    type=EventType.RUN_ERROR, message="AI 生成任务不存在",
-                )))
+                yield str(
+                    encoder.encode(
+                        RunErrorEvent(
+                            type=EventType.RUN_ERROR,
+                            message="AI 生成任务不存在",
+                        )
+                    )
+                )
                 return
             records = await asyncio.to_thread(_load_events, run_id, user_id, cursor)
             for event_id, event in records:
@@ -314,31 +332,50 @@ def _stream_response(run_id: UUID, user_id: UUID, request: Request) -> Streaming
             thread_id = str(snapshot.conversation_id or run_id)
             if not started and finished:
                 # 仅兼容接入前没有事件日志的历史终态任务，不重建实时生命周期。
-                yield str(encoder.encode(RunStartedEvent(
-                    type=EventType.RUN_STARTED, thread_id=thread_id, run_id=str(run_id),
-                )))
+                yield str(
+                    encoder.encode(
+                        RunStartedEvent(
+                            type=EventType.RUN_STARTED,
+                            thread_id=thread_id,
+                            run_id=str(run_id),
+                        )
+                    )
+                )
                 legacy = await asyncio.to_thread(_load_snapshot, run_id, user_id, True)
                 if legacy is not None:
                     yield str(encoder.encode(legacy_snapshot(legacy)))
                 started = True
             state: dict[str, object] = {
-                "sequence": snapshot.sequence, "status": snapshot.status.value,
+                "sequence": snapshot.sequence,
+                "status": snapshot.status.value,
                 "metrics": snapshot.metrics.model_dump(mode="json") if snapshot.metrics else None,
                 "billing": snapshot.billing,
                 "proposals": [item.model_dump(mode="json") for item in snapshot.proposals],
             }
             if started and state != previous_state:
-                yield str(encoder.encode(StateSnapshotEvent(
-                    type=EventType.STATE_SNAPSHOT, snapshot={"genesis": state},
-                )))
+                yield str(
+                    encoder.encode(
+                        StateSnapshotEvent(
+                            type=EventType.STATE_SNAPSHOT,
+                            snapshot={"genesis": state},
+                        )
+                    )
+                )
                 previous_state = state
             if finished:
                 # 最终账务与展示状态先于终态发出，官方终态事件本身保持原样。
-                terminal = terminal or (RunErrorEvent(
-                    type=EventType.RUN_ERROR, message=snapshot.error or "AI 生成失败",
-                ) if snapshot.status == AiChatRunStatus.FAILED else RunFinishedEvent(
-                    type=EventType.RUN_FINISHED, thread_id=thread_id, run_id=str(run_id),
-                ))
+                terminal = terminal or (
+                    RunErrorEvent(
+                        type=EventType.RUN_ERROR,
+                        message=snapshot.error or "AI 生成失败",
+                    )
+                    if snapshot.status == AiChatRunStatus.FAILED
+                    else RunFinishedEvent(
+                        type=EventType.RUN_FINISHED,
+                        thread_id=thread_id,
+                        run_id=str(run_id),
+                    )
+                )
                 yield str(encoder.encode(terminal))
                 return
             if await request.is_disconnected():
@@ -584,10 +621,12 @@ def confirm_agent_action(
     proposal_id = str(proposal.get("proposal_id"))
     stored_run = None
     for run in session.scalars(
-        select(AiChatRun).where(
+        select(AiChatRun)
+        .where(
             AiChatRun.user_id == current_user.id,
             AiChatRun.proposals.is_not(None),
-        ).with_for_update()
+        )
+        .with_for_update()
     ):
         matching = next(
             (item for item in run.proposals or [] if item.get("proposal_id") == proposal_id), None

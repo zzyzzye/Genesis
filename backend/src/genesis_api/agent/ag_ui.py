@@ -38,8 +38,11 @@ class AuthorizedLangGraphAgent(LangGraphAgent):  # type: ignore[misc]
     """仅覆盖官方输入扩展点，保留可信多模态消息与原生 checkpoint 恢复。"""
 
     def __init__(
-        self, *, graph_input: dict[str, object] | None,
-        public_events: PublicAgentEvents, **kwargs: Any,
+        self,
+        *,
+        graph_input: dict[str, object] | None,
+        public_events: PublicAgentEvents,
+        **kwargs: Any,
     ) -> None:
         """绑定服务端准备的输入，禁止从浏览器 forwardedProps 覆盖它。"""
         super().__init__(**kwargs, emit_raw_events=False)
@@ -49,7 +52,8 @@ class AuthorizedLangGraphAgent(LangGraphAgent):  # type: ignore[misc]
     async def prepare_stream(self, **kwargs: Any) -> dict[str, Any]:
         """记录已有消息标识；执行、消息合并和恢复仍委托官方适配器。"""
         self._public_events.previous_messages = {
-            message.id for message in kwargs["agent_state"].values.get("messages", [])
+            message.id
+            for message in kwargs["agent_state"].values.get("messages", [])
             if message.id and message.id not in self._public_events.current_messages
         }
         prepared: dict[str, Any] = await super().prepare_stream(**kwargs)
@@ -77,18 +81,30 @@ class PublicAgentEvents:
         self._seen_questions: set[str] = set()
 
     def _metadata(
-        self, call_id: str, name: str, *, completed: bool = False,
+        self,
+        call_id: str,
+        name: str,
+        *,
+        completed: bool = False,
     ) -> dict[str, object]:
         """沿用原生回调的脱敏展示，不把协议参数和结果原样发给前端。"""
         call = self.history.protocol_calls.get(call_id)
-        details = call.model_dump(
-            mode="json", exclude={"id", "protocol_id", "name", "result_summary"},
-        ) if call else {
-            "label": name, "status": "succeeded" if completed else "running",
-            "started_at": datetime.now(UTC).isoformat(),
-            "duration_ms": None, "input_summary": "参数不公开", "parameter_names": [],
-            "proposal_id": None,
-        }
+        details = (
+            call.model_dump(
+                mode="json",
+                exclude={"id", "protocol_id", "name", "result_summary"},
+            )
+            if call
+            else {
+                "label": name,
+                "status": "succeeded" if completed else "running",
+                "started_at": datetime.now(UTC).isoformat(),
+                "duration_ms": None,
+                "input_summary": "参数不公开",
+                "parameter_names": [],
+                "proposal_id": None,
+            }
+        )
         if call_id in self.current_calls:
             details = {**details, "run_id": self.run_id}
         return {"genesis": details}
@@ -105,40 +121,57 @@ class PublicAgentEvents:
         for message in messages:
             if message.role == "user":
                 # 多模态文件已由附件系统管理，不在事件日志复制文件内容。
-                content = message.content if isinstance(message.content, str) else "".join(
-                    part.text for part in message.content if part.type == "text"
+                content = (
+                    message.content
+                    if isinstance(message.content, str)
+                    else "".join(part.text for part in message.content if part.type == "text")
                 )
                 visible.append(UserMessage(id=message.id, content=content))
             elif message.role == "assistant":
                 if message.id not in self.previous_messages:
                     self.current_messages.add(message.id)
-                metadata = {"genesis": {"run_id": self.run_id}} if (
-                    message.id in self.current_messages
-                ) else None
+                metadata = (
+                    {"genesis": {"run_id": self.run_id}}
+                    if (message.id in self.current_messages)
+                    else None
+                )
                 calls = []
                 for call in message.tool_calls or []:
                     self.tool_names[call.id] = call.function.name
                     if message.id in self.current_messages:
                         self.current_calls.add(call.id)
-                    calls.append(ToolCall(
-                        id=call.id, function=FunctionCall(name=call.function.name, arguments="{}"),
-                        metadata=self._metadata(
-                            call.id, call.function.name, completed=call.id in completed,
-                        ),
-                    ))
-                visible.append(AssistantMessage(
-                    id=message.id, content=message.content or "", tool_calls=calls,
-                    metadata=metadata,
-                ))
+                    calls.append(
+                        ToolCall(
+                            id=call.id,
+                            function=FunctionCall(name=call.function.name, arguments="{}"),
+                            metadata=self._metadata(
+                                call.id,
+                                call.function.name,
+                                completed=call.id in completed,
+                            ),
+                        )
+                    )
+                visible.append(
+                    AssistantMessage(
+                        id=message.id,
+                        content=message.content or "",
+                        tool_calls=calls,
+                        metadata=metadata,
+                    )
+                )
             elif message.role == "tool":
-                visible.append(ToolMessage(
-                    id=message.id, tool_call_id=message.tool_call_id,
-                    content=self._result(message.tool_call_id),
-                    metadata=self._metadata(
-                        message.tool_call_id, self.tool_names.get(message.tool_call_id, "调用工具"),
-                        completed=True,
-                    ),
-                ))
+                visible.append(
+                    ToolMessage(
+                        id=message.id,
+                        tool_call_id=message.tool_call_id,
+                        content=self._result(message.tool_call_id),
+                        metadata=self._metadata(
+                            message.tool_call_id,
+                            self.tool_names.get(message.tool_call_id, "调用工具"),
+                            completed=True,
+                        ),
+                    )
+                )
         return visible
 
     def _question(self, call_id: str, content: str) -> CustomEvent | None:
@@ -155,9 +188,13 @@ class PublicAgentEvents:
             self.question_failed = True
             return None
         self.question_failed = False
-        return CustomEvent(type=EventType.CUSTOM, name="genesis.question", value={
-            "content": "\n```user-question\n" + json.dumps(value, ensure_ascii=False) + "\n```",
-        })
+        return CustomEvent(
+            type=EventType.CUSTOM,
+            name="genesis.question",
+            value={
+                "content": "\n```user-question\n" + json.dumps(value, ensure_ascii=False) + "\n```",
+            },
+        )
 
     def filter(self, event: BaseEvent) -> Iterator[BaseEvent | AgentActionProposal]:
         """白名单放行官方事件，业务提议与澄清内容单独校验后公开。
@@ -179,7 +216,8 @@ class PublicAgentEvents:
             messages = self._messages(event.messages)
             for message in event.messages:
                 if (
-                    message.role == "tool" and message.tool_call_id in self.current_calls
+                    message.role == "tool"
+                    and message.tool_call_id in self.current_calls
                     and self.tool_names.get(message.tool_call_id) == "ask_user_question"
                 ):
                     question = self._question(message.tool_call_id, message.content)
@@ -191,9 +229,14 @@ class PublicAgentEvents:
             self.current_calls.add(event.tool_call_id)
             if event.parent_message_id:
                 self.current_messages.add(event.parent_message_id)
-            yield clean.model_copy(update={"metadata": self._metadata(
-                event.tool_call_id, event.tool_call_name,
-            )})
+            yield clean.model_copy(
+                update={
+                    "metadata": self._metadata(
+                        event.tool_call_id,
+                        event.tool_call_name,
+                    )
+                }
+            )
         elif isinstance(event, ToolCallResultEvent):
             name = self.tool_names.get(event.tool_call_id, "调用工具")
             with suppress(ValueError, TypeError):
@@ -202,15 +245,21 @@ class PublicAgentEvents:
                 question = self._question(event.tool_call_id, event.content)
                 if question is not None:
                     yield question
-            yield clean.model_copy(update={
-                "content": self._result(event.tool_call_id),
-                "metadata": self._metadata(event.tool_call_id, name, completed=True),
-            })
+            yield clean.model_copy(
+                update={
+                    "content": self._result(event.tool_call_id),
+                    "metadata": self._metadata(event.tool_call_id, name, completed=True),
+                }
+            )
         elif kind in (EventType.RUN_STARTED, EventType.RUN_FINISHED, EventType.TOOL_CALL_END):
             if kind == EventType.RUN_FINISHED and self.question_failed:
-                yield CustomEvent(type=EventType.CUSTOM, name="genesis.question", value={
-                    "content": "澄清问题暂时无法显示，请在聊天中补充需求，或请助手重新提问。",
-                })
+                yield CustomEvent(
+                    type=EventType.CUSTOM,
+                    name="genesis.question",
+                    value={
+                        "content": "澄清问题暂时无法显示，请在聊天中补充需求，或请助手重新提问。",
+                    },
+                )
             if kind == EventType.RUN_STARTED:
                 yield clean.model_copy(update={"input": None})
             elif kind == EventType.RUN_FINISHED:

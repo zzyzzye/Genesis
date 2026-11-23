@@ -25,21 +25,40 @@ from genesis_api.core.config import Settings
 
 def response_json(model: str) -> dict[str, Any]:
     return {
-        "id": "resp-test", "object": "response", "created_at": 1, "status": "completed",
-        "model": model, "output": [{
-            "type": "message", "id": "msg-test", "role": "assistant", "status": "completed",
-            "content": [{"type": "output_text", "text": "读取完成", "annotations": []}],
-        }],
+        "id": "resp-test",
+        "object": "response",
+        "created_at": 1,
+        "status": "completed",
+        "model": model,
+        "output": [
+            {
+                "type": "message",
+                "id": "msg-test",
+                "role": "assistant",
+                "status": "completed",
+                "content": [{"type": "output_text", "text": "读取完成", "annotations": []}],
+            }
+        ],
         "usage": {"input_tokens": 10, "output_tokens": 2, "total_tokens": 12},
     }
 
 
 def chat_json(model: str) -> dict[str, Any]:
     return {
-        "id": "chat-test", "object": "chat.completion", "created": 1, "model": model,
-        "choices": [{"index": 0, "finish_reason": "stop", "message": {
-            "role": "assistant", "content": "读取完成",
-        }}],
+        "id": "chat-test",
+        "object": "chat.completion",
+        "created": 1,
+        "model": model,
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": "stop",
+                "message": {
+                    "role": "assistant",
+                    "content": "读取完成",
+                },
+            }
+        ],
         "usage": {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12},
     }
 
@@ -53,9 +72,9 @@ def docx_block() -> dict[str, Any]:
     buffer = BytesIO()
     document.save(buffer)
     return {
-        "type": "file", "mime_type": (
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        ), "base64": base64.b64encode(buffer.getvalue()).decode(),
+        "type": "file",
+        "mime_type": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        "base64": base64.b64encode(buffer.getvalue()).decode(),
         "extras": {"filename": "参考.docx"},
     }
 
@@ -70,12 +89,20 @@ async def test_native_pdf_uses_provider_protocol(provider: str, base_suffix: str
 
     def respond(request: Any) -> Any:
         sent.append(request)
-        payload = response_json(model) if provider == "openai" else {
-            "id": "msg-test", "type": "message", "role": "assistant", "model": model,
-            "content": [{"type": "text", "text": "读取完成"}],
-            "stop_reason": "end_turn", "stop_sequence": None,
-            "usage": {"input_tokens": 10, "output_tokens": 2},
-        }
+        payload = (
+            response_json(model)
+            if provider == "openai"
+            else {
+                "id": "msg-test",
+                "type": "message",
+                "role": "assistant",
+                "model": model,
+                "content": [{"type": "text", "text": "读取完成"}],
+                "stop_reason": "end_turn",
+                "stop_sequence": None,
+                "usage": {"input_tokens": 10, "output_tokens": 2},
+            }
+        )
         response_type = httpx.Response if provider == "openai" else httpx2.Response
         return response_type(200, json=payload)
 
@@ -93,18 +120,36 @@ async def test_native_pdf_uses_provider_protocol(provider: str, base_suffix: str
         }
         settings = Settings(**options)
         graph = runtime._graph(settings, provider, model, "blog")
-        await graph.ainvoke({"messages": [HumanMessage(content=[{
-            "type": "file", "mime_type": "application/pdf", "base64": "JVBERi0=",
-            "extras": {"filename": "参考.pdf"},
-        }])]}, {"configurable": {"thread_id": str(uuid4())}})
+        await graph.ainvoke(
+            {
+                "messages": [
+                    HumanMessage(
+                        content=[
+                            {
+                                "type": "file",
+                                "mime_type": "application/pdf",
+                                "base64": "JVBERi0=",
+                                "extras": {"filename": "参考.pdf"},
+                            }
+                        ]
+                    )
+                ]
+            },
+            {"configurable": {"thread_id": str(uuid4())}},
+        )
     assert len(sent) == 1
     body = json.loads(sent[0].content)
     assert body["model"] == model
     assert sent[0].url.path == ("/v1/responses" if provider == "openai" else "/v1/messages")
     parts = body["input"] if provider == "openai" else body["messages"]
     expected_type = "input_file" if provider == "openai" else "document"
-    block = next(block for message in parts if isinstance(message["content"], list)
-                 for block in message["content"] if block.get("type") == expected_type)
+    block = next(
+        block
+        for message in parts
+        if isinstance(message["content"], list)
+        for block in message["content"]
+        if block.get("type") == expected_type
+    )
     assert "JVBERi0=" in json.dumps(block)
 
 
@@ -124,12 +169,17 @@ async def test_rejected_protocol_or_file_uses_docling_and_persists_converted_mes
         body = json.loads(request.content)
         if len(sent) == 1:
             assert request.url.path == "/v1/responses"
-            assert any(block.get("type") == "input_file" for message in body["input"]
-                       if isinstance(message.get("content"), list)
-                       for block in message["content"])
+            assert any(
+                block.get("type") == "input_file"
+                for message in body["input"]
+                if isinstance(message.get("content"), list)
+                for block in message["content"]
+            )
             return httpx.Response(
                 404 if reject_protocol else 400,
-                json={"detail": "Not Found"} if reject_protocol else {
+                json={"detail": "Not Found"}
+                if reject_protocol
+                else {
                     "error": {"code": "unsupported_file_type", "message": "DOCX not supported"},
                 },
             )
@@ -142,19 +192,37 @@ async def test_rejected_protocol_or_file_uses_docling_and_persists_converted_mes
             converted_path = match[0]
             if reject_protocol:
                 payload = chat_json(model)
-                payload["choices"][0].update({
-                    "finish_reason": "tool_calls", "message": {"role": "assistant", "content": None,
-                    "tool_calls": [{"id": "call-read", "type": "function", "function": {
-                        "name": "read_file", "arguments": json.dumps({"file_path": converted_path}),
-                    }}]},
-                })
+                payload["choices"][0].update(
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call-read",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "read_file",
+                                        "arguments": json.dumps({"file_path": converted_path}),
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                )
             else:
                 payload = response_json(model)
-                payload["output"] = [{
-                    "type": "function_call", "id": "fc-read", "call_id": "call-read",
-                    "name": "read_file", "arguments": json.dumps({"file_path": converted_path}),
-                    "status": "completed",
-                }]
+                payload["output"] = [
+                    {
+                        "type": "function_call",
+                        "id": "fc-read",
+                        "call_id": "call-read",
+                        "name": "read_file",
+                        "arguments": json.dumps({"file_path": converted_path}),
+                        "status": "completed",
+                    }
+                ]
         else:
             assert "读取转换后的内容" in serialized
             payload = chat_json(model) if reject_protocol else response_json(model)
@@ -164,30 +232,40 @@ async def test_rejected_protocol_or_file_uses_docling_and_persists_converted_mes
         runtime = EmbeddedAgentRuntime()
         runtime._http_clients[True] = client
         runtime._checkpointer = InMemorySaver()  # type: ignore[assignment]
-        graph = runtime._graph(Settings(
-            text_openai_api_key=SecretStr("synthetic"),
-            text_openai_base_url="https://www.yyapi.cloud",
-        ), "openai", model, "blog")
+        graph = runtime._graph(
+            Settings(
+                text_openai_api_key=SecretStr("synthetic"),
+                text_openai_base_url="https://www.yyapi.cloud",
+            ),
+            "openai",
+            model,
+            "blog",
+        )
         config = {"configurable": {"thread_id": str(uuid4())}}
         await graph.ainvoke({"messages": [HumanMessage(content=[docx_block()])]}, config)
         snapshot = await graph.aget_state(config)
         assert converted_path in snapshot.values["files"]
         assert all(
             block.get("type") != "file"
-            for message in snapshot.values["messages"] if isinstance(message.content, list)
-            for block in message.content if isinstance(block, dict)
+            for message in snapshot.values["messages"]
+            if isinstance(message.content, list)
+            for block in message.content
+            if isinstance(block, dict)
         )
         await graph.ainvoke({"messages": [HumanMessage(content="继续")]}, config)
     assert len(sent) == 4
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("status, error", [
-    (401, {"error": {"code": "invalid_api_key"}}),
-    (429, {"error": {"code": "rate_limit_exceeded"}}),
-    (500, {"error": {"message": "upstream unavailable"}}),
-    (404, {"error": {"code": "model_not_found", "message": "model not found"}}),
-])
+@pytest.mark.parametrize(
+    "status, error",
+    [
+        (401, {"error": {"code": "invalid_api_key"}}),
+        (429, {"error": {"code": "rate_limit_exceeded"}}),
+        (500, {"error": {"message": "upstream unavailable"}}),
+        (404, {"error": {"code": "model_not_found", "message": "model not found"}}),
+    ],
+)
 async def test_unrelated_errors_do_not_fallback(status: int, error: dict[str, Any]) -> None:
     from openai import APIStatusError
 
@@ -201,14 +279,22 @@ async def test_unrelated_errors_do_not_fallback(status: int, error: dict[str, An
         runtime = EmbeddedAgentRuntime()
         runtime._http_clients[True] = client
         runtime._checkpointer = InMemorySaver()  # type: ignore[assignment]
-        graph = runtime._graph(Settings(
-            text_openai_api_key=SecretStr("synthetic"),
-            text_openai_base_url="https://www.yyapi.cloud",
-        ), "openai", "gpt-5.6-luna", "blog")
+        graph = runtime._graph(
+            Settings(
+                text_openai_api_key=SecretStr("synthetic"),
+                text_openai_base_url="https://www.yyapi.cloud",
+            ),
+            "openai",
+            "gpt-5.6-luna",
+            "blog",
+        )
         with pytest.raises(APIStatusError):
-            await graph.ainvoke({"messages": [HumanMessage(content="测试")]}, {
-                "configurable": {"thread_id": str(uuid4())},
-            })
+            await graph.ainvoke(
+                {"messages": [HumanMessage(content="测试")]},
+                {
+                    "configurable": {"thread_id": str(uuid4())},
+                },
+            )
     assert len(sent) == 1
 
 
@@ -229,22 +315,45 @@ async def test_structured_generation_and_title_share_protocol_fallback(structure
         if body.get("stream"):
             # 契约完整前分片不能被提前校验或作为最终结果返回。
             split = content.index("回退")
-            chunks = [{
-                "id": "chat-title", "object": "chat.completion.chunk", "created": 1,
-                "model": model, "choices": [{"index": 0, "finish_reason": None,
-                "delta": {"role": "assistant", "content": content[:split]}}],
-            }, {
-                "id": "chat-title", "object": "chat.completion.chunk", "created": 1,
-                "model": model, "choices": [{"index": 0, "finish_reason": None,
-                "delta": {"content": content[split:]}}],
-            }, {
-                "id": "chat-title", "object": "chat.completion.chunk", "created": 1,
-                "model": model, "choices": [{"index": 0, "finish_reason": "stop", "delta": {}}],
-            }]
-            return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=(
-                "".join(f"data: {json.dumps(chunk)}\n\n" for chunk in chunks)
-                + "data: [DONE]\n\n"
-            ))
+            chunks = [
+                {
+                    "id": "chat-title",
+                    "object": "chat.completion.chunk",
+                    "created": 1,
+                    "model": model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "finish_reason": None,
+                            "delta": {"role": "assistant", "content": content[:split]},
+                        }
+                    ],
+                },
+                {
+                    "id": "chat-title",
+                    "object": "chat.completion.chunk",
+                    "created": 1,
+                    "model": model,
+                    "choices": [
+                        {"index": 0, "finish_reason": None, "delta": {"content": content[split:]}}
+                    ],
+                },
+                {
+                    "id": "chat-title",
+                    "object": "chat.completion.chunk",
+                    "created": 1,
+                    "model": model,
+                    "choices": [{"index": 0, "finish_reason": "stop", "delta": {}}],
+                },
+            ]
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/event-stream"},
+                content=(
+                    "".join(f"data: {json.dumps(chunk)}\n\n" for chunk in chunks)
+                    + "data: [DONE]\n\n"
+                ),
+            )
         payload = chat_json(model)
         payload["choices"][0]["message"]["content"] = content
         return httpx.Response(200, json=payload)
@@ -253,18 +362,29 @@ async def test_structured_generation_and_title_share_protocol_fallback(structure
         runtime = EmbeddedAgentRuntime()
         runtime._http_clients[True] = client
         settings = Settings(
-            text_openai_api_key=SecretStr("synthetic"), text_openai_model=model,
+            text_openai_api_key=SecretStr("synthetic"),
+            text_openai_model=model,
             text_openai_base_url="https://www.yyapi.cloud",
         )
         if structured:
             result = await runtime.generate_structured(
-                settings, prompt="概括主题", content="测试", schema=AiConversationTitle,
+                settings,
+                prompt="概括主题",
+                content="测试",
+                schema=AiConversationTitle,
             )
             assert result.title == "协议回退"
         else:
-            assert await runtime.generate_title(AiChatRequest(
-                surface="studio", messages=[AiMessage(role="user", content="测试")],
-            ), settings) == "协议回退"
+            assert (
+                await runtime.generate_title(
+                    AiChatRequest(
+                        surface="studio",
+                        messages=[AiMessage(role="user", content="测试")],
+                    ),
+                    settings,
+                )
+                == "协议回退"
+            )
     assert len(sent) == 2
 
 
@@ -276,14 +396,22 @@ def test_paid_anthropic_request_accepts_only_custom_tools(builtin: bool) -> None
         text_claude_base_url="https://www.yyapi.cloud",
     )
     operation = BillingOperation(
-        provider="claude", model="claude-sonnet-4-6", policy={"max_output_tokens": 4096},
+        provider="claude",
+        model="claude-sonnet-4-6",
+        policy={"max_output_tokens": 4096},
     )
     tool: dict[str, Any] = {"name": "read_file", "input_schema": {"type": "object"}}
     if builtin:
         tool["type"] = "web_search_20250305"
-    request = httpx2.Request("POST", "https://www.yyapi.cloud/v1/messages", json={
-        "model": operation.model, "max_tokens": 4096, "tools": [tool],
-    })
+    request = httpx2.Request(
+        "POST",
+        "https://www.yyapi.cloud/v1/messages",
+        json={
+            "model": operation.model,
+            "max_tokens": 4096,
+            "tools": [tool],
+        },
+    )
     if builtin:
         with pytest.raises(RuntimeError, match="供应商内置工具"):
             _validate_chat_budget(operation, settings, request)

@@ -30,26 +30,37 @@ def test_existing_wallet_backfill_is_idempotent_and_preserves_balances() -> None
         with engine.begin() as connection:
             connection.execute(text(f'SET LOCAL search_path TO "{schema}"'))
             connection.execute(text("CREATE TABLE users (id uuid PRIMARY KEY)"))
-            connection.execute(text(
-                "CREATE TABLE billing_wallets (user_id uuid PRIMARY KEY REFERENCES users(id),"
-                " available numeric(20,8) NOT NULL, frozen numeric(20,8) NOT NULL)"
-            ))
-            connection.execute(text("INSERT INTO users VALUES (:first),(:second)"), {
-                "first": first, "second": second,
-            })
-            connection.execute(text("INSERT INTO billing_wallets VALUES (:id,1.23,0.01)"), {
-                "id": first,
-            })
+            connection.execute(
+                text(
+                    "CREATE TABLE billing_wallets (user_id uuid PRIMARY KEY REFERENCES users(id),"
+                    " available numeric(20,8) NOT NULL, frozen numeric(20,8) NOT NULL)"
+                )
+            )
+            connection.execute(
+                text("INSERT INTO users VALUES (:first),(:second)"),
+                {
+                    "first": first,
+                    "second": second,
+                },
+            )
+            connection.execute(
+                text("INSERT INTO billing_wallets VALUES (:id,1.23,0.01)"),
+                {
+                    "id": first,
+                },
+            )
             with Operations.context(MigrationContext.configure(connection)):
                 migration.upgrade()
                 migration.upgrade()
                 migration.downgrade()
-            assert connection.execute(text(
-                "SELECT available,frozen FROM billing_wallets WHERE user_id=:id"
-            ), {"id": first}).one() == (Decimal("1.23000000"), Decimal("0.01000000"))
-            assert connection.execute(text(
-                "SELECT available,frozen FROM billing_wallets WHERE user_id=:id"
-            ), {"id": second}).one() == (Decimal(0), Decimal(0))
+            assert connection.execute(
+                text("SELECT available,frozen FROM billing_wallets WHERE user_id=:id"),
+                {"id": first},
+            ).one() == (Decimal("1.23000000"), Decimal("0.01000000"))
+            assert connection.execute(
+                text("SELECT available,frozen FROM billing_wallets WHERE user_id=:id"),
+                {"id": second},
+            ).one() == (Decimal(0), Decimal(0))
             assert connection.scalar(text("SELECT COUNT(*) FROM billing_wallets")) == 2
     finally:
         with engine.begin() as connection:

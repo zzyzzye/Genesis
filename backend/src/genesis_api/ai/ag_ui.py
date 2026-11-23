@@ -26,18 +26,33 @@ def legacy_snapshot(snapshot: AiChatRunSnapshot) -> MessagesSnapshotEvent:
         elif str(item.run_id) != current:
             messages.append(AssistantMessage(id=f"{item.run_id}:assistant", content=item.content))
     calls = snapshot.tool_calls
-    messages.append(AssistantMessage(
-        id=f"{current}:assistant", content=snapshot.content,
-        metadata={"genesis": {"run_id": current}},
-        tool_calls=[ToolCall(
-            id=str(call.id), function=FunctionCall(name=call.name, arguments="{}"),
-            metadata={"genesis": call.model_dump(
-                mode="json", exclude={"id", "protocol_id", "name", "result_summary"},
-            )},
-        ) for call in calls],
-    ))
-    messages.extend(ToolMessage(
-        id=f"{current}:tool:{call.id}", tool_call_id=str(call.id),
-        content=call.result_summary or call.label,
-    ) for call in calls if call.status != "running")
+    messages.append(
+        AssistantMessage(
+            id=f"{current}:assistant",
+            content=snapshot.content,
+            metadata={"genesis": {"run_id": current}},
+            tool_calls=[
+                ToolCall(
+                    id=str(call.id),
+                    function=FunctionCall(name=call.name, arguments="{}"),
+                    metadata={
+                        "genesis": call.model_dump(
+                            mode="json",
+                            exclude={"id", "protocol_id", "name", "result_summary"},
+                        )
+                    },
+                )
+                for call in calls
+            ],
+        )
+    )
+    messages.extend(
+        ToolMessage(
+            id=f"{current}:tool:{call.id}",
+            tool_call_id=str(call.id),
+            content=call.result_summary or call.label,
+        )
+        for call in calls
+        if call.status != "running"
+    )
     return MessagesSnapshotEvent(type=EventType.MESSAGES_SNAPSHOT, messages=messages)

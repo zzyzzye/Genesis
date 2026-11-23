@@ -50,19 +50,32 @@ def native_runtime(monkeypatch: pytest.MonkeyPatch) -> EmbeddedAgentRuntime:
         """读取合成资料。"""
         return "private-result-marker"
 
-    model = Model(responses=[
-        AIMessage(content="", tool_calls=[{
-            "name": "synthetic_lookup", "id": "official-call-id",
-            "args": {"query": "private-input-marker"},
-        }]),
-        AIMessage(content=[
-            {"type": "reasoning", "reasoning": "private-reasoning-marker"},
-            {"type": "text", "text": "公开正文"},
-        ], additional_kwargs={"reasoning_content": "private-provider-reasoning-marker"}),
-    ])
+    model = Model(
+        responses=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "synthetic_lookup",
+                        "id": "official-call-id",
+                        "args": {"query": "private-input-marker"},
+                    }
+                ],
+            ),
+            AIMessage(
+                content=[
+                    {"type": "reasoning", "reasoning": "private-reasoning-marker"},
+                    {"type": "text", "text": "公开正文"},
+                ],
+                additional_kwargs={"reasoning_content": "private-provider-reasoning-marker"},
+            ),
+        ]
+    )
     checkpointer = InMemorySaver()
     graph = create_deep_agent(
-        model=model, tools=[synthetic_lookup], checkpointer=checkpointer,
+        model=model,
+        tools=[synthetic_lookup],
+        checkpointer=checkpointer,
         system_prompt="private-system-marker",
     )
     runtime = EmbeddedAgentRuntime()
@@ -78,15 +91,23 @@ async def test_official_adapter_keeps_native_ids_and_filters_private_payloads(
     """验证实际官方适配器，防止只导入包却继续自写转译。"""
     runtime = native_runtime(monkeypatch)
     request = AiChatRequest(
-        surface="studio", actor_id=uuid4(), actor_role="owner", billing_source_id=uuid4(),
+        surface="studio",
+        actor_id=uuid4(),
+        actor_role="owner",
+        billing_source_id=uuid4(),
         messages=[AiMessage(role="user", content="请查询")],
     )
-    events = [event async for event in runtime.stream(
-        request, Settings(text_openai_model="synthetic"), thread_id="official-native",
-    )]
-    wire = json.dumps([
-        event.model_dump(mode="json", by_alias=True, exclude_none=True) for event in events
-    ])
+    events = [
+        event
+        async for event in runtime.stream(
+            request,
+            Settings(text_openai_model="synthetic"),
+            thread_id="official-native",
+        )
+    ]
+    wire = json.dumps(
+        [event.model_dump(mode="json", by_alias=True, exclude_none=True) for event in events]
+    )
     assert public_text(events) == "公开正文"
     assert "private-system-marker" not in wire
     assert "private-input-marker" not in wire
@@ -107,7 +128,9 @@ async def test_official_adapter_keeps_native_ids_and_filters_private_payloads(
 @pytest.mark.anyio
 @pytest.mark.parametrize("fail_final_commit", [False, True])
 async def test_event_journal_replays_official_events_and_keeps_owner_boundary(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, fail_final_commit: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    fail_final_commit: bool,
 ) -> None:
     """后台执行后不依赖连接；重订阅重放同一日志，最终业务状态先于终态。"""
     engine = create_engine(f"sqlite+pysqlite:///{tmp_path / 'events.db'}")
@@ -115,14 +138,21 @@ async def test_event_journal_replays_official_events_and_keeps_owner_boundary(
     factory = sessionmaker[Session](bind=engine, expire_on_commit=False)
     actor = uuid4()
     request = AiChatRequest(
-        surface="studio", actor_id=actor, actor_role="owner",
+        surface="studio",
+        actor_id=actor,
+        actor_role="owner",
         messages=[AiMessage(role="user", content="查询")],
     )
     settings = Settings(text_openai_model="synthetic")
     with factory() as session:
-        session.add(User(
-            id=actor, handle="event-owner", display_name="合成账户", role=UserRole.OWNER,
-        ))
+        session.add(
+            User(
+                id=actor,
+                handle="event-owner",
+                display_name="合成账户",
+                role=UserRole.OWNER,
+            )
+        )
         session.commit()
         run = create_ai_chat_run(session, user_id=actor, request=request, settings=settings)
     request.billing_source_id = run.id
@@ -203,12 +233,20 @@ async def test_official_adapter_resumes_native_checkpoint_without_resubmitting_i
     runtime._checkpointer = cast(Any, checkpointer)
     monkeypatch.setattr(runtime, "_graph", lambda *_: graph)
     request = AiChatRequest(
-        surface="studio", actor_id=uuid4(), actor_role="owner", resume_from_checkpoint=True,
+        surface="studio",
+        actor_id=uuid4(),
+        actor_role="owner",
+        resume_from_checkpoint=True,
         messages=[AiMessage(role="user", content="不应重复提交的输入")],
     )
-    events = [item async for item in runtime.stream(
-        request, Settings(text_openai_model="synthetic"), thread_id="native-recovery",
-    )]
+    events = [
+        item
+        async for item in runtime.stream(
+            request,
+            Settings(text_openai_model="synthetic"),
+            thread_id="native-recovery",
+        )
+    ]
     assert public_text(events) == "恢复后的回答"
     assert calls == ["respond"]
     saved = await graph.aget_state(config)
@@ -218,7 +256,9 @@ async def test_official_adapter_resumes_native_checkpoint_without_resubmitting_i
 @pytest.mark.anyio
 @pytest.mark.parametrize("missing,disconnected", [(True, False), (False, True), (False, False)])
 async def test_subscription_missing_disconnect_and_heartbeat(
-    monkeypatch: pytest.MonkeyPatch, missing: bool, disconnected: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    missing: bool,
+    disconnected: bool,
 ) -> None:
     """订阅失效、空闲心跳与离开页面均不触发重新执行。"""
     run_id, actor = uuid4(), uuid4()
@@ -259,7 +299,9 @@ async def test_terminal_waits_for_final_business_state(
         (2, RunFinishedEvent(type=EventType.RUN_FINISHED, thread_id="thread", run_id=str(run_id))),
     ]
     monkeypatch.setattr(
-        ai_route, "_load_events", lambda _r, _u, after: records if not after else [],
+        ai_route,
+        "_load_events",
+        lambda _r, _u, after: records if not after else [],
     )
 
     class BrowserRequest:
@@ -276,13 +318,22 @@ def test_legacy_snapshot_preserves_existing_public_history() -> None:
     """旧任务只读静态安全历史，不为它补造工具执行过程。"""
     previous, current = uuid4(), uuid4()
     snapshot = AiChatRunSnapshot(
-        id=current, status="completed", content="当前回答", sequence=1,
+        id=current,
+        status="completed",
+        content="当前回答",
+        sequence=1,
         history=[
             AiConversationMessage(
-                role="user", content="以前的问题", run_id=previous, status="completed",
+                role="user",
+                content="以前的问题",
+                run_id=previous,
+                status="completed",
             ),
             AiConversationMessage(
-                role="assistant", content="以前的回答", run_id=previous, status="completed",
+                role="assistant",
+                content="以前的回答",
+                run_id=previous,
+                status="completed",
             ),
         ],
     )

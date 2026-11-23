@@ -65,7 +65,8 @@ def test_prompt_contains_write_policy() -> None:
 @pytest.mark.anyio
 @pytest.mark.parametrize("automatic", [False, True])
 async def test_native_blog_boundary_corrects_errors_then_ends_after_write(
-    monkeypatch: pytest.MonkeyPatch, automatic: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    automatic: bool,
 ) -> None:
     """真实框架允许错误后重试，成功提议或回执不会再触发下一次模型调用。"""
     from deepagents import create_deep_agent
@@ -79,44 +80,82 @@ async def test_native_blog_boundary_corrects_errors_then_ends_after_write(
             return self
 
     proposal = AgentActionProposal(
-        proposal_id=uuid4(), module="blog", action="create_draft",
-        payload={"title": "验收文章"}, summary="创建草稿",
-        expires_at=datetime(2099, 1, 1, tzinfo=UTC), proposal_token="test-placeholder",
+        proposal_id=uuid4(),
+        module="blog",
+        action="create_draft",
+        payload={"title": "验收文章"},
+        summary="创建草稿",
+        expires_at=datetime(2099, 1, 1, tzinfo=UTC),
+        proposal_token="test-placeholder",
         executed=automatic,
         execution_result={"status": "created"} if automatic else None,
     )
     monkeypatch.setattr(agent_tools, "_preview", lambda *_: proposal.model_dump_json())
     monkeypatch.setattr(agent_tools, "_list_taxonomies", lambda: '{"categories":[],"tags":[]}')
     arguments: dict[str, object] = {
-        "title": "验收文章", "excerpt": "摘要", "content_markdown": "正文", "slug": "test",
-        "category_ids": [], "tags": [],
+        "title": "验收文章",
+        "excerpt": "摘要",
+        "content_markdown": "正文",
+        "slug": "test",
+        "category_ids": [],
+        "tags": [],
     }
-    model = Model(responses=[
-        AIMessage(content="", tool_calls=[{
-            "name": "list_taxonomies", "args": {}, "id": "read-taxonomies",
-        }]),
-        AIMessage(content="", tool_calls=[{
-            "name": "create_scheduled_post", "args": arguments, "id": "missing-time",
-        }, {
-            "name": "create_scheduled_post", "args": {
-                **arguments, "scheduled_at": "2099-01-01T09:00:00+08:00",
-            }, "id": "sibling-write",
-        }]),
-        AIMessage(content="", tool_calls=[{
-            "name": "create_scheduled_post", "args": {
-                **arguments, "scheduled_at": "2099-01-01T09:00:00+08:00",
-            }, "id": "fixed-time",
-        }]),
-        AIMessage(content="下一轮正常回答"),
-    ])
+    model = Model(
+        responses=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "list_taxonomies",
+                        "args": {},
+                        "id": "read-taxonomies",
+                    }
+                ],
+            ),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "create_scheduled_post",
+                        "args": arguments,
+                        "id": "missing-time",
+                    },
+                    {
+                        "name": "create_scheduled_post",
+                        "args": {
+                            **arguments,
+                            "scheduled_at": "2099-01-01T09:00:00+08:00",
+                        },
+                        "id": "sibling-write",
+                    },
+                ],
+            ),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "create_scheduled_post",
+                        "args": {
+                            **arguments,
+                            "scheduled_at": "2099-01-01T09:00:00+08:00",
+                        },
+                        "id": "fixed-time",
+                    }
+                ],
+            ),
+            AIMessage(content="下一轮正常回答"),
+        ]
+    )
     graph = create_deep_agent(
-        model=model, tools=agent_tools.build_blog_tools(Settings()),
-        middleware=[finish_after_blog_write], checkpointer=InMemorySaver(),
+        model=model,
+        tools=agent_tools.build_blog_tools(Settings()),
+        middleware=[finish_after_blog_write],
+        checkpointer=InMemorySaver(),
     )
     config: RunnableConfig = {"configurable": {"thread_id": "boundary"}}
-    with agent_invocation_context(uuid4(), "owner", "blog", execution_mode=(
-        "automatic" if automatic else "approval_required"
-    )):
+    with agent_invocation_context(
+        uuid4(), "owner", "blog", execution_mode=("automatic" if automatic else "approval_required")
+    ):
         result = await graph.ainvoke({"messages": [HumanMessage(content="安排定时发布")]}, config)
         assert model.i == 3
         outputs = [message for message in result["messages"] if isinstance(message, ToolMessage)]
@@ -162,31 +201,58 @@ async def test_conversation_checkpoint_keeps_turns_and_replaces_page_context(
     runtime = EmbeddedAgentRuntime()
     monkeypatch.setattr(runtime, "_graph", lambda *_: graph)
     request = AiChatRequest(
-        surface="studio", conversation_id=uuid4(), actor_id=uuid4(), actor_role="owner",
+        surface="studio",
+        conversation_id=uuid4(),
+        actor_id=uuid4(),
+        actor_role="owner",
         messages=[AiMessage(role="user", content="第一轮问题")],
         context=AiContext(title="文章甲"),
     )
     settings = Settings(text_openai_model="test")
-    assert public_text([text async for text in runtime.stream(
-        request, settings, thread_id="conversation",
-    )]) == "第一轮回答"
+    assert (
+        public_text(
+            [
+                text
+                async for text in runtime.stream(
+                    request,
+                    settings,
+                    thread_id="conversation",
+                )
+            ]
+        )
+        == "第一轮回答"
+    )
     first_snapshot = await graph.aget_state({"configurable": {"thread_id": "conversation"}})
     first_context = next(
         message for message in first_snapshot.values["messages"] if message.type == "system"
     )
     assert '"provider": "openai", "model": "test"' in first_context.content
-    await_input = request.model_copy(update={
-        "messages": [AiMessage(role="user", content="第二轮问题")],
-        "context": AiContext(title="文章乙"),
-        "provider": "mimo", "model": "mimo-v2.6-pro",
-    })
-    assert public_text([text async for text in runtime.stream(
-        await_input, settings, thread_id="conversation",
-    )]) == "第二轮回答"
+    await_input = request.model_copy(
+        update={
+            "messages": [AiMessage(role="user", content="第二轮问题")],
+            "context": AiContext(title="文章乙"),
+            "provider": "mimo",
+            "model": "mimo-v2.6-pro",
+        }
+    )
+    assert (
+        public_text(
+            [
+                text
+                async for text in runtime.stream(
+                    await_input,
+                    settings,
+                    thread_id="conversation",
+                )
+            ]
+        )
+        == "第二轮回答"
+    )
     snapshot = await graph.aget_state({"configurable": {"thread_id": "conversation"}})
     messages = snapshot.values["messages"]
     assert [message.content for message in messages if message.type == "human"] == [
-        "第一轮问题", "第二轮问题",
+        "第一轮问题",
+        "第二轮问题",
     ]
     contexts = [message for message in messages if message.type == "system"]
     assert len(contexts) == 1
@@ -203,9 +269,11 @@ async def test_title_uses_model_without_agent_tools(monkeypatch: pytest.MonkeyPa
 
     runtime = EmbeddedAgentRuntime()
     model = FakeListChatModel(responses=['{"title":"“规划博客选题”"}', '{"title":"  "}'])
-    monkeypatch.setattr(FakeListChatModel, "with_structured_output", lambda self, schema, **_: (
-        self | PydanticOutputParser(pydantic_object=schema)
-    ))
+    monkeypatch.setattr(
+        FakeListChatModel,
+        "with_structured_output",
+        lambda self, schema, **_: self | PydanticOutputParser(pydantic_object=schema),
+    )
     monkeypatch.setattr(runtime, "_build_model", lambda *_: model)
     request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="规划博客")])
     service = AgentService(Settings(text_openai_model="test"), runtime)
@@ -279,9 +347,7 @@ async def test_gateway_transport_filters_diagnostic_headers() -> None:
 
     transport = YyapiAsyncTransport()
     transport._transport = InnerTransport()  # type: ignore[assignment]
-    request = httpx.Request(
-        "GET", "https://example.com", headers={"x-stainless-test": "remove"}
-    )
+    request = httpx.Request("GET", "https://example.com", headers={"x-stainless-test": "remove"})
     response = await transport.handle_async_request(request)
     await transport.aclose()
     assert response.status_code == 200
@@ -311,7 +377,9 @@ async def test_runtime_streams_only_ai_text_and_resumes_checkpoint(
         async def run(self, _: object) -> Any:
             yield TextMessageStartEvent(type=EventType.TEXT_MESSAGE_START, message_id="answer")
             yield TextMessageContentEvent(
-                type=EventType.TEXT_MESSAGE_CONTENT, message_id="answer", delta="保留",
+                type=EventType.TEXT_MESSAGE_CONTENT,
+                message_id="answer",
+                delta="保留",
             )
             yield TextMessageEndEvent(type=EventType.TEXT_MESSAGE_END, message_id="answer")
 
@@ -329,16 +397,26 @@ async def test_runtime_streams_only_ai_text_and_resumes_checkpoint(
         resume_from_checkpoint=True,
     )
 
-    assert public_text([item async for item in runtime.stream(
-        request, settings, thread_id="thread",
-    )]) == "保留"
+    assert (
+        public_text(
+            [
+                item
+                async for item in runtime.stream(
+                    request,
+                    settings,
+                    thread_id="thread",
+                )
+            ]
+        )
+        == "保留"
+    )
     assert received_inputs == [None]
 
     service = AgentService(settings, runtime)
     request.billing_source_id = uuid4()
-    assert public_text([
-        item async for item in service.stream(request, thread_id="thread")
-    ]) == "保留"
+    assert (
+        public_text([item async for item in service.stream(request, thread_id="thread")]) == "保留"
+    )
 
 
 @pytest.mark.anyio
@@ -347,8 +425,13 @@ async def test_tool_proposal_is_forwarded_without_model_repeating_json(
 ) -> None:
     """只转发通过提议契约校验的工具结果，普通工具输出不混入正文。"""
     proposal = AgentActionProposal(
-        proposal_id=uuid4(), module="blog", action="create_draft", payload={"title": "草稿"},
-        summary="创建草稿", expires_at="2099-01-01T00:00:00Z", proposal_token="test",
+        proposal_id=uuid4(),
+        module="blog",
+        action="create_draft",
+        payload={"title": "草稿"},
+        summary="创建草稿",
+        expires_at="2099-01-01T00:00:00Z",
+        proposal_token="test",
     )
 
     class FakeAdapter:
@@ -357,27 +440,40 @@ async def test_tool_proposal_is_forwarded_without_model_repeating_json(
 
         async def run(self, _: object) -> Any:
             yield ToolCallStartEvent(
-                type=EventType.TOOL_CALL_START, tool_call_id="draft", tool_call_name="create_draft",
+                type=EventType.TOOL_CALL_START,
+                tool_call_id="draft",
+                tool_call_name="create_draft",
             )
             yield ToolCallResultEvent(
-                type=EventType.TOOL_CALL_RESULT, tool_call_id="draft",
-                message_id="result", content=proposal.model_dump_json(),
+                type=EventType.TOOL_CALL_RESULT,
+                tool_call_id="draft",
+                message_id="result",
+                content=proposal.model_dump_json(),
             )
             yield TextMessageStartEvent(type=EventType.TEXT_MESSAGE_START, message_id="answer")
             yield TextMessageContentEvent(
-                type=EventType.TEXT_MESSAGE_CONTENT, message_id="answer", delta="请点击确认执行",
+                type=EventType.TEXT_MESSAGE_CONTENT,
+                message_id="answer",
+                delta="请点击确认执行",
             )
 
     runtime = EmbeddedAgentRuntime()
     monkeypatch.setattr(runtime, "_graph", lambda *_: object())
     monkeypatch.setattr("genesis_api.agent.runtime.AuthorizedLangGraphAgent", FakeAdapter)
     request = AiChatRequest(
-        surface="studio", messages=[AiMessage(role="user", content="写文章")],
-        actor_id=uuid4(), actor_role="owner",
+        surface="studio",
+        messages=[AiMessage(role="user", content="写文章")],
+        actor_id=uuid4(),
+        actor_role="owner",
     )
-    events = [item async for item in runtime.stream(
-        request, Settings(text_openai_model="test"), thread_id="proposal-thread",
-    )]
+    events = [
+        item
+        async for item in runtime.stream(
+            request,
+            Settings(text_openai_model="test"),
+            thread_id="proposal-thread",
+        )
+    ]
     assert [item for item in events if isinstance(item, AgentActionProposal)] == [proposal]
     assert public_text(events) == "请点击确认执行"
 
@@ -385,9 +481,7 @@ async def test_tool_proposal_is_forwarded_without_model_repeating_json(
 @pytest.mark.anyio
 async def test_runtime_validates_context_and_model(monkeypatch: pytest.MonkeyPatch) -> None:
     runtime = EmbeddedAgentRuntime()
-    request = AiChatRequest(
-        surface="studio", messages=[AiMessage(role="user", content="测试")]
-    )
+    request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="测试")])
     with pytest.raises(RuntimeError, match="用户上下文"):
         _ = [item async for item in runtime.stream(request, Settings(), thread_id="thread")]
 
@@ -537,8 +631,11 @@ async def test_blog_tools_keep_invocation_context_isolated(
         tags=[],
         content_markdown="# 正文",
         slug="post",
-        scheduled_at=None, published_at=None, cover_image_url=None,
-        is_featured=False, read_time_minutes=1,
+        scheduled_at=None,
+        published_at=None,
+        cover_image_url=None,
+        is_featured=False,
+        read_time_minutes=1,
     )
     monkeypatch.setattr(agent_tools, "SessionLocal", FakeSession)
     monkeypatch.setattr(agent_tools, "list_admin_posts", lambda _: [post])
@@ -624,43 +721,78 @@ async def test_built_tools_delegate_without_http(monkeypatch: pytest.MonkeyPatch
     assert await tools["search_posts"].ainvoke({"query": "q"}) == "search:q"
     assert await tools["analyze_post"].ainvoke({"post_id": "2"}) == "post:2"
     assert await tools["suggest_revision"].ainvoke({"post_id": "3"}) == "post:3"
-    assert await tools["create_draft"].ainvoke(
-        {"title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s"}
-    ) == "create_draft"
-    assert await tools["create_and_publish"].ainvoke(
-        {"title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s"}
-    ) == "create_and_publish"
-    assert await tools["create_scheduled_post"].ainvoke({
-        "title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s",
-        "scheduled_at": "2099-01-01T09:00:00+08:00",
-        "category_ids": [], "tags": [],
-    }) == "create_draft"
-    assert await tools["schedule_post"].ainvoke({
-        "post_id": "1", "scheduled_at": "2099-01-01T09:00:00+08:00",
-        "expected_updated_at": "2026-01-01T00:00:00Z",
-    }) == "update_post"
+    assert (
+        await tools["create_draft"].ainvoke(
+            {"title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s"}
+        )
+        == "create_draft"
+    )
+    assert (
+        await tools["create_and_publish"].ainvoke(
+            {"title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s"}
+        )
+        == "create_and_publish"
+    )
+    assert (
+        await tools["create_scheduled_post"].ainvoke(
+            {
+                "title": "t",
+                "excerpt": "e",
+                "content_markdown": "c",
+                "slug": "s",
+                "scheduled_at": "2099-01-01T09:00:00+08:00",
+                "category_ids": [],
+                "tags": [],
+            }
+        )
+        == "create_draft"
+    )
+    assert (
+        await tools["schedule_post"].ainvoke(
+            {
+                "post_id": "1",
+                "scheduled_at": "2099-01-01T09:00:00+08:00",
+                "expected_updated_at": "2026-01-01T00:00:00Z",
+            }
+        )
+        == "update_post"
+    )
     version = {"post_id": "1", "expected_updated_at": "2026-01-01T00:00:00Z"}
     assert await tools["cancel_post_schedule"].ainvoke(version) == "update_post"
     assert await tools["update_post"].ainvoke({**version, "changes": "{}"}) == "update_post"
     assert await tools["delete_post"].ainvoke(version) == "delete_post"
     assert await tools["publish_post"].ainvoke(version) == "publish_post"
-    missing_version = await tools["publish_post"].ainvoke({
-        "type": "tool_call", "name": "publish_post", "id": "no-version", "args": {"post_id": "1"},
-    })
+    missing_version = await tools["publish_post"].ainvoke(
+        {
+            "type": "tool_call",
+            "name": "publish_post",
+            "id": "no-version",
+            "args": {"post_id": "1"},
+        }
+    )
     assert missing_version.status == "error"
-    unexpected = await tools["create_and_publish"].ainvoke({
-        "type": "tool_call", "name": "create_and_publish", "id": "unexpected", "args": {
-            "title": "t", "excerpt": "e", "content_markdown": "c", "slug": "s",
-            "scheduled_at": "2099-01-01T09:00:00+08:00",
-        },
-    })
+    unexpected = await tools["create_and_publish"].ainvoke(
+        {
+            "type": "tool_call",
+            "name": "create_and_publish",
+            "id": "unexpected",
+            "args": {
+                "title": "t",
+                "excerpt": "e",
+                "content_markdown": "c",
+                "slug": "s",
+                "scheduled_at": "2099-01-01T09:00:00+08:00",
+            },
+        }
+    )
     assert unexpected.status == "error" and "未声明的参数" in unexpected.content
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("name", ["create_draft", "create_scheduled_post", "create_and_publish"])
 async def test_creation_tools_accept_encoded_arrays_without_weakening_validation(
-    monkeypatch: pytest.MonkeyPatch, name: str,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
 ) -> None:
     """复现 MiMo 将分类和标签传为字符串；兼容后仍按原契约生成一次提议。"""
     received: list[dict[str, object]] = []
@@ -672,8 +804,12 @@ async def test_creation_tools_accept_encoded_arrays_without_weakening_validation
     monkeypatch.setattr(agent_tools, "_preview", preview)
     target = next(item for item in agent_tools.build_blog_tools(Settings()) if item.name == name)
     arguments: dict[str, object] = {
-        "title": "验收", "excerpt": "摘要", "content_markdown": "正文", "slug": "sample",
-        "category_ids": '["category-id"]', "tags": '[{"name":"测试","slug":"test"}]',
+        "title": "验收",
+        "excerpt": "摘要",
+        "content_markdown": "正文",
+        "slug": "sample",
+        "category_ids": '["category-id"]',
+        "tags": '[{"name":"测试","slug":"test"}]',
     }
     if name == "create_scheduled_post":
         arguments["scheduled_at"] = "2099-01-01T09:00:00+08:00"
@@ -683,11 +819,17 @@ async def test_creation_tools_accept_encoded_arrays_without_weakening_validation
     assert received[0]["tags"] == [{"name": "测试", "slug": "test"}]
     assert received[0]["content_markdown"] == "正文"
     for field, value in (("category_ids", "{}"), ("tags", '[{"name":"private-marker"}]')):
-        result = await target.ainvoke({
-            "type": "tool_call", "name": name, "id": "invalid", "args": {
-                **arguments, field: value,
-            },
-        })
+        result = await target.ainvoke(
+            {
+                "type": "tool_call",
+                "name": name,
+                "id": "invalid",
+                "args": {
+                    **arguments,
+                    field: value,
+                },
+            }
+        )
         assert result.status == "error"
         assert field in result.content and "private-marker" not in result.content
     assert len(received) == 1

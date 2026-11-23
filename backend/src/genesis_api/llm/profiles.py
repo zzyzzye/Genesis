@@ -24,8 +24,11 @@ def capability_provider_for(provider: str) -> str:
         KeyError: 供应商标识不受支持。
     """
     return {
-        "openai": "openai", "grok": "xai", "gemini": "google_genai",
-        "claude": "anthropic", "mimo": "openai",
+        "openai": "openai",
+        "grok": "xai",
+        "gemini": "google_genai",
+        "claude": "anthropic",
+        "mimo": "openai",
     }[provider]
 
 
@@ -61,7 +64,9 @@ def model_profile_for(adapter: str, model: str) -> ModelProfile:
     """
     # 当前依赖的客户端本身也调用这些函数；升级时由一致性测试校验。
     lookup = {
-        "openai": openai_profile, "anthropic": anthropic_profile,
-        "google_genai": google_profile, "xai": xai_profile,
+        "openai": openai_profile,
+        "anthropic": anthropic_profile,
+        "google_genai": google_profile,
+        "xai": xai_profile,
     }[adapter]
     return cast(ModelProfile, dict(lookup(model)))

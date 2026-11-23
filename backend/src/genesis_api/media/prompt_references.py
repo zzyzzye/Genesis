@@ -27,7 +27,8 @@ def resolve_text_mentions(text: str, document: CanvasDocument, node_id: UUID) ->
     """
     connected = {edge.source for edge in document.edges if edge.target == node_id}
     sources = {
-        str(node.id): node for node in document.nodes
+        str(node.id): node
+        for node in document.nodes
         if node.id in connected and node.id != node_id and node.type == "text"
     }
 
@@ -40,7 +41,8 @@ def resolve_text_mentions(text: str, document: CanvasDocument, node_id: UUID) ->
         # 禁止通过文字节点间接引用素材或继续递归，避免绕过显式引用规则。
         if MENTION.search(source.text) or TEXT_MENTION.search(source.text):
             raise HTTPException(
-                422, "文字节点不能嵌套引用，请使用普通文本并在生成提示词中直接引用素材",
+                422,
+                "文字节点不能嵌套引用，请使用普通文本并在生成提示词中直接引用素材",
             )
         return source.text
 

@@ -32,7 +32,9 @@ MEDIA_ACTIONS = {
 
 
 async def execute_tool(
-    entry: BaseTool, payload: dict[str, Any], config: RunnableConfig,
+    entry: BaseTool,
+    payload: dict[str, Any],
+    config: RunnableConfig,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """通过原生工具调用保留参数验证、错误语义和资源回执。"""
     message = await entry.ainvoke(
@@ -48,6 +50,7 @@ async def execute_tool(
 
 def reviewed_tool(entry: BaseTool, settings: Settings) -> BaseTool:
     """让同一个业务工具按可信执行模式返回待确认或已执行提议。"""
+
     async def invoke(config: RunnableConfig, **kwargs: Any) -> tuple[str, dict[str, Any]]:
         from genesis_api.media.agent.tools import SessionLocal
 
@@ -60,19 +63,37 @@ def reviewed_tool(entry: BaseTool, settings: Settings) -> BaseTool:
                 str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
             ) from None
         # 参数已由原工具的 schema 验证；转换为可签名、可恢复的 JSON。
-        payload = json.loads(json.dumps(kwargs, default=lambda value: (
-            value.model_dump(mode="json") if hasattr(value, "model_dump") else str(value)
-        )))
+        payload = json.loads(
+            json.dumps(
+                kwargs,
+                default=lambda value: (
+                    value.model_dump(mode="json") if hasattr(value, "model_dump") else str(value)
+                ),
+            )
+        )
         payload["_run_id"] = str(config.get("configurable", {}).get("genesis_run_id", ""))
         proposal_id = uuid4()
         expires = datetime.now(UTC) + timedelta(seconds=settings.agent_action_expire_seconds)
-        token = encode({
-            "proposal_id": str(proposal_id), "actor_id": str(actor), "module": "media",
-            "action": entry.name, "payload": payload, "exp": expires,
-        }, settings.agent_action_secret.get_secret_value(), algorithm="HS256")
+        token = encode(
+            {
+                "proposal_id": str(proposal_id),
+                "actor_id": str(actor),
+                "module": "media",
+                "action": entry.name,
+                "payload": payload,
+                "exp": expires,
+            },
+            settings.agent_action_secret.get_secret_value(),
+            algorithm="HS256",
+        )
         proposal = AgentActionProposal(
-            proposal_id=proposal_id, module="media", action=entry.name, payload=payload,
-            summary=MEDIA_ACTIONS[entry.name], expires_at=expires, proposal_token=token,
+            proposal_id=proposal_id,
+            module="media",
+            action=entry.name,
+            payload=payload,
+            summary=MEDIA_ACTIONS[entry.name],
+            expires_at=expires,
+            proposal_token=token,
         )
         artifact: dict[str, Any] = {}
         if automatic_actions_allowed():
@@ -82,14 +103,21 @@ def reviewed_tool(entry: BaseTool, settings: Settings) -> BaseTool:
         return proposal.model_dump_json(), artifact
 
     return StructuredTool(
-        name=entry.name, description=entry.description + " 审阅模式仅创建提议，确认后才执行。",
-        args_schema=entry.args_schema, coroutine=invoke, response_format="content_and_artifact",
-        handle_tool_error=True, handle_validation_error=entry.handle_validation_error,
+        name=entry.name,
+        description=entry.description + " 审阅模式仅创建提议，确认后才执行。",
+        args_schema=entry.args_schema,
+        coroutine=invoke,
+        response_format="content_and_artifact",
+        handle_tool_error=True,
+        handle_validation_error=entry.handle_validation_error,
     )
 
 
 async def confirm_media_action(
-    action: str, payload: dict[str, Any], user: User, settings: Settings,
+    action: str,
+    payload: dict[str, Any],
+    user: User,
+    settings: Settings,
 ) -> dict[str, Any]:
     """执行验签后的提议；不信任客户端补充参数，不重建生成意图标识。"""
     from genesis_api.media.agent.tools import build_media_tools
@@ -101,9 +129,13 @@ async def confirm_media_action(
     arguments = {key: value for key, value in payload.items() if key != "_run_id"}
     with agent_invocation_context(user.id, user.role.value, "media", execution_mode="automatic"):
         try:
-            result, artifact = await execute_tool(entry, arguments, {
-                "configurable": {"genesis_run_id": payload.get("_run_id")},
-            })
+            result, artifact = await execute_tool(
+                entry,
+                arguments,
+                {
+                    "configurable": {"genesis_run_id": payload.get("_run_id")},
+                },
+            )
         except ToolException as exc:
             raise HTTPException(422, str(exc)) from None
     return {**result, **artifact, "action": action}

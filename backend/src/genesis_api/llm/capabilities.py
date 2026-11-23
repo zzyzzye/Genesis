@@ -61,15 +61,16 @@ def model_capabilities_for(provider: str, model: str) -> ModelCapabilities:
         exclude_none=True, exclude={"thinking_modes", "thinking_mode_default"}
     )
     native = model_profile_for(capability_provider_for(provider), model)
-    profile = cast(ModelProfile, fallback | {
-        key: value for key, value in native.items() if value is not None
-    })
+    profile = cast(
+        ModelProfile, fallback | {key: value for key, value in native.items() if value is not None}
+    )
     return ModelCapabilities(
         profile=profile,
         thinking_modes=supplement.thinking_modes,
         # 官方默认仍记录在补充表；对外返回站点实际采用的默认策略。
         thinking_mode_default=(
-            "disabled" if provider == "mimo" and "disabled" in (supplement.thinking_modes or [])
+            "disabled"
+            if provider == "mimo" and "disabled" in (supplement.thinking_modes or [])
             else supplement.thinking_mode_default
         ),
     )

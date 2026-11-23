@@ -29,8 +29,11 @@ def upgrade() -> None:
     op.create_index("ix_ai_conversations_user_id", "ai_conversations", ["user_id"])
     op.add_column("ai_chat_runs", sa.Column("conversation_id", sa.Uuid(), nullable=True))
     op.create_foreign_key(
-        "fk_ai_chat_runs_conversation", "ai_chat_runs", "ai_conversations",
-        ["conversation_id"], ["id"],
+        "fk_ai_chat_runs_conversation",
+        "ai_chat_runs",
+        "ai_conversations",
+        ["conversation_id"],
+        ["id"],
     )
     op.create_index("ix_ai_chat_runs_conversation_id", "ai_chat_runs", ["conversation_id"])
 

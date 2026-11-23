@@ -76,9 +76,7 @@ def test_prepare_request_embeds_authenticated_actor_and_studio_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     owner = User(id=uuid4(), handle="owner", display_name="Owner", role=UserRole.OWNER)
-    request = AiChatRequest(
-        surface="blog", messages=[AiMessage(role="user", content="你好")]
-    )
+    request = AiChatRequest(surface="blog", messages=[AiMessage(role="user", content="你好")])
     prepared = ai_route._prepare_request(
         request,
         current_user=owner,
@@ -108,10 +106,12 @@ def test_prepare_request_embeds_authenticated_actor_and_studio_context(
     for section in ("overview", "categories", "tags"):
         prepared_page = ai_route._prepare_request(
             AiChatRequest(
-                surface="studio", messages=[AiMessage(role="user", content="整理博客")],
+                surface="studio",
+                messages=[AiMessage(role="user", content="整理博客")],
                 context=AiContext(module="blog", section=section),
             ),
-            current_user=owner, current_user_role=owner.role,
+            current_user=owner,
+            current_user_role=owner.role,
             session=pytest.MonkeyPatch(),  # type: ignore[arg-type]
         )
         assert prepared_page.actor_id == owner.id
@@ -119,9 +119,7 @@ def test_prepare_request_embeds_authenticated_actor_and_studio_context(
     member = User(id=uuid4(), handle="member", display_name="Member", role=UserRole.MEMBER)
     with pytest.raises(HTTPException) as exc_info:
         ai_route._prepare_request(
-            AiChatRequest(
-                surface="studio", messages=[AiMessage(role="user", content="越权")]
-            ),
+            AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="越权")]),
             current_user=member,
             current_user_role=member.role,
             session=pytest.MonkeyPatch(),  # type: ignore[arg-type]
@@ -130,9 +128,7 @@ def test_prepare_request_embeds_authenticated_actor_and_studio_context(
 
 
 def test_media_surface_proposes_confirmed_canvas_plans() -> None:
-    request = AiChatRequest(
-        surface="media", messages=[AiMessage(role="user", content="拆分镜头")]
-    )
+    request = AiChatRequest(surface="media", messages=[AiMessage(role="user", content="拆分镜头")])
     capability = agent_capabilities.resolve("media", Settings())
 
     assert request.surface == "media"
@@ -157,23 +153,38 @@ def test_confirmed_proposal_is_saved_and_cannot_be_executed_again() -> None:
         session.add(conversation)
         session.commit()
         payload = {
-            "title": "确认草稿", "excerpt": "摘要",
-            "content_markdown": "正文", "slug": "receipt-draft",
+            "title": "确认草稿",
+            "excerpt": "摘要",
+            "content_markdown": "正文",
+            "slug": "receipt-draft",
         }
-        token = encode({
-            "proposal_id": proposal_id, "actor_id": str(owner.id), "module": "blog",
-            "action": "create_draft", "payload": payload,
-            "exp": datetime.now(UTC) + timedelta(minutes=10),
-        }, settings.agent_action_secret.get_secret_value(), algorithm="HS256")
+        token = encode(
+            {
+                "proposal_id": proposal_id,
+                "actor_id": str(owner.id),
+                "module": "blog",
+                "action": "create_draft",
+                "payload": payload,
+                "exp": datetime.now(UTC) + timedelta(minutes=10),
+            },
+            settings.agent_action_secret.get_secret_value(),
+            algorithm="HS256",
+        )
         run = AiChatRun(
-            user_id=owner.id, surface="studio", provider="mimo", content="请确认执行",
+            user_id=owner.id,
+            surface="studio",
+            provider="mimo",
+            content="请确认执行",
             conversation_id=conversation.id,
             proposals=[{"proposal_id": proposal_id, "executed": False}],
         )
         session.add(run)
         session.commit()
         result = ai_route.confirm_agent_action(
-            AgentActionConfirmation(proposal_token=token), owner, session, settings,
+            AgentActionConfirmation(proposal_token=token),
+            owner,
+            session,
+            settings,
         )
         session.refresh(run)
         assert run.proposals is not None
@@ -181,15 +192,22 @@ def test_confirmed_proposal_is_saved_and_cannot_be_executed_again() -> None:
         assert run.proposals[0]["execution_result"] == result
         prepared = ai_route._prepare_request(
             AiChatRequest(
-                surface="studio", conversation_id=conversation.id,
+                surface="studio",
+                conversation_id=conversation.id,
                 messages=[AiMessage(role="user", content="写入了吗")],
-            ), current_user=owner, current_user_role=owner.role, session=session,
+            ),
+            current_user=owner,
+            current_user_role=owner.role,
+            session=session,
         )
         assert prepared.context is not None
         assert prepared.context.action_results == [result]
         with pytest.raises(HTTPException) as repeated:
             ai_route.confirm_agent_action(
-                AgentActionConfirmation(proposal_token=token), owner, session, settings,
+                AgentActionConfirmation(proposal_token=token),
+                owner,
+                session,
+                settings,
             )
         assert repeated.value.status_code == 409
         assert len(session.scalars(select(BlogPost)).all()) == 1
@@ -247,9 +265,7 @@ def test_confirm_agent_action_executes_all_blog_mutations() -> None:
         }
         created = ai_route.confirm_agent_action(
             AgentActionConfirmation(
-                proposal_token=proposal_token(
-                    settings, owner.id, "create_draft", create_payload
-                )
+                proposal_token=proposal_token(settings, owner.id, "create_draft", create_payload)
             ),
             owner,
             session,
@@ -306,9 +322,7 @@ def test_confirm_agent_action_executes_all_blog_mutations() -> None:
 async def test_chat_run_routes_keep_public_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     run_id = uuid4()
     user = User(id=uuid4(), handle="owner", display_name="Owner", role=UserRole.OWNER)
-    request = AiChatRequest(
-        surface="studio", messages=[AiMessage(role="user", content="执行")]
-    )
+    request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="执行")])
     created = AiChatRunCreated(id=run_id, status=AiChatRunStatus.PENDING)
     snapshot = AiChatRunSnapshot(
         id=run_id,
@@ -326,37 +340,42 @@ async def test_chat_run_routes_keep_public_contract(monkeypatch: pytest.MonkeyPa
         lambda value, *_: starts.append(value),
     )
     monkeypatch.setattr(ai_route, "get_ai_chat_run_snapshot", lambda *_, **__: snapshot)
+
     async def cancel(value: UUID) -> None:
         cancellations.append(value)
+
     monkeypatch.setattr(cast(Any, ai_route).ai_chat_run_manager, "cancel", cancel)
     response_marker = cast(Any, object())
     monkeypatch.setattr(ai_route, "_stream_response", lambda *_: response_marker)
 
-    assert ai_route._start_run(
-        request, current_user=user, session=cast(Any, object()), settings=Settings()
-    ) == created
+    assert (
+        ai_route._start_run(
+            request, current_user=user, session=cast(Any, object()), settings=Settings()
+        )
+        == created
+    )
     assert starts == [run_id]
-    assert await ai_route.create_chat_run(
-        request, user, cast(Any, object()), Settings()
-    ) == created
+    assert await ai_route.create_chat_run(request, user, cast(Any, object()), Settings()) == created
     assert await ai_route.get_chat_run(run_id, user, cast(Any, object())) == snapshot
     await ai_route.cancel_chat_run(run_id, user, cast(Any, object()))
     assert cancellations == [run_id]
-    assert await ai_route.stream_chat_run(
-        run_id, cast(Request, object()), user, cast(Any, object())
-    ) is response_marker
-    assert await ai_route.stream_chat(
-        request, cast(Request, object()), user, cast(Any, object()), Settings()
-    ) is response_marker
+    assert (
+        await ai_route.stream_chat_run(run_id, cast(Request, object()), user, cast(Any, object()))
+        is response_marker
+    )
+    assert (
+        await ai_route.stream_chat(
+            request, cast(Request, object()), user, cast(Any, object()), Settings()
+        )
+        is response_marker
+    )
 
     monkeypatch.setattr(ai_route, "get_ai_chat_run_snapshot", lambda *_, **__: None)
     with pytest.raises(HTTPException) as missing:
         await ai_route.get_chat_run(run_id, user, cast(Any, object()))
     assert missing.value.status_code == 404
     with pytest.raises(HTTPException) as missing_stream:
-        await ai_route.stream_chat_run(
-            run_id, cast(Request, object()), user, cast(Any, object())
-        )
+        await ai_route.stream_chat_run(run_id, cast(Request, object()), user, cast(Any, object()))
     assert missing_stream.value.status_code == 404
     with pytest.raises(HTTPException) as missing_cancel:
         await ai_route.cancel_chat_run(run_id, user, cast(Any, object()))

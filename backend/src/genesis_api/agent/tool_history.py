@@ -149,7 +149,10 @@ class ToolCallHistory(AsyncCallbackHandler):
         elif not failed and isinstance(content, str):
             summary = f"已返回结果（{len(content):,} 字符）"
         await self._finish(
-            run_id, status=status, result_summary=summary, proposal_id=proposal_id,
+            run_id,
+            status=status,
+            result_summary=summary,
+            proposal_id=proposal_id,
             resource=resource,
         )
 

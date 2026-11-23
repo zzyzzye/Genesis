@@ -61,8 +61,7 @@ async def test_agent_video_submission_is_versioned_idempotent_and_queryable(
 ) -> None:
     """助手与页面共享准入和提交，重放不再创建上游任务。"""
     tools = {
-        entry.name: entry
-        for entry in media_tools.build_media_tools(fixture.settings, review=False)
+        entry.name: entry for entry in media_tools.build_media_tools(fixture.settings, review=False)
     }
     user = fixture.session.scalar(select(User))
     assert user is not None
@@ -92,10 +91,13 @@ async def test_agent_video_submission_is_versioned_idempotent_and_queryable(
         stored.status = "download_failed"
         fixture.session.commit()
         retry_args = {
-            "project_id": fixture.project_id, "task_id": created["id"], "kind": "video",
+            "project_id": fixture.project_id,
+            "task_id": created["id"],
+            "kind": "video",
         }
         reviewed = next(
-            tool for tool in media_tools.build_media_tools(fixture.settings)
+            tool
+            for tool in media_tools.build_media_tools(fixture.settings)
             if tool.name == "retry_generation_save"
         )
         pending = json.loads(await reviewed.ainvoke(retry_args))
@@ -212,10 +214,18 @@ async def test_text_reference_submission_freezes_latest_source(fixture: VideoFix
     source = str(uuid4())
     token = f"@[文字](ref:{source})"
     doc["nodes"][0]["text"] = f"开场：{token}"
-    doc["nodes"].append({
-        "id": source, "type": "text", "text": "旧设定", "name": "人物设定",
-        "x": 0, "y": 0, "width": 300, "height": 180,
-    })
+    doc["nodes"].append(
+        {
+            "id": source,
+            "type": "text",
+            "text": "旧设定",
+            "name": "人物设定",
+            "x": 0,
+            "y": 0,
+            "width": 300,
+            "height": 180,
+        }
+    )
     doc["edges"] = [{"id": str(uuid4()), "source": source, "target": state.node_id}]
     for content in ("旧设定", "最新设定"):
         doc["nodes"][-1]["text"] = content
@@ -230,19 +240,25 @@ async def test_text_reference_submission_freezes_latest_source(fixture: VideoFix
     task = state.session.get(VideoGeneration, UUID(response.json()["id"]))
     assert task is not None
     frozen = task.snapshot["node"]
+    assert isinstance(frozen, dict)
     assert frozen["text"] == "开场：最新设定"
     post = next(request for request in state.requests if request.method == "POST")
     assert json.loads(post.content)["prompt"] == "开场：最新设定"
     current = (await state.client.get(f"projects/{state.project_id}/canvas")).json()
     assert current["document"]["nodes"][0]["text"] == f"开场：{token}"
-    next(node for node in current["document"]["nodes"] if node["id"] == source)[
-        "text"
-    ] = "提交后继续修改"
-    assert (await state.client.put(
-        f"projects/{state.project_id}/canvas", json=current,
-    )).status_code == 200
+    next(node for node in current["document"]["nodes"] if node["id"] == source)["text"] = (
+        "提交后继续修改"
+    )
+    assert (
+        await state.client.put(
+            f"projects/{state.project_id}/canvas",
+            json=current,
+        )
+    ).status_code == 200
     state.session.refresh(task)
-    assert task.snapshot["node"]["text"] == "开场：最新设定"
+    frozen = task.snapshot["node"]
+    assert isinstance(frozen, dict)
+    assert frozen["text"] == "开场：最新设定"
 
 
 async def save_node(state: VideoFixture, **patch: object) -> None:

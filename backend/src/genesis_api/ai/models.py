@@ -97,6 +97,8 @@ class AiChatRunEvent(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[UUID] = mapped_column(
-        Uuid, ForeignKey("ai_chat_runs.id", ondelete="CASCADE"), index=True,
+        Uuid,
+        ForeignKey("ai_chat_runs.id", ondelete="CASCADE"),
+        index=True,
     )
     payload: Mapped[dict[str, object]] = mapped_column(JSON)

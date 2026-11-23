@@ -47,6 +47,8 @@ from genesis_api.identity.models import User, UserRole
 BlogAgentAction = Literal[
     "create_draft", "create_and_publish", "update_post", "delete_post", "publish_post"
 ]
+
+
 async def _invoke[**P](operation: Callable[P, str], *args: P.args, **kwargs: P.kwargs) -> str:
     """让可修正的业务错误成为 LangChain 工具回执，不中断整轮 Agent 执行。"""
     try:
@@ -55,10 +57,11 @@ async def _invoke[**P](operation: Callable[P, str], *args: P.args, **kwargs: P.k
         raise ToolException(str(exc.detail)) from None
     except ValidationError as exc:
         # 只回报字段与原因，不在工具错误中复述文章正文或其他输入值。
-        reasons = [f"{'.'.join(map(str, error['loc'])) or '文章'}：" + (
-            "时间必须包含时区偏移" if error["type"] == "timezone_aware" else error["msg"]
-        )
-                   for error in exc.errors(include_input=False, include_url=False)]
+        reasons = [
+            f"{'.'.join(map(str, error['loc'])) or '文章'}："
+            + ("时间必须包含时区偏移" if error["type"] == "timezone_aware" else error["msg"])
+            for error in exc.errors(include_input=False, include_url=False)
+        ]
         raise ToolException("参数校验失败：" + "；".join(reasons)) from None
     except ValueError as exc:
         raise ToolException(str(exc)) from None
@@ -110,9 +113,11 @@ def _detail(post: BlogPost) -> dict[str, object]:
         供模型分析或改写使用的完整文章数据。
     """
     return {
-        **_summary(post), "content_markdown": post.content_markdown,
+        **_summary(post),
+        "content_markdown": post.content_markdown,
         "tag_details": [{"name": tag.name, "slug": tag.slug} for tag in post.tags],
-        "cover_image_url": post.cover_image_url, "is_featured": post.is_featured,
+        "cover_image_url": post.cover_image_url,
+        "is_featured": post.is_featured,
         "read_time_minutes": post.read_time_minutes,
         "published_at": utc(post.published_at).isoformat() if post.published_at else None,
     }
@@ -122,12 +127,19 @@ def _list_taxonomies() -> str:
     """读取真实分类和共享标签，供模型引用稳定标识及原有名称。"""
     _owner_id()
     with SessionLocal() as session:
-        return json.dumps({
-            "categories": [{"id": str(item.id), "name": item.name, "slug": item.slug}
-                           for item in list_admin_categories(session)],
-            "tags": [{"id": str(item.id), "name": item.name, "slug": item.slug}
-                     for item in list_admin_tags(session)],
-        }, ensure_ascii=False)
+        return json.dumps(
+            {
+                "categories": [
+                    {"id": str(item.id), "name": item.name, "slug": item.slug}
+                    for item in list_admin_categories(session)
+                ],
+                "tags": [
+                    {"id": str(item.id), "name": item.name, "slug": item.slug}
+                    for item in list_admin_tags(session)
+                ],
+            },
+            ensure_ascii=False,
+        )
 
 
 def _list_posts() -> str:
@@ -197,7 +209,7 @@ def _search_posts(query: str) -> str:
                     BlogPost.tags.any(BlogTag.name.icontains(query, autoescape=True)),
                     BlogPost.tags.any(BlogTag.slug.icontains(query, autoescape=True)),
                     BlogPost.categories.any(BlogCategory.name.icontains(query, autoescape=True)),
-                )
+                ),
             )
             .options(selectinload(BlogPost.category), selectinload(BlogPost.tags))
             .order_by(BlogPost.updated_at.desc())
@@ -238,9 +250,12 @@ def _preview(action: BlogAgentAction, payload: dict[str, object], settings: Sett
             if payload.get("cancel_schedule") and post.scheduled_at is None:
                 raise ValueError("该文章当前没有定时发布计划，无需取消。")
             # 在操作前保留可信标题，删除后与历史恢复时仍能识别目标文章。
-            payload = {**payload, "target_title": post.title,
-                       "target_status": post.status.value,
-                       "expected_updated_at": utc(post.updated_at).isoformat()}
+            payload = {
+                **payload,
+                "target_title": post.title,
+                "target_status": post.status.value,
+                "expected_updated_at": utc(post.updated_at).isoformat(),
+            }
         if action != "delete_post":
             data = post_write_data(action, payload, post)
             names = check_post_references(session, data)
@@ -374,8 +389,12 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
 
     @tool
     async def create_draft(
-        title: str, excerpt: str, content_markdown: str, slug: str,
-        category_ids: ToolArray[str] | None = None, tags: ToolArray[BlogTagWrite] | None = None,
+        title: str,
+        excerpt: str,
+        content_markdown: str,
+        slug: str,
+        category_ids: ToolArray[str] | None = None,
+        tags: ToolArray[BlogTagWrite] | None = None,
         cover_image_url: str | None = None,
     ) -> str:
         """创建新草稿，可同时设置分类、标签和封面；定时发布请用 create_scheduled_post。
@@ -399,15 +418,21 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             "excerpt": excerpt,
             "content_markdown": content_markdown,
             "slug": slug,
-            "category_ids": category_ids, "tags": [tag.model_dump() for tag in tags or []],
+            "category_ids": category_ids,
+            "tags": [tag.model_dump() for tag in tags or []],
             "cover_image_url": cover_image_url,
         }
         return await _invoke(_preview, "create_draft", payload, runtime_settings)
 
     @tool
     async def create_scheduled_post(
-        title: str, excerpt: str, content_markdown: str, slug: str, scheduled_at: str,
-        category_ids: ToolArray[str], tags: ToolArray[BlogTagWrite],
+        title: str,
+        excerpt: str,
+        content_markdown: str,
+        slug: str,
+        scheduled_at: str,
+        category_ids: ToolArray[str],
+        tags: ToolArray[BlogTagWrite],
         cover_image_url: str | None = None,
     ) -> str:
         """一次创建文章并安排定时发布，用户要求未来发布新文章时必须使用。
@@ -425,16 +450,30 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         Returns:
             审阅时返回一次确认的完整计划；自动时返回已保存计划的真实回执。
         """
-        return await _invoke(_preview, "create_draft", {
-            "title": title, "excerpt": excerpt, "content_markdown": content_markdown, "slug": slug,
-            "scheduled_at": scheduled_at, "category_ids": category_ids,
-            "tags": [tag.model_dump() for tag in tags or []], "cover_image_url": cover_image_url,
-        }, runtime_settings)
+        return await _invoke(
+            _preview,
+            "create_draft",
+            {
+                "title": title,
+                "excerpt": excerpt,
+                "content_markdown": content_markdown,
+                "slug": slug,
+                "scheduled_at": scheduled_at,
+                "category_ids": category_ids,
+                "tags": [tag.model_dump() for tag in tags or []],
+                "cover_image_url": cover_image_url,
+            },
+            runtime_settings,
+        )
 
     @tool
     async def create_and_publish(
-        title: str, excerpt: str, content_markdown: str, slug: str,
-        category_ids: ToolArray[str] | None = None, tags: ToolArray[BlogTagWrite] | None = None,
+        title: str,
+        excerpt: str,
+        content_markdown: str,
+        slug: str,
+        category_ids: ToolArray[str] | None = None,
+        tags: ToolArray[BlogTagWrite] | None = None,
         cover_image_url: str | None = None,
     ) -> str:
         """一次创建并发布全新文章；用户要求直接发布时使用，不要拆成创建草稿和再次发布。
@@ -451,15 +490,26 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         Returns:
             审阅模式返回一次性发布提议；自动模式返回已执行的发布结果。
         """
-        return await _invoke(_preview, "create_and_publish", {
-            "title": title, "excerpt": excerpt, "content_markdown": content_markdown, "slug": slug,
-            "category_ids": category_ids, "tags": [tag.model_dump() for tag in tags or []],
-            "cover_image_url": cover_image_url,
-        }, runtime_settings)
+        return await _invoke(
+            _preview,
+            "create_and_publish",
+            {
+                "title": title,
+                "excerpt": excerpt,
+                "content_markdown": content_markdown,
+                "slug": slug,
+                "category_ids": category_ids,
+                "tags": [tag.model_dump() for tag in tags or []],
+                "cover_image_url": cover_image_url,
+            },
+            runtime_settings,
+        )
 
     @tool
     async def update_post(
-        post_id: str, changes: str, expected_updated_at: str,
+        post_id: str,
+        changes: str,
+        expected_updated_at: str,
     ) -> str:
         """修改文章内容、分类标签或发布计划，按当前执行策略审阅或执行。
 
@@ -478,13 +528,17 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             审阅模式返回签名提议，自动模式返回真实执行回执。
         """
         return await _invoke(
-            _preview, "update_post", {"post_id": post_id, "changes": changes,
-                                     "expected_updated_at": expected_updated_at}, runtime_settings
+            _preview,
+            "update_post",
+            {"post_id": post_id, "changes": changes, "expected_updated_at": expected_updated_at},
+            runtime_settings,
         )
 
     @tool
     async def schedule_post(
-        post_id: str, scheduled_at: str, expected_updated_at: str,
+        post_id: str,
+        scheduled_at: str,
+        expected_updated_at: str,
     ) -> str:
         """为已有文章安排定时发布；保持原内容，当前公开文章将先撤回为草稿。
 
@@ -496,10 +550,16 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         Returns:
             审阅时返回发布计划提议，自动时保存计划并返回真实回执。
         """
-        return await _invoke(_preview, "update_post", {
-            "post_id": post_id, "expected_updated_at": expected_updated_at,
-            "changes": {"status": "draft", "scheduled_at": scheduled_at},
-        }, runtime_settings)
+        return await _invoke(
+            _preview,
+            "update_post",
+            {
+                "post_id": post_id,
+                "expected_updated_at": expected_updated_at,
+                "changes": {"status": "draft", "scheduled_at": scheduled_at},
+            },
+            runtime_settings,
+        )
 
     @tool
     async def cancel_post_schedule(post_id: str, expected_updated_at: str) -> str:
@@ -512,10 +572,17 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         Returns:
             审阅时返回取消计划提议，自动时直接取消并返回真实回执。
         """
-        return await _invoke(_preview, "update_post", {
-            "post_id": post_id, "expected_updated_at": expected_updated_at,
-            "changes": {"scheduled_at": None}, "cancel_schedule": True,
-        }, runtime_settings)
+        return await _invoke(
+            _preview,
+            "update_post",
+            {
+                "post_id": post_id,
+                "expected_updated_at": expected_updated_at,
+                "changes": {"scheduled_at": None},
+                "cancel_schedule": True,
+            },
+            runtime_settings,
+        )
 
     @tool
     async def delete_post(post_id: str, expected_updated_at: str) -> str:
@@ -529,8 +596,10 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             审阅模式返回签名提议；自动模式返回已移入回收站的执行回执。
         """
         return await _invoke(
-            _preview, "delete_post", {"post_id": post_id,
-                                     "expected_updated_at": expected_updated_at}, runtime_settings
+            _preview,
+            "delete_post",
+            {"post_id": post_id, "expected_updated_at": expected_updated_at},
+            runtime_settings,
         )
 
     @tool
@@ -545,8 +614,10 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
             审阅模式返回签名提议；自动模式直接执行，均须通过完整发布校验。
         """
         return await _invoke(
-            _preview, "publish_post", {"post_id": post_id,
-                                      "expected_updated_at": expected_updated_at}, runtime_settings
+            _preview,
+            "publish_post",
+            {"post_id": post_id, "expected_updated_at": expected_updated_at},
+            runtime_settings,
         )
 
     tools = [
@@ -569,8 +640,9 @@ def build_blog_tools(settings: Settings | None = None) -> list[BaseTool]:
         schema = item.args_schema
         if isinstance(schema, type) and issubclass(schema, BaseModel):
             # 工具参数也拒绝未知字段，避免把误传的定时参数忽略后立即发布。
-            item.args_schema = create_model(schema.__name__, __base__=schema,
-                                            __config__=ConfigDict(extra="forbid"))
+            item.args_schema = create_model(
+                schema.__name__, __base__=schema, __config__=ConfigDict(extra="forbid")
+            )
         item.handle_tool_error = True
         item.handle_validation_error = tool_validation_error
     return tools

@@ -17,10 +17,14 @@ from genesis_api.core.config import Settings
 @pytest.mark.anyio
 async def test_native_gemini_uses_direct_httpx_for_sync_and_async() -> None:
     runtime = EmbeddedAgentRuntime()
-    model = runtime._build_model(Settings(
-        text_gemini_api_key=SecretStr("synthetic-direct-test"),
-        text_gemini_base_url="https://generativelanguage.googleapis.com",
-    ), "gemini", "gemini-2.5-flash")
+    model = runtime._build_model(
+        Settings(
+            text_gemini_api_key=SecretStr("synthetic-direct-test"),
+            text_gemini_base_url="https://generativelanguage.googleapis.com",
+        ),
+        "gemini",
+        "gemini-2.5-flash",
+    )
     assert isinstance(model, ChatGoogleGenerativeAI)
     assert model.client_args is not None
     assert model.client_args["trust_env"] is False

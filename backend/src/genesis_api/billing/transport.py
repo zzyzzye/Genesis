@@ -49,7 +49,9 @@ def execution_context(
 
 
 def _before(
-    execution: Execution, size: int, request: httpx.Request | httpx2.Request,
+    execution: Execution,
+    size: int,
+    request: httpx.Request | httpx2.Request,
 ) -> UUID | None:
     with execution.factory() as session:
         operation = session.scalar(

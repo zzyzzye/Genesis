@@ -63,7 +63,8 @@ def claim_guide(session_factory: SessionFactory) -> GuideJob | None:
             select(BlogArticleGuide)
             .join(BlogPost)
             .where(
-                BlogPost.status == BlogPostStatus.PUBLISHED, BlogPost.deleted_at.is_(None),
+                BlogPost.status == BlogPostStatus.PUBLISHED,
+                BlogPost.deleted_at.is_(None),
                 or_(
                     BlogArticleGuide.state == "pending",
                     (BlogArticleGuide.state == "running")
@@ -109,7 +110,8 @@ def finish_guide(
                 select(BlogPost.id)
                 .where(
                     BlogPost.id == job.post_id,
-                    BlogPost.status == BlogPostStatus.PUBLISHED, BlogPost.deleted_at.is_(None),
+                    BlogPost.status == BlogPostStatus.PUBLISHED,
+                    BlogPost.deleted_at.is_(None),
                 )
                 .exists(),
             )

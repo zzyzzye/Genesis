@@ -36,7 +36,11 @@ class ModelCatalog:
         self.pending: dict[str, asyncio.Task[dict[str, Any]]] = {}
 
     async def get(
-        self, url: str, headers: dict[str, str], *, refresh: bool = False,
+        self,
+        url: str,
+        headers: dict[str, str],
+        *,
+        refresh: bool = False,
         client: httpx.AsyncClient | None = None,
     ) -> dict[str, Any]:
         """获取独立副本，缓存身份不包含明文凭据，也不混入用户价格或权限。
@@ -57,9 +61,13 @@ class ModelCatalog:
         ).hexdigest()
         entry = self.entries.get(identity)
         now = monotonic()
-        if entry and not refresh and (
-            now - entry.loaded_at < CATALOG_TTL_SECONDS
-            or (now - entry.loaded_at < STALE_TTL_SECONDS and now < entry.retry_at)
+        if (
+            entry
+            and not refresh
+            and (
+                now - entry.loaded_at < CATALOG_TTL_SECONDS
+                or (now - entry.loaded_at < STALE_TTL_SECONDS and now < entry.retry_at)
+            )
         ):
             self.entries.move_to_end(identity)
             return deepcopy(entry.payload)
@@ -78,7 +86,10 @@ class ModelCatalog:
         return deepcopy(await asyncio.shield(task))
 
     async def _load(
-        self, identity: str, url: str, headers: dict[str, str],
+        self,
+        identity: str,
+        url: str,
+        headers: dict[str, str],
         client: httpx.AsyncClient | None,
     ) -> dict[str, Any]:
         """仅缓存结构正确的成功结果，鉴权失败立即清除旧目录。"""

@@ -16,15 +16,29 @@ def test_framework_fields_win_and_missing_fields_use_supplements(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """框架已有值（包括 False、空列表）不能被静态补充覆盖。"""
-    monkeypatch.setattr(capabilities, "model_profile_for", lambda *_: {
-        "max_input_tokens": 2000, "reasoning_effort_levels": [], "tool_calling": False,
-    })
-    monkeypatch.setattr(capabilities, "_supplements", lambda: {"mimo": {"custom":
-        CapabilitySupplement(
-            max_input_tokens=1000, max_output_tokens=500,
-            reasoning_effort_levels=["high"], tool_calling=True,
-        ),
-    }})
+    monkeypatch.setattr(
+        capabilities,
+        "model_profile_for",
+        lambda *_: {
+            "max_input_tokens": 2000,
+            "reasoning_effort_levels": [],
+            "tool_calling": False,
+        },
+    )
+    monkeypatch.setattr(
+        capabilities,
+        "_supplements",
+        lambda: {
+            "mimo": {
+                "custom": CapabilitySupplement(
+                    max_input_tokens=1000,
+                    max_output_tokens=500,
+                    reasoning_effort_levels=["high"],
+                    tool_calling=True,
+                ),
+            }
+        },
+    )
     result = model_capabilities_for("mimo", "custom")
     assert result.profile["max_input_tokens"] == 2000
     assert result.profile["max_output_tokens"] == 500
@@ -54,18 +68,31 @@ def test_supplement_rejects_typos_and_invalid_limits() -> None:
 async def test_native_catalog_limits_and_mimo_fallback_are_exposed() -> None:
     """原生目录长度字段可用；目录失败也获得完整 MiMo 补充能力。"""
     settings = Settings(text_gemini_api_key=SecretStr("test"))
-    async with httpx.AsyncClient(transport=httpx.MockTransport(
-        lambda _: httpx.Response(200, json={"models": [{
-            "name": "models/custom", "inputTokenLimit": 9000, "outputTokenLimit": 1000,
-        }]}),
-    )) as client:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={
+                    "models": [
+                        {
+                            "name": "models/custom",
+                            "inputTokenLimit": 9000,
+                            "outputTokenLimit": 1000,
+                        }
+                    ]
+                },
+            ),
+        )
+    ) as client:
         result = await ModelDiscoveryService(settings, client).list_models("gemini")
     custom = next(model for model in result.models if model.id == "custom")
     assert (custom.context_window, custom.max_output_tokens) == (9000, 1000)
     settings = Settings(text_mimo_api_key=SecretStr("test"), text_mimo_model="mimo-v2.6-flash")
-    async with httpx.AsyncClient(transport=httpx.MockTransport(
-        lambda _: httpx.Response(503),
-    )) as client:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(503),
+        )
+    ) as client:
         result = await ModelDiscoveryService(settings, client).list_models("mimo")
     model = result.models[0]
     assert (model.context_window, model.max_output_tokens) == (1_000_000, 128_000)
@@ -93,11 +120,14 @@ def test_runtime_omits_default_output_budget() -> None:
     assert "max_tokens" not in payload
 
 
-@pytest.mark.parametrize("name, levels", [
-    ("grok-4.5", ["low", "medium", "high"]),
-    ("grok-4.6", ["low", "medium", "high", "xhigh"]),
-    ("grok-4.7", ["low", "medium", "high", "xhigh"]),
-])
+@pytest.mark.parametrize(
+    "name, levels",
+    [
+        ("grok-4.5", ["low", "medium", "high"]),
+        ("grok-4.6", ["low", "medium", "high", "xhigh"]),
+        ("grok-4.7", ["low", "medium", "high", "xhigh"]),
+    ],
+)
 def test_documented_grok_effort_levels(name: str, levels: list[str]) -> None:
     """静态档位仅补框架缺失字段，Grok 的思考不能关闭。"""
     result = model_capabilities_for("grok", name)

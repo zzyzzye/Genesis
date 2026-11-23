@@ -85,7 +85,8 @@ ask_user_question.handle_validation_error = tool_validation_error
 
 @before_model(can_jump_to=["end"])
 def finish_after_user_question(
-    state: AgentState, runtime: Runtime[None],
+    state: AgentState,
+    runtime: Runtime[None],
 ) -> dict[str, object] | None:
     """有效提问才用原生跳转等待用户；参数错误继续交给模型修正。
 

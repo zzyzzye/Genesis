@@ -244,9 +244,11 @@ async def test_structured_runtime_uses_framework_without_graph_or_tools(
 
     runtime = EmbeddedAgentRuntime()
     model = FakeListChatModel(responses=[content().model_dump_json(), '{"points":[]}'])
-    monkeypatch.setattr(FakeListChatModel, "with_structured_output", lambda self, schema: (
-        self | PydanticOutputParser(pydantic_object=schema)
-    ))
+    monkeypatch.setattr(
+        FakeListChatModel,
+        "with_structured_output",
+        lambda self, schema: self | PydanticOutputParser(pydantic_object=schema),
+    )
     monkeypatch.setattr(runtime, "_build_model", lambda *_: model)
     monkeypatch.setattr(runtime, "_graph", lambda *_: pytest.fail("导读不能运行私有 Agent"))
     settings = Settings(text_provider="openai", text_openai_model="test")
@@ -267,9 +269,9 @@ async def test_structured_runtime_uses_framework_without_graph_or_tools(
     async def empty(_: object) -> None:
         return None
 
-    monkeypatch.setattr(FakeListChatModel, "with_structured_output", lambda *_: (
-        SimpleNamespace(ainvoke=empty)
-    ))
+    monkeypatch.setattr(
+        FakeListChatModel, "with_structured_output", lambda *_: SimpleNamespace(ainvoke=empty)
+    )
     with pytest.raises(RuntimeError, match="完整结构化"):
         await runtime.generate_structured(
             settings, prompt="待概括", content="正文", schema=ArticleGuideContent

@@ -16,11 +16,15 @@ def upgrade() -> None:
     op.create_table(
         "blog_post_categories",
         sa.Column(
-            "post_id", sa.Uuid(), sa.ForeignKey("blog_posts.id", ondelete="CASCADE"),
+            "post_id",
+            sa.Uuid(),
+            sa.ForeignKey("blog_posts.id", ondelete="CASCADE"),
             primary_key=True,
         ),
         sa.Column(
-            "category_id", sa.Uuid(), sa.ForeignKey("blog_categories.id", ondelete="CASCADE"),
+            "category_id",
+            sa.Uuid(),
+            sa.ForeignKey("blog_categories.id", ondelete="CASCADE"),
             primary_key=True,
         ),
     )

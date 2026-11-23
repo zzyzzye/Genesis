@@ -44,7 +44,9 @@ def check_post_version(post: BlogPost, expected: object) -> None:
 
 
 def post_write_data(
-    action: str, payload: dict[str, object], post: BlogPost | None = None,
+    action: str,
+    payload: dict[str, object],
+    post: BlogPost | None = None,
 ) -> BlogPostWrite:
     """合并局部修改并复用完整文章契约，供提议预检与最终执行共同使用。
 
@@ -64,17 +66,25 @@ def post_write_data(
         required = ("title", "excerpt", "content_markdown", "slug")
         if any(not isinstance(payload.get(key), str) or not payload[key] for key in required):
             raise HTTPException(422, "创建草稿缺少必要字段")
-        return BlogPostWrite.model_validate({
-            **{key: value for key, value in payload.items() if key in BlogPostWrite.model_fields},
-            "status": (
-                BlogPostStatus.PUBLISHED if action == "create_and_publish" else BlogPostStatus.DRAFT
-            ),
-        })
+        return BlogPostWrite.model_validate(
+            {
+                **{
+                    key: value
+                    for key, value in payload.items()
+                    if key in BlogPostWrite.model_fields
+                },
+                "status": (
+                    BlogPostStatus.PUBLISHED
+                    if action == "create_and_publish"
+                    else BlogPostStatus.DRAFT
+                ),
+            }
+        )
 
     if post is None:
         raise HTTPException(404, "文章不存在")
-    changes = {"status": BlogPostStatus.PUBLISHED} if action == "publish_post" else payload.get(
-        "changes"
+    changes = (
+        {"status": BlogPostStatus.PUBLISHED} if action == "publish_post" else payload.get("changes")
     )
     if isinstance(changes, str):
         try:
@@ -86,18 +96,28 @@ def post_write_data(
     allowed = BlogPostWrite.model_fields.keys() - {"expected_updated_at"}
     if changes.keys() - allowed:
         raise HTTPException(422, "包含不支持的修改字段，请使用文章写入契约中的字段名。")
-    return BlogPostWrite.model_validate({
-        "slug": post.slug, "title": post.title, "excerpt": post.excerpt,
-        "content_markdown": post.content_markdown, "cover_image_url": post.cover_image_url,
-        "category_id": post.category_id,
-        "category_ids": [str(category.id) for category in post.categories],
-        "status": post.status, "is_featured": post.is_featured,
-        "read_time_minutes": post.read_time_minutes, "published_at": post.published_at,
-        "tags": [{"name": tag.name, "slug": tag.slug} for tag in post.tags],
-        **({"category_ids": None} if "category_id" in changes and "category_ids" not in changes
-           else {}),
-        **changes,
-    })
+    return BlogPostWrite.model_validate(
+        {
+            "slug": post.slug,
+            "title": post.title,
+            "excerpt": post.excerpt,
+            "content_markdown": post.content_markdown,
+            "cover_image_url": post.cover_image_url,
+            "category_id": post.category_id,
+            "category_ids": [str(category.id) for category in post.categories],
+            "status": post.status,
+            "is_featured": post.is_featured,
+            "read_time_minutes": post.read_time_minutes,
+            "published_at": post.published_at,
+            "tags": [{"name": tag.name, "slug": tag.slug} for tag in post.tags],
+            **(
+                {"category_ids": None}
+                if "category_id" in changes and "category_ids" not in changes
+                else {}
+            ),
+            **changes,
+        }
+    )
 
 
 def check_post_references(session: Session, data: BlogPostWrite) -> list[str]:
@@ -228,8 +248,11 @@ def confirm_blog_action(
             "action": action,
             "post_id": str(post_id),
             "status": "published" if action == "publish_post" else "updated",
-            **({"scheduled_at": utc(post.scheduled_at).isoformat() if post.scheduled_at else None}
-               if "scheduled_at" in data.model_fields_set else {}),
+            **(
+                {"scheduled_at": utc(post.scheduled_at).isoformat() if post.scheduled_at else None}
+                if "scheduled_at" in data.model_fields_set
+                else {}
+            ),
         }
 
     # 创建并发布共用同一事务，不先提交草稿，也不要求第二次确认。
@@ -238,8 +261,8 @@ def confirm_blog_action(
     session.add(post)
     _save_post(session, post, data)
     return {
-        "action": action, "post_id": str(post.id),
+        "action": action,
+        "post_id": str(post.id),
         "status": "published" if action == "create_and_publish" else "created",
-        **({"scheduled_at": utc(post.scheduled_at).isoformat()}
-           if post.scheduled_at else {}),
+        **({"scheduled_at": utc(post.scheduled_at).isoformat()} if post.scheduled_at else {}),
     }

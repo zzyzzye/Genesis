@@ -24,7 +24,9 @@ from genesis_api.identity.models import User, UserRole
 def sessions() -> sessionmaker[Session]:
     """创建可跨后台持久化线程复用的隔离数据库。"""
     engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
     return sessionmaker(bind=engine, expire_on_commit=False)
@@ -41,7 +43,8 @@ def test_conversation_ownership_history_and_rename(sessions: sessionmaker[Sessio
             owned_conversation(session, uuid4(), created.id)
         assert denied.value.status_code == 404
         request = AiChatRequest(
-            surface="studio", conversation_id=created.id,
+            surface="studio",
+            conversation_id=created.id,
             messages=[AiMessage(role="user", content="规划写作主题")],
         )
         run = create_ai_chat_run(session, user_id=owner.id, request=request, settings=Settings())
@@ -55,7 +58,8 @@ def test_conversation_ownership_history_and_rename(sessions: sessionmaker[Sessio
         session.commit()
         detail = conversation_detail(session, conversation)
         assert [message.content for message in detail.messages] == [
-            "规划写作主题", "可以从开发经验开始。",
+            "规划写作主题",
+            "可以从开发经验开始。",
         ]
         assert detail.messages[-1].run_id == run.id
         renamed = ai.rename_conversation(
@@ -70,13 +74,16 @@ def test_conversation_ownership_history_and_rename(sessions: sessionmaker[Sessio
             ai.rename_conversation(created.id, AiConversationRename(title="  "), owner, session)
         with pytest.raises(HTTPException) as invalid:
             create_ai_chat_run(
-                session, user_id=owner.id,
-                request=request.model_copy(update={"surface": "media"}), settings=Settings(),
+                session,
+                user_id=owner.id,
+                request=request.model_copy(update={"surface": "media"}),
+                settings=Settings(),
             )
         assert invalid.value.status_code == 404
         with pytest.raises(HTTPException) as history:
             create_ai_chat_run(
-                session, user_id=owner.id,
+                session,
+                user_id=owner.id,
                 request=request.model_copy(update={"messages": request.messages * 2}),
                 settings=Settings(),
             )
@@ -85,12 +92,11 @@ def test_conversation_ownership_history_and_rename(sessions: sessionmaker[Sessio
 
 @pytest.mark.anyio
 async def test_title_generation_does_not_overwrite_manual_rename(
-    sessions: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch,
+    sessions: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with sessions() as session:
-        user = User(
-            id=uuid4(), handle="title-rename", display_name="标题测试", role=UserRole.OWNER
-        )
+        user = User(id=uuid4(), handle="title-rename", display_name="标题测试", role=UserRole.OWNER)
         session.add(user)
         session.flush()
         conversation = AiConversation(user_id=user.id)
@@ -98,7 +104,8 @@ async def test_title_generation_does_not_overwrite_manual_rename(
         session.commit()
         conversation_id = conversation.id
     request = AiChatRequest(
-        surface="studio", conversation_id=conversation_id,
+        surface="studio",
+        conversation_id=conversation_id,
         messages=[AiMessage(role="user", content="帮我规划博客")],
     )
 
@@ -122,7 +129,9 @@ async def test_title_generation_does_not_overwrite_manual_rename(
 @pytest.mark.anyio
 @pytest.mark.parametrize("failure", ["none", "upstream", "paragraph"])
 async def test_title_success_and_fallback(
-    sessions: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch, failure: str,
+    sessions: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
 ) -> None:
     with sessions() as session:
         user = User(
@@ -143,10 +152,14 @@ async def test_title_success_and_fallback(
         return "博客选题规划"
 
     monkeypatch.setattr(AgentService, "generate_title", generate)
-    await AiChatRunManager(sessions)._generate_title(AiChatRequest(
-        surface="studio", conversation_id=conversation_id,
-        messages=[AiMessage(role="user", content="规划博客")],
-    ), Settings())
+    await AiChatRunManager(sessions)._generate_title(
+        AiChatRequest(
+            surface="studio",
+            conversation_id=conversation_id,
+            messages=[AiMessage(role="user", content="规划博客")],
+        ),
+        Settings(),
+    )
     with sessions() as session:
         stored = cast(AiConversation, session.get(AiConversation, conversation_id))
         assert stored.title == ("博客选题规划" if failure == "none" else "规划博客")
@@ -170,10 +183,16 @@ def test_recovery_repairs_invalid_generated_title_without_rewriting_messages(
             conversation = AiConversation(user_id=owner.id, title=title, title_source=source)
             session.add(conversation)
             session.commit()
-            created = create_ai_chat_run(session, user_id=owner.id, request=AiChatRequest(
-                surface="studio", conversation_id=conversation.id,
-                messages=[AiMessage(role="user", content="你是什么模型")],
-            ), settings=Settings())
+            created = create_ai_chat_run(
+                session,
+                user_id=owner.id,
+                request=AiChatRequest(
+                    surface="studio",
+                    conversation_id=conversation.id,
+                    messages=[AiMessage(role="user", content="你是什么模型")],
+                ),
+                settings=Settings(),
+            )
             run = cast(AiChatRun, session.get(AiChatRun, created.id))
             run.status = AiChatRunStatus.COMPLETED
             run.content = "原来的完整回答"

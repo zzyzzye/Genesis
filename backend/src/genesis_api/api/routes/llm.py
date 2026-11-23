@@ -48,10 +48,16 @@ async def list_provider_models(
     """
     try:
         result = await ModelDiscoveryService(settings).list_models(provider, refresh=refresh)
-        prices = await yyapi_pricing_service.for_models(
-            settings, provider, [model.id for model in result.models],
-            refresh=refresh or refresh_pricing,
-        ) if include_pricing else {}
+        prices = (
+            await yyapi_pricing_service.for_models(
+                settings,
+                provider,
+                [model.id for model in result.models],
+                refresh=refresh or refresh_pricing,
+            )
+            if include_pricing
+            else {}
+        )
         paid_channel = False
         if provider != "mimo" and user.role.value != "owner":
             try:

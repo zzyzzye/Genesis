@@ -56,9 +56,9 @@ def _details(session: Session, row: BillingOperation) -> dict[str, Any]:
         "call_count": row.call_count,
         "generation_status": run.status.value if run else None,
         # 复用任务统计的白名单；最近输入和正文输出不能冒充整轮计费用量。
-        "generation_metrics": AiGenerationMetrics.model_validate(
-            run.generation_metrics
-        ).model_dump(exclude_unset=True)
+        "generation_metrics": AiGenerationMetrics.model_validate(run.generation_metrics).model_dump(
+            exclude_unset=True
+        )
         if run and run.generation_metrics
         else None,
         "calls": [
@@ -187,9 +187,15 @@ def quote(
                 session,
             )
         else:
-            node = node.model_copy(update={"text": resolve_text_mentions(
-                node.text, CanvasDocument.model_validate(project.canvas), node.id,
-            )})
+            node = node.model_copy(
+                update={
+                    "text": resolve_text_mentions(
+                        node.text,
+                        CanvasDocument.model_validate(project.canvas),
+                        node.id,
+                    )
+                }
+            )
         model = node.generation.model
         provider = data.kind  # type: ignore[assignment]
         parameters = media_parameters(node)

@@ -58,7 +58,8 @@ class ModelDiscoveryService:
             payload = await self._catalog.get(
                 self._models_url(base_url),
                 self._headers(provider, api_key.get_secret_value()),
-                refresh=refresh, client=self._client,
+                refresh=refresh,
+                client=self._client,
             )
         except CatalogFormatError as exc:
             raise ModelDiscoveryError(str(exc)) from exc
@@ -74,10 +75,12 @@ class ModelDiscoveryService:
                     provider=provider,
                     models=self._with_capabilities(
                         provider,
-                        [AvailableModel(
-                            id=fallback_model,
-                            name=fallback_model,
-                        )],
+                        [
+                            AvailableModel(
+                                id=fallback_model,
+                                name=fallback_model,
+                            )
+                        ],
                     ),
                 )
             logger.exception("获取模型列表时调用上游服务失败：provider=%s", provider)
@@ -116,16 +119,19 @@ class ModelDiscoveryService:
             model.reasoning_effort_default = profile.get("reasoning_effort_default")
             model.thinking_modes = (
                 list(capabilities.thinking_modes)
-                if capabilities.thinking_modes is not None else None
+                if capabilities.thinking_modes is not None
+                else None
             )
             model.thinking_mode_default = capabilities.thinking_mode_default
             model.image_inputs = profile.get("image_inputs")
             # OpenAI 兼容通道尚不支持标准视频块，不能只按模型名称展示可用。
             native_video = profile.get("video_inputs")
             model.video_inputs = native_video
-            if native_video and transport_provider_for(
-                provider, self._provider_config(provider)[1]
-            ) != "google_genai":
+            if (
+                native_video
+                and transport_provider_for(provider, self._provider_config(provider)[1])
+                != "google_genai"
+            ):
                 model.video_inputs = False
         return models
 
@@ -256,18 +262,17 @@ class ModelDiscoveryService:
             if not isinstance(model_id, str):
                 continue
             # 官方目录同时包含语音识别/合成模型，不能用于文本 Agent。
-            if provider == "mimo" and any(
-                part in {"asr", "tts"} for part in model_id.split("-")
-            ):
+            if provider == "mimo" and any(part in {"asr", "tts"} for part in model_id.split("-")):
                 continue
             context_window = (
-                raw_model.get("context_window") or raw_model.get("context_length")
+                raw_model.get("context_window")
+                or raw_model.get("context_length")
                 or raw_model.get("inputTokenLimit")
             )
             if type(context_window) is not int or context_window <= 0:
                 context_window = None
-            max_output_tokens = (
-                raw_model.get("max_output_tokens") or raw_model.get("outputTokenLimit")
+            max_output_tokens = raw_model.get("max_output_tokens") or raw_model.get(
+                "outputTokenLimit"
             )
             if type(max_output_tokens) is not int or max_output_tokens <= 0:
                 max_output_tokens = None

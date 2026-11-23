@@ -65,12 +65,16 @@ class FakeChatService:
         """分两次产出固定文本，中间让出事件循环以触发异步持久化。"""
         self.metrics.observe(None, "断点")
         yield TextMessageContentEvent(
-            type=EventType.TEXT_MESSAGE_CONTENT, message_id="synthetic", delta="断点",
+            type=EventType.TEXT_MESSAGE_CONTENT,
+            message_id="synthetic",
+            delta="断点",
         )
         await asyncio.sleep(0.01)
         self.metrics.observe(None, "续传")
         yield TextMessageContentEvent(
-            type=EventType.TEXT_MESSAGE_CONTENT, message_id="synthetic", delta="续传",
+            type=EventType.TEXT_MESSAGE_CONTENT,
+            message_id="synthetic",
+            delta="续传",
         )
 
 
@@ -81,9 +85,14 @@ async def test_tool_history_persists_updates_and_closes_unfinished_calls() -> No
     user_id = uuid4()
     request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="读取")])
     with factory() as session:
-        session.add(User(
-            id=user_id, handle="tool-owner", display_name="Owner", role=UserRole.OWNER,
-        ))
+        session.add(
+            User(
+                id=user_id,
+                handle="tool-owner",
+                display_name="Owner",
+                role=UserRole.OWNER,
+            )
+        )
         session.commit()
         created = create_ai_chat_run(session, user_id=user_id, request=request, settings=Settings())
 
@@ -97,14 +106,21 @@ async def test_tool_history_persists_updates_and_closes_unfinished_calls() -> No
                 snapshot = get_ai_chat_run_snapshot(session, run_id=created.id, user_id=user_id)
                 assert snapshot is not None and snapshot.tool_calls[0].status == "running"
                 assert snapshot.content == ""
-                assert get_ai_chat_run_snapshot(
-                    session, run_id=created.id, user_id=uuid4(),
-                ) is None
+                assert (
+                    get_ai_chat_run_snapshot(
+                        session,
+                        run_id=created.id,
+                        user_id=uuid4(),
+                    )
+                    is None
+                )
             await self.tool_history.on_tool_end("[]", run_id=call_id)
             await self.tool_history.on_tool_end("[]", run_id=call_id)
             await self.tool_history.on_tool_start({"name": "slow_tool"}, "", run_id=uuid4())
             yield TextMessageContentEvent(
-                type=EventType.TEXT_MESSAGE_CONTENT, message_id="synthetic", delta="完成",
+                type=EventType.TEXT_MESSAGE_CONTENT,
+                message_id="synthetic",
+                delta="完成",
             )
 
     manager = AiChatRunManager(factory, lambda _: ToolService())
@@ -127,13 +143,22 @@ async def test_tool_history_persists_updates_and_closes_unfinished_calls() -> No
         assert history.messages[-1].tool_calls == snapshot.tool_calls
         assert not snapshot.history
         subscription = get_ai_chat_run_snapshot(
-            session, run_id=created.id, user_id=user_id, include_history=True,
+            session,
+            run_id=created.id,
+            user_id=user_id,
+            include_history=True,
         )
         assert subscription is not None and subscription.history == history.messages
         assert "history" not in subscription.model_dump()
-        assert get_ai_chat_run_snapshot(
-            session, run_id=created.id, user_id=uuid4(), include_history=True,
-        ) is None
+        assert (
+            get_ai_chat_run_snapshot(
+                session,
+                run_id=created.id,
+                user_id=uuid4(),
+                include_history=True,
+            )
+            is None
+        )
 
 
 @pytest.mark.anyio
@@ -144,14 +169,22 @@ async def test_cancel_or_restart_preserves_history_without_stale_running(recover
     user_id = uuid4()
     request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="查询")])
     with factory() as session:
-        session.add(User(
-            id=user_id, handle="recover-owner", display_name="Owner", role=UserRole.OWNER,
-        ))
+        session.add(
+            User(
+                id=user_id,
+                handle="recover-owner",
+                display_name="Owner",
+                role=UserRole.OWNER,
+            )
+        )
         session.commit()
         created = create_ai_chat_run(session, user_id=user_id, request=request, settings=Settings())
     manager = AiChatRunManager(factory)
     call = AgentToolCall(
-        id=uuid4(), name="lookup", label="读取", status="running",
+        id=uuid4(),
+        name="lookup",
+        label="读取",
+        status="running",
         started_at="2026-10-22T00:00:00Z",
     )
     later = call.model_copy(update={"id": uuid4(), "started_at": call.started_at.replace(second=1)})
@@ -192,7 +225,8 @@ def build_session_factory() -> sessionmaker[Session]:
 @pytest.mark.anyio
 @pytest.mark.parametrize("outcome", ["complete", "run_error", "persist_error", "cancel"])
 async def test_stream_closes_in_own_context_before_next_run(
-    monkeypatch: pytest.MonkeyPatch, outcome: str,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
 ) -> None:
     """正常、错误及消费期间取消都逐层关闭流，并恢复身份、附件和计费上下文。"""
     runtime = EmbeddedAgentRuntime()
@@ -214,13 +248,17 @@ async def test_stream_closes_in_own_context_before_next_run(
                 execution = _execution.get()
                 assert execution is not None and execution.source_id == active_source
                 yield TextMessageContentEvent(
-                    type=EventType.TEXT_MESSAGE_CONTENT, message_id="answer", delta="片段",
+                    type=EventType.TEXT_MESSAGE_CONTENT,
+                    message_id="answer",
+                    delta="片段",
                 )
                 if active_outcome == "run_error":
                     yield RunErrorEvent(type=EventType.RUN_ERROR, message="合成模型错误")
                 else:
                     yield RunFinishedEvent(
-                        type=EventType.RUN_FINISHED, thread_id="thread", run_id="run",
+                        type=EventType.RUN_FINISHED,
+                        thread_id="thread",
+                        run_id="run",
                     )
             finally:
                 assert require_actor(module="blog") == active_actor
@@ -229,7 +267,9 @@ async def test_stream_closes_in_own_context_before_next_run(
 
     monkeypatch.setattr("genesis_api.agent.runtime.AuthorizedLangGraphAgent", Adapter)
     manager = AiChatRunManager(
-        build_session_factory(), lambda _: AgentService(settings, runtime), flush_size=1,
+        build_session_factory(),
+        lambda _: AgentService(settings, runtime),
+        flush_size=1,
     )
     manager._semaphore = asyncio.Semaphore(1)
     interrupted = False
@@ -274,8 +314,11 @@ async def test_stream_closes_in_own_context_before_next_run(
         active_outcome = outcome if index == 0 else "complete"
         interrupted = False
         request = AiChatRequest(
-            surface="studio", messages=[AiMessage(role="user", content="合成输入")],
-            actor_id=active_actor, actor_role="owner", billing_source_id=active_source,
+            surface="studio",
+            messages=[AiMessage(role="user", content="合成输入")],
+            actor_id=active_actor,
+            actor_role="owner",
+            billing_source_id=active_source,
         )
 
         task = asyncio.create_task(execute(request, index + 1))
@@ -286,7 +329,8 @@ async def test_stream_closes_in_own_context_before_next_run(
             await task
             assert states[-1] == (
                 AiChatRunStatus.COMPLETED
-                if active_outcome == "complete" else AiChatRunStatus.FAILED
+                if active_outcome == "complete"
+                else AiChatRunStatus.FAILED
             )
         assert len(closed) == index + 1
 
@@ -298,19 +342,31 @@ async def test_proposals_persist_separately_and_deduplicate() -> None:
     user_id = uuid4()
     request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="创建草稿")])
     with factory() as session:
-        session.add(User(
-            id=user_id, handle="proposal-owner", display_name="Owner", role=UserRole.OWNER,
-        ))
+        session.add(
+            User(
+                id=user_id,
+                handle="proposal-owner",
+                display_name="Owner",
+                role=UserRole.OWNER,
+            )
+        )
         session.commit()
         run = create_ai_chat_run(session, user_id=user_id, request=request, settings=Settings())
     proposal = AgentActionProposal(
-        proposal_id=uuid4(), module="blog", action="create_draft", payload={"title": "草稿"},
-        summary="创建草稿", expires_at="2099-01-01T00:00:00Z", proposal_token="test-proposal",
+        proposal_id=uuid4(),
+        module="blog",
+        action="create_draft",
+        payload={"title": "草稿"},
+        summary="创建草稿",
+        expires_at="2099-01-01T00:00:00Z",
+        proposal_token="test-proposal",
     )
 
     class ProposalService:
         async def stream(
-            self, *_: object, **__: object,
+            self,
+            *_: object,
+            **__: object,
         ) -> AsyncGenerator[AgentActionProposal, None]:
             yield proposal
             yield proposal
@@ -544,11 +600,16 @@ async def test_run_manager_persists_runtime_and_provider_errors() -> None:
             pass
 
         async def stream(
-            self, _: AiChatRequest, *, thread_id: str,
+            self,
+            _: AiChatRequest,
+            *,
+            thread_id: str,
         ) -> AsyncGenerator[BaseEvent, None]:
             if False:
                 yield RunStartedEvent(
-                    type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test",
+                    type=EventType.RUN_STARTED,
+                    thread_id=thread_id,
+                    run_id="test",
                 )
             raise RuntimeError("配置错误")
 
@@ -560,18 +621,21 @@ async def test_run_manager_persists_runtime_and_provider_errors() -> None:
             pass
 
         async def stream(
-            self, _: AiChatRequest, *, thread_id: str,
+            self,
+            _: AiChatRequest,
+            *,
+            thread_id: str,
         ) -> AsyncGenerator[BaseEvent, None]:
             if False:
                 yield RunStartedEvent(
-                    type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test",
+                    type=EventType.RUN_STARTED,
+                    thread_id=thread_id,
+                    run_id="test",
                 )
             raise PermissionDeniedError("blocked")
 
     async def execute(factory: object) -> AiChatRun:
-        request = AiChatRequest(
-            surface="studio", messages=[AiMessage(role="user", content="失败")]
-        )
+        request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="失败")])
         with session_factory() as session:
             created = create_ai_chat_run(
                 session, user_id=user_id, request=request, settings=Settings()
@@ -602,19 +666,18 @@ async def test_shutdown_leaves_cancelled_run_recoverable() -> None:
     with session_factory() as session:
         session.add(User(id=user_id, handle="owner", display_name="Owner", role=UserRole.OWNER))
         session.commit()
-        request = AiChatRequest(
-            surface="studio", messages=[AiMessage(role="user", content="等待")]
-        )
-        created = create_ai_chat_run(
-            session, user_id=user_id, request=request, settings=Settings()
-        )
+        request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="等待")])
+        created = create_ai_chat_run(session, user_id=user_id, request=request, settings=Settings())
 
     class SlowService:
         def __init__(self, _: Settings) -> None:
             pass
 
         async def stream(
-            self, _: AiChatRequest, *, thread_id: str,
+            self,
+            _: AiChatRequest,
+            *,
+            thread_id: str,
         ) -> AsyncGenerator[BaseEvent, None]:
             await asyncio.sleep(10)
             yield RunStartedEvent(type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test")
@@ -633,22 +696,21 @@ async def test_shutdown_leaves_cancelled_run_recoverable() -> None:
 async def test_user_cancel_marks_run_failed_instead_of_recoverable() -> None:
     session_factory = build_session_factory()
     user_id = uuid4()
-    request = AiChatRequest(
-        surface="studio", messages=[AiMessage(role="user", content="停止")]
-    )
+    request = AiChatRequest(surface="studio", messages=[AiMessage(role="user", content="停止")])
     with session_factory() as session:
         session.add(User(id=user_id, handle="owner", display_name="Owner", role=UserRole.OWNER))
         session.commit()
-        created = create_ai_chat_run(
-            session, user_id=user_id, request=request, settings=Settings()
-        )
+        created = create_ai_chat_run(session, user_id=user_id, request=request, settings=Settings())
 
     class SlowService:
         def __init__(self, _: Settings) -> None:
             pass
 
         async def stream(
-            self, _: AiChatRequest, *, thread_id: str,
+            self,
+            _: AiChatRequest,
+            *,
+            thread_id: str,
         ) -> AsyncGenerator[BaseEvent, None]:
             await asyncio.sleep(10)
             yield RunStartedEvent(type=EventType.RUN_STARTED, thread_id=thread_id, run_id="test")
@@ -663,6 +725,7 @@ async def test_user_cancel_marks_run_failed_instead_of_recoverable() -> None:
         assert run.status is AiChatRunStatus.FAILED
         assert run.error == "生成已由用户停止。"
 
+
 @pytest.mark.anyio
 async def test_stream_response_replays_snapshot_before_live_delta(
     monkeypatch: pytest.MonkeyPatch,
@@ -670,12 +733,21 @@ async def test_stream_response_replays_snapshot_before_live_delta(
     run_id = uuid4()
     user_id = uuid4()
     proposal = AgentActionProposal(
-        proposal_id=uuid4(), module="blog", action="create_draft", payload={},
-        summary="创建草稿", expires_at="2099-01-01T00:00:00Z", proposal_token="test-proposal",
+        proposal_id=uuid4(),
+        module="blog",
+        action="create_draft",
+        payload={},
+        summary="创建草稿",
+        expires_at="2099-01-01T00:00:00Z",
+        proposal_token="test-proposal",
     )
     tool_call = AgentToolCall(
-        id=uuid4(), name="lookup", label="读取文章", status="succeeded",
-        started_at="2026-10-22T00:00:00Z", duration_ms=120,
+        id=uuid4(),
+        name="lookup",
+        label="读取文章",
+        status="succeeded",
+        started_at="2026-10-22T00:00:00Z",
+        duration_ms=120,
     )
     snapshots = iter(
         [
@@ -698,32 +770,64 @@ async def test_stream_response_replays_snapshot_before_live_delta(
         ]
     )
     monkeypatch.setattr(ai_route, "_load_snapshot", lambda *_: next(snapshots))
-    records = iter([
+    records = iter(
         [
-            (1, RunStartedEvent(
-                type=EventType.RUN_STARTED, thread_id=str(run_id), run_id=str(run_id),
-            )),
-            (2, legacy_snapshot(AiChatRunSnapshot(
-                id=run_id, status="running", content="刷新前已生成", sequence=1,
-                tool_calls=[tool_call],
-            ))),
-            (3, TextMessageStartEvent(
-                type=EventType.TEXT_MESSAGE_START, message_id=f"{run_id}:assistant",
-            )),
-        ],
-        [
-            (4, TextMessageContentEvent(
-                type=EventType.TEXT_MESSAGE_CONTENT, message_id=f"{run_id}:assistant",
-                delta="，刷新后继续",
-            )),
-            (5, TextMessageEndEvent(
-                type=EventType.TEXT_MESSAGE_END, message_id=f"{run_id}:assistant",
-            )),
-            (6, RunFinishedEvent(
-                type=EventType.RUN_FINISHED, thread_id=str(run_id), run_id=str(run_id),
-            )),
-        ],
-    ])
+            [
+                (
+                    1,
+                    RunStartedEvent(
+                        type=EventType.RUN_STARTED,
+                        thread_id=str(run_id),
+                        run_id=str(run_id),
+                    ),
+                ),
+                (
+                    2,
+                    legacy_snapshot(
+                        AiChatRunSnapshot(
+                            id=run_id,
+                            status="running",
+                            content="刷新前已生成",
+                            sequence=1,
+                            tool_calls=[tool_call],
+                        )
+                    ),
+                ),
+                (
+                    3,
+                    TextMessageStartEvent(
+                        type=EventType.TEXT_MESSAGE_START,
+                        message_id=f"{run_id}:assistant",
+                    ),
+                ),
+            ],
+            [
+                (
+                    4,
+                    TextMessageContentEvent(
+                        type=EventType.TEXT_MESSAGE_CONTENT,
+                        message_id=f"{run_id}:assistant",
+                        delta="，刷新后继续",
+                    ),
+                ),
+                (
+                    5,
+                    TextMessageEndEvent(
+                        type=EventType.TEXT_MESSAGE_END,
+                        message_id=f"{run_id}:assistant",
+                    ),
+                ),
+                (
+                    6,
+                    RunFinishedEvent(
+                        type=EventType.RUN_FINISHED,
+                        thread_id=str(run_id),
+                        run_id=str(run_id),
+                    ),
+                ),
+            ],
+        ]
+    )
     monkeypatch.setattr(ai_route, "_load_events", lambda *_: next(records))
 
     class ConnectedRequest:

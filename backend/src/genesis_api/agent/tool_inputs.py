@@ -24,16 +24,30 @@ def decode_json_array(value: object) -> object:
 
 type ToolArray[T] = Annotated[list[T], BeforeValidator(decode_json_array)]
 type InputReason = Literal[
-    "缺少必填字段", "必须是数组", "必须是对象", "必须是字符串", "未声明的参数，请移除",
-    "内容过长", "内容过短或为空", "数量超出范围", "数量不足", "内容不符合工具定义",
+    "缺少必填字段",
+    "必须是数组",
+    "必须是对象",
+    "必须是字符串",
+    "未声明的参数，请移除",
+    "内容过长",
+    "内容过短或为空",
+    "数量超出范围",
+    "数量不足",
+    "内容不符合工具定义",
 ]
 
 _REASONS: dict[str, InputReason] = {
-    "missing": "缺少必填字段", "list_type": "必须是数组", "dict_type": "必须是对象",
-    "model_type": "必须是对象", "model_attributes_type": "必须是对象",
-    "string_type": "必须是字符串", "extra_forbidden": "未声明的参数，请移除",
-    "string_too_long": "内容过长", "string_too_short": "内容过短或为空",
-    "too_long": "数量超出范围", "too_short": "数量不足",
+    "missing": "缺少必填字段",
+    "list_type": "必须是数组",
+    "dict_type": "必须是对象",
+    "model_type": "必须是对象",
+    "model_attributes_type": "必须是对象",
+    "string_type": "必须是字符串",
+    "extra_forbidden": "未声明的参数，请移除",
+    "string_too_long": "内容过长",
+    "string_too_short": "内容过短或为空",
+    "too_long": "数量超出范围",
+    "too_short": "数量不足",
 }
 
 
@@ -62,7 +76,8 @@ def tool_validation_error(error: ValidationError | ValidationErrorV1) -> str:
     """将原生校验错误转换成可修正的工具回执，不复制任何输入值。"""
     errors = (
         error.errors(include_input=False, include_url=False)
-        if isinstance(error, ValidationError) else error.errors()
+        if isinstance(error, ValidationError)
+        else error.errors()
     )
     fields = []
     for item in errors[:8]:
@@ -72,10 +87,12 @@ def tool_validation_error(error: ValidationError | ValidationErrorV1) -> str:
                 path = (path or "arguments") + f"[{part}]"
             elif isinstance(part, str) and re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]{0,63}", part):
                 path += ("." if path else "") + part
-        fields.append(ToolInputIssue(
-            path=(path or "arguments")[:160],
-            reason=_REASONS.get(item["type"], "内容不符合工具定义"),
-        ))
+        fields.append(
+            ToolInputIssue(
+                path=(path or "arguments")[:160],
+                reason=_REASONS.get(item["type"], "内容不符合工具定义"),
+            )
+        )
     return ToolInputFailure(fields=fields).model_dump_json()
 
 

@@ -36,9 +36,17 @@ async def test_gateway_model_catalog_uses_native_framework_capabilities() -> Non
         text_gemini_model="gemini-3.1-pro-preview",
     )
     async with httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"data": [
-            {"id": "gemini-2.5-flash"}, {"id": "custom-unknown"},
-        ]}))
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {"id": "gemini-2.5-flash"},
+                        {"id": "custom-unknown"},
+                    ]
+                },
+            )
+        )
     ) as client:
         result = await ModelDiscoveryService(settings, client).list_models("gemini")
     models = {model.id: model for model in result.models}
@@ -65,9 +73,10 @@ async def test_model_discovery_uses_framework_profiles_including_fallback() -> N
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         result = await ModelDiscoveryService(settings, client).list_models("openai")
-    assert result.models[0].reasoning_effort_levels == model_profile_for(
-        "openai", "gpt-5"
-    )["reasoning_effort_levels"]
+    assert (
+        result.models[0].reasoning_effort_levels
+        == model_profile_for("openai", "gpt-5")["reasoning_effort_levels"]
+    )
     assert result.models[1].reasoning_effort_levels is None
 
     async with httpx.AsyncClient(
@@ -273,9 +282,7 @@ async def test_list_models_falls_back_to_configured_model_when_gateway_blocks_di
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         result = await ModelDiscoveryService(settings, client).list_models("grok")
 
-    assert result.models == [
-        AvailableModel(id="grok-4", name="grok-4", context_window=None)
-    ]
+    assert result.models == [AvailableModel(id="grok-4", name="grok-4", context_window=None)]
 
 
 @pytest.mark.anyio

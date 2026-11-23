@@ -50,8 +50,11 @@ def _post_list_item(post: BlogPost) -> dict[str, object]:
         可 JSON 序列化的摘要，UUID 与更新时间转换为字符串。
     """
     return {
-        "id": str(post.id), "title": post.title, "excerpt": post.excerpt,
-        "status": post.status.value, "updated_at": post.updated_at.isoformat(),
+        "id": str(post.id),
+        "title": post.title,
+        "excerpt": post.excerpt,
+        "status": post.status.value,
+        "updated_at": post.updated_at.isoformat(),
         "scheduled_at": post.scheduled_at.isoformat() if post.scheduled_at else None,
         "category": post.category.name if post.category else None,
         "categories": [category.name for category in post.categories],
@@ -69,7 +72,9 @@ def _persisted_post(post: BlogPost) -> dict[str, object]:
         包含正文与 database_status 的已保存快照，不含客户端草稿。
     """
     return {
-        "id": str(post.id), "title": post.title, "excerpt": post.excerpt,
+        "id": str(post.id),
+        "title": post.title,
+        "excerpt": post.excerpt,
         "content_markdown": post.content_markdown,
         "database_status": post.status.value,
         "scheduled_at": post.scheduled_at.isoformat() if post.scheduled_at else None,
@@ -79,10 +84,16 @@ def _persisted_post(post: BlogPost) -> dict[str, object]:
 
 
 def build_blog_agent_context(
-    session: Session, *, route: str | None = None, section: str | None = None,
-    page_type: str | None = None, post_id: str | None = None,
-    title: str | None = None, excerpt: str | None = None,
-    content_markdown: str | None = None, editor_status: str | None = None,
+    session: Session,
+    *,
+    route: str | None = None,
+    section: str | None = None,
+    page_type: str | None = None,
+    post_id: str | None = None,
+    title: str | None = None,
+    excerpt: str | None = None,
+    content_markdown: str | None = None,
+    editor_status: str | None = None,
 ) -> dict[str, object]:
     """组装博客页面上下文，分开表示数据库记录和客户端未保存的编辑内容。
 
@@ -111,11 +122,15 @@ def build_blog_agent_context(
         else "posts_list"
     )
     page = {
-        "module": "blog", "route": route or "/blog/studio/posts",
-        "section": section or "posts", "type": resolved_page_type,
+        "module": "blog",
+        "route": route or "/blog/studio/posts",
+        "section": section or "posts",
+        "type": resolved_page_type,
     }
     context: dict[str, object] = {
-        "module": "blog", "page": page, "available_tools": tool_manifest(),
+        "module": "blog",
+        "page": page,
+        "available_tools": tool_manifest(),
         "write_policy": "写操作通过业务工具，审阅模式等待确认，自动模式执行后以真实回执为准。",
     }
     if page["type"] == "posts_list":
@@ -143,23 +158,31 @@ def build_blog_agent_context(
         if has_editor_context:
             # 草稿单独挂在 editor_draft 下，避免覆盖数据库正文与发布状态。
             editor_draft: dict[str, object] = {
-                "title": title, "excerpt": excerpt,
-                "content_markdown": content_markdown, "editor_status": editor_status,
+                "title": title,
+                "excerpt": excerpt,
+                "content_markdown": content_markdown,
+                "editor_status": editor_status,
             }
-            editor_draft["has_unsaved_changes"] = any((
-                title is not None and title != database_post.title,
-                excerpt is not None and excerpt != database_post.excerpt,
-                content_markdown is not None and content_markdown != database_post.content_markdown,
-                editor_status is not None and editor_status != database_post.status.value,
-            ))
+            editor_draft["has_unsaved_changes"] = any(
+                (
+                    title is not None and title != database_post.title,
+                    excerpt is not None and excerpt != database_post.excerpt,
+                    content_markdown is not None
+                    and content_markdown != database_post.content_markdown,
+                    editor_status is not None and editor_status != database_post.status.value,
+                )
+            )
             current_post["editor_draft"] = editor_draft
         context["current_post"] = current_post
     elif has_editor_context:
         context["current_post"] = {
-            "id": None, "database_status": None,
+            "id": None,
+            "database_status": None,
             "editor_draft": {
-                "title": title, "excerpt": excerpt,
-                "content_markdown": content_markdown, "editor_status": editor_status,
+                "title": title,
+                "excerpt": excerpt,
+                "content_markdown": content_markdown,
+                "editor_status": editor_status,
                 "has_unsaved_changes": True,
             },
         }

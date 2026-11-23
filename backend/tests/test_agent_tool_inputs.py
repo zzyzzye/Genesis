@@ -37,9 +37,18 @@ def test_encoded_arrays_keep_nested_validation_and_canonical_schema() -> None:
         {"label": "甲", "description": "方向一"},
         {"label": "乙", "description": "方向二"},
     ]
-    request = QuestionRequest.model_validate({"questions": json.dumps([{
-        "question": "选哪个？", "options": json.dumps(options),
-    }])})
+    request = QuestionRequest.model_validate(
+        {
+            "questions": json.dumps(
+                [
+                    {
+                        "question": "选哪个？",
+                        "options": json.dumps(options),
+                    }
+                ]
+            )
+        }
+    )
     assert request.questions[0].options[1].label == "乙"
 
 

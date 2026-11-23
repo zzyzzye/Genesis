@@ -132,7 +132,9 @@ class AgentCapabilityRegistry:
         raise ValueError("操作类型无效")
 
     def load_attachments(
-        self, module: str, request: AiChatRequest,
+        self,
+        module: str,
+        request: AiChatRequest,
     ) -> tuple[list[dict[str, object]], list[tuple[str, bytes]]]:
         """由业务能力核验附件并准备输入，公共运行时不访问业务文件库。"""
         if module in (self._blog.module, self._media.module):

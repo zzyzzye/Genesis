@@ -19,8 +19,11 @@ from genesis_api.llm.service import ModelDiscoveryService
 def test_thinking_switch_scope_is_limited_to_documented_mimo_models() -> None:
     """官方开关范围不扩展到未知名称、语音模型或其他供应商。"""
     for name in (
-        "mimo-v2.6-flash", "mimo-v2.6-pro", "mimo-v2.6-pro-ultraspeed",
-        "mimo-v2.5-pro", "mimo-v2.5",
+        "mimo-v2.6-flash",
+        "mimo-v2.6-pro",
+        "mimo-v2.6-pro-ultraspeed",
+        "mimo-v2.5-pro",
+        "mimo-v2.5",
     ):
         assert model_capabilities_for("mimo", name).thinking_modes == ["enabled", "disabled"]
     assert model_capabilities_for("mimo", "mimo-v2.5-tts").thinking_modes is None
@@ -41,9 +44,7 @@ def test_mimo_thinking_switch_uses_extra_body(mode: str | None) -> None:
     assert payload["extra_body"] == {"thinking": {"type": mode or "disabled"}}
     assert ("temperature" in payload) == (mode != "enabled")
     with pytest.raises(RuntimeError, match="思考开关"):
-        EmbeddedAgentRuntime()._build_model(
-            settings, "mimo", "unknown", thinking_mode="enabled"
-        )
+        EmbeddedAgentRuntime()._build_model(settings, "mimo", "unknown", thinking_mode="enabled")
 
 
 def test_unknown_mimo_model_does_not_receive_unverified_thinking_switch() -> None:
@@ -63,7 +64,9 @@ def test_thinking_switch_survives_request_persistence_and_graph_cache(
     from genesis_api.ai.runs import _request_from_payload, _request_payload
 
     request = AiChatRequest(
-        surface="studio", provider="mimo", thinking_mode="disabled",
+        surface="studio",
+        provider="mimo",
+        thinking_mode="disabled",
         messages=[{"role": "user", "content": "hi"}],
     )
     assert _request_from_payload(_request_payload(request)).thinking_mode == "disabled"
@@ -73,12 +76,10 @@ def test_thinking_switch_survives_request_persistence_and_graph_cache(
     monkeypatch.setattr("genesis_api.agent.runtime.create_deep_agent", lambda **_: object())
     settings = Settings()
     enabled = runtime._graph(settings, "mimo", "mimo-v2.6-flash", "blog", None, "enabled")
-    assert runtime._graph(
-        settings, "mimo", "mimo-v2.6-flash", "blog", None, "enabled"
-    ) is enabled
-    assert runtime._graph(
-        settings, "mimo", "mimo-v2.6-flash", "blog", None, "disabled"
-    ) is not enabled
+    assert runtime._graph(settings, "mimo", "mimo-v2.6-flash", "blog", None, "enabled") is enabled
+    assert (
+        runtime._graph(settings, "mimo", "mimo-v2.6-flash", "blog", None, "disabled") is not enabled
+    )
 
 
 def test_mimo_configuration_and_reasoning_roundtrip() -> None:
@@ -143,9 +144,16 @@ async def test_mimo_discovery_and_fallback(status: int) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert str(request.url) == "https://api.xiaomimimo.com/v1/models"
         assert request.headers["api-key"] == "test-placeholder"
-        return httpx.Response(status, json={"data": [
-            {"id": "mimo-v2.6-flash"}, {"id": "mimo-v2.5-tts"}, {"id": "mimo-v2.5-asr"},
-        ]})
+        return httpx.Response(
+            status,
+            json={
+                "data": [
+                    {"id": "mimo-v2.6-flash"},
+                    {"id": "mimo-v2.5-tts"},
+                    {"id": "mimo-v2.5-asr"},
+                ]
+            },
+        )
 
     settings = Settings(
         text_mimo_api_key=SecretStr("test-placeholder"), text_mimo_model="mimo-v2.6-flash"
@@ -188,13 +196,19 @@ async def test_mimo_stream_uses_chat_completions() -> None:
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("body", [
-    '{"title":"了解当前模型"}', '{"title":"' + "回答正文" * 12 + '"}',
-])
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"title":"了解当前模型"}',
+        '{"title":"' + "回答正文" * 12 + '"}',
+    ],
+)
 async def test_mimo_title_validates_complete_json_not_partial_prefix(
-    monkeypatch: pytest.MonkeyPatch, body: str,
+    monkeypatch: pytest.MonkeyPatch,
+    body: str,
 ) -> None:
     """MiMo 使用官方 JSON 模式；完整流校验失败时不能保留半截合法标题。"""
+
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
         assert payload["stream"] is True
@@ -202,10 +216,12 @@ async def test_mimo_title_validates_complete_json_not_partial_prefix(
         assert "JSON" in payload["messages"][0]["content"]
         assert json.loads(payload["messages"][1]["content"]) == {"用户话题": "你是什么模型"}
         deltas = [{"role": "assistant", "reasoning_content": "仅用于隔离测试的内部标记"}]
-        deltas.extend({"content": body[index:index + 4]} for index in range(0, len(body), 4))
+        deltas.extend({"content": body[index : index + 4]} for index in range(0, len(body), 4))
         common = {
-            "id": "chatcmpl-title-test", "object": "chat.completion.chunk",
-            "created": 1, "model": "mimo-v2.6-pro",
+            "id": "chatcmpl-title-test",
+            "object": "chat.completion.chunk",
+            "created": 1,
+            "model": "mimo-v2.6-pro",
         }
         events = [{**common, "choices": [{"index": 0, "delta": delta}]} for delta in deltas]
         events.append({**common, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
@@ -214,15 +230,22 @@ async def test_mimo_title_validates_complete_json_not_partial_prefix(
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
         model = ChatMiMo(
-            model="mimo-v2.6-pro", api_key=SecretStr("test-placeholder"),
-            base_url="https://api.xiaomimimo.com/v1", use_responses_api=False,
+            model="mimo-v2.6-pro",
+            api_key=SecretStr("test-placeholder"),
+            base_url="https://api.xiaomimimo.com/v1",
+            use_responses_api=False,
             http_async_client=client,
         )
         runtime = EmbeddedAgentRuntime()
         monkeypatch.setattr(runtime, "_build_model", lambda *_: model)
-        request = AiChatRequest(surface="studio", provider="mimo", model="mimo-v2.6-pro", messages=[
-            {"role": "user", "content": "你是什么模型"},
-        ])
+        request = AiChatRequest(
+            surface="studio",
+            provider="mimo",
+            model="mimo-v2.6-pro",
+            messages=[
+                {"role": "user", "content": "你是什么模型"},
+            ],
+        )
         if "回答正文" in body:
             with pytest.raises(RuntimeError, match="有效的会话标题"):
                 await runtime.generate_title(request, Settings())

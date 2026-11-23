@@ -17,17 +17,31 @@ from genesis_api.media.schemas import CanvasDocument, CanvasEdge, CanvasNode, Ge
 def canvas() -> CanvasDocument:
     """构造一个文字来源与一个生成节点。"""
     source = CanvasNode(
-        id=uuid4(), type="text", name="人物设定", text="白衬衫\n自然光",
-        x=0, y=0, width=300, height=180,
+        id=uuid4(),
+        type="text",
+        name="人物设定",
+        text="白衬衫\n自然光",
+        x=0,
+        y=0,
+        width=300,
+        height=180,
     )
     target = CanvasNode(
-        id=uuid4(), type="image_generation", text=f"开场：@[文字](ref:{source.id})。",
+        id=uuid4(),
+        type="image_generation",
+        text=f"开场：@[文字](ref:{source.id})。",
         generation=GenerationSettings(model="gpt-image-2"),
-        x=400, y=0, width=300, height=180,
+        x=400,
+        y=0,
+        width=300,
+        height=180,
     )
-    return CanvasDocument(nodes=[source, target], edges=[
-        CanvasEdge(id=uuid4(), source=source.id, target=target.id),
-    ])
+    return CanvasDocument(
+        nodes=[source, target],
+        edges=[
+            CanvasEdge(id=uuid4(), source=source.id, target=target.id),
+        ],
+    )
 
 
 @pytest.mark.parametrize("kind", ["image", "video"])
@@ -39,9 +53,14 @@ def test_generation_resolves_latest_text_without_mutating_canvas(kind: str) -> N
     original = target.text
     task_type = ImageGeneration if kind == "image" else VideoGeneration
     task = task_type(
-        id=uuid4(), owner_id=uuid4(), project_id=uuid4(), node_id=target.id, snapshot={},
+        id=uuid4(),
+        owner_id=uuid4(),
+        project_id=uuid4(),
+        node_id=target.id,
+        snapshot={},
     )
     with Session() as session:
+
         def prepare() -> str:
             if isinstance(task, ImageGeneration):
                 return image.prepare(task, document, session).text
@@ -63,9 +82,18 @@ def test_generation_resolves_latest_text_without_mutating_canvas(kind: str) -> N
         assert prepare() == target.text
 
 
-@pytest.mark.parametrize("failure", [
-    "disconnect", "deleted", "wrong_type", "empty", "nested", "image", "overflow",
-])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "disconnect",
+        "deleted",
+        "wrong_type",
+        "empty",
+        "nested",
+        "image",
+        "overflow",
+    ],
+)
 @pytest.mark.parametrize("kind", ["image", "video"])
 def test_invalid_text_reference_blocks_both_generation_paths(failure: str, kind: str) -> None:
     """断线、空内容和嵌套素材标记不能静默降级或绕过授权。"""

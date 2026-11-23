@@ -34,8 +34,12 @@ def test_review_does_not_write_and_automatic_returns_receipt(canvas_tools: Canva
         project = session.get(MediaProject, project_id)
         assert project is not None
         version = project.version
-    args = {"project_id": str(project_id), "node_id": str(ids[0]),
-            "name": "新名称", "expected_version": version}
+    args = {
+        "project_id": str(project_id),
+        "node_id": str(ids[0]),
+        "name": "新名称",
+        "expected_version": version,
+    }
     with agent_invocation_context(actor, "member", "media"):
         pending = json.loads(asyncio.run(entry.ainvoke(args)))
     assert pending["type"] == "pending_action"
@@ -70,22 +74,39 @@ async def test_media_confirmation_persists_and_rejects_replay(canvas_tools: Canv
         assert project is not None
         version = project.version
     with agent_invocation_context(actor, "member", "media"):
-        pending = json.loads(await entry.ainvoke({
-            "project_id": str(project_id), "node_id": str(ids[0]),
-            "name": "已确认名称", "expected_version": version,
-        }))
+        pending = json.loads(
+            await entry.ainvoke(
+                {
+                    "project_id": str(project_id),
+                    "node_id": str(ids[0]),
+                    "name": "已确认名称",
+                    "expected_version": version,
+                }
+            )
+        )
     with sessions() as session:
         user = session.get(User, actor)
         assert user is not None
-        run = AiChatRun(user_id=actor, surface="media", provider="openai",
-                        status=AiChatRunStatus.COMPLETED,
-                        request_payload={}, proposals=[pending])
+        run = AiChatRun(
+            user_id=actor,
+            surface="media",
+            provider="openai",
+            status=AiChatRunStatus.COMPLETED,
+            request_payload={},
+            proposals=[pending],
+        )
         session.add(run)
         session.commit()
         confirmation = AgentActionConfirmation(proposal_token=pending["proposal_token"])
-        result = await to_thread.run_sync(partial(
-            confirm_agent_action, confirmation, user, session, settings,
-        ))
+        result = await to_thread.run_sync(
+            partial(
+                confirm_agent_action,
+                confirmation,
+                user,
+                session,
+                settings,
+            )
+        )
         assert isinstance(result, dict)
         assert result["resource"]["kind"] == "canvas_node_rename"
         session.refresh(run)
@@ -94,9 +115,15 @@ async def test_media_confirmation_persists_and_rejects_replay(canvas_tools: Canv
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException, match="已经执行"):
-            await to_thread.run_sync(partial(
-                confirm_agent_action, confirmation, user, session, settings,
-            ))
+            await to_thread.run_sync(
+                partial(
+                    confirm_agent_action,
+                    confirmation,
+                    user,
+                    session,
+                    settings,
+                )
+            )
 
 
 def test_asset_tools_link_only_owned_library_assets(canvas_tools: CanvasTools) -> None:
@@ -105,9 +132,17 @@ def test_asset_tools_link_only_owned_library_assets(canvas_tools: CanvasTools) -
     ids = [uuid4(), uuid4()]
     with sessions() as session:
         for index, asset_id in enumerate(ids):
-            session.add(MediaAsset(id=asset_id, owner_id=actor, name=f"参考{index}.png",
-                                   kind="image", mime_type="image/png", size=4,
-                                   in_library=index == 0))
+            session.add(
+                MediaAsset(
+                    id=asset_id,
+                    owner_id=actor,
+                    name=f"参考{index}.png",
+                    kind="image",
+                    mime_type="image/png",
+                    size=4,
+                    in_library=index == 0,
+                )
+            )
         session.commit()
     tools = {entry.name: entry for entry in media_tools.build_media_tools(Settings(), review=False)}
     args = {"project_id": str(project_id), "asset_id": str(ids[0])}
@@ -116,9 +151,11 @@ def test_asset_tools_link_only_owned_library_assets(canvas_tools: CanvasTools) -
         assert [item["id"] for item in listed["items"]] == [str(ids[0])]
         for _ in range(2):
             assert asyncio.run(tools["reference_media_asset"].ainvoke(args))["id"] == str(ids[0])
-        assert "不在账户素材库" in asyncio.run(tools["reference_media_asset"].ainvoke(
-            {**args, "asset_id": str(ids[1])},
-        ))
+        assert "不在账户素材库" in asyncio.run(
+            tools["reference_media_asset"].ainvoke(
+                {**args, "asset_id": str(ids[1])},
+            )
+        )
     with sessions() as session:
         assert session.get(ProjectAsset, (project_id, ids[0])) is not None
         assert session.get(ProjectAsset, (project_id, ids[1])) is None
@@ -137,13 +174,23 @@ def test_edit_canvas_validates_graph_version_and_supports_replay(canvas_tools: C
         copy["name"] = "副本"
         copy["x"] = 200
         document["nodes"].append(copy)
-        document["nodes"].append({
-            "id": str(uuid4()), "type": "group", "x": 0, "y": 0,
-            "width": 1200, "height": 600, "member_ids": [str(ids[0]), copy["id"]],
-        })
+        document["nodes"].append(
+            {
+                "id": str(uuid4()),
+                "type": "group",
+                "x": 0,
+                "y": 0,
+                "width": 1200,
+                "height": 600,
+                "member_ids": [str(ids[0]), copy["id"]],
+            }
+        )
         document["edges"] = [{"id": str(uuid4()), "source": str(ids[0]), "target": copy["id"]}]
-        args = {"project_id": str(project_id), "expected_version": snapshot["version"],
-                "document": document}
+        args = {
+            "project_id": str(project_id),
+            "expected_version": snapshot["version"],
+            "document": document,
+        }
         result = asyncio.run(tools["edit_media_canvas"].ainvoke(args))
         assert result["version"] == snapshot["version"] + 1
         assert asyncio.run(tools["edit_media_canvas"].ainvoke(args))["version"] == result["version"]
@@ -191,7 +238,8 @@ def test_rename_node_saves_only_name_and_replay_is_idempotent(
         project.canvas = original
         session.commit()
     entry = next(
-        t for t in media_tools.build_media_tools(Settings(), review=False)
+        t
+        for t in media_tools.build_media_tools(Settings(), review=False)
         if t.name == "rename_node"
     )
     args = {
@@ -231,7 +279,8 @@ def test_rename_rejects_empty_or_long_names(canvas_tools: CanvasTools, name: str
     """无效输入不产生部分写入或版本变化。"""
     actor_id, project_id, ids, sessions = canvas_tools
     entry = next(
-        t for t in media_tools.build_media_tools(Settings(), review=False)
+        t
+        for t in media_tools.build_media_tools(Settings(), review=False)
         if t.name == "rename_node"
     )
     with agent_invocation_context(actor_id, "member", "media"):
@@ -257,7 +306,8 @@ def test_rename_rejects_wrong_actor_missing_node_and_stale_version(
     """权限、归属、节点和版本均在服务端校验，不能用模型参数绕过。"""
     actor_id, project_id, ids, sessions = canvas_tools
     entry = next(
-        t for t in media_tools.build_media_tools(Settings(), review=False)
+        t
+        for t in media_tools.build_media_tools(Settings(), review=False)
         if t.name == "rename_node"
     )
     args = {
@@ -336,8 +386,7 @@ def test_member_reads_all_and_prepares_five_updates(
 ) -> None:
     actor_id, project_id, ids, _ = canvas_tools
     entries = {
-        entry.name: entry
-        for entry in media_tools.build_media_tools(Settings(), review=False)
+        entry.name: entry for entry in media_tools.build_media_tools(Settings(), review=False)
     }
     with agent_invocation_context(actor_id, "member", "media"):
         canvas = asyncio.run(entries["get_media_canvas"].ainvoke({"project_id": str(project_id)}))
@@ -370,12 +419,12 @@ def test_member_reads_all_and_prepares_five_updates(
 def test_other_user_can_read_but_cannot_prepare(canvas_tools: CanvasTools) -> None:
     _, project_id, _, _ = canvas_tools
     entries = {
-        entry.name: entry
-        for entry in media_tools.build_media_tools(Settings(), review=False)
+        entry.name: entry for entry in media_tools.build_media_tools(Settings(), review=False)
     }
     with agent_invocation_context(uuid4(), "member", "media"):
         assert isinstance(
-            asyncio.run(entries["get_media_canvas"].ainvoke({"project_id": str(project_id)})), dict,
+            asyncio.run(entries["get_media_canvas"].ainvoke({"project_id": str(project_id)})),
+            dict,
         )
         assert (
             asyncio.run(
@@ -402,8 +451,7 @@ def test_configuration_checks_actual_references_instead_of_legacy_mode(
         AsyncMock(return_value=[{"id": "image2.5-flare", "image_edit": False}]),
     )
     entries = {
-        entry.name: entry
-        for entry in media_tools.build_media_tools(Settings(), review=False)
+        entry.name: entry for entry in media_tools.build_media_tools(Settings(), review=False)
     }
     args = {
         "project_id": str(project_id),
