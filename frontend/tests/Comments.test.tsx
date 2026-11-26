@@ -105,7 +105,7 @@ describe('文章评论', () => {
     await screen.findByText('还没有公开评论，欢迎留下你的想法。')
     const body = screen.getByRole('textbox', { name: '写下评论' })
     const qq = screen.getByRole('textbox', { name: 'QQ 邮箱（选填）' })
-    expect(qq).toHaveAttribute('placeholder', '输入 QQ 邮箱自动获取头像')
+    expect(qq).toHaveAttribute('placeholder', 'QQ 邮箱（选填，用于头像）')
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(qq.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(container.querySelector('form')!.compareDocumentPosition(container.querySelector('.article-comments__list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

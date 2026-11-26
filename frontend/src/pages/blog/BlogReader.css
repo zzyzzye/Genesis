@@ -18,7 +18,7 @@
 .blog-page--article > main { padding-top: var(--portal-header-height); }
 .reader-header .portal-search-trigger { width: min(100%, 560px); }
 .reader-header .portal-brand > .reader-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 17px; }
-.blog-page--article .reader-shell { box-sizing: border-box; width: min(calc(100% - 64px), 1080px); max-width: 1080px; padding: 24px 0 64px; }
+.blog-page--article .reader-shell { box-sizing: border-box; width: min(calc(100% - 64px), 1080px); max-width: 1080px; padding: 24px 0 32px; }
 .reader-publication-result { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px 24px; margin:0 0 24px; padding:18px 20px; border:0; border-radius:12px; outline:0; box-shadow:none; background:var(--portal-soft); color:var(--portal-ink); }
 .reader-publication-result>div { min-width:0; }
 .reader-publication-result strong { font-size:18px; font-weight:600; }
@@ -30,7 +30,7 @@
 .reader-navigation { margin-bottom: 20px; }
 .blog-page--article .reader-navigation .back-button { margin-bottom: 0; }
 .reader-document { display: grid; grid-template-columns: minmax(0, 1fr) 248px; column-gap: 64px; align-items: start; }
-.reader-document > .article-document__toc { position: sticky; top: 100px; grid-column: 2; grid-row: 1 / span 4; min-width: 0; max-height: calc(100dvh - 124px); margin: 0; padding-right: 4px; overflow-y: auto; }
+.reader-document > .article-document__toc { position: sticky; top: 100px; grid-column: 2; grid-row: 1 / span 3; min-width: 0; max-height: calc(100dvh - 124px); margin: 0; padding-right: 4px; overflow-y: auto; }
 .reader-document > .reader-intro { grid-column: 1; grid-row: 1; min-width: 0; }
 .reader-document > .article-guide { grid-column: 1; grid-row: 2; min-width: 0; margin: 0 0 32px; }
 .reader-document > .article-content { grid-column: 1; grid-row: 3; min-width: 0; }
@@ -85,11 +85,10 @@
 .blog-page--article .blog-public-links { width: min(calc(100% - 64px), 1080px); margin: 0 auto 48px; padding: 0; }
 .blog-page--article .blog-public-links h2 { font-family: inherit; font-size: 20px; font-weight: 600; }
 .blog-page--article .blog-public-links :is(header > span, header p, small, [role="status"], [role="alert"]) { color: var(--blog-muted); }
-.blog-page--article .blog-footer { width: min(calc(100% - 64px), 1080px); margin: 0 auto; padding: 24px 0 32px; border: 0; }
-.reader-back-top { position: fixed; z-index: 10; right: 24px; bottom: 24px; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--portal-soft); color: var(--blog-ink); }
-.reader-back-top:is(:hover, :focus-visible) { background: var(--blog-hover); }
+.blog-page--article .blog-footer { box-sizing: border-box; width: min(calc(100% - 64px), 1080px); align-items: center; margin: 0 auto; padding: 16px 312px 24px 0; border: 0; }
 @media (max-width: 1100px) {
   .blog-page--article .reader-shell, .blog-page--article .blog-public-links, .blog-page--article .blog-footer { max-width: 768px; }
+  .blog-page--article .blog-footer { padding-right: 0; }
   .reader-document { display: flex; flex-direction: column; }
   .reader-document > * { width: 100%; }
   .reader-document > .reader-intro { order: 0; }
@@ -106,7 +105,7 @@
   .reader-header .portal-brand > .reader-brand { font-size: 15px; }
 }
 @media (max-width: 680px) {
-  .blog-page--article .reader-shell { width: calc(100% - 40px); padding: 16px 0 48px; }
+  .blog-page--article .reader-shell { width: calc(100% - 40px); padding: 16px 0 24px; }
   .blog-page--article .back-button { margin-bottom: 18px; }
   .blog-page--article .reader-intro h1 { font-size: 26px; letter-spacing: -.025em; }
   .blog-page--article .reader-summary { font-size: 14px; }
@@ -116,6 +115,4 @@
   .blog-page--article .article-content :is(h3, h4, h5, h6) { font-size: 18px; }
   .blog-page--article .article-content blockquote { padding: 16px; }
   .blog-page--article .blog-public-links, .blog-page--article .blog-footer { width: calc(100% - 40px); }
-  .blog-page--article .blog-footer { padding-right: 48px; }
-  .reader-back-top { display: none; }
 }

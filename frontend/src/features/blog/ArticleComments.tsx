@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBlocker, useLocation } from 'react-router-dom'
-import { ArrowUpRight, MessageSquare, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { BlogWorkflowDialog } from '../../studio/BlogWorkflowDialog'
 import { ApiError, getBlogComments, submitBlogComment, type BlogComment } from '../../lib/api'
 import { authTokenChangedEvent, getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
@@ -99,18 +99,18 @@ export function ArticleComments({ slug }: { slug: string }) {
   }
 
   return <section className="article-comments" id="comments" aria-labelledby="article-comments-title">
-    <header><h2 id="article-comments-title"><MessageSquare size={18} aria-hidden="true" />文章讨论 <span>{total}</span></h2><button className="article-comments__refresh" type="button" disabled={loading} onClick={() => { setOffset(0); setRefresh((value) => value + 1) }}><RefreshCw size={14} aria-hidden="true" />刷新评论</button></header>
+    <header><h2 id="article-comments-title">文章讨论 <span>{total}</span></h2><button className="article-comments__refresh" type="button" aria-label="刷新评论" title="刷新评论" disabled={loading} onClick={() => { setOffset(0); setRefresh((value) => value + 1) }}><RefreshCw size={15} aria-hidden="true" /></button></header>
     {token ? <form noValidate onSubmit={(event) => void submit(event)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault() }}>
       <div className="article-comments__composer">
         <div className="article-comments__identity">
           <CommentAvatarPreview qq={qq} token={token} />
-          <input id="comment-qq" ref={qqInput} type="text" inputMode="email" autoComplete="off" maxLength={64} aria-label="QQ 邮箱（选填）" placeholder="输入 QQ 邮箱自动获取头像" value={qq} disabled={busy} onChange={(event) => { setQq(event.target.value); setQqError(false); setError('') }} aria-invalid={qqError} aria-describedby="comment-error" />
+          <input id="comment-qq" ref={qqInput} type="text" inputMode="email" autoComplete="off" maxLength={64} aria-label="QQ 邮箱（选填）" placeholder="QQ 邮箱（选填，用于头像）" value={qq} disabled={busy} onChange={(event) => { setQq(event.target.value); setQqError(false); setError('') }} aria-invalid={qqError} aria-describedby="comment-error" />
         </div>
         <div className="article-comments__writing">
-          <textarea className="resize-none" id="comment-content" ref={input} aria-label="写下评论" placeholder="聊聊你的看法，让讨论从这里开始。" rows={4} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); if (!qqError) setError('') }} aria-describedby="comment-help comment-error" aria-invalid={Boolean(error) && !qqError} />
+          <textarea className="resize-none" id="comment-content" ref={input} aria-label="写下评论" placeholder="写下你的想法…" rows={3} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); if (!qqError) setError('') }} aria-describedby="comment-help comment-error" aria-invalid={Boolean(error) && !qqError} />
           <div className="article-comments__composer-footer">
             <div className="article-comments__composer-meta"><span id="comment-help">审核通过后公开</span><span>{content.length}<span className="article-comments__limit"> / 2000</span></span></div>
-            <button type="submit" disabled={busy}>{busy ? '提交中…' : '提交评论'}<ArrowUpRight size={15} aria-hidden="true" /></button>
+            <button type="submit" disabled={busy}>{busy ? '提交中…' : '提交评论'}</button>
           </div>
         </div>
       </div>
