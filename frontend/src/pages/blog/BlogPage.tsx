@@ -9,7 +9,6 @@ import { BlogLinks } from '../../features/blog/BlogLinks'
 import { ArticleComments } from '../../features/blog/ArticleComments'
 import { ArticleGuide } from '../../features/blog/ArticleGuide'
 import { GenesisLogo } from '../../components/GenesisLogo'
-import { SpaceLinks } from '../../components/SpaceLinks'
 import { BlogDirectory } from '../../features/blog/BlogDirectory'
 import { BlogSearch } from '../../features/blog/BlogSearch'
 import { FpsStatusSlot } from '../../features/performance/FpsMonitor'
@@ -147,7 +146,7 @@ function PublicBlog() {
           </div>}
           <div className="reader-navigation"><button className="back-button" type="button" onClick={closeArticle}>
             <span aria-hidden="true">←</span> 返回文章列表
-          </button><nav aria-label="其他空间"><SpaceLinks current="blog" /></nav></div>
+          </button></div>
           {currentArticle ? (
             <ArticleDocument
               key={currentArticle.id}
