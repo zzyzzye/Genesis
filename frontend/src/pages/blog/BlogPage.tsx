@@ -29,9 +29,8 @@ function formatDate(value: string): string { return dateFormatter.format(new Dat
 function ReaderAuthor({ author }: { author: BlogAuthor }) {
   const [failed, setFailed] = useState(false)
   return <section className="reader-author" aria-label="本文作者">
-    <span className="reader-author__label">本文作者</span>
-    {author.avatar_url && !failed ? <img src={author.avatar_url} alt="" width={40} height={40} onError={() => setFailed(true)} /> : <span className="reader-author__avatar" aria-hidden="true">{author.display_name.slice(0, 1).toUpperCase()}</span>}
-    <div><strong>{author.display_name}</strong><span className="reader-author__handle">@{author.handle}</span></div>
+    {author.avatar_url && !failed ? <img src={author.avatar_url} alt="" width={28} height={28} onError={() => setFailed(true)} /> : <span className="reader-author__avatar" aria-hidden="true">{author.display_name.slice(0, 1).toUpperCase()}</span>}
+    <strong>{author.display_name}</strong>
   </section>
 }
 
@@ -151,16 +150,18 @@ function PublicBlog() {
           </button><nav aria-label="其他空间"><SpaceLinks current="blog" /></nav></div>
           {currentArticle ? (
             <ArticleDocument
+              key={currentArticle.id}
               content={currentArticle.content_markdown}
+              title={currentArticle.title}
               className="reader-document"
               tocTitle="本文目录"
-              sidebar={<ReaderAuthor key={`${currentArticle.author.id}:${currentArticle.author.avatar_url ?? ''}`} author={currentArticle.author} />}
+              progressiveToc
               intro={<><header className="reader-intro">
                 <TagList tags={currentArticle.tags} />
                 <ArticleTitle title={currentArticle.title} />
                 {currentArticle.excerpt && <p className="reader-summary">{currentArticle.excerpt}</p>}
                 <div className="article-meta">
-                  <span>{currentArticle.author.display_name}</span>
+                  <ReaderAuthor key={`${currentArticle.author.id}:${currentArticle.author.avatar_url ?? ''}`} author={currentArticle.author} />
                   <time dateTime={currentArticle.published_at}>{formatDate(currentArticle.published_at)}</time>
                   <span>{currentArticle.read_time_minutes} 分钟阅读</span>
                 </div>

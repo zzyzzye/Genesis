@@ -52,7 +52,7 @@ describe('App', () => {
     vi.restoreAllMocks()
   })
 
-  it('公开首页只展示内容导航，不暴露后台入口', async () => {
+  it('公开首页只展示内容导航，不暴露后台入口', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0 }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     document.title = '旧文章标题 · Genesis'
     window.history.pushState({}, '', '/')
@@ -65,7 +65,7 @@ describe('App', () => {
     expect(navigation).toHaveTextContent('影音')
     expect(navigation).not.toHaveTextContent('Studio')
     expect(screen.queryByRole('link', { name: /系统入口|Studio|工作台/ })).not.toBeInTheDocument()
-    expect(await screen.findByText('还没有发布的文章，之后再来看看。')).toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: '探索空间' })).getByRole('link', { name: '进入博客' })).toHaveAttribute('href', '/blog')
   })
 
   it('在 Owner 账户页提供写作台入口并同步登录态', async () => {

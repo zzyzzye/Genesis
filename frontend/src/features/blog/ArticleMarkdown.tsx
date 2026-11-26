@@ -109,9 +109,9 @@ function CodePre({ children }: { children?: ReactNode }) {
   return <CodeBlock key={`${language}:${source}`} source={source} language={language} />
 }
 
-export function ArticleMarkdown({ children }: { children: string }) {
+export function ArticleMarkdown({ children, titleHeadingId }: { children: string; titleHeadingId?: string }) {
   const headings = getArticleHeadings(children)
-  return <Markdown remarkPlugins={[...articleRemarkPlugins, remarkHeadingIds]} remarkRehypeOptions={{ footnoteLabel: '脚注', footnoteBackLabel: '返回正文' }} rehypePlugins={[rehypeRaw, [rehypeSanitize, articleHtmlSchema], [rehypeKatex, { trust: false, strict: 'warn' }]]} components={{ pre: CodePre, table: ({ children: rows }) => <div className="article-table-scroll" tabIndex={0} role="region" aria-label="文章表格"><table>{rows}</table></div>, a: ({ href, title, children: label }) => {
+  return <Markdown remarkPlugins={[...articleRemarkPlugins, remarkHeadingIds]} remarkRehypeOptions={{ footnoteLabel: '脚注', footnoteBackLabel: '返回正文' }} rehypePlugins={[rehypeRaw, [rehypeSanitize, articleHtmlSchema], [rehypeKatex, { trust: false, strict: 'warn' }]]} components={{ h1: ({ id, children: label }) => id && id === titleHeadingId ? <span id={id} className="article-title-anchor" aria-hidden="true" /> : <h1 id={id}>{label}</h1>, pre: CodePre, table: ({ children: rows }) => <div className="article-table-scroll" tabIndex={0} role="region" aria-label="文章表格"><table>{rows}</table></div>, a: ({ href, title, children: label }) => {
     const attachment = /\/blog\/attachments\/[0-9a-f-]{36}\/file(?:[?#]|$)/i.test(href ?? '')
     return <a href={resolveArticleAnchor(href, headings)} title={title} className={attachment ? 'article-attachment-link' : undefined} download={attachment ? '' : undefined}>{attachment && <Paperclip size={16} aria-hidden="true" />}{label}</a>
   } }}>{children}</Markdown>

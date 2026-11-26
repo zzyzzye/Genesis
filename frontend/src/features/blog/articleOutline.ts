@@ -33,6 +33,15 @@ export function getArticleHeadings(markdown: string): ArticleHeading[] {
   return collectHeadings(parser.runSync(parser.parse(markdown)) as Root)
 }
 
+export function getArticleTitleHeading(markdown: string, title: string): ArticleHeading | undefined {
+  const tree = parser.runSync(parser.parse(markdown)) as Root
+  const first = tree.children[0]
+  const normalize = (value: string) => value.trim().replace(/\s+/gu, ' ')
+  // 只合并开头与文章标题相同的一级标题，保留章节及其原有锚点编号。
+  if (first?.type !== 'heading' || first.depth !== 1 || normalize(toString(first)) !== normalize(title)) return
+  return collectHeadings(tree)[0]
+}
+
 export function resolveArticleAnchor(href: string | undefined, headings: ArticleHeading[]): string | undefined {
   if (!href?.startsWith('#')) return href
   let anchor: string

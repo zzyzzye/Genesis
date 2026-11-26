@@ -17,6 +17,13 @@
 .article-toc li { margin: 0; padding: 0; }
 .article-toc li a, .article-toc li button { display: block; width: 100%; min-height: 44px; padding: 10px 8px 10px calc(8px + var(--toc-indent, 0px)); text-align: left; overflow-wrap: anywhere; }
 .article-toc__empty { margin: 4px 8px 12px; color: var(--blog-muted, var(--studio-muted)); }
+.article-toc__section-heading { display: flex; align-items: center; }
+.article-toc__section-heading > :first-child { min-width: 0; flex: 1; }
+.article-toc li .article-toc__section-toggle { display: grid; place-items: center; flex: 0 0 36px; width: 36px; min-height: 36px; padding: 0; }
+.article-toc__section-toggle svg { transform: rotate(-90deg); }
+.article-toc__section-toggle[aria-expanded="true"] svg { transform: none; }
+.article-toc__children[hidden] { display: none; }
+.article-title-anchor { display: block; height: 0; scroll-margin-top: 100px; }
 .article-document .article-content :is(h1,h2,h3,h4,h5,h6) { scroll-margin-top: 100px; }
 @media (min-width: 1280px) {
   /* 阅读栏为目录预留独立宽度，固定目录不挤压或覆盖正文。 */

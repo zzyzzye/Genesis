@@ -20,9 +20,9 @@ function GuideContent({ data, playing, onFinish }: { data: BlogArticleGuide; pla
   }
   return <div className="article-guide__result" aria-busy={playing}>
     <ul aria-label="文章关键要点">{data.key_points.map((point, index) => (!playing || index <= step) && <li key={index}>{line(point, index)}</li>)}</ul>
-    {(!playing || step >= data.key_points.length) && <p className="article-guide__focus"><span>阅读重点</span>{line(data.reading_focus, data.key_points.length)}</p>}
+    {(!playing || step >= data.key_points.length) && <p className="article-guide__focus"><span>阅读建议</span>{line(data.reading_focus, data.key_points.length)}</p>}
     <div className="article-guide__footer">
-      <p className="article-guide__note">由 AI 根据本文整理，内容以原文为准。</p>
+      <p className="article-guide__note">AI 整理 · 以原文为准</p>
       {playing && <button className="article-guide__skip" type="button" onClick={onFinish}>显示全部</button>}
     </div>
   </div>
@@ -88,7 +88,7 @@ export function ArticleGuide({ slug, revision }: { slug: string; revision?: stri
   return <section className="article-guide" aria-label="AI 导读">
     <button className="article-guide__trigger" type="button" aria-expanded={open} aria-controls={panelId} onClick={toggle}>
       <BookOpenText size={17} aria-hidden="true" />
-      <span className="article-guide__heading"><span className="article-guide__title">AI 导读</span><span className="article-guide__caption">文章要点 · 阅读建议</span></span>
+      <span className="article-guide__title">AI 导读</span>
       <span className="article-guide__action">{open ? '收起' : '展开要点'}<motion.span className="article-guide__chevron" initial={false} animate={{ rotate: open ? 180 : 0 }} transition={transition}><ChevronDown size={14} aria-hidden="true" /></motion.span></span>
     </button>
     <div id={panelId} aria-hidden={!open} inert={!open}>
