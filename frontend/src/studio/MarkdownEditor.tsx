@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { ArticleHistory } from './ArticleHistory'
 import { ArticleDocument, ArticleToc } from '../features/blog/ArticleToc'
 import { FpsStatusSlot } from '../features/performance/FpsMonitor'
 import { getArticleHeadings, type ArticleHeading } from '../features/blog/articleOutline'
@@ -335,6 +336,7 @@ function PostSettingsModal({
 }
 
 export function MarkdownEditor({
+  historyToken,
   attachmentAccess,
   categories,
   editor,
@@ -355,6 +357,7 @@ export function MarkdownEditor({
   onCompareVersion,
   hasVersionConflict,
 }: {
+  historyToken?: string
   attachmentAccess?: EditorAttachmentAccess
   categories: BlogCategory[]
   editor: EditorState
@@ -374,6 +377,8 @@ export function MarkdownEditor({
   hasVersionConflict: boolean
 } & Partial<ArticleTaxonomyActions>) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyNotice, setHistoryNotice] = useState('')
   const [isAttachmentOpen, setIsAttachmentOpen] = useState(false)
   const sourceInsertion = useRef<{ view: EditorView; from: number; to: number } | null>(null)
   const editorWorkspaceRef = useRef<HTMLDivElement>(null)
@@ -439,7 +444,9 @@ export function MarkdownEditor({
 
   return (
     <section className="markdown-editor" aria-labelledby="markdown-editor-title">
+      {historyOpen && historyToken && editor.id && <ArticleHistory token={historyToken} editor={editor} categories={categories} tags={tags} onClose={() => setHistoryOpen(false)} onApply={next => { onChange(next); setHistoryOpen(false); setHistoryNotice('历史内容已载入编辑器，核对后请保存；线上文章尚未改变。') }} />}
       <div className="markdown-editor__main">
+      {historyNotice && <p className="markdown-editor__recovery" role="status">{historyNotice}</p>}
       <header className="markdown-editor__header">
         <div className="markdown-editor__identity">
           <button className="text-button" type="button" onClick={onBack}>← 返回{label}列表</button>
@@ -453,6 +460,7 @@ export function MarkdownEditor({
         <div className="markdown-editor__actions">
           <FpsStatusSlot />
           <button className="secondary-button markdown-editor__utility" disabled={isSaving || recovery !== null} type="button" onClick={onPreview}><StudioIcon name="eye" />预览</button>
+          {historyToken && editor.id && <button className="secondary-button markdown-editor__utility" disabled={isSaving || recovery !== null} type="button" onClick={() => setHistoryOpen(true)}>历史版本</button>}
           <button className="secondary-button markdown-editor__utility" disabled={isSaving || recovery !== null} type="button" aria-label={`打开${label}设置`} onClick={() => setIsSettingsOpen(true)}><StudioIcon name="settings" />设置</button>
           {editor.status === 'draft' && <button className="secondary-button markdown-editor__save" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('draft')}>保存草稿</button>}
           <button className="primary-button markdown-editor__publish" disabled={isSaving || recovery !== null} type="button" onClick={() => onSave('published')}>{editor.status === 'published' ? '更新发布' : '发布'}<StudioIcon name="arrow-up-right" /></button>

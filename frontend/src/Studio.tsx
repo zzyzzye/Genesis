@@ -205,7 +205,7 @@ function PostsWorkspace({
   }
 
   if (isEditorOpen) {
-    return <MarkdownEditor attachmentAccess={attachmentAccess} categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} saveState={saveState} recovery={recovery} onRestoreDraft={onRestoreDraft} onDiscardDraft={onDiscardDraft} onCompareVersion={onCompareVersion} hasVersionConflict={hasVersionConflict} />
+return <MarkdownEditor historyToken={token} attachmentAccess={attachmentAccess} categories={categories} editor={editor} feedback={feedback} isSaving={isSaving} onBack={onBack} onChange={onChange} onDelete={onDelete} onPreview={onPreview} onSave={onSave} tags={tags} onCreateTaxonomy={onCreateTaxonomy} onSelectTaxonomy={onSelectTaxonomy} saveState={saveState} recovery={recovery} onRestoreDraft={onRestoreDraft} onDiscardDraft={onDiscardDraft} onCompareVersion={onCompareVersion} hasVersionConflict={hasVersionConflict} />
   }
 
   return <ArticleReader editor={editor} onBack={onBack} onEdit={onEdit} />

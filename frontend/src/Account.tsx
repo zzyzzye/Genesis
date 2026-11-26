@@ -2,7 +2,8 @@ import './Account.css'
 
 import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 import { ArrowRight, ArrowUpRight, Eye, EyeOff, LoaderCircle, Upload } from 'lucide-react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { BlogNotifications } from './features/blog/BlogNotifications'
 import { GenesisLogo } from './components/GenesisLogo'
 import { AccountWorkspace } from './features/account/AccountWorkspace'
 import { WalletPage } from './features/billing/WalletPage'
@@ -126,6 +127,7 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
   onLogout: () => void
   onSave: (displayName: string, bio: string, avatarUrl: string, avatar?: File) => Promise<CurrentUser | null> | void
 }) {
+  const location = useLocation()
   const [displayName, setDisplayName] = useState(user.display_name)
   const [bio, setBio] = useState(user.bio)
   const [selectedAvatar, setSelectedAvatar] = useState<{ file: File; preview: string } | null>(null)
@@ -163,6 +165,8 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
     const saved = await onSave(displayName.trim(), bio.trim(), user.avatar_url ?? '', selectedAvatar?.file)
     if (saved) { setSelectedAvatar(null); setUploadError(null) }
   }
+
+  if (location.pathname === '/account/notifications') return <AccountWorkspace user={user} active="notifications" onLogout={onLogout} logoutDisabled={busy}><BlogNotifications key={user.id} token={getStoredAuthToken() ?? getStoredAuthToken(studioAuthTokenKey) ?? ''} /></AccountWorkspace>
 
   return (
     <AccountWorkspace user={user} active="profile" onLogout={onLogout} logoutDisabled={busy}>
@@ -213,6 +217,7 @@ export function AccountProfile({ user, feedback, busy, onLogout, onSave }: {
 
 export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentUser) => void } = {}) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const returnTo = searchParams.get('returnTo')
   const [token, setToken] = useState(() => getStoredAuthToken())
@@ -223,7 +228,7 @@ export function Account({ onAuthenticated }: { onAuthenticated?: (user: CurrentU
   const [reload, setReload] = useState(0)
   const pending = useRef(false)
   const attempt = useRef(0)
-  const title = state.status === 'ready' ? '个人账户 · Genesis' : state.status === 'guest' && state.mode === 'register' ? '注册 · Genesis' : '登录 · Genesis'
+  const title = state.status === 'ready' ? (location.pathname === '/account/notifications' ? '回复通知 · Genesis' : '个人账户 · Genesis') : state.status === 'guest' && state.mode === 'register' ? '注册 · Genesis' : '登录 · Genesis'
   useEffect(() => { document.title = title }, [title])
   useEffect(() => () => { attempt.current += 1 }, [])
 

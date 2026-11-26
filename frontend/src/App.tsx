@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate, Route, RouterProvider, Routes, useLocati
 import { AnimatePresence, motion, MotionConfig, useReducedMotion } from 'motion/react'
 
 import { Account } from './Account'
+import { BlogMetadata } from './features/blog/BlogMetadata'
 import { Studio } from './Studio'
 import { Home } from './pages/home/Home'
 import { PublicBlog } from './pages/blog/BlogPage'
@@ -47,7 +48,7 @@ function getRouteMotionKey(pathname: string) {
 }
 
 export function AppRoutes() {
-  return <SessionRecovery>{(location) => <PageRoutes location={location} />}</SessionRecovery>
+  return <SessionRecovery>{(location) => <><BlogMetadata /><PageRoutes location={location} /></>}</SessionRecovery>
 }
 
 function PageRoutes({ location }: { location: Location }) {
@@ -81,6 +82,7 @@ function PageRoutes({ location }: { location: Location }) {
         <Route path="/studio" element={<LegacyStudioRedirect />} />
         <Route path="/account" element={<Account />} />
         <Route path="/account/wallet" element={<Account />} />
+        <Route path="/account/notifications" element={<Account />} />
         <Route path="/account/billing" element={<LegacyBillingRedirect />} />
         <Route path="/admin/*" element={<AdminPage />} />
       </Routes>

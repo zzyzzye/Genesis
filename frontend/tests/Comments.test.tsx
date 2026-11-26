@@ -21,6 +21,22 @@ function reader(loggedIn = true) {
 }
 
 describe('文章评论', () => {
+  it('回复关联目标，失败保留正文与目标，切换目标使用新的提交标识', async () => {
+    reader()
+    vi.mocked(getBlogComments).mockResolvedValue({ items: [item, { ...item, id: 'second', author_name: '另一位读者' }], total: 2 })
+    fireEvent.click(await screen.findByRole('button', { name: '回复 测试昵称' }))
+    fireEvent.change(screen.getByRole('textbox', { name: '写下评论' }), { target: { value: '关联回复' } })
+    vi.mocked(submitBlogComment).mockRejectedValue(new Error('离线'))
+    fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('离线')
+    expect(submitBlogComment).toHaveBeenLastCalledWith('test-post', 'test-placeholder', '关联回复', expect.any(String), '', true, 'comment-1')
+    const first = vi.mocked(submitBlogComment).mock.calls[0]?.[3]
+    fireEvent.click(screen.getByRole('button', { name: '回复 另一位读者' }))
+    fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
+    await waitFor(() => expect(submitBlogComment).toHaveBeenCalledTimes(2))
+    expect(vi.mocked(submitBlogComment).mock.calls[1]?.[3]).not.toBe(first)
+    expect(vi.mocked(submitBlogComment).mock.calls[1]?.[6]).toBe('second')
+  })
   it('未登录提供返回当前文章的登录入口，空态不影响阅读', async () => {
     reader(false)
     expect(await screen.findByText('还没有公开评论，欢迎留下你的想法。')).toBeInTheDocument()

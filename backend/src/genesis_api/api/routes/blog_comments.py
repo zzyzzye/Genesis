@@ -17,6 +17,7 @@ from genesis_api.blog.comments import (
     CommentAvatarRequest,
     CommentModerate,
     CommentPage,
+    CommentPublic,
     CommentReceipt,
     CommentWrite,
     admin_comment,
@@ -24,7 +25,13 @@ from genesis_api.blog.comments import (
     public_comment,
     utc,
 )
-from genesis_api.blog.models import BlogComment, BlogCommentState, BlogPost, BlogPostStatus
+from genesis_api.blog.models import (
+    BlogComment,
+    BlogCommentState,
+    BlogNotification,
+    BlogPost,
+    BlogPostStatus,
+)
 from genesis_api.identity.models import User
 
 public_router = APIRouter(prefix="/blog", tags=["博客评论"])
@@ -94,14 +101,25 @@ def submit_comment(
         select(BlogComment).where(BlogComment.submission_id == data.submission_id)
     )
     if previous is not None:
-        if (previous.author_id, previous.post_id, previous.content, previous.qq_number) != (
+        if (
+            previous.author_id,
+            previous.post_id,
+            previous.content,
+            previous.qq_number,
+            previous.parent_id,
+        ) != (
             user.id,
             post.id,
             data.content,
             data.qq,
+            data.parent_id,
         ):
             raise HTTPException(409, "提交标识已使用，请重新提交")
         return CommentReceipt(id=previous.id, state=previous.state)
+    if data.parent_id is not None:
+        parent = session.get(BlogComment, data.parent_id)
+        if parent is None or parent.post_id != post.id or parent.state != BlogCommentState.PUBLIC:
+            raise HTTPException(404, "被回复的评论不存在或尚未公开")
     now = datetime.now(UTC)
     recent = (
         session.scalar(
@@ -124,6 +142,7 @@ def submit_comment(
         author_id=user.id,
         post_id=post.id,
         content=data.content,
+        parent_id=data.parent_id,
         qq_number=data.qq,
         browser=browser,
         operating_system=operating_system,
@@ -143,6 +162,25 @@ def submit_comment(
         session.rollback()
         raise HTTPException(409, "提交标识已使用，请重新提交") from exc
     return CommentReceipt(id=item.id, state=item.state)
+
+
+@public_router.get("/posts/{slug}/comments/{item_id}", response_model=CommentPublic)
+def get_comment(slug: str, item_id: UUID, session: SessionDependency) -> CommentPublic:
+    """通知深链接可定位分页之外的公开评论，隐藏项统一返回 404。"""
+    item = session.scalar(
+        select(BlogComment)
+        .join(BlogComment.post)
+        .where(
+            BlogComment.id == item_id,
+            BlogPost.slug == slug,
+            BlogPost.status == BlogPostStatus.PUBLISHED,
+            BlogPost.deleted_at.is_(None),
+            BlogComment.state == BlogCommentState.PUBLIC,
+        )
+    )
+    if item is None:
+        raise HTTPException(404, "评论不存在或尚未公开")
+    return public_comment(item)
 
 
 @public_router.get("/comments/{item_id}/avatar")
@@ -203,6 +241,25 @@ def moderate_comment(
     item = locked_comment(session, item_id, data.expected_updated_at)
     item.state = data.state
     item.updated_at = datetime.now(UTC)
+    if (
+        data.state == BlogCommentState.PUBLIC
+        and item.parent is not None
+        and item.parent.author_id != item.author_id
+    ):
+        exists = session.scalar(
+            select(BlogNotification.id).where(
+                BlogNotification.comment_id == item.id,
+                BlogNotification.recipient_id == item.parent.author_id,
+            )
+        )
+        if exists is None:
+            session.add(
+                BlogNotification(
+                    recipient_id=item.parent.author_id,
+                    comment_id=item.id,
+                    created_at=item.updated_at,
+                )
+            )
     session.commit()
     session.refresh(item)
     return admin_comment(item)

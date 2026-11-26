@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBlocker, useLocation } from 'react-router-dom'
 import { RefreshCw } from 'lucide-react'
 import { BlogWorkflowDialog } from '../../studio/BlogWorkflowDialog'
-import { ApiError, getBlogComments, submitBlogComment, type BlogComment } from '../../lib/api'
+import { ApiError, getBlogComment, getBlogComments, submitBlogComment, type BlogComment } from '../../lib/api'
 import { authTokenChangedEvent, getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
 import './ArticleComments.css'
 import { CommentAvatar, CommentSource } from './CommentSource'
@@ -21,6 +21,17 @@ export function ArticleComments({ slug }: { slug: string }) {
   const [offset, setOffset] = useState(0)
   const [token, setToken] = useState(readToken)
   const [content, setContent] = useState('')
+  const [reply, setReply] = useState<BlogComment | null>(null)
+  const [focused, setFocused] = useState<{ id: string; item?: BlogComment; error?: string } | null>(null)
+  const focusId = new URLSearchParams(location.search).get('comment')
+  useEffect(() => {
+    if (!focusId) return
+    const controller = new AbortController()
+    void getBlogComment(slug, focusId, controller.signal).then(item => {
+      if (!controller.signal.aborted) setFocused({ id: focusId, item })
+    }).catch(() => { if (!controller.signal.aborted) setFocused({ id: focusId, error: '这条回复已不可见或暂时无法读取。' }) })
+    return () => controller.abort()
+  }, [slug, focusId, refresh])
   const [qq, setQq] = useState('')
   const [qqError, setQqError] = useState(false)
   const qqInput = useRef<HTMLInputElement>(null)
@@ -82,13 +93,14 @@ export function ArticleComments({ slug }: { slug: string }) {
     if (qqValue && !/^[1-9][0-9]{4,10}(?:@qq\.com)?$/i.test(qqValue)) { setQqError(true); setError('请填写数字 QQ 邮箱，例如 12345@qq.com。'); qqInput.current?.focus(); return }
     const currentToken = readToken()
     if (!currentToken) { setExpired(true); setError('请先登录，当前输入会保留在此页面。'); return }
-    const signature = JSON.stringify([body, qqValue.toLowerCase()])
+    const signature = JSON.stringify([body, qqValue.toLowerCase(), reply?.id])
     if (attempt.current?.signature !== signature) attempt.current = { signature, id: crypto.randomUUID() }
     pending.current = true; setBusy(true); setError(''); setFeedback('')
     try {
-      const receipt = await submitBlogComment(slug, currentToken, body, attempt.current.id, qqValue, true)
+      const receipt = reply ? await submitBlogComment(slug, currentToken, body, attempt.current.id, qqValue, true, reply.id) : await submitBlogComment(slug, currentToken, body, attempt.current.id, qqValue, true)
       if (!mounted.current) return
       setContent(''); setQq(''); attempt.current = null; setExpired(false)
+      setReply(null)
       setFeedback(receipt.state === 'public' ? '评论已提交并公开。' : receipt.state === 'hidden' ? '这条评论已提交，目前未公开。' : '评论已提交，审核通过后会显示。')
       setOffset(0); setRefresh((value) => value + 1); input.current?.focus()
     } catch (reason) {
@@ -98,10 +110,15 @@ export function ArticleComments({ slug }: { slug: string }) {
     } finally { pending.current = false; if (mounted.current) setBusy(false) }
   }
 
+  function entry(item: BlogComment) {
+    return <li key={item.id} id={`comment-${item.id}`}><CommentAvatar item={item} /><div className="article-comments__entry"><div className="article-comments__meta"><strong>{item.author_name}</strong><time dateTime={item.created_at}>{date(item.created_at)}</time></div><CommentSource item={item} />{item.reply_to && <div className="article-comments__reply-context">回复 {item.reply_to.author_name}：{item.reply_to.content}</div>}<p>{item.content}</p>{token && <button aria-label={`回复 ${item.author_name}`} disabled={busy} onClick={() => { setReply(item); setError(''); input.current?.focus(); input.current?.scrollIntoView({ block: 'center' }) }}>回复</button>}</div></li>
+  }
+  const focusedItem = focusId && focused?.id === focusId ? focused.item : undefined
   return <section className="article-comments" id="comments" aria-labelledby="article-comments-title">
     <header><h2 id="article-comments-title">文章讨论 <span>{total}</span></h2><button className="article-comments__refresh" type="button" aria-label="刷新评论" title="刷新评论" disabled={loading} onClick={() => { setOffset(0); setRefresh((value) => value + 1) }}><RefreshCw size={15} aria-hidden="true" /></button></header>
     {token ? <form noValidate onSubmit={(event) => void submit(event)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault() }}>
       <div className="article-comments__composer">
+        {reply && <div className="article-comments__reply-target"><span>回复 {reply.author_name}</span><button type="button" disabled={busy} onClick={() => { setReply(null); input.current?.focus() }}>取消回复</button></div>}
         <div className="article-comments__identity">
           <CommentAvatarPreview qq={qq} token={token} />
           <input id="comment-qq" ref={qqInput} type="text" inputMode="email" autoComplete="off" maxLength={64} aria-label="QQ 邮箱（选填）" placeholder="QQ 邮箱（选填，用于头像）" value={qq} disabled={busy} onChange={(event) => { setQq(event.target.value); setQqError(false); setError('') }} aria-invalid={qqError} aria-describedby="comment-error" />
@@ -119,7 +136,8 @@ export function ArticleComments({ slug }: { slug: string }) {
       <p className="article-comments__feedback" role="status">{feedback}</p>
     </form> : <p><Link to={returnTo}>登录后参与讨论 ↗</Link></p>}
     <div className="article-comments__list" aria-busy={loading}>
-      {items.length > 0 && <ol aria-label="公开评论">{items.map((item) => <li key={item.id}><CommentAvatar item={item} /><div className="article-comments__entry"><div className="article-comments__meta"><strong>{item.author_name}</strong><time dateTime={item.created_at}>{date(item.created_at)}</time></div><CommentSource item={item} /><p>{item.content}</p></div></li>)}</ol>}
+      {focusId && <div className="article-comments__focused"><strong>定位的回复</strong>{focused?.id !== focusId ? <p role="status">正在定位回复…</p> : focused.error ? <p role="alert">{focused.error}<button onClick={() => setRefresh(value => value + 1)}>重试</button></p> : focusedItem && <ol aria-label="定位的回复">{entry(focusedItem)}</ol>}</div>}
+      {items.length > 0 && <ol aria-label="公开评论">{items.filter(item => item.id !== focusedItem?.id).map(entry)}</ol>}
       {loading && <p role="status">正在加载评论…</p>}
       {loadError && <p role="alert">评论暂时未能加载。<button type="button" onClick={() => setRefresh((value) => value + 1)}>重试加载评论</button></p>}
       {!loading && !loadError && items.length === 0 && <p>还没有公开评论，欢迎留下你的想法。</p>}

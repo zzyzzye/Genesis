@@ -181,7 +181,7 @@ describe('App', () => {
     await waitFor(() => expect(decodeURIComponent(window.location.hash)).toContain('内容章节'))
     expect(screen.queryByRole('link', { name: '参与讨论' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '浏览博客' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('link', { name: '回到顶部', exact: true }))
+    fireEvent.click(screen.getByRole('link', { name: '回到顶部' }))
     await waitFor(() => expect(window.location.hash).toBe('#top'))
     fireEvent.click(screen.getByRole('button', { name: '返回文章列表' }))
     expect(await screen.findByRole('heading', { name: '搜索「模块」' })).toBeInTheDocument()

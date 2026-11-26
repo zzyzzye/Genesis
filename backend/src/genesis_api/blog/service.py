@@ -7,6 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from genesis_api.blog.guide import queue_article_guide
+from genesis_api.blog.history import capture_revision
 from genesis_api.blog.models import BlogCategory, BlogPost, BlogPostStatus, BlogTag
 from genesis_api.blog.schemas import BlogPostWrite, BlogTagWrite
 
@@ -174,6 +175,7 @@ def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> No
     Raises:
         ValueError: 所选分类不存在。
     """
+    capture_revision(session, post)
     post.slug = data.slug
     post.title = data.title
     post.excerpt = data.excerpt
@@ -218,6 +220,7 @@ def apply_post_data(session: Session, post: BlogPost, data: BlogPostWrite) -> No
         updated_at = max(updated_at, previous + timedelta(microseconds=1))
     post.updated_at = updated_at
     queue_article_guide(post)
+    capture_revision(session, post)
 
 
 def resolve_tags(session: Session, tag_inputs: list[BlogTagWrite]) -> list[BlogTag]:

@@ -1,0 +1,22 @@
+.article-history { box-sizing: border-box; width: min(1120px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; border: 0; border-radius: 12px; outline: 0; background: var(--studio-paper, #fff); color: var(--studio-ink, #151515); }
+.article-history::backdrop { background: rgb(0 0 0 / 25%); }
+.article-history[open] { display: flex; flex-direction: column; overflow: hidden; }
+.article-history header, .article-history footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.article-history > header, .article-history > footer { flex-shrink: 0; }
+.article-history > header > button { flex-shrink: 0; white-space: nowrap; }
+.article-history h2 { margin: 0; font-size: 20px; }
+.article-history p { font-size: 13px; color: var(--studio-muted, #686868); }
+.article-history button { min-height: 44px; padding: 8px 12px; border: 0; border-radius: 6px; outline: 0; box-shadow: none; color: inherit; background: transparent; font: inherit; font-size: 13px; cursor: pointer; }
+.article-history button:is(:hover, :focus-visible), .article-history button[aria-pressed=true] { background: var(--studio-soft, #f4f4f4); }
+.article-history button:disabled { opacity: .5; cursor: not-allowed; }
+.article-history__layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; margin: 20px 0; min-height: 0; overflow: auto; }
+.article-history aside > button { display: flex; width: 100%; flex-direction: column; text-align: left; gap: 4px; }
+.article-history aside span { overflow-wrap: anywhere; }
+.article-history nav { display: flex; align-items: center; font-size: 12px; }
+.article-history__columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; font-size: 13px; }
+.article-history__field h3 { display: flex; gap: 8px; margin: 16px 0 8px; font-size: 13px; }
+.article-history__field h3 span { color: var(--studio-muted, #686868); font-weight: 400; }
+.article-history pre { margin: 0; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.8; }
+.article-history__changed { background: var(--studio-soft, #f4f4f4); border-radius: 6px; }
+.article-history .article-history__apply { flex-shrink: 0; background: var(--studio-ink, #151515); color: var(--studio-paper, #fff); }
+@media (max-width: 680px) { .article-history { padding: 16px; } .article-history__layout { grid-template-columns: minmax(0, 1fr); } .article-history aside { max-height: 180px; overflow: auto; } .article-history footer { flex-wrap: wrap; } }

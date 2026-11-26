@@ -1505,6 +1505,7 @@ async def test_comment_submission_moderation_and_public_boundary(
         "region",
         "browser",
         "operating_system",
+        "reply_to",
     }
     assert public["items"][0]["content"] == str(data["content"]).strip()
     assert public["items"][0]["region"] == "浙江省"

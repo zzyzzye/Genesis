@@ -19,6 +19,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
     Uuid,
     func,
     text,
@@ -124,6 +125,10 @@ class BlogComment(Base):
         Uuid, ForeignKey("users.id", ondelete="RESTRICT"), index=True
     )
     content: Mapped[str] = mapped_column(String(2000))
+    parent_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("blog_comments.id", ondelete="SET NULL"), index=True
+    )
+    parent: Mapped[BlogComment | None] = relationship(remote_side="BlogComment.id")
     qq_number: Mapped[str | None] = mapped_column(String(11), nullable=True)
     region: Mapped[str | None] = mapped_column(String(100), nullable=True)
     browser: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -289,6 +294,40 @@ class BlogPost(Base):
     guide: Mapped[BlogArticleGuide | None] = relationship(
         cascade="all, delete-orphan", passive_deletes=True
     )
+
+
+class BlogPostRevision(Base):
+    """与文章保存同事务写入的不可变快照，文章永久删除时一并清理。"""
+
+    __tablename__ = "blog_post_revisions"
+    __table_args__ = (UniqueConstraint("post_id", "version"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    post_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("blog_posts.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    title: Mapped[str] = mapped_column(String(200))
+    payload: Mapped[dict[str, object]] = mapped_column(JSON)
+    post: Mapped[BlogPost] = relationship()
+
+
+class BlogNotification(Base):
+    """已公开回复的收件箱索引，不复制评论内容，隐藏后不再向读者展示。"""
+
+    __tablename__ = "blog_notifications"
+    __table_args__ = (UniqueConstraint("recipient_id", "comment_id"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    recipient_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    comment_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("blog_comments.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    comment: Mapped[BlogComment] = relationship()
 
 
 class BlogArticleGuide(Base):

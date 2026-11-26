@@ -1,0 +1,14 @@
+.blog-notifications { max-width: 900px; color: var(--portal-ink, #151515); }
+.blog-notifications header, .blog-notifications footer, .blog-notifications nav { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.blog-notifications h1 { margin: 0; font-size: 26px; }
+.blog-notifications header p, .blog-notifications__empty { color: #686868; font-size: 14px; }
+.blog-notifications button, .blog-notifications a { display: inline-flex; align-items: center; min-height: 44px; border: 0; outline: 0; box-shadow: none; border-radius: 6px; background: transparent; color: inherit; padding: 4px 8px; font: inherit; font-size: 13px; text-decoration: none; cursor: pointer; overflow-wrap: anywhere; }
+.blog-notifications button:is(:hover, :focus-visible), .blog-notifications a:is(:hover, :focus-visible) { background: #f4f4f4; }
+.blog-notifications button:disabled { opacity: .5; cursor: not-allowed; }
+.blog-notifications ul { padding: 0; margin: 24px 0; list-style: none; }
+.blog-notifications li { padding: 20px 0; }
+.blog-notifications li > p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; font-size: 15px; }
+.blog-notifications__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; }
+.blog-notifications__meta time { color: #686868; font-size: 12px; }
+.blog-notifications__meta > span { padding: 2px 6px; border-radius: 4px; background: #f4f4f4; font-size: 12px; }
+.blog-notifications__empty { padding: 40px 0; line-height: 1.8; }

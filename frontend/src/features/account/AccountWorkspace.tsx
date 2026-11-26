@@ -1,4 +1,4 @@
-import { ArrowUpRight, Clapperboard, LogOut, PenLine, ShieldCheck, UserRound } from 'lucide-react'
+import { ArrowUpRight, Bell, Clapperboard, LogOut, PenLine, ShieldCheck, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { GenesisLogo } from '../../components/GenesisLogo'
@@ -8,13 +8,14 @@ import './AccountWorkspace.css'
 
 export function AccountWorkspace({ user, active, children, onLogout, logoutDisabled = false }: {
   user: CurrentUser | null
-  active: 'profile' | 'wallet' | 'billing'
+  active: 'profile' | 'wallet' | 'billing' | 'notifications'
   children: ReactNode
   onLogout?: () => void
   logoutDisabled?: boolean
 }) {
   const items = [
     { id:'profile',name:'个人账户',path:'/account',icon:UserRound },
+    { id:'notifications',name:'回复通知',path:'/account/notifications',icon:Bell },
     ...(user?.role === 'owner' ? [{ id:'billing',name:'全站管理',path:'/admin',icon:ShieldCheck }] : []),
   ]
   return <div className={`account-shell account-workspace account-workspace--${active}`}>

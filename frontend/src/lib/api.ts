@@ -27,15 +27,18 @@ export interface BlogCategory {
 
 
 export type BlogCommentState = 'pending' | 'public' | 'hidden'
-export interface BlogComment { id: string; content: string; author_name: string; created_at: string; avatar_url?: string | null; region?: string | null; browser?: string | null; operating_system?: string | null }
+export interface BlogComment { id: string; content: string; author_name: string; created_at: string; avatar_url?: string | null; region?: string | null; browser?: string | null; operating_system?: string | null; reply_to?: { id: string; author_name: string; content: string } | null }
 export interface BlogCommentAdmin extends BlogComment { post_title: string; post_slug: string; post_status: 'draft' | 'published'; state: BlogCommentState; updated_at: string }
 export interface BlogCommentsPage<T = BlogComment> { items: T[]; total: number }
 export function getBlogComments(slug: string, offset: number, signal?: AbortSignal): Promise<BlogCommentsPage> {
   return request(`/blog/posts/${encodeURIComponent(slug)}/comments?limit=20&offset=${offset}`, { signal })
 }
-export async function submitBlogComment(slug: string, token: string, content: string, submissionId: string, qq = '', showRegion = false): Promise<{ id: string; state: BlogCommentState }> {
+export function getBlogComment(slug: string, id: string, signal: AbortSignal): Promise<BlogComment> {
+  return request(`/blog/posts/${encodeURIComponent(slug)}/comments/${encodeURIComponent(id)}`, { signal })
+}
+export async function submitBlogComment(slug: string, token: string, content: string, submissionId: string, qq = '', showRegion = false, parentId?: string): Promise<{ id: string; state: BlogCommentState }> {
   const deviceHints = await collectCommentDeviceHints()
-  return request(`/blog/posts/${encodeURIComponent(slug)}/comments`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ content, submission_id: submissionId, qq: qq.trim() || null, show_region: showRegion, ...(deviceHints ? { device_hints: deviceHints } : {}) }) })
+  return request(`/blog/posts/${encodeURIComponent(slug)}/comments`, { method: 'POST', headers: { ...authHeaders(token), 'Content-Type': 'application/json' }, body: JSON.stringify({ content, submission_id: submissionId, qq: qq.trim() || null, show_region: showRegion, ...(parentId ? { parent_id: parentId } : {}), ...(deviceHints ? { device_hints: deviceHints } : {}) }) })
 }
 export function getAdminBlogComments(token: string, query: string, state: string, page: number, signal?: AbortSignal): Promise<BlogCommentsPage<BlogCommentAdmin>> {
   const params = new URLSearchParams({ q: query, limit: '20', offset: String((page - 1) * 20) })
@@ -249,7 +252,7 @@ function formatApiErrorDetail(error: unknown): string | null {
   return location ? `${location}：${value.msg}` : value.msg
 }
 
-function authHeaders(token: string): HeadersInit {
+export function authHeaders(token: string): HeadersInit {
   return { Authorization: `Bearer ${token}` }
 }
 

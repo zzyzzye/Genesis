@@ -42,6 +42,7 @@ class CommentWrite(BaseModel):
     model_config = {"extra": "forbid"}
     content: str = Field(min_length=1, max_length=2000)
     submission_id: UUID
+    parent_id: UUID | None = None
     qq: str | None = Field(default=None, max_length=64)
     show_region: bool = False
     device_hints: CommentDeviceHints | None = None
@@ -80,6 +81,14 @@ class CommentAvatarRequest(BaseModel):
         return number
 
 
+class CommentReplyTo(BaseModel):
+    """仅返回仍公开的被回复评论的上下文。"""
+
+    id: UUID
+    author_name: str
+    content: str
+
+
 class CommentPublic(BaseModel):
     """公开字段不含用户标识、账号、联系方式或审核元数据。"""
 
@@ -88,6 +97,7 @@ class CommentPublic(BaseModel):
     author_name: str
     created_at: datetime
     avatar_url: str | None = None
+    reply_to: CommentReplyTo | None = None
     region: str | None = None
     browser: str | None = None
     operating_system: str | None = None
@@ -144,6 +154,13 @@ def public_comment(item: BlogComment) -> CommentPublic:
         region=item.region,
         browser=item.browser,
         operating_system=item.operating_system,
+        reply_to=CommentReplyTo(
+            id=item.parent.id,
+            author_name=item.parent.author.display_name,
+            content=item.parent.content[:160],
+        )
+        if item.parent is not None and item.parent.state == BlogCommentState.PUBLIC
+        else None,
     )
 
 
@@ -189,7 +206,11 @@ def list_comments(
     total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     order = BlogComment.created_at.asc() if slug is not None else BlogComment.created_at.desc()
     items = session.scalars(
-        stmt.options(selectinload(BlogComment.author), selectinload(BlogComment.post))
+        stmt.options(
+            selectinload(BlogComment.author),
+            selectinload(BlogComment.post),
+            selectinload(BlogComment.parent).selectinload(BlogComment.author),
+        )
         .order_by(order, BlogComment.id)
         .offset(offset)
         .limit(limit)

@@ -1,10 +1,11 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vitest/config'
+import { blogSeoPlugin } from './blogSeoPlugin.ts'
 
 const proxyTarget = process.env.VITE_PROXY_TARGET ?? 'http://localhost:8000'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), blogSeoPlugin(proxyTarget)],
   server: {
     port: 5173,
     watch: {
@@ -15,6 +16,12 @@ export default defineConfig({
       '/api': {
         target: proxyTarget,
         changeOrigin: true,
+        configure(proxy) {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            proxyReq.setHeader('X-Forwarded-Host', req.headers.host ?? 'localhost:5173')
+            proxyReq.setHeader('X-Forwarded-Proto', 'http')
+          })
+        },
       },
     },
   },
