@@ -3,7 +3,7 @@ import './BlogReader.css'
 
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams, type Location } from 'react-router-dom'
-import { Search, UserRound } from 'lucide-react'
+import { ArrowUp, Search, UserRound } from 'lucide-react'
 import { ArticleDocument } from '../../features/blog/ArticleToc'
 import { BlogLinks } from '../../features/blog/BlogLinks'
 import { ArticleComments } from '../../features/blog/ArticleComments'
@@ -183,8 +183,8 @@ function PublicBlog() {
 
       <footer className="blog-footer">
         <span>Genesis · 记录与分享</span>
-        <Link to="#top" state={location.state} preventScrollReset onClick={returnToTop}>回到顶部 ↑</Link>
       </footer>
+      <Link className="reader-back-top" to="#top" state={location.state} preventScrollReset onClick={returnToTop} aria-label="回到顶部" title="回到顶部"><ArrowUp size={20} aria-hidden="true" /></Link>
       {searchOpen && <BlogSearch initialQuery="" onClose={() => setSearchOpen(false)} onSearch={query => { setSearchOpen(false); void navigate(`/blog?${new URLSearchParams({ q: query })}`) }} />}
     </div>
   )
