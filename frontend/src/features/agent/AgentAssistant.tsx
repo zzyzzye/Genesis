@@ -366,6 +366,9 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   const contextPercent = contextTokens !== null && contextWindow && contextWindow > 0 ? Math.min(100, contextTokens / contextWindow * 100) : null
   const contextDescription = `${contextTokens === null ? '—' : contextTokens.toLocaleString('zh-CN')} / ${formatTokens(contextWindow)}`
   const suggestions = media?.suggestions ?? (editor ? ['分析当前文章结构和问题', '优化当前文章的表达和节奏', '为当前文章生成更好的标题'] : defaultSuggestions)
+  const blogSuggestionPresentation = editor
+    ? [{ label: '分析文章结构', icon: 'menu' }, { label: '润色表达', icon: 'spark' }, { label: '生成标题', icon: 'articles' }] as const
+    : [{ label: '构思主题与大纲', icon: 'spark' }, { label: '整理分类与标签', icon: 'folder' }, { label: '创建文章草稿', icon: 'plus' }] as const
 
   useEffect(() => {
     if (!model) return
@@ -851,6 +854,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
 
   function handleSuggestion(suggestion: string) {
     setDraft(suggestion)
+    if (!media) inputRef.current?.focus()
   }
 
   function stopGeneration() {
@@ -952,7 +956,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             {!(isBlogWelcome && page.pageType === 'overview') && <div className="studio-assistant__context"><StudioIcon name="spark" /> {media?.contextLabel ?? (editor ? `当前文章：${editor.title || '未命名草稿'}` : `当前页面：${pageLabels[page.pageType]}`)}</div>}
             <div className="studio-assistant__messages">
               {messages.map((message, index) => {
-                if (isBlogWelcome) return <div key="blog-welcome" className="studio-assistant__welcome"><StudioIcon name="spark" /><h2>今天想写点什么？</h2><p>从一个想法开始，也可以直接交给我整理。</p></div>
+                if (isBlogWelcome) return <div key="blog-welcome" className="studio-assistant__welcome"><h2>今天想写点什么？</h2></div>
                 if (media && index === 0) return messages.length === 1 ? <div key="welcome" className="media-assistant__welcome">{media.welcome}</div> : null
                 const previous = messages[index - 1]
                 const previousQuestion = previous?.role === 'assistant' ? splitAgentQuestion(previous.content).request : null
@@ -968,7 +972,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             {messages.length === 1 && (
               <div className="studio-assistant__suggestions">
                 {media && <span>你可以这样开始</span>}
-                {suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => handleSuggestion(suggestion)}>{suggestion}<StudioIcon name="arrow-up-right" /></button>)}
+                {suggestions.map((suggestion, index) => <button key={suggestion} type="button" onClick={() => handleSuggestion(suggestion)}>{media ? <>{suggestion}<StudioIcon name="arrow-up-right" /></> : <><StudioIcon name={blogSuggestionPresentation[index]?.icon ?? 'spark'} /><span>{blogSuggestionPresentation[index]?.label ?? suggestion}</span></>}</button>)}
               </div>
             )}
             </div>
@@ -984,7 +988,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             <textarea className="resize-none"
               ref={inputRef}
               aria-label={`向${name}提问`}
-              placeholder={media ? undefined : '告诉我你想完成什么…'}
+              placeholder={media ? undefined : '向博客助手提问…'}
               rows={2}
               value={draft}
               disabled={conversationLoading}

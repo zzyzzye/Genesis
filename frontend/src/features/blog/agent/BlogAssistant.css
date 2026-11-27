@@ -191,17 +191,21 @@
 .studio-assistant.is-open .studio-assistant__header { padding: 10px 20px; margin-bottom: 0; border-bottom: 1px solid var(--studio-line, #e8e8e8); background: var(--studio-navigation, #f7f7f7); }
 .studio-assistant.is-open .studio-assistant__panel { border-left: 1px solid var(--studio-line, #e8e8e8); }
 .studio-assistant.is-open .studio-assistant__composer { border-top: 1px solid var(--studio-line, #e8e8e8); }
-.studio-assistant.is-open:not(.media-assistant) .studio-assistant__header { min-height: 64px; border-bottom: 0; background: var(--assistant-paper); }
-.studio-assistant.is-open:not(.media-assistant) .studio-assistant__panel { border-left: 0; }
-.studio-assistant.is-open:not(.media-assistant) .studio-assistant__composer { border-top: 0; }
-.studio-assistant__welcome { padding-top: 36px; }
-.studio-assistant__welcome > svg { width: 24px; height: 24px; color: var(--assistant-muted); }
-.studio-assistant__welcome h2 { margin: 16px 0 8px; font-size: 19px; font-weight: 600; line-height: 1.5; letter-spacing: -.02em; }
-.studio-assistant__welcome p { margin: 0; color: var(--assistant-muted); font-size: 12px; line-height: 1.8; }
-.is-blog-welcome .studio-assistant__scroll-content { gap: 24px; }
-.is-blog-welcome .studio-assistant__suggestions { gap: 8px; }
-.is-blog-welcome .studio-assistant__suggestions button { min-height: 44px; margin: 0; padding: 10px 12px; background: var(--assistant-surface); border-radius: 8px; }
-.is-blog-welcome .studio-assistant__suggestions button:is(:hover, :focus-visible) { background: var(--assistant-hover); }
+.studio-assistant.is-open:not(.media-assistant) { padding: 12px; }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__header { min-height: 52px; padding: 10px 16px; border-bottom: 0; background: transparent; }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__panel { border: 0; border-radius: 16px; box-shadow: 0 4px 24px rgb(0 0 0 / 8%); }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__identity { gap: 6px; }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__avatar { width: 22px; height: 22px; }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__avatar svg { width: 18px; height: 18px; }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__identity strong { font-size: 13px; font-weight: 500; }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__composer { margin: 0 12px max(12px, env(safe-area-inset-bottom)); padding: 12px 8px 8px; border: 0; border-radius: 10px; background: var(--assistant-composer); }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__composer textarea { min-height: 64px; height: 64px; }
+.studio-assistant:not(.media-assistant) .studio-assistant__suggestions button { justify-content: flex-start; gap: 10px; min-height: 40px; }
+.studio-assistant:not(.media-assistant) .studio-assistant__suggestions svg { width: 16px; height: 16px; }
+.studio-assistant__welcome { padding-top: 24px; }
+.studio-assistant__welcome h2 { margin: 0; font-size: 16px; font-weight: 550; line-height: 1.5; letter-spacing: -.02em; }
+.is-blog-welcome .studio-assistant__scroll-content { gap: 14px; }
+.is-blog-welcome .studio-assistant__suggestions { gap: 2px; }
 .is-blog-welcome .studio-assistant__scroll-content > [role="status"]:empty { display: none; }
 .studio-assistant__workspace { display: flex; flex: 1; min-height: 0; min-width: 0; }
 .studio-assistant__chat { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding-top: 6px; }
@@ -250,4 +254,16 @@
   .studio-assistant__conversation-heading { min-height: 30px; padding-bottom: 4px; }
   .studio-assistant__composer { padding-block: 8px; }
   .studio-assistant__composer textarea, .studio-assistant__composer textarea:focus { height: 32px; min-height: 32px; }
+}
+/* 内收面板沿用同一尺寸轨道，避免展开、调宽时挤压或覆盖消息。 */
+.studio-app-shell:has(.markdown-editor) .studio-assistant.is-open:not(.media-assistant) { box-shadow: none; }
+@media (max-width: 680px) {
+  .studio-assistant.is-open:not(.media-assistant) { padding: 8px; background: var(--assistant-surface); }
+  .studio-assistant.is-open:not(.media-assistant) .studio-assistant__panel { border-radius: 12px; box-shadow: none; }
+}
+@media (max-height: 480px) {
+  .studio-assistant.is-open:not(.media-assistant) { padding: 8px; }
+  .studio-assistant.is-open:not(.media-assistant) .studio-assistant__header { min-height: 44px; padding-block: 6px; }
+  .studio-assistant.is-open:not(.media-assistant) .studio-assistant__composer textarea { min-height: 32px; height: 32px; }
+  .studio-assistant__welcome { padding-top: 8px; }
 }
