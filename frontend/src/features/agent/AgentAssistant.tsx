@@ -275,7 +275,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   const studioShellRef = useRef<HTMLElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const launcherRef = useRef<HTMLButtonElement | null>(null)
-  const [panelWidth, setPanelWidth] = useState(420)
+  const [panelWidth, setPanelWidth] = useState(media ? 420 : 460)
   const [resizing, setResizing] = useState(false)
   const resizeStart = useRef<{ x: number; width: number } | null>(null)
   const drafts = useRef<Record<string, string>>({})
@@ -913,12 +913,14 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
       {isOpen && !expanded && <div tabIndex={0} role="separator" aria-label="调整助手宽度" aria-orientation="vertical" aria-valuemin={340} aria-valuemax={600} aria-valuenow={panelWidth} className="studio-assistant__resize" title="拖动或用左右方向键调整宽度" onPointerDown={(event) => { event.preventDefault(); event.currentTarget.focus({ preventScroll: true }); setResizing(true); resizeStart.current = { x: event.clientX, width: panelWidth }; event.currentTarget.setPointerCapture(event.pointerId) }} onPointerMove={(event) => { const start = resizeStart.current; if (start) setPanelWidth(Math.max(340, Math.min(600, start.width + start.x - event.clientX))) }} onPointerUp={() => { setResizing(false); resizeStart.current = null }} onPointerCancel={() => { setResizing(false); resizeStart.current = null }} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setPanelWidth((width) => Math.max(340, Math.min(600, width + (event.key === 'ArrowLeft' ? 16 : -16)))) } }} />}
         <section className={`studio-assistant__panel${messages.length === 1 && !isBusy ? ' is-empty' : ''}${isBlogWelcome ? ' is-blog-welcome' : ''}`} aria-label={media ? `${name} AI 助手` : '博客 AI 助手'}>
           <header className="studio-assistant__header">
-            <div className="studio-assistant__identity">
+            {media ? <div className="studio-assistant__identity">
               <span className="studio-assistant__avatar"><StudioIcon name="assistant" /></span>
               <div><strong>{name}</strong>{media?.subtitle && <span>{media.subtitle}</span>}</div>
-            </div>
+            </div> : <button className="studio-assistant__conversation-menu" type="button" aria-label="聊天历史" title="聊天历史" aria-expanded={historyOpen || expanded} onClick={() => { setHistoryOpen((open) => !open); setModelMenuOpen(false) }}>
+              <span>{isBlogWelcome ? '新对话' : name}</span><StudioIcon name="chevron" />
+            </button>}
             <div className="studio-assistant__header-actions">
-              <button type="button" aria-label="聊天历史" title="聊天历史" aria-expanded={historyOpen || expanded} onClick={() => { setHistoryOpen((open) => !open); setModelMenuOpen(false) }}><StudioIcon name="menu" /></button>
+              {media && <button type="button" aria-label="聊天历史" title="聊天历史" aria-expanded={historyOpen || expanded} onClick={() => { setHistoryOpen((open) => !open); setModelMenuOpen(false) }}><StudioIcon name="menu" /></button>}
               <button className="studio-assistant__new-conversation" type="button" aria-label="新建对话" title="新建对话" disabled={isStarting || conversationLoading || renameBusy || historyDeleting} onClick={startNewConversation}>
                 <StudioIcon name="plus" />
               </button>
@@ -956,7 +958,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             {!(isBlogWelcome && page.pageType === 'overview') && <div className="studio-assistant__context"><StudioIcon name="spark" /> {media?.contextLabel ?? (editor ? `当前文章：${editor.title || '未命名草稿'}` : `当前页面：${pageLabels[page.pageType]}`)}</div>}
             <div className="studio-assistant__messages">
               {messages.map((message, index) => {
-                if (isBlogWelcome) return <div key="blog-welcome" className="studio-assistant__welcome"><h2>今天想写点什么？</h2></div>
+                if (isBlogWelcome) return <div key="blog-welcome" className="studio-assistant__welcome"><StudioIcon name="assistant" /><h2>今天想写点什么？</h2></div>
                 if (media && index === 0) return messages.length === 1 ? <div key="welcome" className="media-assistant__welcome">{media.welcome}</div> : null
                 const previous = messages[index - 1]
                 const previousQuestion = previous?.role === 'assistant' ? splitAgentQuestion(previous.content).request : null

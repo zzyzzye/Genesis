@@ -197,20 +197,28 @@
   --assistant-composer: #fafafa;
   --assistant-hover: #f0f0f0;
 }
-.studio-assistant.is-open:not(.media-assistant) { padding: 12px; }
+.studio-assistant.is-open:not(.media-assistant) { padding: 76px 16px 16px 8px; align-items: stretch; }
 .studio-assistant.is-open:not(.media-assistant) .studio-assistant__header { min-height: 52px; padding: 10px 16px; border-bottom: 0; background: transparent; }
-.studio-assistant.is-open:not(.media-assistant) .studio-assistant__panel { border: 0; border-radius: 16px; box-shadow: 0 4px 24px rgb(0 0 0 / 8%); }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__panel { border: 0; border-radius: 18px; box-shadow: 0 6px 28px rgb(0 0 0 / 7%); }
+.studio-assistant.is-open:not(.media-assistant):not(.is-expanded) .studio-assistant__panel.is-blog-welcome { flex: 0 1 500px; }
+.studio-assistant.is-expanded:not(.media-assistant) { padding: 16px; }
+.studio-assistant__conversation-menu { display: inline-flex; align-items: center; gap: 8px; min-width: 0; min-height: 32px; padding: 4px 6px; margin-left: -6px; border-radius: 6px; background: transparent; font-size: 14px; }
+.studio-assistant__conversation-menu svg { width: 14px; height: 14px; color: var(--assistant-muted); transform: rotate(90deg); }
 .studio-assistant.is-open:not(.media-assistant) .studio-assistant__identity { gap: 6px; }
 .studio-assistant.is-open:not(.media-assistant) .studio-assistant__avatar { width: 22px; height: 22px; }
 .studio-assistant.is-open:not(.media-assistant) .studio-assistant__avatar svg { width: 18px; height: 18px; }
 .studio-assistant.is-open:not(.media-assistant) .studio-assistant__identity strong { font-size: 13px; font-weight: 500; }
-.studio-assistant.is-open:not(.media-assistant) .studio-assistant__composer { margin: 0 12px max(12px, env(safe-area-inset-bottom)); padding: 12px 8px 8px; border: 0; border-radius: 10px; background: var(--assistant-composer); }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__composer { margin: 0 16px max(16px, env(safe-area-inset-bottom)); padding: 14px 10px 10px; border: 0; border-radius: 14px; background: var(--assistant-composer); }
 .studio-assistant.is-open:not(.media-assistant) .studio-assistant__composer textarea { min-height: 64px; height: 64px; }
-.studio-assistant:not(.media-assistant) .studio-assistant__suggestions button { justify-content: flex-start; gap: 10px; min-height: 40px; }
+.studio-assistant:not(.media-assistant) .studio-assistant__body { padding-inline: 26px; }
+.studio-assistant:not(.media-assistant) .studio-assistant__suggestions button { justify-content: flex-start; gap: 12px; min-height: 42px; font-size: 14px; }
 .studio-assistant:not(.media-assistant) .studio-assistant__suggestions svg { width: 16px; height: 16px; }
-.studio-assistant__welcome { padding-top: 24px; }
-.studio-assistant__welcome h2 { margin: 0; font-size: 16px; font-weight: 550; line-height: 1.5; letter-spacing: -.02em; }
-.is-blog-welcome .studio-assistant__scroll-content { gap: 14px; }
+.studio-assistant__welcome { display: grid; gap: 20px; padding-top: 30px; }
+.studio-assistant__welcome > svg { width: 32px; height: 32px; color: var(--assistant-ink); }
+.studio-assistant__welcome h2 { margin: 0; font-size: 20px; font-weight: 550; line-height: 1.5; letter-spacing: -.02em; }
+.is-blog-welcome .studio-assistant__scroll-content { gap: 20px; }
+.studio-assistant:not(.media-assistant) .studio-assistant__selected-reasoning { display: none; }
+.studio-assistant:not(.media-assistant) .studio-assistant__composer-tools > button[type=submit], .studio-assistant:not(.media-assistant) .studio-assistant__stop { border-radius: 50%; }
 .is-blog-welcome .studio-assistant__suggestions { gap: 2px; }
 .is-blog-welcome .studio-assistant__scroll-content > [role="status"]:empty { display: none; }
 .studio-assistant__workspace { display: flex; flex: 1; min-height: 0; min-width: 0; }
@@ -266,6 +274,7 @@
 @media (max-width: 680px) {
   .studio-assistant.is-open:not(.media-assistant) { padding: 8px; background: var(--assistant-surface); }
   .studio-assistant.is-open:not(.media-assistant) .studio-assistant__panel { border-radius: 12px; box-shadow: none; }
+  .studio-assistant.is-open:not(.media-assistant):not(.is-expanded) .studio-assistant__panel.is-blog-welcome { flex: 1; }
 }
 @media (max-height: 480px) {
   .studio-assistant.is-open:not(.media-assistant) { padding: 8px; }
