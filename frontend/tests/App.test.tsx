@@ -129,7 +129,8 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: '返回文章列表' })).toBeInTheDocument()
     await waitFor(() => expect(document.title).toBe('从一个完整模块开始 · Genesis'))
     if (path.endsWith('#comments')) {
-      expect(await screen.findByText('还没有公开评论，欢迎留下你的想法。')).toBeInTheDocument()
+      expect(await screen.findByRole('heading', { name: /^评论$/ })).toBeInTheDocument()
+      await waitFor(() => expect(screen.getByRole('button', { name: '刷新评论' })).toBeEnabled())
       expect(window.location.hash).toBe('#comments')
     }
   })

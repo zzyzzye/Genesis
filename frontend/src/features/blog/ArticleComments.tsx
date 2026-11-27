@@ -115,18 +115,18 @@ export function ArticleComments({ slug }: { slug: string }) {
   }
   const focusedItem = focusId && focused?.id === focusId ? focused.item : undefined
   return <section className="article-comments" id="comments" aria-labelledby="article-comments-title">
-    <header><h2 id="article-comments-title">文章讨论 <span>{total}</span></h2><button className="article-comments__refresh" type="button" aria-label="刷新评论" title="刷新评论" disabled={loading} onClick={() => { setOffset(0); setRefresh((value) => value + 1) }}><RefreshCw size={15} aria-hidden="true" /></button></header>
+    <header><h2 id="article-comments-title">评论{total > 0 && <span>{total}</span>}</h2><button className="article-comments__refresh" type="button" aria-label="刷新评论" title="刷新评论" disabled={loading} onClick={() => { setOffset(0); setRefresh((value) => value + 1) }}><RefreshCw size={15} aria-hidden="true" /></button></header>
     {token ? <form noValidate onSubmit={(event) => void submit(event)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.keyCode === 229)) event.preventDefault() }}>
       <div className="article-comments__composer">
         {reply && <div className="article-comments__reply-target"><span>回复 {reply.author_name}</span><button type="button" disabled={busy} onClick={() => { setReply(null); input.current?.focus() }}>取消回复</button></div>}
         <div className="article-comments__identity">
           <CommentAvatarPreview qq={qq} token={token} />
-          <input id="comment-qq" ref={qqInput} type="text" inputMode="email" autoComplete="off" maxLength={64} aria-label="QQ 邮箱（选填）" placeholder="QQ 邮箱（选填，用于头像）" value={qq} disabled={busy} onChange={(event) => { setQq(event.target.value); setQqError(false); setError('') }} aria-invalid={qqError} aria-describedby="comment-error" />
+          <input id="comment-qq" ref={qqInput} type="text" inputMode="email" autoComplete="off" maxLength={64} aria-label="QQ 邮箱（选填）" placeholder="QQ 邮箱（选填）" value={qq} disabled={busy} onChange={(event) => { setQq(event.target.value); setQqError(false); setError('') }} aria-invalid={qqError} aria-describedby="comment-error" />
         </div>
         <div className="article-comments__writing">
-          <textarea className="resize-none" id="comment-content" ref={input} aria-label="写下评论" placeholder="写下你的想法…" rows={3} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); if (!qqError) setError('') }} aria-describedby="comment-help comment-error" aria-invalid={Boolean(error) && !qqError} />
+          <textarea className="resize-none" id="comment-content" ref={input} aria-label="写下评论" placeholder="写下你的想法…" rows={3} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); if (!qqError) setError('') }} aria-describedby={content.length >= 1800 ? 'comment-count comment-error' : 'comment-error'} aria-invalid={Boolean(error) && !qqError} />
           <div className="article-comments__composer-footer">
-            <div className="article-comments__composer-meta"><span id="comment-help">审核通过后公开</span><span>{content.length}<span className="article-comments__limit"> / 2000</span></span></div>
+            {content.length >= 1800 && <span id="comment-count" className="article-comments__count">{content.length} / 2000</span>}
             <button type="submit" disabled={busy}>{busy ? '提交中…' : '提交评论'}</button>
           </div>
         </div>
@@ -140,7 +140,6 @@ export function ArticleComments({ slug }: { slug: string }) {
       {items.length > 0 && <ol aria-label="公开评论">{items.filter(item => item.id !== focusedItem?.id).map(entry)}</ol>}
       {loading && <p role="status">正在加载评论…</p>}
       {loadError && <p role="alert">评论暂时未能加载。<button type="button" onClick={() => setRefresh((value) => value + 1)}>重试加载评论</button></p>}
-      {!loading && !loadError && items.length === 0 && <p>还没有公开评论，欢迎留下你的想法。</p>}
       {!loading && !loadError && items.length < total && <button type="button" onClick={() => setOffset(offset + 20)}>查看更多评论</button>}
     </div>
     {blocker.state === 'blocked' && <BlogWorkflowDialog title={busy ? '正在提交评论' : dirty ? '评论还未提交' : '离开文章'} description={busy ? '请等待提交结果，再离开文章。' : dirty ? '离开后当前输入会丢失；取消可以继续编辑。' : '评论已提交，可以继续离开文章。'} confirmLabel={dirty ? '放弃评论并离开' : '继续离开'} busy={busy} onCancel={() => blocker.reset()} onConfirm={() => blocker.proceed()} />}
