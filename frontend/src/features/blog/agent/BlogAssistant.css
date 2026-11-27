@@ -191,7 +191,9 @@
 .studio-assistant.is-open .studio-assistant__header { padding: 10px 20px; margin-bottom: 0; border-bottom: 1px solid var(--studio-line, #e8e8e8); background: var(--studio-navigation, #f7f7f7); }
 .studio-assistant.is-open .studio-assistant__panel { border-left: 1px solid var(--studio-line, #e8e8e8); }
 .studio-assistant.is-open .studio-assistant__composer { border-top: 1px solid var(--studio-line, #e8e8e8); }
-.studio-assistant.is-open:not(.media-assistant) .studio-assistant__header { min-height: 64px; background: var(--assistant-paper); }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__header { min-height: 64px; border-bottom: 0; background: var(--assistant-paper); }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__panel { border-left: 0; }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__composer { border-top: 0; }
 .studio-assistant__welcome { padding-top: 36px; }
 .studio-assistant__welcome > svg { width: 24px; height: 24px; color: var(--assistant-muted); }
 .studio-assistant__welcome h2 { margin: 16px 0 8px; font-size: 19px; font-weight: 600; line-height: 1.5; letter-spacing: -.02em; }
