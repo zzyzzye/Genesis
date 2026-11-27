@@ -899,13 +899,15 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
     }
   }, [onExecuted, authKey])
 
+  const isBlogWelcome = !media && !conversationId && !isBusy && messages.length === 1 && messages[0]?.content.startsWith('你好，我是博客助手。')
+
   return (
     <><AnimatePresence initial={false}>
     {isOpen ? <motion.div key="assistant" ref={rootRef} className={`studio-assistant${media ? ` media-assistant ${media.className}` : ''} is-open${expanded ? ' is-expanded' : ''}`}
       initial={{ opacity: 0, x: reducedMotion ? 0 : media ? 24 : '100%', y: reducedMotion || !media ? 0 : 16, '--assistant-motion-width': `${panelWidth}px` }} animate={{ opacity: 1, x: 0, y: 0, '--assistant-motion-width': expanded ? '960px' : `${panelWidth}px` }} exit={{ opacity: 0, x: reducedMotion ? 0 : media ? 24 : '100%', y: reducedMotion || !media ? 0 : 16 }}
       transition={resizing ? { ...transition, duration: 0 } : transition}>
       {isOpen && !expanded && <div tabIndex={0} role="separator" aria-label="调整助手宽度" aria-orientation="vertical" aria-valuemin={340} aria-valuemax={600} aria-valuenow={panelWidth} className="studio-assistant__resize" title="拖动或用左右方向键调整宽度" onPointerDown={(event) => { event.preventDefault(); event.currentTarget.focus({ preventScroll: true }); setResizing(true); resizeStart.current = { x: event.clientX, width: panelWidth }; event.currentTarget.setPointerCapture(event.pointerId) }} onPointerMove={(event) => { const start = resizeStart.current; if (start) setPanelWidth(Math.max(340, Math.min(600, start.width + start.x - event.clientX))) }} onPointerUp={() => { setResizing(false); resizeStart.current = null }} onPointerCancel={() => { setResizing(false); resizeStart.current = null }} onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setPanelWidth((width) => Math.max(340, Math.min(600, width + (event.key === 'ArrowLeft' ? 16 : -16)))) } }} />}
-        <section className={`studio-assistant__panel${messages.length === 1 && !isBusy ? ' is-empty' : ''}`} aria-label={media ? `${name} AI 助手` : '博客 AI 助手'}>
+        <section className={`studio-assistant__panel${messages.length === 1 && !isBusy ? ' is-empty' : ''}${isBlogWelcome ? ' is-blog-welcome' : ''}`} aria-label={media ? `${name} AI 助手` : '博客 AI 助手'}>
           <header className="studio-assistant__header">
             <div className="studio-assistant__identity">
               <span className="studio-assistant__avatar"><StudioIcon name="assistant" /></span>
@@ -929,13 +931,13 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
           </motion.nav>}
           </AnimatePresence>
           <motion.div className="studio-assistant__chat" animate={{ opacity: historyOpen && !expanded ? 0 : 1 }} transition={transition}>
-          <div className="studio-assistant__conversation-heading">
+          {!isBlogWelcome && <div className="studio-assistant__conversation-heading">
             {renaming ? <form noValidate onSubmit={(event) => { void saveTitle(event) }}>
               <input autoFocus aria-label="对话标题" maxLength={80} value={titleDraft} disabled={renameBusy} onChange={(event) => setTitleDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape' && !renameBusy) setRenaming(false) }} />
               <button type="submit" disabled={renameBusy}>{renameBusy ? '保存中…' : '保存'}</button><button type="button" disabled={renameBusy} onClick={() => setRenaming(false)}>取消</button>
               {renameError && <p role="alert">{renameError}</p>}
             </form> : <><strong title={conversation?.title}>{conversation?.title ?? '新对话'}</strong><button type="button" disabled={!conversationId || conversationLoading || historyDeleting} onClick={() => { setTitleDraft(conversation?.title ?? '新对话'); setRenameError(null); setRenaming(true) }}>重命名</button></>}
-          </div>
+          </div>}
           {media?.status}
           {conversationLoading && <p className="studio-assistant__loading" role="status">正在读取对话…</p>}
           {historyError && !historyOpen && <p className="studio-assistant__request-error" role="alert">{historyError}<button type="button" onClick={() => { if (conversationId) void loadConversation(conversationId) }}>重试</button></p>}
@@ -947,9 +949,10 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             aria-label="对话消息"
           >
             <div className="studio-assistant__scroll-content" ref={contentRef}>
-            <div className="studio-assistant__context"><StudioIcon name="spark" /> {media?.contextLabel ?? (editor ? `当前文章：${editor.title || '未命名草稿'}` : `当前页面：${pageLabels[page.pageType]}`)}</div>
+            {!(isBlogWelcome && page.pageType === 'overview') && <div className="studio-assistant__context"><StudioIcon name="spark" /> {media?.contextLabel ?? (editor ? `当前文章：${editor.title || '未命名草稿'}` : `当前页面：${pageLabels[page.pageType]}`)}</div>}
             <div className="studio-assistant__messages">
               {messages.map((message, index) => {
+                if (isBlogWelcome) return <div key="blog-welcome" className="studio-assistant__welcome"><StudioIcon name="spark" /><h2>今天想写点什么？</h2><p>从一个想法开始，也可以直接交给我整理。</p></div>
                 if (media && index === 0) return messages.length === 1 ? <div key="welcome" className="media-assistant__welcome">{media.welcome}</div> : null
                 const previous = messages[index - 1]
                 const previousQuestion = previous?.role === 'assistant' ? splitAgentQuestion(previous.content).request : null

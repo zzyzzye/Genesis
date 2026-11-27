@@ -1,48 +1,46 @@
-.studio-content:has(> .studio-overview) { padding-block: 28px; container-type: inline-size; }
-.studio-overview { display: grid; width: 100%; gap: 32px; }
-.studio-topbar:has(.studio-overview-create) { min-height: 72px; flex-wrap: wrap; }
+.studio-content:has(> .studio-overview) { padding-block: 24px; container-type: inline-size; }
+.studio-overview { display: grid; width: 100%; max-width: 1000px; margin-inline: auto; gap: 24px; }
+.studio-topbar:has(.studio-overview-create) { min-height: 64px; flex-wrap: wrap; }
 .studio-overview-create { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 12px; border-radius: var(--studio-control-radius); background: var(--studio-ink); color: var(--studio-paper); font: inherit; font-size: 12px; font-weight: 550; cursor: pointer; }
 .studio-overview-create:is(:hover, :focus-visible) { background: #373737; }
 .studio-overview-create svg { width: 15px; height: 15px; }
 .studio-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
 .studio-stat-card { min-width: 0; }
-.studio-stat-card p { margin: 0 0 8px; font-size: 12px; color: var(--studio-muted); }
+.studio-stat-card p { margin: 0 0 6px; font-size: 12px; color: var(--studio-muted); }
 .studio-stat-value { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; }
-.studio-stat-value strong { font-size: 30px; line-height: 1.2; font-weight: 550; font-variant-numeric: tabular-nums; letter-spacing: -.035em; overflow-wrap: anywhere; }
+.studio-stat-value strong { font-size: 26px; line-height: 1.2; font-weight: 550; font-variant-numeric: tabular-nums; letter-spacing: -.035em; overflow-wrap: anywhere; }
 .studio-stat-value small { color: var(--studio-muted); font-size: 11px; }
-.studio-overview-grid { display: grid; gap: 28px; }
+.studio-overview-grid { display: grid; gap: 20px; }
 .studio-panel { min-width: 0; }
-.studio-panel__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; margin-bottom: 10px; }
+.studio-panel__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 36px; margin-bottom: 4px; }
 .studio-panel__header h2 { margin: 0; font-size: 15px; font-weight: 600; }
 .studio-panel__header > button { min-height: 36px; padding: 6px 8px; border-radius: 6px; background: transparent; color: var(--studio-muted); font: inherit; font-size: 12px; cursor: pointer; }
 .studio-panel__header > button:is(:hover, :focus-visible) { background: var(--studio-hover); }
-.studio-quick-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.studio-quick-grid button { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 48px; padding: 10px 12px; border: 0; border-radius: var(--studio-control-radius); background: var(--studio-soft); color: var(--studio-ink); text-align: left; cursor: pointer; }
+.studio-quick-grid { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.studio-quick-grid button { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 40px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--studio-muted); text-align: left; cursor: pointer; }
 .studio-quick-grid button:is(:hover, :focus-visible) { background: var(--studio-hover); }
 .studio-card-icon { display: grid; place-items: center; flex: none; color: var(--studio-muted); }
 .studio-card-icon svg { width: 16px; height: 16px; }
 .studio-quick-grid strong { font-size: 13px; font-weight: 500; }
-.studio-quick-grid .studio-quick-chevron { width: 12px; height: 12px; margin-left: auto; color: var(--studio-muted); }
-.studio-activity-list { display: grid; gap: 4px; }
-.studio-activity-list > button { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 12px; width: 100%; min-height: 72px; padding: 12px; border: 0; border-radius: 8px; background: transparent; color: var(--studio-ink); text-align: left; cursor: pointer; }
+.studio-activity-list { display: grid; }
+.studio-activity-list > button { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 68px; padding: 12px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--studio-ink); text-align: left; cursor: pointer; }
 .studio-activity-list > button:is(:hover, :focus-visible) { background: var(--studio-hover); }
-.studio-activity-list > button > svg { width: 16px; height: 16px; margin-top: 3px; color: var(--studio-muted); }
+.studio-activity-list > button > svg { width: 14px; height: 14px; color: var(--studio-muted); }
+.studio-activity-copy { flex: 1; min-width: 0; }
 .studio-activity-list strong { display: block; font-size: 14px; line-height: 1.6; font-weight: 550; overflow-wrap: anywhere; }
-.studio-activity-list small { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; margin-top: 4px; color: var(--studio-muted); font-size: 12px; line-height: 1.7; }
-.studio-activity-meta { display: grid; justify-items: end; gap: 6px; padding-top: 2px; white-space: nowrap; }
+.studio-activity-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-top: 5px; }
 .studio-activity-meta em { font-size: 11px; font-style: normal; color: var(--studio-muted); }
 .studio-activity-meta time { color: var(--studio-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.studio-empty-activity { display: grid; justify-items: center; align-content: center; gap: 8px; min-height: 208px; padding: 24px 16px; border-radius: var(--studio-control-radius); background: var(--studio-soft); text-align: center; }
+.studio-empty-activity { display: grid; justify-items: start; align-content: center; gap: 8px; min-height: 192px; padding: 24px 8px; text-align: left; }
 .studio-empty-activity > svg { width: 24px; height: 24px; margin-bottom: 4px; color: var(--studio-muted); }
 .studio-empty-activity p { margin: 0; color: var(--studio-muted); font-size: 12px; line-height: 1.7; }
 @container (max-width: 480px) {
   .studio-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
-  .studio-quick-grid { grid-template-columns: 1fr; }
   .studio-activity-list > button { padding-inline: 0; }
 }
 @media (max-width: 680px) {
   .studio-content:has(> .studio-overview) { padding-block: 20px; }
   .studio-overview { gap: 24px; }
   .studio-topbar:has(.studio-overview-create) { gap: 8px; }
-  .studio-stat-value strong { font-size: 28px; }
+  .studio-stat-value strong { font-size: 26px; }
 }

@@ -34,7 +34,6 @@ export function StudioOverview({
   const activityItems = [...posts].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5).map((post) => ({
       id: post.id,
       title: post.title,
-      description: post.excerpt,
       label: post.status === 'published' ? '已发布' : '草稿',
       date: formatShortDate(post.updated_at),
       post,
@@ -51,21 +50,6 @@ export function StudioOverview({
       </div>
 
       <div className="studio-overview-grid">
-        <article className="studio-panel studio-quick-panel">
-          <header className="studio-panel__header">
-            <h2 id="studio-overview-title">快捷访问</h2>
-          </header>
-          <div className="studio-quick-grid">
-            {quickActions.map((item) => (
-              <button type="button" onClick={item.action} key={item.title}>
-                <span className="studio-card-icon"><StudioIcon name={item.icon} /></span>
-                <strong>{item.title}</strong>
-                <StudioIcon className="studio-quick-chevron" name="chevron" />
-              </button>
-            ))}
-          </div>
-        </article>
-
         <article className="studio-panel studio-activity-panel">
           <header className="studio-panel__header">
             <h2>最近内容</h2>
@@ -78,12 +62,19 @@ export function StudioOverview({
                 onClick={() => onOpenPost(item.post)}
                 key={item.id}
               >
-                <StudioIcon name="articles" />
-                <span><strong>{item.title}</strong>{item.description && <small>{item.description}</small>}</span>
-                <span className="studio-activity-meta"><em>{item.label}</em><time dateTime={item.post.updated_at}>{item.date}</time></span>
+                <span className="studio-activity-copy"><strong>{item.title}</strong><span className="studio-activity-meta"><em>{item.label}</em><time dateTime={item.post.updated_at}>{item.date} 更新</time></span></span>
+                <StudioIcon name="chevron" />
               </button>
             ))}
             {activityItems.length === 0 && <div className="studio-empty-activity"><StudioIcon name="articles" /><strong>还没有文章</strong><p>点击右上角「创建文章」，开始第一篇草稿。</p></div>}
+          </div>
+        </article>
+        <article className="studio-panel studio-quick-panel">
+          <header className="studio-panel__header"><h2>快捷访问</h2></header>
+          <div className="studio-quick-grid">
+            {quickActions.map((item) => <button type="button" onClick={item.action} key={item.title}>
+              <span className="studio-card-icon"><StudioIcon name={item.icon} /></span><strong>{item.title}</strong>
+            </button>)}
           </div>
         </article>
       </div>

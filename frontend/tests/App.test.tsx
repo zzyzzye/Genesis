@@ -407,7 +407,7 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '新建对话' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: '新建对话' }))
     expect(screen.queryByText('请继续保留这段对话')).not.toBeInTheDocument()
-    expect(screen.getByText('你好，我是博客助手。', { exact: false })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '今天想写点什么？' })).toBeInTheDocument()
     expect(screen.queryByText('一级')).not.toBeInTheDocument()
     expect(screen.queryByText('二级')).not.toBeInTheDocument()
     expect(screen.queryByText('三级')).not.toBeInTheDocument()

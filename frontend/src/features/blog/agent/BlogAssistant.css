@@ -191,6 +191,16 @@
 .studio-assistant.is-open .studio-assistant__header { padding: 10px 20px; margin-bottom: 0; border-bottom: 1px solid var(--studio-line, #e8e8e8); background: var(--studio-navigation, #f7f7f7); }
 .studio-assistant.is-open .studio-assistant__panel { border-left: 1px solid var(--studio-line, #e8e8e8); }
 .studio-assistant.is-open .studio-assistant__composer { border-top: 1px solid var(--studio-line, #e8e8e8); }
+.studio-assistant.is-open:not(.media-assistant) .studio-assistant__header { min-height: 64px; background: var(--assistant-paper); }
+.studio-assistant__welcome { padding-top: 36px; }
+.studio-assistant__welcome > svg { width: 24px; height: 24px; color: var(--assistant-muted); }
+.studio-assistant__welcome h2 { margin: 16px 0 8px; font-size: 19px; font-weight: 600; line-height: 1.5; letter-spacing: -.02em; }
+.studio-assistant__welcome p { margin: 0; color: var(--assistant-muted); font-size: 12px; line-height: 1.8; }
+.is-blog-welcome .studio-assistant__scroll-content { gap: 24px; }
+.is-blog-welcome .studio-assistant__suggestions { gap: 8px; }
+.is-blog-welcome .studio-assistant__suggestions button { min-height: 44px; margin: 0; padding: 10px 12px; background: var(--assistant-surface); border-radius: 8px; }
+.is-blog-welcome .studio-assistant__suggestions button:is(:hover, :focus-visible) { background: var(--assistant-hover); }
+.is-blog-welcome .studio-assistant__scroll-content > [role="status"]:empty { display: none; }
 .studio-assistant__workspace { display: flex; flex: 1; min-height: 0; min-width: 0; }
 .studio-assistant__chat { display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding-top: 6px; }
 .studio-assistant__conversation-heading { display: flex; flex: none; align-items: center; gap: 12px; min-height: 34px; padding: 0 20px 6px; }
