@@ -191,6 +191,12 @@
 .studio-assistant.is-open .studio-assistant__header { padding: 10px 20px; margin-bottom: 0; border-bottom: 1px solid var(--studio-line, #e8e8e8); background: var(--studio-navigation, #f7f7f7); }
 .studio-assistant.is-open .studio-assistant__panel { border-left: 1px solid var(--studio-line, #e8e8e8); }
 .studio-assistant.is-open .studio-assistant__composer { border-top: 1px solid var(--studio-line, #e8e8e8); }
+.studio-assistant:not(.media-assistant) {
+  --assistant-paper: #fff;
+  --assistant-surface: #f7f7f7;
+  --assistant-composer: #fafafa;
+  --assistant-hover: #f0f0f0;
+}
 .studio-assistant.is-open:not(.media-assistant) { padding: 12px; }
 .studio-assistant.is-open:not(.media-assistant) .studio-assistant__header { min-height: 52px; padding: 10px 16px; border-bottom: 0; background: transparent; }
 .studio-assistant.is-open:not(.media-assistant) .studio-assistant__panel { border: 0; border-radius: 16px; box-shadow: 0 4px 24px rgb(0 0 0 / 8%); }
