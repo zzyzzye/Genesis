@@ -21,6 +21,46 @@ function reader(loggedIn = true) {
 }
 
 describe('文章评论', () => {
+  it('在选区插入表情并恢复光标，提交保留短码，公开评论显示图片', async () => {
+    reader()
+    const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: '写下评论' })
+    fireEvent.change(field, { target: { value: '前面替换后面' } })
+    field.setSelectionRange(2, 4)
+    fireEvent.click(screen.getByRole('button', { name: '选择表情' }))
+    fireEvent.click(screen.getByRole('button', { name: /^开心$/ }))
+    expect(field).toHaveValue('前面[表情:开心]后面')
+    expect(field).toHaveFocus()
+    expect(field.selectionStart).toBe('前面[表情:开心]'.length)
+    expect(screen.queryByRole('group', { name: '图片表情包' })).not.toBeInTheDocument()
+    vi.mocked(submitBlogComment).mockResolvedValueOnce({ id: 'comment-1', state: 'public' })
+    vi.mocked(getBlogComments).mockResolvedValue({ items: [{ ...item, content: '前面[表情:开心]后面' }], total: 1 })
+    fireEvent.click(screen.getByRole('button', { name: '提交评论' }))
+    expect(await screen.findByRole('img', { name: '[表情:开心]' })).toBeInTheDocument()
+    expect(submitBlogComment).toHaveBeenCalledWith('test-post', 'test-placeholder', '前面[表情:开心]后面', expect.any(String), '', true)
+  })
+
+  it('表情面板支持键盘关闭，超限不截断正文或表情短码', () => {
+    reader()
+    const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: '写下评论' })
+    const trigger = screen.getByRole('button', { name: '选择表情' })
+    fireEvent.click(trigger)
+    expect(screen.getByRole('button', { name: /^开心$/ })).toHaveFocus()
+    fireEvent.keyDown(screen.getByRole('group', { name: '图片表情包' }), { key: 'ArrowRight' })
+    expect(screen.getByRole('button', { name: '大笑' })).toHaveFocus()
+    fireEvent.keyDown(screen.getByRole('group', { name: '图片表情包' }), { key: 'Escape' })
+    expect(trigger).toHaveFocus()
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.change(field, { target: { value: '字'.repeat(1998) } })
+    field.setSelectionRange(1998, 1998)
+    fireEvent.click(trigger)
+    fireEvent.click(screen.getByRole('button', { name: /^开心$/ }))
+    expect(screen.getByRole('alert')).toHaveTextContent('评论最多 2000 字')
+    expect(field).toHaveValue('字'.repeat(1998))
+    expect(field).toHaveFocus()
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(submitBlogComment).not.toHaveBeenCalled()
+  })
+
   it('回复关联目标，失败保留正文与目标，切换目标使用新的提交标识', async () => {
     reader()
     vi.mocked(getBlogComments).mockResolvedValue({ items: [item, { ...item, id: 'second', author_name: '另一位读者' }], total: 2 })

@@ -1,0 +1,9 @@
+.comment-sticker { display: inline-block; width: 32px; height: 32px; margin-inline: 2px; object-fit: contain; vertical-align: middle; }
+.comment-sticker-fallback { font-size: .8em; }
+.article-comments .comment-sticker-picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 4px; width: min(100%, 320px); max-height: 264px; box-sizing: border-box; overflow-y: auto; margin-top: 8px; padding: 8px; border-radius: 8px; background: var(--portal-soft, var(--blog-hover)); }
+.article-comments .comment-sticker-picker button { min-width: 0; min-height: 44px; padding: 4px; }
+.comment-sticker-picker .comment-sticker { margin: 0; }
+.comment-sticker-picker .comment-sticker-fallback { overflow-wrap: anywhere; line-height: 1.3; }
+@media (max-width: 480px) {
+  .article-comments .comment-sticker-picker { width: calc(100% - 56px); }
+}

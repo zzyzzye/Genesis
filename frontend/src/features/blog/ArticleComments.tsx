@@ -1,12 +1,15 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useBlocker, useLocation } from 'react-router-dom'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Smile } from 'lucide-react'
 import { BlogWorkflowDialog } from '../../studio/BlogWorkflowDialog'
 import { ApiError, getBlogComment, getBlogComments, submitBlogComment, type BlogComment } from '../../lib/api'
 import { authTokenChangedEvent, getStoredAuthToken, studioAuthTokenKey } from '../../lib/auth'
 import './ArticleComments.css'
 import { CommentAvatar, CommentSource } from './CommentSource'
 import { CommentAvatarPreview } from './CommentAvatarPreview'
+import { CommentContent } from './CommentContent'
+import { CommentStickerPicker } from './CommentStickerPicker'
+import type { CommentSticker } from './commentStickers'
 
 const readToken = () => getStoredAuthToken() ?? getStoredAuthToken(studioAuthTokenKey)
 const date = (value: string) => new Date(value).toLocaleString('zh-CN')
@@ -40,6 +43,9 @@ export function ArticleComments({ slug }: { slug: string }) {
   const [error, setError] = useState('')
   const [expired, setExpired] = useState(false)
   const input = useRef<HTMLTextAreaElement>(null)
+  const stickerTrigger = useRef<HTMLButtonElement>(null)
+  const [stickersOpen, setStickersOpen] = useState(false)
+  const insertionCaret = useRef<number | null>(null)
   const pending = useRef(false)
   const attempt = useRef<{ signature: string; id: string } | null>(null)
   const mounted = useRef(true)
@@ -47,6 +53,23 @@ export function ArticleComments({ slug }: { slug: string }) {
   const dirty = Boolean(content.trim() || qq.trim())
   const blocker = useBlocker(({ currentLocation, nextLocation }) => (dirty || pending.current) && currentLocation.pathname !== nextLocation.pathname)
   const returnTo = '/account?returnTo=' + encodeURIComponent('/articles/' + slug + '#comments')
+
+  useLayoutEffect(() => {
+    if (insertionCaret.current === null) return
+    input.current?.focus({ preventScroll: true })
+    input.current?.setSelectionRange(insertionCaret.current, insertionCaret.current)
+    insertionCaret.current = null
+  }, [content, stickersOpen])
+
+  function insertSticker(sticker: CommentSticker) {
+    if (busy || !input.current) return
+    const { selectionStart, selectionEnd } = input.current
+    const next = content.slice(0, selectionStart) + sticker.code + content.slice(selectionEnd)
+    if (next.length > 2000) { setError('评论最多 2000 字，请删减后再添加表情。'); setStickersOpen(false); input.current.focus(); return }
+    insertionCaret.current = selectionStart + sticker.code.length
+    setContent(next); setStickersOpen(false)
+    if (!qqError) setError('')
+  }
 
   useEffect(() => {
     mounted.current = true
@@ -95,7 +118,7 @@ export function ArticleComments({ slug }: { slug: string }) {
     if (!currentToken) { setExpired(true); setError('请先登录，当前输入会保留在此页面。'); return }
     const signature = JSON.stringify([body, qqValue.toLowerCase(), reply?.id])
     if (attempt.current?.signature !== signature) attempt.current = { signature, id: crypto.randomUUID() }
-    pending.current = true; setBusy(true); setError(''); setFeedback('')
+    pending.current = true; setBusy(true); setStickersOpen(false); setError(''); setFeedback('')
     try {
       const receipt = reply ? await submitBlogComment(slug, currentToken, body, attempt.current.id, qqValue, true, reply.id) : await submitBlogComment(slug, currentToken, body, attempt.current.id, qqValue, true)
       if (!mounted.current) return
@@ -111,7 +134,7 @@ export function ArticleComments({ slug }: { slug: string }) {
   }
 
   function entry(item: BlogComment) {
-    return <li key={item.id} id={`comment-${item.id}`}><CommentAvatar item={item} /><div className="article-comments__entry"><div className="article-comments__meta"><strong>{item.author_name}</strong><time dateTime={item.created_at}>{date(item.created_at)}</time></div><CommentSource item={item} />{item.reply_to && <div className="article-comments__reply-context">回复 {item.reply_to.author_name}：{item.reply_to.content}</div>}<p>{item.content}</p>{token && <button aria-label={`回复 ${item.author_name}`} disabled={busy} onClick={() => { setReply(item); setError(''); input.current?.focus(); input.current?.scrollIntoView({ block: 'center' }) }}>回复</button>}</div></li>
+    return <li key={item.id} id={`comment-${item.id}`}><CommentAvatar item={item} /><div className="article-comments__entry"><div className="article-comments__meta"><strong>{item.author_name}</strong><time dateTime={item.created_at}>{date(item.created_at)}</time></div><CommentSource item={item} />{item.reply_to && <div className="article-comments__reply-context">回复 {item.reply_to.author_name}：<CommentContent content={item.reply_to.content} /></div>}<p><CommentContent content={item.content} /></p>{token && <button aria-label={`回复 ${item.author_name}`} disabled={busy} onClick={() => { setReply(item); setError(''); input.current?.focus(); input.current?.scrollIntoView({ block: 'center' }) }}>回复</button>}</div></li>
   }
   const focusedItem = focusId && focused?.id === focusId ? focused.item : undefined
   return <section className="article-comments" id="comments" aria-labelledby="article-comments-title">
@@ -126,9 +149,11 @@ export function ArticleComments({ slug }: { slug: string }) {
         <div className="article-comments__writing">
           <textarea className="resize-none" id="comment-content" ref={input} aria-label="写下评论" placeholder="写下你的想法…" rows={3} maxLength={2000} value={content} disabled={busy} onChange={(event) => { setContent(event.target.value); if (!qqError) setError('') }} aria-describedby={content.length >= 1800 ? 'comment-count comment-error' : 'comment-error'} aria-invalid={Boolean(error) && !qqError} />
           <div className="article-comments__composer-footer">
+            <button ref={stickerTrigger} className="article-comments__stickers" type="button" aria-label="选择表情" title="选择表情" aria-expanded={stickersOpen} aria-controls={stickersOpen ? 'comment-stickers' : undefined} disabled={busy} onClick={() => setStickersOpen(open => !open)}><Smile size={20} aria-hidden="true" /></button>
             {content.length >= 1800 && <span id="comment-count" className="article-comments__count">{content.length} / 2000</span>}
             <button type="submit" disabled={busy}>{busy ? '提交中…' : '提交评论'}</button>
           </div>
+          {stickersOpen && !busy && <CommentStickerPicker id="comment-stickers" onSelect={insertSticker} onClose={() => { setStickersOpen(false); stickerTrigger.current?.focus({ preventScroll: true }) }} />}
         </div>
       </div>
       <p id="comment-error" className="article-comments__error" role={error ? 'alert' : undefined}>{error}</p>
