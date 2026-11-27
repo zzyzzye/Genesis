@@ -543,18 +543,19 @@ function Dashboard({
           <header className="studio-topbar">
             <div className="studio-topbar__title">
               <h1>{meta.title}</h1>
-              <small>{meta.description}</small>
+              {activeSection !== 'overview' && <small>{meta.description}</small>}
             </div>
             <div className="studio-topbar__actions">
               <FpsStatusSlot />
               <Link className="studio-topbar__site-link" to="/blog"><StudioIcon name="eye" />查看站点 <StudioIcon name="arrow-up-right" /></Link>
+              {activeSection === 'overview' && <button className="studio-overview-create" type="button" onClick={createPost}><StudioIcon name="plus" />创建文章</button>}
             </div>
           </header>
         )}
 
         <main className={activeSection === 'posts' ? 'studio-content studio-content--editor' : 'studio-content'}>
           {activeSection === 'overview' && (
-            <StudioOverview posts={managedPosts} onChange={selectSection} onCreatePost={createPost} onOpenPost={openPost} />
+            <StudioOverview posts={managedPosts} onChange={selectSection} onOpenPost={openPost} />
           )}
           {activeSection === 'posts' && (
             <PostsWorkspace

@@ -87,7 +87,7 @@ const defaultSuggestions = ['规划下一篇文章的主题与大纲', '梳理�
 const assistantSessionKey = 'genesis-blog-ai-conversation'
 
 function initialAssistantMessages(): AssistantMessage[] {
-  return [{ role: 'assistant', content: '你好，我是博客助手。\n我会结合当前文章和页面帮你构思、改写与整理内容。' }]
+  return [{ role: 'assistant', content: '你好，我是博客助手。一起构思、写作或整理内容。' }]
 }
 
 function readAssistantSession(key = assistantSessionKey): AssistantSession {
@@ -275,7 +275,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
   const studioShellRef = useRef<HTMLElement | null>(null)
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const launcherRef = useRef<HTMLButtonElement | null>(null)
-  const [panelWidth, setPanelWidth] = useState(media ? 420 : 540)
+  const [panelWidth, setPanelWidth] = useState(420)
   const [resizing, setResizing] = useState(false)
   const resizeStart = useRef<{ x: number; width: number } | null>(null)
   const drafts = useRef<Record<string, string>>({})
@@ -909,7 +909,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
           <header className="studio-assistant__header">
             <div className="studio-assistant__identity">
               <span className="studio-assistant__avatar"><StudioIcon name="assistant" /></span>
-              <div><strong>{name}</strong><span>{media?.subtitle ?? '构思 · 写作 · 整理'}</span></div>
+              <div><strong>{name}</strong>{media?.subtitle && <span>{media.subtitle}</span>}</div>
             </div>
             <div className="studio-assistant__header-actions">
               <button type="button" aria-label="聊天历史" title="聊天历史" aria-expanded={historyOpen || expanded} onClick={() => { setHistoryOpen((open) => !open); setModelMenuOpen(false) }}><StudioIcon name="menu" /></button>
@@ -964,7 +964,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             <p className={streamStatus?.startsWith('连接中断') ? 'studio-assistant__message-status' : 'sr-only'} role="status">{!error && (isBusy || streamStatus) ? (streamStatus ?? '正在生成…') : ''}</p>
             {messages.length === 1 && (
               <div className="studio-assistant__suggestions">
-                <span>你可以这样开始</span>
+                {media && <span>你可以这样开始</span>}
                 {suggestions.map((suggestion) => <button key={suggestion} type="button" onClick={() => handleSuggestion(suggestion)}>{suggestion}<StudioIcon name="arrow-up-right" /></button>)}
               </div>
             )}
@@ -976,7 +976,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             onDragLeave={() => { dragDepth.current -= 1; if (dragDepth.current <= 0) setDraggingFiles(false) }}
             onDrop={event => { event.preventDefault(); dragDepth.current = 0; setDraggingFiles(false); if (!isBusy && attachmentsAllowed) attachments.add(Array.from(event.dataTransfer.files)) }}>
             {!!attachments.items.length && <BlogAgentAttachments items={attachments.items} disabled={isBusy} onRetry={attachments.retry} onRemove={attachments.remove} onStop={attachments.stop} />}
-            {(!media || draggingFiles) && <p className="blog-agent-upload-hint">{draggingFiles ? '松开以添加附件' : '文档、图片、视频 · 最多 8 个，共 20 MiB · 上传后保留在私有附件库'}</p>}
+            {(draggingFiles || (!media && attachments.items.length > 0)) && <p className="blog-agent-upload-hint">{draggingFiles ? '松开以添加附件' : '最多 8 个，共 20 MiB · 保留在私有附件库'}</p>}
             {(attachments.error || attachmentModelError) && <p className="blog-agent-upload-error" role="alert">{attachments.error || attachmentModelError}</p>}
             <textarea className="resize-none"
               ref={inputRef}
@@ -998,7 +998,7 @@ export function AgentAssistant({ page, editor, userId, onExecuted, media }: { pa
             />
             {error && <p className="studio-assistant__request-error" role="alert">{error}</p>}
             <div className="studio-assistant__composer-tools">
-              <button type="button" className="studio-assistant__tool-button" aria-label="添加附件" title={attachmentsAllowed ? '添加文件、图片或视频' : '附件输入仅限站点所有者使用'} disabled={!attachmentsAllowed || isBusy || attachments.items.length >= 8} onClick={() => fileInput.current?.click()}><StudioIcon name="attachment" /></button>
+              <button type="button" className="studio-assistant__tool-button" aria-label="添加附件" title={attachmentsAllowed ? media ? '添加文件、图片或视频' : '添加文件、图片或视频 · 最多 8 个，共 20 MiB · 保留在私有附件库' : '附件输入仅限站点所有者使用'} disabled={!attachmentsAllowed || isBusy || attachments.items.length >= 8} onClick={() => fileInput.current?.click()}><StudioIcon name="attachment" /></button>
               <input ref={fileInput} type="file" hidden multiple accept={agentAttachmentAccept} aria-label="选择 Agent 附件" onChange={event => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ''; if (!isBusy && attachmentsAllowed) attachments.add(files) }} />
               {!media?.readOnly && <div className="studio-assistant__mode-switch">
                 <select
