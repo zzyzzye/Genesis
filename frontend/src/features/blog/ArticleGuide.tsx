@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { BookOpenText, ChevronDown } from 'lucide-react'
+import { Sparkles, ChevronDown } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { getBlogArticleGuide, type BlogArticleGuide } from '../../lib/api'
 import { motionTiming, useLiveReducedMotion } from '../../lib/motion'
@@ -87,7 +87,7 @@ export function ArticleGuide({ slug, revision }: { slug: string; revision?: stri
   }
   return <section className="article-guide" aria-label="AI 导读">
     <button className="article-guide__trigger" type="button" aria-expanded={open} aria-controls={panelId} onClick={toggle}>
-      <BookOpenText size={17} aria-hidden="true" />
+      <Sparkles size={17} aria-hidden="true" />
       <span className="article-guide__title">AI 导读</span>
       <span className="article-guide__action">{open ? '收起' : '展开要点'}<motion.span className="article-guide__chevron" initial={false} animate={{ rotate: open ? 180 : 0 }} transition={transition}><ChevronDown size={14} aria-hidden="true" /></motion.span></span>
     </button>
